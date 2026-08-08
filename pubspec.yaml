@@ -1,0 +1,29 @@
+name: scrup
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  drift: ^2.34.3
+  drift_flutter: ^0.3.1
+  flutter:
+    sdk: flutter
+  http: ^1.6.0
+  media_kit: ^1.2.6
+  media_kit_libs_audio: ^1.0.7
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  provider: ^6.1.5+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  drift_dev: ^2.34.5
+  build_runner: ^2.15.1
+
+flutter:
+  uses-material-design: true
