@@ -24,12 +24,12 @@ class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   StreamSubscription<String>? _errorSub;
 
+  /// Consulta de búsqueda lanzada desde el inicio: el HomeView la escribe y
+  /// la SearchView la ejecuta al cambiar de pestaña.
+  final ValueNotifier<String?> _searchRequest = ValueNotifier<String?>(null);
+
   static const _titles = ['Inicio', 'Buscar', 'Playlists'];
-  static const _icons = [
-    Icons.home_outlined,
-    Icons.search,
-    Icons.queue_music,
-  ];
+  static const _icons = [Icons.home_outlined, Icons.search, Icons.queue_music];
 
   @override
   void initState() {
@@ -46,7 +46,15 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _errorSub?.cancel();
+    _searchRequest.dispose();
     super.dispose();
+  }
+
+  /// Lanza una búsqueda desde el inicio: cambia a la pestaña Buscar y le
+  /// pasa la consulta a la SearchView.
+  void _submitSearch(String query) {
+    _searchRequest.value = query;
+    setState(() => _selectedIndex = 1);
   }
 
   @override
@@ -62,16 +70,15 @@ class _AppShellState extends State<AppShell> {
                 // Navegación lateral
                 NavigationRail(
                   selectedIndex: _selectedIndex,
-                  onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+                  onDestinationSelected: (i) =>
+                      setState(() => _selectedIndex = i),
                   labelType: NavigationRailLabelType.all,
                   leading: const SizedBox(height: 16),
                   destinations: [
                     for (var i = 0; i < _titles.length; i++)
                       NavigationRailDestination(
                         icon: Icon(_icons[i]),
-                        selectedIcon: Icon(
-                          i == 0 ? Icons.home : _icons[i],
-                        ),
+                        selectedIcon: Icon(i == 0 ? Icons.home : _icons[i]),
                         label: Text(_titles[i]),
                       ),
                   ],
@@ -81,10 +88,10 @@ class _AppShellState extends State<AppShell> {
                 Expanded(
                   child: IndexedStack(
                     index: _selectedIndex,
-                    children: const [
-                      HomeView(),
-                      SearchView(),
-                      PlaylistsView(),
+                    children: [
+                      HomeView(onSearch: _submitSearch),
+                      SearchView(searchRequest: _searchRequest),
+                      const PlaylistsView(),
                     ],
                   ),
                 ),

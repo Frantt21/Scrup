@@ -8,12 +8,17 @@ class Track {
   final Duration? duration;
   final String? thumbnailUrl;
 
+  /// Álbum al que pertenece la pista (rellenado por el enriquecimiento de
+  /// metadatos vía Deezer; los resultados de YouTube no lo traen).
+  final String? album;
+
   const Track({
     required this.id,
     required this.title,
     required this.artist,
     this.duration,
     this.thumbnailUrl,
+    this.album,
   });
 
   factory Track.fromYtDlp(Map<String, dynamic> json) {
@@ -38,6 +43,7 @@ class Track {
           ? Duration(seconds: durationSec.toInt())
           : null,
       thumbnailUrl: thumb,
+      album: json['album'] as String?,
     );
   }
 
@@ -49,6 +55,7 @@ class Track {
     String? artist,
     Duration? duration,
     String? thumbnailUrl,
+    String? album,
   }) {
     return Track(
       id: id,
@@ -56,6 +63,7 @@ class Track {
       artist: artist ?? this.artist,
       duration: duration ?? this.duration,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      album: album ?? this.album,
     );
   }
 }

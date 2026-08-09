@@ -8,9 +8,11 @@ import 'package:window_manager/window_manager.dart';
 import 'core/binaries.dart';
 import 'data/database.dart';
 import 'services/audio_cache_service.dart';
+import 'services/deezer_service.dart';
 import 'services/player_service.dart';
 import 'services/ytdlp_service.dart';
 import 'ui/app_shell.dart';
+import 'ui/theme_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,41 +52,71 @@ class ScrupApp extends StatelessWidget {
           create: (context) =>
               AudioCacheService(ytdlp: context.read<YtDlpService>()),
         ),
+        Provider<DeezerService>(create: (_) => DeezerService()),
         Provider<PlayerService>(
-          // Inyecta la resolución de fuente (cache-first con yt-dlp) y la
-          // búsqueda de radio para que la cola pueda auto-avanzar sin
-          // intervención de la UI.
+          // Inyecta la resolución de fuente (cache-first con yt-dlp), la
+          // búsqueda de radio y el enriquecimiento de metadatos (Deezer).
           create: (context) {
             final ytdlp = context.read<YtDlpService>();
             final cache = context.read<AudioCacheService>();
+            final deezer = context.read<DeezerService>();
             return PlayerService(
               // Cache-first: descarga la pista al caché local y la
               // reproduce desde archivo (estable y rápido en próximas
               // sesiones).
               resolveSource: (track) async {
-                final path =
-                    await cache.ensure(track.id, title: track.title);
+                final path = await cache.ensure(track.id, title: track.title);
                 return PlayableSource(path, isLocal: true);
               },
               // Radio: busca canciones del mismo artista/género
               recommend: (track) async {
-                final query =
-                    track.artist.isNotEmpty ? track.artist : track.title;
+                final query = track.artist.isNotEmpty
+                    ? track.artist
+                    : track.title;
                 return ytdlp.search(query, limit: 10);
               },
+              // Metadatos: Deezer aporta título/álbum/portada limpios
+              enrich: (track) async =>
+                  deezer.apply(track, await deezer.enrich(track)),
+              // Historial: registra cada pista que realmente empieza a sonar
+              // (manual, auto-advance o radio)
+              onPlayed: (track) async =>
+                  context.read<AppDatabase>().recordPlay(track),
             );
           },
           dispose: (_, player) => player.dispose(),
         ),
+        // Tema dinámico: el color de acento sigue al artwork de la pista.
+        // ThemeController es un ChangeNotifier, así que necesita
+        // ChangeNotifierProvider (Provider rechaza subtipos de Listenable).
+        // ChangeNotifierProvider libera el notifier automáticamente.
+        ChangeNotifierProvider<ThemeController>(
+          create: (context) => ThemeController(context.read<PlayerService>()),
+        ),
       ],
-      child: MaterialApp(
-        title: 'Scrup',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            // Acento lila sobre fondo negro puro
-            seedColor: const Color(0xFFC084FC),
+      child: Consumer<ThemeController>(
+        builder: (context, themeController, _) => MaterialApp(
+          title: 'Scrup',
+          debugShowCheckedModeBanner: false,
+          // Transición suave cuando el color cambia de pista a pista
+          themeAnimationDuration: const Duration(milliseconds: 700),
+          themeAnimationCurve: Curves.easeInOut,
+          theme: _buildTheme(themeController.accentColor),
+          home: const AppShell(),
+        ),
+      ),
+    );
+  }
+
+  /// Tema oscuro negro puro con acento dinámico (lila por defecto, o el
+  /// color extraído del artwork de la pista en reproducción).
+  ThemeData _buildTheme(Color? accent) {
+    final seed = accent ?? kDefaultAccent;
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme:
+          ColorScheme.fromSeed(
+            seedColor: seed,
             brightness: Brightness.dark,
           ).copyWith(
             // Negro puro como color base
@@ -96,14 +128,11 @@ class ScrupApp extends StatelessWidget {
             surfaceContainerHigh: const Color(0xFF1B1B1B),
             surfaceContainerHighest: const Color(0xFF222222),
           ),
-          scaffoldBackgroundColor: const Color(0xFF000000),
-          // Sutil tinte lila en superficies de navegación
-          navigationRailTheme: NavigationRailThemeData(
-            backgroundColor: const Color(0xFF000000),
-            indicatorColor: const Color(0xFFC084FC).withValues(alpha: 0.16),
-          ),
-        ),
-        home: const AppShell(),
+      scaffoldBackgroundColor: const Color(0xFF000000),
+      // Sutil tinte del acento en superficies de navegación
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: const Color(0xFF000000),
+        indicatorColor: seed.withValues(alpha: 0.16),
       ),
     );
   }

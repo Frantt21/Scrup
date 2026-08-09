@@ -60,6 +60,16 @@ void main() {
       });
       expect(track.title, 'Mi Canción');
     });
+
+    test('lee el álbum cuando yt-dlp lo aporta', () {
+      final track = Track.fromYtDlp({
+        'id': 't4',
+        'title': 'Tema',
+        'channel': 'Artista',
+        'album': 'El Álbum',
+      });
+      expect(track.album, 'El Álbum');
+    });
   });
 
   group('Track.copyWith', () {
@@ -70,6 +80,13 @@ void main() {
       expect(updated.id, 'c1');
       expect(updated.title, 'Después');
       expect(original.title, 'Antes');
+    });
+
+    test('actualiza el álbum', () {
+      final original = Track(id: 'c2', title: 'T', artist: 'A');
+      final updated = original.copyWith(album: 'Discovery');
+      expect(updated.album, 'Discovery');
+      expect(original.album, isNull);
     });
   });
 }

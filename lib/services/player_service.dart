@@ -54,6 +54,15 @@ class PlayerService {
   /// Opcional: si es null, el modo radio se desactiva automáticamente.
   final Future<List<Track>> Function(Track track)? recommend;
 
+  /// Enriquece los metadatos de una pista (título/artista/álbum/portada vía
+  /// Deezer). Opcional y *best-effort*: corre en segundo plano y si devuelve
+  /// null o falla, la pista se queda con los metadatos de YouTube.
+  final Future<Track?> Function(Track track)? enrich;
+
+  /// Notifica cada pista que realmente empieza a sonar (manual, auto-advance
+  /// o radio). Se usa para registrar el historial de reproducciones.
+  final Future<void> Function(Track track)? onPlayed;
+
   final _positionController = StreamController<Duration>.broadcast();
   final _durationController = StreamController<Duration?>.broadcast();
   final _playingController = StreamController<bool>.broadcast();
@@ -75,8 +84,9 @@ class PlayerService {
   final ValueNotifier<String?> preparingTrackId = ValueNotifier<String?>(null);
 
   /// Modo de repetición actual (expuesto a la UI).
-  final ValueNotifier<LoopMode> repeatMode =
-      ValueNotifier<LoopMode>(LoopMode.off);
+  final ValueNotifier<LoopMode> repeatMode = ValueNotifier<LoopMode>(
+    LoopMode.off,
+  );
 
   /// Modo aleatorio activo (expuesto a la UI).
   final ValueNotifier<bool> shuffle = ValueNotifier<bool>(false);
@@ -85,9 +95,18 @@ class PlayerService {
   /// Activo por defecto (recomendación automática al terminar una canción).
   final ValueNotifier<bool> radio = ValueNotifier<bool>(true);
 
+  /// Volumen de reproducción normalizado (0.0–1.0), expuesto a la UI.
+  /// media_kit trabaja en 0–100; aquí se mantiene la escala de la UI.
+  final ValueNotifier<double> volume = ValueNotifier<double>(1.0);
+
   bool _playing = false;
   Duration _lastPosition = Duration.zero;
   Track? _currentTrack;
+
+  /// Momento en que se abrió el medio actual. media_kit emite un `completed`
+  /// espurio al abrir o reemplazar un medio (el `stop` interno de `open`), y
+  /// este timestamp permite distinguirlo de un fin de canción real.
+  DateTime _openedAt = DateTime.now();
 
   /// Si la última fuente abierta fue local (caché). La guardia anti-corte
   /// solo aplica a streams remotos, que son los que pueden cortarse por
@@ -108,7 +127,15 @@ class PlayerService {
   final List<Track> _queue = [];
   int _queueIndex = -1;
 
-  PlayerService({required this.resolveSource, this.recommend}) {
+  /// Volumen previo antes de silenciar, para restaurarlo al desmutear.
+  double _lastVolumeBeforeMute = 1.0;
+
+  PlayerService({
+    required this.resolveSource,
+    this.recommend,
+    this.enrich,
+    this.onPlayed,
+  }) {
     _player.stream.position.listen((p) {
       _lastPosition = p;
       _positionController.add(p);
@@ -119,6 +146,10 @@ class PlayerService {
       _playingController.add(p);
     });
     _player.stream.buffering.listen(_bufferingController.add);
+    _player.stream.volume.listen((v) {
+      // media_kit reporta en 0–100; normalizar a 0–1 para la UI
+      volume.value = (v / 100.0).clamp(0.0, 1.0);
+    });
     _player.stream.error.listen((e) {
       _errorController.add(e);
     });
@@ -188,6 +219,23 @@ class PlayerService {
 
   Future<void> seek(Duration position) => _player.seek(position);
 
+  /// Establece el volumen (0.0–1.0).
+  Future<void> setVolume(double v) async {
+    final clamped = v.clamp(0.0, 1.0);
+    volume.value = clamped;
+    await _player.setVolume(clamped * 100);
+  }
+
+  /// Silencia/restaura el sonido recordando el volumen previo.
+  Future<void> toggleMute() async {
+    if (volume.value > 0) {
+      _lastVolumeBeforeMute = volume.value;
+      await setVolume(0);
+    } else {
+      await setVolume(_lastVolumeBeforeMute > 0 ? _lastVolumeBeforeMute : 0.5);
+    }
+  }
+
   Future<void> stop() => _player.stop();
 
   /// Cicla el modo de repetición: off → all → one → off.
@@ -211,24 +259,29 @@ class PlayerService {
     final token = _playToken;
     final current = _currentTrack;
 
-    // Guardia anti-corte: si un stream remoto "terminó" tras pocos segundos
-    // y no se ha reintentado aún, se cortó (expiración/rate-limit). Se
-    // reintenta una vez con una fuente recién resuelta.
-    if (!_lastSourceIsLocal &&
+    // media_kit emite un `completed` falso cada vez que se abre o reemplaza
+    // un medio (el `stop` interno de `open`), que NO es un fin de canción
+    // real: si llega pocos segundos después de abrir, se ignora. Solo un
+    // stream remoto que además murió a los pocos segundos se reintenta.
+    final sinceOpened = DateTime.now().difference(_openedAt);
+    final streamCut =
+        !_lastSourceIsLocal &&
         current != null &&
         _lastPosition > Duration.zero &&
         _lastPosition < const Duration(seconds: 8) &&
-        (_prematureRetries[current.id] ?? 0) < 1) {
-      _prematureRetries[current.id] = (_prematureRetries[current.id] ?? 0) + 1;
-      _errorController.add(
-        'La reproducción de "${current.title}" se interrumpió; '
-        'reintentando…',
-      );
-      if (_queueIndex >= 0) {
-        await _playAt(_queueIndex);
-      } else {
-        await _openAndPlay(current);
+        (_prematureRetries[current.id] ?? 0) < 1;
+
+    if (sinceOpened < const Duration(seconds: 3)) {
+      if (streamCut) {
+        await _retryPrematureCut(current);
       }
+      return;
+    }
+
+    // Guardia anti-corte: un stream remoto que "terminó" con <8s
+    // reproducidos se cortó (expiración/rate-limit) → reintento una vez.
+    if (streamCut) {
+      await _retryPrematureCut(current);
       return;
     }
 
@@ -260,6 +313,20 @@ class PlayerService {
       if (base != null) {
         await _playRadio(base);
       }
+    }
+  }
+
+  /// Reintenta una vez una pista cuyo stream remoto se cortó prematuramente.
+  Future<void> _retryPrematureCut(Track current) async {
+    _prematureRetries[current.id] = (_prematureRetries[current.id] ?? 0) + 1;
+    _errorController.add(
+      'La reproducción de "${current.title}" se interrumpió; '
+      'reintentando…',
+    );
+    if (_queueIndex >= 0) {
+      await _playAt(_queueIndex);
+    } else {
+      await _openAndPlay(current);
     }
   }
 
@@ -305,12 +372,34 @@ class PlayerService {
     _trackController.add(track);
     preparingTrackId.value = track.id;
     try {
-      final src = await resolveSource(track);
+      // Detener la pista anterior al instante. Se usa pause y no stop porque
+      // stop() de media_kit emite el evento `completed`, que dispararía el
+      // auto-advance y podría saltar de canción indebidamente.
+      await _player.pause();
+      // Resolver la fuente y enriquecer con Deezer en paralelo. El presupuesto
+      // para esperar a Deezer es adaptativo: si la pista ya estaba en caché
+      // (resolución instantánea), se espera poco (800ms); si se está
+      // descargando por primera vez, hay margen (2s, oculto tras la descarga).
+      final stopwatch = Stopwatch()..start();
+      final srcFuture = resolveSource(track);
+      final enrichFuture = _enrich(track);
+      final src = await srcFuture;
+      final sourceWasCached = stopwatch.elapsedMilliseconds < 300;
       if (token != _playToken) return false;
+      final enriched = await _enrichWithTimeout(
+        enrichFuture,
+        sourceWasCached ? 800 : 2000,
+      );
+      if (token != _playToken) return false;
+      final display = _applyEnriched(track, enriched);
       _lastSourceIsLocal = src.isLocal;
+      // Marcar ANTES de abrir: el `completed` espurio se emite durante el
+      // open y debe caer dentro de la ventana de 3s sí o sí.
+      _openedAt = DateTime.now();
       await _player.open(Media(_mediaUri(src)));
       if (token != _playToken) return false;
       await _player.play();
+      unawaited(_notifyPlayed(display));
       return true;
     } catch (e) {
       _errorController.add('No se pudo reproducir "${track.title}": $e');
@@ -332,18 +421,88 @@ class PlayerService {
     _trackController.add(track);
     preparingTrackId.value = track.id;
     try {
-      final src = await resolveSource(track);
+      // Silenciar la pista anterior al instante (mismo motivo que en _playAt).
+      await _player.pause();
+      // Enriquecer en paralelo con la resolución de la fuente (ver _playAt).
+      final stopwatch = Stopwatch()..start();
+      final srcFuture = resolveSource(track);
+      final enrichFuture = _enrich(track);
+      final src = await srcFuture;
+      final sourceWasCached = stopwatch.elapsedMilliseconds < 300;
       if (token != _playToken) return false;
+      final enriched = await _enrichWithTimeout(
+        enrichFuture,
+        sourceWasCached ? 800 : 2000,
+      );
+      if (token != _playToken) return false;
+      final display = _applyEnriched(track, enriched);
       _lastSourceIsLocal = src.isLocal;
+      // Marcar ANTES de abrir (mismo motivo que en _playAt).
+      _openedAt = DateTime.now();
       await _player.open(Media(_mediaUri(src)));
       if (token != _playToken) return false;
       await _player.play();
+      unawaited(_notifyPlayed(display));
       return true;
     } catch (e) {
       _errorController.add('No se pudo reproducir "${track.title}": $e');
       return false;
     } finally {
       if (token == _playToken) preparingTrackId.value = null;
+    }
+  }
+
+  /// Ejecuta el enriquecimiento (sin tope). Captura errores internamente
+  /// para que nunca quede un error asíncrono sin manejar, aunque el futuro
+  /// no se llegue a esperar.
+  Future<Track?> _enrich(Track track) async {
+    final fn = enrich;
+    if (fn == null) return null;
+    try {
+      return await fn(track);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Aplica un tope temporal al enriquecimiento en curso; si excede el
+  /// presupuesto, devuelve null y la reproducción sigue con YouTube.
+  Future<Track?> _enrichWithTimeout(
+    Future<Track?> future,
+    int milliseconds,
+  ) async {
+    try {
+      return await future.timeout(Duration(milliseconds: milliseconds));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Aplica la pista enriquecida a la UI (y la devuelve para persistirla)
+  /// si Deezer aportó algo nuevo; si no, devuelve la original sin tocar el
+  /// estado.
+  Track _applyEnriched(Track original, Track? enriched) {
+    if (enriched == null || enriched.id != original.id) return original;
+    final same =
+        enriched.title == original.title &&
+        enriched.artist == original.artist &&
+        enriched.thumbnailUrl == original.thumbnailUrl &&
+        enriched.album == original.album;
+    if (same) return original;
+    _currentTrack = enriched;
+    _trackController.add(enriched);
+    return enriched;
+  }
+
+  /// Registra la reproducción de una pista en el historial (best-effort:
+  /// los fallos de DB no deben romper la reproducción).
+  Future<void> _notifyPlayed(Track track) async {
+    final cb = onPlayed;
+    if (cb == null) return;
+    try {
+      await cb(track);
+    } catch (_) {
+      // Silencioso: el historial es secundario a la reproducción.
     }
   }
 
@@ -365,5 +524,6 @@ class PlayerService {
     repeatMode.dispose();
     shuffle.dispose();
     radio.dispose();
+    volume.dispose();
   }
 }

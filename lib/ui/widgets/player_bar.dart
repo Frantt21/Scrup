@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/track.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/player_service.dart';
+import '../theme_controller.dart';
 
 /// Barra inferior fija con los controles del reproductor: artwork, título,
 /// progreso, loader y controles (shuffle, anterior, play/pausa, siguiente,
@@ -23,6 +24,12 @@ class _PlayerBarState extends State<PlayerBar> {
   Duration? _duration;
   bool _playing = false;
   bool _buffering = false;
+
+  /// Posición del slider durante el arrastre: mientras se arrastra NO se
+  /// hace seek (el seek real ocurre al soltar), solo se muestra la posición
+  /// del dedo en la UI.
+  double? _dragValue;
+
   final List<StreamSubscription> _subs = [];
 
   @override
@@ -32,7 +39,10 @@ class _PlayerBarState extends State<PlayerBar> {
     _subs.addAll([
       player.currentTrack.listen((t) {
         if (!mounted) return;
-        setState(() => _track = t);
+        setState(() {
+          _track = t;
+          _dragValue = null;
+        });
       }),
       player.position.listen((p) {
         if (!mounted) return;
@@ -66,125 +76,183 @@ class _PlayerBarState extends State<PlayerBar> {
     final theme = Theme.of(context);
     final player = context.read<PlayerService>();
     final cache = context.read<AudioCacheService>();
+    final themeController = context.watch<ThemeController>();
     final hasTrack = _track != null;
     final total = _duration ?? Duration.zero;
     final progress = total.inMilliseconds > 0
         ? (_position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
         : 0.0;
+    // Durante el arrastre se muestra la posición del dedo; el seek real se
+    // hace al soltar (onChangeEnd), no en cada tick.
+    final shownProgress = _dragValue ?? progress;
 
     return Material(
       elevation: 12,
       color: theme.colorScheme.surfaceContainerHighest,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Barra de progreso
-              SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 3,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                  overlayShape:
-                      const RoundSliderOverlayShape(overlayRadius: 14),
-                ),
-                child: Slider(
-                  value: progress,
-                  onChanged: hasTrack
-                      ? (v) {
-                          final target = Duration(
-                            milliseconds: (v * total.inMilliseconds).round(),
-                          );
-                          player.seek(target);
-                        }
-                      : null,
-                ),
-              ),
-              Row(
-                children: [
-                  // Artwork
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: SizedBox(
-                      width: 44,
-                      height: 44,
-                      child: hasTrack && _track!.thumbnailUrl != null
-                          ? Image.network(
-                              _track!.thumbnailUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
-                                  _artworkFallback(theme),
-                            )
-                          : _artworkFallback(theme),
+      child: Container(
+        // Tinte sutil del color del artwork, desvaneciéndose hacia la derecha
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              themeController.accentColor?.withValues(alpha: 0.20) ??
+                  Colors.transparent,
+              Colors.transparent,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Barra de progreso (altura fija para que la barra no salte;
+                // 28px para no recortar el overlay del pulgar al pulsar)
+                SizedBox(
+                  height: 28,
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 7,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 14,
+                      ),
+                    ),
+                    child: Slider(
+                      value: shownProgress,
+                      onChanged: hasTrack
+                          ? (v) => setState(() => _dragValue = v)
+                          : null,
+                      onChangeEnd: hasTrack
+                          ? (v) {
+                              final target = Duration(
+                                milliseconds: (v * total.inMilliseconds)
+                                    .round(),
+                              );
+                              player.seek(target);
+                              setState(() => _dragValue = null);
+                            }
+                          : null,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  // Metadatos
-                  Expanded(
-                    child: hasTrack
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ValueListenableBuilder<double?>(
-                                valueListenable: cache.progress,
-                                builder: (context, downloadPct, _) {
-                                  return ValueListenableBuilder<String?>(
-                                    valueListenable: player.preparingTrackId,
-                                    builder: (context, preparingId, _) {
-                                      // Solo mostrar el % si la descarga es
-                                      // de la pista que se está preparando
-                                      // (si el usuario saltó de pista, la
-                                      // descarga sigue en segundo plano).
-                                      final downloadingCurrent =
-                                          cache.downloadingId.value ==
-                                              preparingId;
-                                      final String label;
-                                      if (downloadPct != null &&
-                                          downloadPct < 1 &&
-                                          downloadingCurrent) {
-                                        label = 'Descargando… '
-                                            '${(downloadPct * 100).round()}%';
-                                      } else if (preparingId != null) {
-                                        label = 'Preparando…';
-                                      } else {
-                                        label = _track!.title;
-                                      }
-                                      return Text(
-                                        label,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: theme.textTheme.titleSmall,
-                                      );
-                                    },
-                                  );
-                                },
+                ),
+                SizedBox(
+                  height: 48,
+                  child: Row(
+                    children: [
+                      // Izquierda: artwork + metadatos
+                      Expanded(
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: SizedBox(
+                                width: 44,
+                                height: 44,
+                                child: hasTrack && _track!.thumbnailUrl != null
+                                    ? Image.network(
+                                        _track!.thumbnailUrl!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) =>
+                                            _artworkFallback(theme),
+                                      )
+                                    : _artworkFallback(theme),
                               ),
-                              Text(
-                                _track!.artist,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          )
-                        : Text(
-                            'Sin reproducción',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
                             ),
-                          ),
+                            const SizedBox(width: 12),
+                            // Metadatos
+                            Expanded(
+                              child: hasTrack
+                                  ? Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        ValueListenableBuilder<double?>(
+                                          valueListenable: cache.progress,
+                                          builder: (context, downloadPct, _) {
+                                            return ValueListenableBuilder<
+                                              String?
+                                            >(
+                                              valueListenable:
+                                                  player.preparingTrackId,
+                                              builder: (context, preparingId, _) {
+                                                // Solo mostrar el % si la descarga
+                                                // es de la pista que se está
+                                                // preparando (si el usuario saltó
+                                                // de pista, la descarga sigue en
+                                                // segundo plano).
+                                                final downloadingCurrent =
+                                                    cache.downloadingId.value ==
+                                                    preparingId;
+                                                final String label;
+                                                if (downloadPct != null &&
+                                                    downloadPct < 1 &&
+                                                    downloadingCurrent) {
+                                                  label =
+                                                      'Descargando… '
+                                                      '${(downloadPct * 100).round()}%';
+                                                } else if (preparingId !=
+                                                    null) {
+                                                  label = 'Preparando…';
+                                                } else {
+                                                  label = _track!.title;
+                                                }
+                                                return Text(
+                                                  label,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: theme
+                                                      .textTheme
+                                                      .titleSmall,
+                                                );
+                                              },
+                                            );
+                                          },
+                                        ),
+                                        Text(
+                                          _track!.artist,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                        ),
+                                      ],
+                                    )
+                                  : Text(
+                                      'Sin reproducción',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Centro: controles de reproducción
+                      _buildControls(context, theme, player, hasTrack),
+                      const SizedBox(width: 8),
+                      // Derecha: volumen
+                      Expanded(child: _buildVolume(context, theme, player)),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  // Controles
-                  _buildControls(context, theme, player, hasTrack),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -225,26 +293,31 @@ class _PlayerBarState extends State<PlayerBar> {
               tooltip: 'Anterior',
               onPressed: hasTrack ? player.previous : null,
             ),
-            // Play / Pausa (o loader)
-            if (preparing || _buffering)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
-                ),
-              )
-            else
-              IconButton(
-                iconSize: 40,
-                icon: Icon(
-                  _playing ? Icons.pause_circle_filled : Icons.play_circle_fill,
-                  color: primary,
-                ),
-                tooltip: _playing ? 'Pausar' : 'Reproducir',
-                onPressed: hasTrack ? player.togglePlayPause : null,
+            // Play / Pausa (o loader). Footprint fijo (56x48) para que la
+            // barra no cambie de altura al alternar entre botón y spinner.
+            SizedBox(
+              width: 56,
+              height: 48,
+              child: Center(
+                child: preparing || _buffering
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : IconButton(
+                        iconSize: 40,
+                        icon: Icon(
+                          _playing
+                              ? Icons.pause_circle_filled
+                              : Icons.play_circle_fill,
+                          color: primary,
+                        ),
+                        tooltip: _playing ? 'Pausar' : 'Reproducir',
+                        onPressed: hasTrack ? player.togglePlayPause : null,
+                      ),
               ),
+            ),
             // Siguiente
             IconButton(
               icon: const Icon(Icons.skip_next),
@@ -276,11 +349,7 @@ class _PlayerBarState extends State<PlayerBar> {
             ValueListenableBuilder<bool>(
               valueListenable: player.radio,
               builder: (context, on, _) => IconButton(
-                icon: Icon(
-                  Icons.radio,
-                  size: 20,
-                  color: on ? primary : muted,
-                ),
+                icon: Icon(Icons.radio, size: 20, color: on ? primary : muted),
                 tooltip: on ? 'Radio: activa' : 'Radio: inactiva',
                 onPressed: player.toggleRadio,
               ),
@@ -299,6 +368,54 @@ class _PlayerBarState extends State<PlayerBar> {
         size: 22,
         color: theme.colorScheme.onSurfaceVariant,
       ),
+    );
+  }
+
+  /// Control de volumen: icono (con mute) + slider, alineado a la derecha.
+  Widget _buildVolume(
+    BuildContext context,
+    ThemeData theme,
+    PlayerService player,
+  ) {
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return ValueListenableBuilder<double>(
+      valueListenable: player.volume,
+      builder: (context, vol, _) {
+        // Icono: mute / bajo / alto. Tocar silencia o restaura.
+        final icon = vol <= 0
+            ? Icons.volume_off
+            : (vol < 0.5 ? Icons.volume_down : Icons.volume_up);
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(icon, size: 20),
+              color: muted,
+              tooltip: vol <= 0 ? 'Activar sonido' : 'Silenciar',
+              onPressed: player.toggleMute,
+            ),
+            SizedBox(
+              width: 110,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 3,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 7,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 14,
+                  ),
+                ),
+                child: Slider(
+                  value: vol.clamp(0.0, 1.0),
+                  onChanged: player.setVolume,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

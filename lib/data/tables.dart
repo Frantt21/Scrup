@@ -9,6 +9,9 @@ class Tracks extends Table {
   TextColumn get artist => text().withDefault(const Constant(''))();
   IntColumn get durationSeconds => integer().nullable()();
   TextColumn get thumbnailUrl => text().nullable()();
+
+  /// Álbum enriquecido vía Deezer (null si aún no se ha enriquecido).
+  TextColumn get album => text().nullable()();
   DateTimeColumn get lastPlayed => dateTime().nullable()();
   IntColumn get playCount => integer().withDefault(const Constant(0))();
 
@@ -29,9 +32,7 @@ class History extends Table {
 class Playlists extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
-  DateTimeColumn get createdAt => dateTime().withDefault(
-        currentDateAndTime,
-      )();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 /// Relación N:M entre playlists y canciones, con posición de orden.
@@ -44,6 +45,6 @@ class PlaylistTracks extends Table {
 
   @override
   List<Set<Column>> get uniqueKeys => [
-        {playlistId, trackId},
-      ];
+    {playlistId, trackId},
+  ];
 }

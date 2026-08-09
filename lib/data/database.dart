@@ -11,30 +11,38 @@ class Playlist {
   final int id;
   final String name;
   final DateTime createdAt;
-  const Playlist({required this.id, required this.name, required this.createdAt});
+  const Playlist({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+  });
 }
 
 @DriftDatabase(tables: [Tracks, History, Playlists, PlaylistTracks])
 class AppDatabase extends _$AppDatabase {
   /// [executor] permite inyectar una base en memoria en los tests.
   AppDatabase({QueryExecutor? executor})
-      : super(executor ?? driftDatabase(name: 'scrup'));
+    : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-        },
-        onUpgrade: (m, from, to) async {
-          if (from < 2) {
-            await m.createTable(playlists);
-            await m.createTable(playlistTracks);
-          }
-        },
-      );
+    onCreate: (m) async {
+      await m.createAll();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.createTable(playlists);
+        await m.createTable(playlistTracks);
+      }
+      if (from < 3) {
+        // Álbum enriquecido (Deezer)
+        await m.addColumn(tracks, tracks.album);
+      }
+    },
+  );
 
   // ---------------------------------------------------------------- cache
   /// Guarda (o actualiza) los metadatos de una pista. Nunca guardamos la URL
@@ -47,14 +55,16 @@ class AppDatabase extends _$AppDatabase {
         artist: Value(track.artist),
         durationSeconds: Value(track.duration?.inSeconds),
         thumbnailUrl: Value(track.thumbnailUrl),
+        album: Value(track.album),
       ),
     );
   }
 
   /// Devuelve los metadatos cacheados de una pista, si existen.
   Future<Track?> getCachedTrack(String id) async {
-    final row = await (select(tracks)..where((t) => t.id.equals(id)))
-        .getSingleOrNull();
+    final row = await (select(
+      tracks,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
     if (row == null) return null;
     return _trackFromRow(row);
   }
@@ -65,9 +75,10 @@ class AppDatabase extends _$AppDatabase {
   /// reproducción más reciente. El historial está acotado por el pruning
   /// (60 días), así que traemos todas las filas y deduplicamos en memoria.
   Stream<List<Track>> watchRecentlyPlayed({int limit = 30}) {
-    final query = (select(history)
-          ..orderBy([(h) => OrderingTerm.desc(h.playedAt)]))
-        .join([innerJoin(tracks, tracks.id.equalsExp(history.trackId))]);
+    final query =
+        (select(history)..orderBy([(h) => OrderingTerm.desc(h.playedAt)])).join(
+          [innerJoin(tracks, tracks.id.equalsExp(history.trackId))],
+        );
 
     return query.watch().map((rows) {
       final seen = <String>{};
@@ -100,10 +111,11 @@ class AppDatabase extends _$AppDatabase {
       HistoryCompanion.insert(trackId: track.id, playedAt: DateTime.now()),
     );
     // Pruning: mantener solo los últimos 60 días de historial
-    await (delete(history)
-          ..where((h) => h.playedAt.isSmallerThanValue(
-                DateTime.now().subtract(const Duration(days: 60)),
-              )))
+    await (delete(history)..where(
+          (h) => h.playedAt.isSmallerThanValue(
+            DateTime.now().subtract(const Duration(days: 60)),
+          ),
+        ))
         .go();
   }
 
@@ -111,38 +123,45 @@ class AppDatabase extends _$AppDatabase {
   Stream<List<Playlist>> watchPlaylists() {
     final query = select(playlists)
       ..orderBy([(p) => OrderingTerm.desc(p.createdAt)]);
-    return query.watch().map((rows) => rows
-        .map((r) => Playlist(id: r.id, name: r.name, createdAt: r.createdAt))
-        .toList());
+    return query.watch().map(
+      (rows) => rows
+          .map((r) => Playlist(id: r.id, name: r.name, createdAt: r.createdAt))
+          .toList(),
+    );
   }
 
   /// Crea una playlist y devuelve su id.
   Future<int> createPlaylist(String name) async {
-    final id = await into(playlists).insert(
-      PlaylistsCompanion.insert(name: name),
-    );
+    final id = await into(
+      playlists,
+    ).insert(PlaylistsCompanion.insert(name: name));
     return id;
   }
 
   Future<void> deletePlaylist(int id) async {
-    await (delete(playlistTracks)..where((pt) => pt.playlistId.equals(id)))
-        .go();
+    await (delete(
+      playlistTracks,
+    )..where((pt) => pt.playlistId.equals(id))).go();
     await (delete(playlists)..where((p) => p.id.equals(id))).go();
   }
 
   Future<Playlist?> getPlaylist(int id) async {
-    final row = await (select(playlists)..where((p) => p.id.equals(id)))
-        .getSingleOrNull();
+    final row = await (select(
+      playlists,
+    )..where((p) => p.id.equals(id))).getSingleOrNull();
     if (row == null) return null;
     return Playlist(id: row.id, name: row.name, createdAt: row.createdAt);
   }
 
   /// Canciones de una playlist (con metadatos cacheados), en orden.
   Stream<List<Track>> watchPlaylistTracks(int playlistId) {
-    final query = (select(playlistTracks)
-          ..where((pt) => pt.playlistId.equals(playlistId))
-          ..orderBy([(pt) => OrderingTerm.asc(pt.position)]))
-        .join([innerJoin(tracks, tracks.id.equalsExp(playlistTracks.trackId))]);
+    final query =
+        (select(playlistTracks)
+              ..where((pt) => pt.playlistId.equals(playlistId))
+              ..orderBy([(pt) => OrderingTerm.asc(pt.position)]))
+            .join([
+              innerJoin(tracks, tracks.id.equalsExp(playlistTracks.trackId)),
+            ]);
 
     return query.watch().map((rows) {
       return rows.map((row) => _trackFromRow(row.readTable(tracks))).toList();
@@ -152,18 +171,21 @@ class AppDatabase extends _$AppDatabase {
   /// Añade una canción al final de una playlist (no duplica).
   Future<void> addToPlaylist(int playlistId, Track track) async {
     await cacheTrack(track);
-    final existing = await (select(playlistTracks)
-          ..where(
-            (pt) => pt.playlistId.equals(playlistId) & pt.trackId.equals(track.id),
-          ))
-        .get();
+    final existing =
+        await (select(playlistTracks)..where(
+              (pt) =>
+                  pt.playlistId.equals(playlistId) &
+                  pt.trackId.equals(track.id),
+            ))
+            .get();
     if (existing.isNotEmpty) return;
 
-    final maxPos = await (selectOnly(playlistTracks)
-          ..addColumns([playlistTracks.position.max()])
-          ..where(playlistTracks.playlistId.equals(playlistId)))
-        .map((row) => row.read(playlistTracks.position.max()))
-        .getSingle();
+    final maxPos =
+        await (selectOnly(playlistTracks)
+              ..addColumns([playlistTracks.position.max()])
+              ..where(playlistTracks.playlistId.equals(playlistId)))
+            .map((row) => row.read(playlistTracks.position.max()))
+            .getSingle();
     final nextPosition = (maxPos ?? 0) + 1;
 
     await into(playlistTracks).insert(
@@ -176,10 +198,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> removeFromPlaylist(int playlistId, String trackId) async {
-    await (delete(playlistTracks)
-          ..where(
-            (pt) => pt.playlistId.equals(playlistId) & pt.trackId.equals(trackId),
-          ))
+    await (delete(playlistTracks)..where(
+          (pt) => pt.playlistId.equals(playlistId) & pt.trackId.equals(trackId),
+        ))
         .go();
   }
 
@@ -193,8 +214,7 @@ class AppDatabase extends _$AppDatabase {
           ? Duration(seconds: row.durationSeconds!)
           : null,
       thumbnailUrl: row.thumbnailUrl,
+      album: row.album,
     );
   }
-
 }
-

@@ -58,6 +58,15 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _albumMeta = const VerificationMeta('album');
+  @override
+  late final GeneratedColumn<String> album = GeneratedColumn<String>(
+    'album',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _lastPlayedMeta = const VerificationMeta(
     'lastPlayed',
   );
@@ -88,6 +97,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     artist,
     durationSeconds,
     thumbnailUrl,
+    album,
     lastPlayed,
     playCount,
   ];
@@ -140,6 +150,12 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         ),
       );
     }
+    if (data.containsKey('album')) {
+      context.handle(
+        _albumMeta,
+        album.isAcceptableOrUnknown(data['album']!, _albumMeta),
+      );
+    }
     if (data.containsKey('last_played')) {
       context.handle(
         _lastPlayedMeta,
@@ -181,6 +197,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.string,
         data['${effectivePrefix}thumbnail_url'],
       ),
+      album: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}album'],
+      ),
       lastPlayed: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}last_played'],
@@ -204,6 +224,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final String artist;
   final int? durationSeconds;
   final String? thumbnailUrl;
+
+  /// Álbum enriquecido vía Deezer (null si aún no se ha enriquecido).
+  final String? album;
   final DateTime? lastPlayed;
   final int playCount;
   const TrackRow({
@@ -212,6 +235,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     required this.artist,
     this.durationSeconds,
     this.thumbnailUrl,
+    this.album,
     this.lastPlayed,
     required this.playCount,
   });
@@ -226,6 +250,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     }
     if (!nullToAbsent || thumbnailUrl != null) {
       map['thumbnail_url'] = Variable<String>(thumbnailUrl);
+    }
+    if (!nullToAbsent || album != null) {
+      map['album'] = Variable<String>(album);
     }
     if (!nullToAbsent || lastPlayed != null) {
       map['last_played'] = Variable<DateTime>(lastPlayed);
@@ -245,6 +272,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       thumbnailUrl: thumbnailUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(thumbnailUrl),
+      album: album == null && nullToAbsent
+          ? const Value.absent()
+          : Value(album),
       lastPlayed: lastPlayed == null && nullToAbsent
           ? const Value.absent()
           : Value(lastPlayed),
@@ -263,6 +293,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       artist: serializer.fromJson<String>(json['artist']),
       durationSeconds: serializer.fromJson<int?>(json['durationSeconds']),
       thumbnailUrl: serializer.fromJson<String?>(json['thumbnailUrl']),
+      album: serializer.fromJson<String?>(json['album']),
       lastPlayed: serializer.fromJson<DateTime?>(json['lastPlayed']),
       playCount: serializer.fromJson<int>(json['playCount']),
     );
@@ -276,6 +307,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'artist': serializer.toJson<String>(artist),
       'durationSeconds': serializer.toJson<int?>(durationSeconds),
       'thumbnailUrl': serializer.toJson<String?>(thumbnailUrl),
+      'album': serializer.toJson<String?>(album),
       'lastPlayed': serializer.toJson<DateTime?>(lastPlayed),
       'playCount': serializer.toJson<int>(playCount),
     };
@@ -287,6 +319,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     String? artist,
     Value<int?> durationSeconds = const Value.absent(),
     Value<String?> thumbnailUrl = const Value.absent(),
+    Value<String?> album = const Value.absent(),
     Value<DateTime?> lastPlayed = const Value.absent(),
     int? playCount,
   }) => TrackRow(
@@ -297,6 +330,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
         ? durationSeconds.value
         : this.durationSeconds,
     thumbnailUrl: thumbnailUrl.present ? thumbnailUrl.value : this.thumbnailUrl,
+    album: album.present ? album.value : this.album,
     lastPlayed: lastPlayed.present ? lastPlayed.value : this.lastPlayed,
     playCount: playCount ?? this.playCount,
   );
@@ -311,6 +345,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       thumbnailUrl: data.thumbnailUrl.present
           ? data.thumbnailUrl.value
           : this.thumbnailUrl,
+      album: data.album.present ? data.album.value : this.album,
       lastPlayed: data.lastPlayed.present
           ? data.lastPlayed.value
           : this.lastPlayed,
@@ -326,6 +361,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('artist: $artist, ')
           ..write('durationSeconds: $durationSeconds, ')
           ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('album: $album, ')
           ..write('lastPlayed: $lastPlayed, ')
           ..write('playCount: $playCount')
           ..write(')'))
@@ -339,6 +375,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     artist,
     durationSeconds,
     thumbnailUrl,
+    album,
     lastPlayed,
     playCount,
   );
@@ -351,6 +388,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.artist == this.artist &&
           other.durationSeconds == this.durationSeconds &&
           other.thumbnailUrl == this.thumbnailUrl &&
+          other.album == this.album &&
           other.lastPlayed == this.lastPlayed &&
           other.playCount == this.playCount);
 }
@@ -361,6 +399,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<String> artist;
   final Value<int?> durationSeconds;
   final Value<String?> thumbnailUrl;
+  final Value<String?> album;
   final Value<DateTime?> lastPlayed;
   final Value<int> playCount;
   final Value<int> rowid;
@@ -370,6 +409,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.artist = const Value.absent(),
     this.durationSeconds = const Value.absent(),
     this.thumbnailUrl = const Value.absent(),
+    this.album = const Value.absent(),
     this.lastPlayed = const Value.absent(),
     this.playCount = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -380,6 +420,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.artist = const Value.absent(),
     this.durationSeconds = const Value.absent(),
     this.thumbnailUrl = const Value.absent(),
+    this.album = const Value.absent(),
     this.lastPlayed = const Value.absent(),
     this.playCount = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -391,6 +432,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<String>? artist,
     Expression<int>? durationSeconds,
     Expression<String>? thumbnailUrl,
+    Expression<String>? album,
     Expression<DateTime>? lastPlayed,
     Expression<int>? playCount,
     Expression<int>? rowid,
@@ -401,6 +443,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (artist != null) 'artist': artist,
       if (durationSeconds != null) 'duration_seconds': durationSeconds,
       if (thumbnailUrl != null) 'thumbnail_url': thumbnailUrl,
+      if (album != null) 'album': album,
       if (lastPlayed != null) 'last_played': lastPlayed,
       if (playCount != null) 'play_count': playCount,
       if (rowid != null) 'rowid': rowid,
@@ -413,6 +456,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<String>? artist,
     Value<int?>? durationSeconds,
     Value<String?>? thumbnailUrl,
+    Value<String?>? album,
     Value<DateTime?>? lastPlayed,
     Value<int>? playCount,
     Value<int>? rowid,
@@ -423,6 +467,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       artist: artist ?? this.artist,
       durationSeconds: durationSeconds ?? this.durationSeconds,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      album: album ?? this.album,
       lastPlayed: lastPlayed ?? this.lastPlayed,
       playCount: playCount ?? this.playCount,
       rowid: rowid ?? this.rowid,
@@ -447,6 +492,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (thumbnailUrl.present) {
       map['thumbnail_url'] = Variable<String>(thumbnailUrl.value);
     }
+    if (album.present) {
+      map['album'] = Variable<String>(album.value);
+    }
     if (lastPlayed.present) {
       map['last_played'] = Variable<DateTime>(lastPlayed.value);
     }
@@ -467,6 +515,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('artist: $artist, ')
           ..write('durationSeconds: $durationSeconds, ')
           ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('album: $album, ')
           ..write('lastPlayed: $lastPlayed, ')
           ..write('playCount: $playCount, ')
           ..write('rowid: $rowid')
@@ -1314,6 +1363,7 @@ typedef $$TracksTableCreateCompanionBuilder =
       Value<String> artist,
       Value<int?> durationSeconds,
       Value<String?> thumbnailUrl,
+      Value<String?> album,
       Value<DateTime?> lastPlayed,
       Value<int> playCount,
       Value<int> rowid,
@@ -1325,6 +1375,7 @@ typedef $$TracksTableUpdateCompanionBuilder =
       Value<String> artist,
       Value<int?> durationSeconds,
       Value<String?> thumbnailUrl,
+      Value<String?> album,
       Value<DateTime?> lastPlayed,
       Value<int> playCount,
       Value<int> rowid,
@@ -1403,6 +1454,11 @@ class $$TracksTableFilterComposer
 
   ColumnFilters<String> get thumbnailUrl => $composableBuilder(
     column: $table.thumbnailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get album => $composableBuilder(
+    column: $table.album,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1501,6 +1557,11 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get album => $composableBuilder(
+    column: $table.album,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get lastPlayed => $composableBuilder(
     column: $table.lastPlayed,
     builder: (column) => ColumnOrderings(column),
@@ -1539,6 +1600,9 @@ class $$TracksTableAnnotationComposer
     column: $table.thumbnailUrl,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get album =>
+      $composableBuilder(column: $table.album, builder: (column) => column);
 
   GeneratedColumn<DateTime> get lastPlayed => $composableBuilder(
     column: $table.lastPlayed,
@@ -1632,6 +1696,7 @@ class $$TracksTableTableManager
                 Value<String> artist = const Value.absent(),
                 Value<int?> durationSeconds = const Value.absent(),
                 Value<String?> thumbnailUrl = const Value.absent(),
+                Value<String?> album = const Value.absent(),
                 Value<DateTime?> lastPlayed = const Value.absent(),
                 Value<int> playCount = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1641,6 +1706,7 @@ class $$TracksTableTableManager
                 artist: artist,
                 durationSeconds: durationSeconds,
                 thumbnailUrl: thumbnailUrl,
+                album: album,
                 lastPlayed: lastPlayed,
                 playCount: playCount,
                 rowid: rowid,
@@ -1652,6 +1718,7 @@ class $$TracksTableTableManager
                 Value<String> artist = const Value.absent(),
                 Value<int?> durationSeconds = const Value.absent(),
                 Value<String?> thumbnailUrl = const Value.absent(),
+                Value<String?> album = const Value.absent(),
                 Value<DateTime?> lastPlayed = const Value.absent(),
                 Value<int> playCount = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1661,6 +1728,7 @@ class $$TracksTableTableManager
                 artist: artist,
                 durationSeconds: durationSeconds,
                 thumbnailUrl: thumbnailUrl,
+                album: album,
                 lastPlayed: lastPlayed,
                 playCount: playCount,
                 rowid: rowid,

@@ -21,6 +21,11 @@ Plataformas objetivo: **Windows, Linux y macOS** (una sola base de código Flutt
   minimizar/maximizar/cerrar.
 - **Caché local de audio**: evicción LRU por tamaño (2 GiB por defecto),
   descargas con progreso y deduplicación de descargas concurrentes.
+- **Metadatos vía Deezer**: al reproducir, se enriquece la pista con título/
+  artista/álbum/portada limpios de la API pública de Deezer (best-effort,
+  sin clave).
+- **Tema dinámico**: el color de acento de la app se adapta al artwork de la
+  pista en reproducción (paleta extraída con `palette_generator`).
 
 ## Arquitectura
 
@@ -73,6 +78,28 @@ flutter build windows    # o build linux / build macos
 Los binarios sidecar se copian junto al ejecutable en el build (o se resuelven
 desde `bin/<plataforma>/` en desarrollo). También puedes anular sus rutas con
 las variables de entorno `SCRUP_YTDLP_PATH` y `SCRUP_FFMPEG_PATH`.
+
+## Flujo de desarrollo (importante)
+
+**Regla de oro: nunca ejecutar `flutter build` mientras haya un `flutter run`
+activo.** El build mata el proceso `scrup.exe` en ejecución (necesario para
+poder sobrescribir el binario), lo que corta la conexión del modo debug
+("Lost connection to device"). Si quieres el ejecutable, cierra primero la
+sesión de desarrollo con `q`.
+
+Mientras se itera, el ciclo es solo código + recarga en la consola de
+`flutter run`:
+
+| Tecla | Acción | Cuándo usarla |
+|---|---|---|---|
+| `r` | Hot reload | Cambios de UI/lógica que **no** tocan `main.dart` ni singletons |
+| `R` | Hot restart | Cambios en `main.dart` o en `PlayerService` (singleton) |
+| `q` | Quit | Cerrar la app y la sesión de debug |
+
+> ⚠️ **`media_kit` + hot restart**: cada `R` crea un `Player` nativo (libmpv)
+> nuevo en el mismo proceso. En Windows esto puede crashear la app. Si al
+> pulsar `R` la app se cae o se pierde la conexión, usa `q` y relanza
+> `flutter run -d windows` — es la vía más estable para cambios de servicios.
 
 ## Estructura
 

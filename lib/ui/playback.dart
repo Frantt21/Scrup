@@ -2,21 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/track.dart';
-import '../data/database.dart';
 import '../services/player_service.dart';
 
-/// Reproduce una pista individual (resuelve la fuente cache-first, la
-/// reproduce y registra el historial). Muestra un SnackBar si falla.
+/// Reproduce una pista individual (resuelve la fuente cache-first y la
+/// reproduce). El historial lo registra el propio [PlayerService] vía el
+/// callback `onPlayed` (cubre también auto-advance y radio).
 ///
 /// Se usa desde cualquier vista (inicio, resultados, playlists).
 Future<void> playTrack(BuildContext context, Track track) async {
   final messenger = ScaffoldMessenger.of(context);
   final player = context.read<PlayerService>();
-  final db = context.read<AppDatabase>();
   try {
-    final played = await player.playTrack(track);
-    // Cache de metadatos para la próxima vez (solo si sigue vigente)
-    if (played) await db.recordPlay(track);
+    await player.playTrack(track);
   } catch (e) {
     messenger.showSnackBar(
       SnackBar(content: Text('No se pudo reproducir: $e')),

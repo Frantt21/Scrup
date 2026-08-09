@@ -36,19 +36,21 @@ void main() {
       expect(cached!.title, 'Canción');
     });
 
-    test('recientes deduplica la misma canción reproducida varias veces',
-        () async {
-      final track = Track(id: 't1', title: 'Canción', artist: 'Artista');
+    test(
+      'recientes deduplica la misma canción reproducida varias veces',
+      () async {
+        final track = Track(id: 't1', title: 'Canción', artist: 'Artista');
 
-      await db.recordPlay(track);
-      await db.recordPlay(track);
-      await db.recordPlay(track);
+        await db.recordPlay(track);
+        await db.recordPlay(track);
+        await db.recordPlay(track);
 
-      // La misma canción 3 veces → aparece una sola vez en recientes
-      final recientes = await db.watchRecentlyPlayed().first;
-      expect(recientes.length, 1);
-      expect(recientes.first.id, 't1');
-    });
+        // La misma canción 3 veces → aparece una sola vez en recientes
+        final recientes = await db.watchRecentlyPlayed().first;
+        expect(recientes.length, 1);
+        expect(recientes.first.id, 't1');
+      },
+    );
 
     test('recientes ordena las canciones distintas por último play', () async {
       final a = Track(id: 'a', title: 'A', artist: 'X');
@@ -61,6 +63,48 @@ void main() {
       final recientes = await db.watchRecentlyPlayed().first;
       expect(recientes.map((t) => t.id).toList(), ['a', 'b']);
     });
+
+    test('persiste el álbum enriquecido y lo devuelve al leer', () async {
+      final track = Track(
+        id: 'alb1',
+        title: 'One More Time',
+        artist: 'Daft Punk',
+        album: 'Discovery',
+        thumbnailUrl:
+            'https://e-cdns-images.dzcdn.net/images/cover/x/500x500.jpg',
+      );
+
+      await db.cacheTrack(track);
+      final cached = await db.getCachedTrack('alb1');
+
+      expect(cached, isNotNull);
+      expect(cached!.album, 'Discovery');
+      expect(cached.thumbnailUrl, track.thumbnailUrl);
+      expect(cached.title, 'One More Time');
+    });
+
+    test(
+      'recordPlay guarda el álbum del track enriquecido en recientes',
+      () async {
+        final track = Track(
+          id: 'alb2',
+          title: 'One More Time',
+          artist: 'Daft Punk',
+          album: 'Discovery',
+          thumbnailUrl:
+              'https://e-cdns-images.dzcdn.net/images/cover/x/500x500.jpg',
+        );
+
+        await db.recordPlay(track);
+        final recientes = await db.watchRecentlyPlayed().first;
+
+        expect(recientes.first.album, 'Discovery');
+        expect(
+          recientes.first.thumbnailUrl,
+          'https://e-cdns-images.dzcdn.net/images/cover/x/500x500.jpg',
+        );
+      },
+    );
   });
 
   group('playlists', () {
@@ -98,7 +142,6 @@ void main() {
 
     test('eliminar playlist borra sus canciones', () async {
       final playlistId = await db.createPlaylist('Temporal');
-
 
       await db.addToPlaylist(
         playlistId,

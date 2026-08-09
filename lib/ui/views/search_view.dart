@@ -12,7 +12,13 @@ import '../widgets/track_tile.dart';
 /// Vista de búsqueda: busca canciones en YouTube y permite reproducirlas
 /// o añadirlas a una playlist.
 class SearchView extends StatefulWidget {
-  const SearchView({super.key});
+  /// Consulta de búsqueda externa (lanzada desde el inicio). Al cambiar, la
+  /// vista ejecuta la búsqueda y la muestra. Es un [ValueNotifier] porque la
+  /// vista lo consume (resetea a null) para permitir repetir una consulta
+  /// idéntica.
+  final ValueNotifier<String?>? searchRequest;
+
+  const SearchView({super.key, this.searchRequest});
 
   @override
   State<SearchView> createState() => _SearchViewState();
@@ -30,6 +36,23 @@ class _SearchViewState extends State<SearchView> {
 
   /// Contador para descartar respuestas de búsquedas obsoletas.
   int _searchToken = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Búsqueda lanzada desde la pantalla de inicio
+    widget.searchRequest?.addListener(_onExternalSearch);
+  }
+
+  void _onExternalSearch() {
+    final q = widget.searchRequest?.value;
+    if (q == null || q.trim().isEmpty) return;
+    // Consumir la consulta (reset a null) para que una búsqueda idéntica
+    // repetida desde el inicio vuelva a notificar.
+    widget.searchRequest?.value = null;
+    _searchController.text = q;
+    _search(q);
+  }
 
   Future<void> _search(String query) async {
     final q = query.trim();
@@ -72,8 +95,10 @@ class _SearchViewState extends State<SearchView> {
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('Añadir a playlist',
-                  style: Theme.of(ctx).textTheme.titleMedium),
+              child: Text(
+                'Añadir a playlist',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
             ),
             if (playlists.isEmpty)
               Padding(
@@ -81,8 +106,8 @@ class _SearchViewState extends State<SearchView> {
                 child: Text(
                   'No tienes playlists todavía. Crea una nueva.',
                   style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                      ),
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             for (final p in playlists)
@@ -129,9 +154,7 @@ class _SearchViewState extends State<SearchView> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Nombre de la playlist',
-          ),
+          decoration: const InputDecoration(hintText: 'Nombre de la playlist'),
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
@@ -150,6 +173,7 @@ class _SearchViewState extends State<SearchView> {
 
   @override
   void dispose() {
+    widget.searchRequest?.removeListener(_onExternalSearch);
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -234,8 +258,11 @@ class _SearchViewState extends State<SearchView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline,
-                  size: 48, color: theme.colorScheme.error),
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: theme.colorScheme.error,
+              ),
               const SizedBox(height: 12),
               Text(_error!, textAlign: TextAlign.center),
             ],
