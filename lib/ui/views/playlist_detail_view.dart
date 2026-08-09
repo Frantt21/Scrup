@@ -1,12 +1,18 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../playback.dart';
+import '../widgets/cover_image.dart';
 import '../widgets/player_bar.dart' show kPlayerOverlayInset;
+import '../widgets/scrup_snackbar.dart';
 import '../widgets/track_tile.dart';
 
 /// Detalle de una playlist renderizado EN EL MISMO espacio que el grid (sin
@@ -75,83 +81,143 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     );
   }
 
-  /// Selector de portada: elegir el artwork de una de las canciones de la
-  /// playlist (o quitar la portada actual).
+  /// Selector de portada: elegir una imagen desde los archivos del usuario,
+  /// el artwork de una de las canciones de la playlist, o quitar la portada.
   Future<void> _pickCover() async {
     final db = context.read<AppDatabase>();
-    final choice = await showModalBottomSheet<({String? url, bool remove})>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Portada de la playlist',
-                style: Theme.of(ctx).textTheme.titleMedium,
-              ),
+    final choice =
+        await showModalBottomSheet<({String? url, bool remove, bool fromFile})>(
+          context: context,
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Portada de la playlist',
+                    style: Theme.of(ctx).textTheme.titleMedium,
+                  ),
+                ),
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.image_outlined),
+                  title: const Text('Elegir desde archivo…'),
+                  onTap: () => Navigator.pop(ctx, (
+                    url: null,
+                    remove: false,
+                    fromFile: true,
+                  )),
+                ),
+                if (_tracks.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Text(
+                      'Añade canciones para poder usar su portada como la de la '
+                      'playlist.',
+                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                for (final track in _tracks.take(12))
+                  ListTile(
+                    dense: true,
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: CoverImage(
+                          source: track.thumbnailUrl,
+                          fallback: _artworkFallback(Theme.of(ctx)),
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      track.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      track.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => Navigator.pop(ctx, (
+                      url: track.thumbnailUrl,
+                      remove: false,
+                      fromFile: false,
+                    )),
+                  ),
+                if (_playlist?.coverUrl != null)
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.delete_outline),
+                    title: const Text('Quitar portada'),
+                    onTap: () => Navigator.pop(ctx, (
+                      url: null,
+                      remove: true,
+                      fromFile: false,
+                    )),
+                  ),
+              ],
             ),
-            if (_tracks.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Text(
-                  'Añade canciones para poder usar su portada como la de la '
-                  'playlist.',
-                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            for (final track in _tracks.take(12))
-              ListTile(
-                dense: true,
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: track.thumbnailUrl != null
-                        ? Image.network(
-                            track.thumbnailUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
-                                _artworkFallback(Theme.of(ctx)),
-                          )
-                        : _artworkFallback(Theme.of(ctx)),
-                  ),
-                ),
-                title: Text(
-                  track.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  track.artist,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onTap: () => Navigator.pop(ctx, (
-                  url: track.thumbnailUrl,
-                  remove: false,
-                )),
-              ),
-            if (_playlist?.coverUrl != null)
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('Quitar portada'),
-                onTap: () => Navigator.pop(ctx, (url: null, remove: true)),
-              ),
-          ],
-        ),
-      ),
-    );
+          ),
+        );
     if (choice == null) return;
-    if (choice.remove) {
+    if (choice.fromFile) {
+      await _pickCoverFromFile();
+    } else if (choice.remove) {
       await db.setPlaylistCover(widget.playlist.id, null);
     } else {
       await db.setPlaylistCover(widget.playlist.id, choice.url);
+    }
+  }
+
+  /// Copia una imagen elegida por el usuario al directorio de portadas de la
+  /// app y la asigna a la playlist. Copiar (en vez de referenciar el archivo
+  /// original) hace que la portada sobreviva aunque el usuario mueva el
+  /// archivo original.
+  Future<void> _pickCoverFromFile() async {
+    const images = XTypeGroup(
+      label: 'Imágenes',
+      extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'],
+    );
+    final file = await openFile(acceptedTypeGroups: [images]);
+    if (file == null || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final db = context.read<AppDatabase>();
+    try {
+      final current = await db.getPlaylist(widget.playlist.id);
+      final currentCover = current?.coverUrl;
+      final base = await getApplicationSupportDirectory();
+      final coversDir = Directory(p.join(base.path, 'playlist_covers'));
+      await coversDir.create(recursive: true);
+      final ext = p.extension(file.path);
+      final dest = p.join(coversDir.path, 'playlist_${widget.playlist.id}$ext');
+      if (p.equals(file.path, dest)) {
+        // El archivo elegido ya es la portada actual.
+        if (!mounted) return;
+        showScrupSnackBar(messenger, 'Esa imagen ya es la portada');
+        return;
+      }
+      // Copiar PRIMERO (si el copy falla, la portada anterior se conserva) y
+      // luego limpiar la portada local anterior para no acumular huérfanos.
+      await File(file.path).copy(dest);
+      await db.setPlaylistCover(widget.playlist.id, dest);
+      if (currentCover != null &&
+          CoverImage.isLocalPath(currentCover) &&
+          !p.equals(currentCover, dest)) {
+        final old = File(currentCover);
+        if (await old.exists()) await old.delete();
+      }
+      if (!mounted) return;
+      showScrupSnackBar(messenger, 'Portada actualizada');
+    } catch (_) {
+      if (!mounted) return;
+      showScrupSnackBar(messenger, 'No se pudo usar esa imagen');
     }
   }
 
@@ -294,30 +360,10 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   }
 
   Widget _coverArt(ThemeData theme, String? url) {
-    if (url == null) {
-      return Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              theme.colorScheme.surfaceContainerHigh,
-              theme.colorScheme.surfaceContainer,
-            ],
-          ),
-        ),
-        child: Icon(
-          Icons.queue_music,
-          size: 24,
-          color: theme.colorScheme.primary.withValues(alpha: 0.5),
-        ),
-      );
-    }
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
+    return CoverImage(
+      source: url,
       cacheWidth: 200,
-      errorBuilder: (_, _, _) => Container(
+      fallback: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,

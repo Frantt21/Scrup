@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SettingsStore {
   static const _volumeKey = 'player.volume';
   static const _lastTrackKey = 'player.last_track_id';
+  static const _sidebarGridKey = 'ui.sidebar_grid_mode';
 
   SharedPreferences? _prefs;
 
@@ -20,6 +21,17 @@ class SettingsStore {
   Future<double?> loadVolume() async {
     final prefs = await _instance;
     return prefs.getDouble(_volumeKey);
+  }
+
+  Future<void> saveSidebarGridMode(bool grid) async {
+    final prefs = await _instance;
+    await prefs.setBool(_sidebarGridKey, grid);
+  }
+
+  /// `null` si el usuario nunca cambió el modo (por defecto: lista).
+  Future<bool?> loadSidebarGridMode() async {
+    final prefs = await _instance;
+    return prefs.getBool(_sidebarGridKey);
   }
 
   Future<void> saveLastTrackId(String id) async {

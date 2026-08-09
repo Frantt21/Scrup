@@ -5,16 +5,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/database.dart';
+import '../../services/settings_store.dart';
 import '../theme_controller.dart';
+import 'cover_image.dart';
 import 'scrup_snackbar.dart';
 
 /// Ancho fijo del contenedor lateral de playlists.
 const double kSidebarWidth = 250;
 
 /// Contenedor lateral flotante tipo glass: ocupa su propio espacio a la
-/// izquierda (no se superpone al contenido) y muestra TODAS las playlists en
-/// una lista vertical. Al final de la lista hay un item que emula una
-/// playlist pero es un botón para crear una nueva.
+/// izquierda (no se superpone al contenido) y muestra TODAS las playlists.
+/// Permite alternar entre vista de LISTA (filas) y CUADRÍCULA (grid de 2
+/// columnas). En ambos modos hay un item final que emula una playlist pero
+/// es un botón para crear una nueva.
 class PlaylistsSidebar extends StatefulWidget {
   /// Playlist abierta actualmente (para resaltarla en la lista). `null` =
   /// ninguna abierta.
@@ -41,9 +44,17 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   List<Playlist> _playlists = const [];
   Map<int, int> _counts = const {};
 
+  /// `true` = cuadrícula (grid de 2 columnas); `false` = lista.
+  bool _gridMode = false;
+
+  /// El usuario ya alternó el modo: evita que la carga asíncrona de la
+  /// preferencia sobrescriba su elección (carrera de arranque).
+  bool _userToggled = false;
+
   @override
   void initState() {
     super.initState();
+    _loadGridMode();
     final db = context.read<AppDatabase>();
     _playlistsStream = db.watchPlaylists();
     _playlistsSub = _playlistsStream.listen((playlists) {
@@ -55,6 +66,23 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
       if (!mounted) return;
       setState(() => _counts = counts);
     });
+  }
+
+  /// Restaura el modo guardado (lista/cuadrícula) de la última sesión.
+  Future<void> _loadGridMode() async {
+    try {
+      final saved = await context.read<SettingsStore>().loadSidebarGridMode();
+      if (!mounted || saved == null || _userToggled) return;
+      setState(() => _gridMode = saved);
+    } catch (_) {
+      // La preferencia nunca debe romper el arranque del sidebar.
+    }
+  }
+
+  void _toggleGridMode() {
+    _userToggled = true;
+    setState(() => _gridMode = !_gridMode);
+    unawaited(context.read<SettingsStore>().saveSidebarGridMode(_gridMode));
   }
 
   @override
@@ -177,32 +205,38 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Cabecera: título + toggle lista/cuadrícula
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-                    child: Text(
-                      'Playlists',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Playlists',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            _gridMode
+                                ? Icons.view_list_outlined
+                                : Icons.grid_view_rounded,
+                            size: 20,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          tooltip: _gridMode
+                              ? 'Ver como lista'
+                              : 'Ver como cuadrícula',
+                          color: theme.colorScheme.onSurfaceVariant,
+                          onPressed: _toggleGridMode,
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
-                      children: [
-                        if (_playlists.isEmpty) _emptyState(theme),
-                        for (final playlist in _playlists)
-                          _PlaylistRow(
-                            playlist: playlist,
-                            count: _counts[playlist.id] ?? 0,
-                            selected: playlist.id == widget.openPlaylistId,
-                            onTap: () => widget.onSelectPlaylist(playlist),
-                            onDelete: () => _deletePlaylist(playlist),
-                          ),
-                        const SizedBox(height: 4),
-                        _CreatePlaylistTile(onTap: _createPlaylist),
-                      ],
-                    ),
+                    child: _gridMode ? _buildGrid(theme) : _buildList(theme),
                   ),
                 ],
               ),
@@ -210,6 +244,55 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Vista de lista: filas con miniatura + nombre + conteo y el item de
+  /// crear al final.
+  Widget _buildList(ThemeData theme) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+      children: [
+        if (_playlists.isEmpty) _emptyState(theme),
+        for (final playlist in _playlists)
+          _PlaylistRow(
+            playlist: playlist,
+            count: _counts[playlist.id] ?? 0,
+            selected: playlist.id == widget.openPlaylistId,
+            onTap: () => widget.onSelectPlaylist(playlist),
+            onDelete: () => _deletePlaylist(playlist),
+          ),
+        const SizedBox(height: 4),
+        _CreatePlaylistTile(onTap: _createPlaylist),
+      ],
+    );
+  }
+
+  /// Vista de cuadrícula: grid de 2 columnas con tarjetas de portada y el
+  /// item de crear ocupando una celda.
+  Widget _buildGrid(ThemeData theme) {
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 0.78,
+      ),
+      itemCount: _playlists.length + 1,
+      itemBuilder: (context, i) {
+        if (i == _playlists.length) {
+          return _CreateGridCell(onTap: _createPlaylist);
+        }
+        final playlist = _playlists[i];
+        return _PlaylistGridCell(
+          playlist: playlist,
+          count: _counts[playlist.id] ?? 0,
+          selected: playlist.id == widget.openPlaylistId,
+          onTap: () => widget.onSelectPlaylist(playlist),
+          onDelete: () => _deletePlaylist(playlist),
+        );
+      },
     );
   }
 
@@ -244,8 +327,9 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   }
 }
 
-/// Fila de playlist: miniatura + nombre + nº de canciones, con borrado al
-/// hacer hover. La abierta se resalta con el tinte del color primario.
+/// Fila de playlist (vista lista): miniatura + nombre + nº de canciones, con
+/// borrado al hacer hover. La abierta se resalta con el tinte del color
+/// primario.
 class _PlaylistRow extends StatefulWidget {
   final Playlist playlist;
   final int count;
@@ -319,7 +403,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
                   ),
                 ),
                 // Espacio reservado para el borrar: evita que el nombre
-                // "salte" de ancho cuando aparece el botón en hover.
+                // \"salte\" de ancho cuando aparece el botón en hover.
                 SizedBox(
                   width: 32,
                   child: _hovered
@@ -341,44 +425,30 @@ class _PlaylistRowState extends State<_PlaylistRow> {
   }
 
   Widget _thumb(ThemeData theme) {
-    final url = widget.playlist.coverUrl;
-    if (url == null) {
-      return Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              theme.colorScheme.surfaceContainerHigh,
-              theme.colorScheme.surfaceContainer,
-            ],
-          ),
-        ),
-        child: Icon(
-          Icons.queue_music,
-          size: 18,
-          color: theme.colorScheme.primary.withValues(alpha: 0.5),
-        ),
-      );
-    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: SizedBox(
         width: 40,
         height: 40,
-        child: Image.network(
-          url,
-          fit: BoxFit.cover,
+        child: CoverImage(
+          source: widget.playlist.coverUrl,
           cacheWidth: 120,
-          errorBuilder: (_, _, _) => Container(
-            color: theme.colorScheme.surfaceContainerHigh,
+          fallback: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  theme.colorScheme.surfaceContainerHigh,
+                  theme.colorScheme.surfaceContainer,
+                ],
+              ),
+            ),
             child: Icon(
               Icons.queue_music,
               size: 18,
-              color: theme.colorScheme.onSurfaceVariant,
+              color: theme.colorScheme.primary.withValues(alpha: 0.5),
             ),
           ),
         ),
@@ -387,7 +457,145 @@ class _PlaylistRowState extends State<_PlaylistRow> {
   }
 }
 
-/// Item final que emula una playlist pero es un botón para crear una nueva.
+/// Tarjeta de playlist (vista cuadrícula): portada grande + nombre y conteo
+/// debajo. Hover con borde y borrar; la abierta se resalta.
+class _PlaylistGridCell extends StatefulWidget {
+  final Playlist playlist;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  const _PlaylistGridCell({
+    required this.playlist,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  @override
+  State<_PlaylistGridCell> createState() => _PlaylistGridCellState();
+}
+
+class _PlaylistGridCellState extends State<_PlaylistGridCell> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final playlist = widget.playlist;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: CoverImage(
+                      source: playlist.coverUrl,
+                      cacheWidth: 200,
+                      fallback: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              theme.colorScheme.surfaceContainerHigh,
+                              theme.colorScheme.surfaceContainer,
+                            ],
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.queue_music,
+                          size: 28,
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.45,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Resaltado: borde si está seleccionada o en hover
+                  if (_hovered || widget.selected)
+                    IgnorePointer(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: widget.selected ? 0.9 : 0.5,
+                            ),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (_hovered)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: widget.onDelete,
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.delete_outline,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              playlist.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: widget.selected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurface,
+              ),
+            ),
+            Text(
+              '${widget.count} '
+              '${widget.count == 1 ? 'canción' : 'canciones'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Item final que emula una playlist pero es un botón para crear una nueva
+/// (vista lista).
 class _CreatePlaylistTile extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -437,6 +645,56 @@ class _CreatePlaylistTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Celda que emula una playlist pero es un botón para crear una nueva
+/// (vista cuadrícula).
+class _CreateGridCell extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _CreateGridCell({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.55),
+                ),
+                color: theme.colorScheme.primary.withValues(alpha: 0.08),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add, size: 30, color: theme.colorScheme.primary),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Nueva playlist',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // El GridView impone el mismo tamaño a todas las celdas
+          // (childAspectRatio), así que no hace falta reservar altura.
+          const SizedBox(height: 6),
+        ],
       ),
     );
   }

@@ -29,4 +29,15 @@ void main() {
     await store.saveLastTrackId('v456');
     expect(await store.loadLastTrackId(), 'v456');
   });
+
+  test('guarda y restaura el modo del sidebar (lista/cuadrícula)', () async {
+    final store = SettingsStore();
+    expect(await store.loadSidebarGridMode(), isNull);
+
+    await store.saveSidebarGridMode(true); // cuadrícula
+    expect(await store.loadSidebarGridMode(), isTrue);
+
+    await store.saveSidebarGridMode(false); // lista
+    expect(await store.loadSidebarGridMode(), isFalse);
+  });
 }
