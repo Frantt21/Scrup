@@ -208,12 +208,13 @@ class _AppShellState extends State<AppShell> {
                         ],
                       ),
                       // Player flotante tipo glass. El padding exterior es el
-                      // margen flotante; las vistas usan kPlayerOverlayInset
+                      // margen flotante, alineado lateralmente con los
+                      // contenedores (12); las vistas usan kPlayerOverlayInset
                       // como padding inferior para no quedar ocultas.
                       Align(
                         alignment: Alignment.bottomCenter,
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                           child: const PlayerBar(),
                         ),
                       ),

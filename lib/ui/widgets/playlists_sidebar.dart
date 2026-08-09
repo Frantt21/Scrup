@@ -194,10 +194,12 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
 
     return Container(
       width: kSidebarWidth,
-      // Margen derecho 16 = mismo hueco que el padding del player (16): la
-      // separación entre el sidebar y el contenido queda idéntica a la del
-      // lado derecho (contenido → borde de la ventana).
-      margin: const EdgeInsets.fromLTRB(12, 12, 16, 12),
+      // El hueco entre el sidebar y el contenido lo define cada vista (los
+      // contenedores glass usan margen izquierdo 12; Home/Buscar su padding
+      // interno), igual que el hueco del lado derecho (contenido → borde de
+      // la ventana): ambos quedan en 12. Por eso aquí no se añade margen
+      // derecho propio.
+      margin: const EdgeInsets.fromLTRB(12, 12, 0, 12),
       // Sombra exterior (fuera del clip para que no se recorte)
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),

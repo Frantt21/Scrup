@@ -348,8 +348,11 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     return Theme(
       data: theme,
       child: Container(
-        // Margen flotante + sombra exterior (fuera del clip)
-        margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        // Margen flotante + sombra exterior (fuera del clip). Top 12 =
+        // alineado con el sidebar; bottom = kPlayerOverlayInset para que el
+        // contenedor termine POR ENCIMA del player (separado, sin pasar por
+        // detrás).
+        margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerOverlayInset),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
@@ -368,15 +371,29 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                // Cristal limpio: dos tonos oscuros translúcidos, sin el
-                // tinte del color de la portada.
+                // Cristal: la MISMA base oscura translúcida que el sidebar
+                // (mismos dos tonos y alphas), pero en el detalle se le añade
+                // un matiz sutil del color de la portada de la playlist
+                // (solo aquí; el sidebar se queda neutro).
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    theme.colorScheme.surfaceContainerHighest.withValues(
-                      alpha: 0.55,
-                    ),
+                    if (playlistColor != null)
+                      // Tinte SOLO del tono: se mezclan los colores opacos
+                      // (sin alpha) y luego se aplica el mismo alpha 0.55 del
+                      // sidebar, para que la translucidez coincida exactamente
+                      // (Color.lerp también interpolaría el canal alfa y el
+                      // detalle quedaría más opaco que el sidebar).
+                      Color.lerp(
+                        theme.colorScheme.surfaceContainerHighest,
+                        playlistColor,
+                        0.30,
+                      )!.withValues(alpha: 0.55)
+                    else
+                      theme.colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.55,
+                      ),
                     theme.colorScheme.surfaceContainer.withValues(alpha: 0.55),
                   ],
                 ),
@@ -507,13 +524,10 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                               ),
                             )
                           : ListView.separated(
-                              // El player flotante cubre la parte inferior.
-                              padding: const EdgeInsets.fromLTRB(
-                                12,
-                                8,
-                                12,
-                                kPlayerOverlayInset,
-                              ),
+                              // El contenedor ya termina por encima del
+                              // player (margen inferior), así que aquí solo
+                              // hace falta un respiro pequeño.
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                               itemCount: _tracks.length,
                               separatorBuilder: (_, _) =>
                                   const SizedBox(height: 4),

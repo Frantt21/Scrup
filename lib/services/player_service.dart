@@ -208,7 +208,10 @@ class PlayerService {
       // Marcar ANTES de abrir (el `completed` espurio de open cae en la
       // ventana de 3s).
       _openedAt = DateTime.now();
-      await _player.open(Media(_mediaUri(src)));
+      // `play: false` es OBLIGATORIO aquí: en media_kit, `open()` arranca la
+      // reproducción por defecto (`play: true`), y sin esto la canción
+      // restaurada empezaría a sonar sola al arrancar la app.
+      await _player.open(Media(_mediaUri(src)), play: false);
       if (token != _playToken) return false;
       // Queda pausada y lista; no se reproduce ni se registra historial.
       _publishTrack(track);

@@ -104,8 +104,11 @@ class _SettingsViewState extends State<SettingsView> {
     );
 
     return Container(
-      // Margen flotante + sombra exterior (fuera del clip)
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      // Margen flotante + sombra exterior (fuera del clip). Top 12 =
+      // alineado con el sidebar; bottom = kPlayerOverlayInset para que el
+      // contenedor termine POR ENCIMA del player (separado, sin pasar por
+      // detrás).
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerOverlayInset),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
@@ -135,12 +138,9 @@ class _SettingsViewState extends State<SettingsView> {
             child: Material(
               color: Colors.transparent,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  20,
-                  20,
-                  20,
-                  kPlayerOverlayInset,
-                ),
+                // El contenedor ya termina por encima del player (margen
+                // inferior), así que aquí solo hace falta un respiro pequeño.
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
                 children: [
                   Text(
                     AppLocalizations.of(context).settings,
