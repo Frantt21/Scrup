@@ -12,6 +12,7 @@ import '../../services/audio_cache_service.dart';
 import '../../services/player_service.dart';
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
+import '../widgets/context_menu_item.dart';
 
 /// Espacio vertical que ocupa el player flotante en la parte inferior de la
 /// ventana (barra + márgenes). Los scrollables de las vistas lo usan como
@@ -20,12 +21,13 @@ import '../theme_controller.dart';
 const double kPlayerOverlayInset = 104;
 
 /// Margen inferior de los contenedores principales (detalle de playlist y
-/// configuración) para que terminen POR ENCIMA del player: el player ocupa
-/// ~84px desde el borde inferior del área (12 de padding inferior + 64 de
-/// barra + 8 de padding superior), y el contenedor debe quedar a 12px de él
-/// — el mismo hueco que separa al contenedor del sidebar y del borde
-/// derecho, para espaciados uniformes y simétricos (84 + 12 = 96).
-const double kPlayerClearance = 96;
+/// configuración) para que terminen POR ENCIMA del player: el borde superior
+/// del cristal del player queda a 76px del borde inferior del área (12 de
+/// padding inferior + 64 de barra; el padding superior de 8 es transparente,
+/// no suma al vidrio visible), y el contenedor debe quedar a 12px de él — el
+/// mismo hueco que separa al contenedor del sidebar y del borde derecho,
+/// para espaciados uniformes y simétricos (76 + 12 = 88).
+const double kPlayerClearance = 88;
 
 /// Player flotante tipo glass: tarjeta translúcida con blur que flota sobre
 /// el contenido. La barra de progreso (sin dot, con tiempos) queda entre la
@@ -146,15 +148,10 @@ class _PlayerBarState extends State<PlayerBar> {
         position.dy,
       ),
       items: [
-        PopupMenuItem(
+        ContextMenuItem(
           value: 'add',
-          child: Row(
-            children: [
-              Icon(Icons.playlist_add),
-              const SizedBox(width: 10),
-              Text(l10n.addToPlaylist),
-            ],
-          ),
+          icon: Icons.playlist_add,
+          label: l10n.addToPlaylist,
         ),
       ],
     );
@@ -489,15 +486,12 @@ class _PlayerBarState extends State<PlayerBar> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Shuffle (mismo lenguaje visual que el play: relleno lila
-            // cuando está activo)
+            // Shuffle (el icono no cambia; solo se enciende en lila cuando
+            // está activo)
             ValueListenableBuilder<bool>(
               valueListenable: player.shuffle,
               builder: (context, on, _) => IconButton(
-                icon: Icon(
-                  on ? Icons.shuffle_on : Icons.shuffle,
-                  size: on ? 26 : iconSize,
-                ),
+                icon: Icon(Icons.shuffle, size: iconSize),
                 constraints: btnConstraints,
                 padding: EdgeInsets.zero,
                 color: on ? primary : muted,

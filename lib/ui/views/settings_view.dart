@@ -8,7 +8,6 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/settings_store.dart';
 import '../locale_controller.dart';
-import '../theme_controller.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/scrup_snackbar.dart';
 
@@ -25,6 +24,22 @@ class SettingsView extends StatefulWidget {
 class _SettingsViewState extends State<SettingsView> {
   CacheStats? _stats;
   bool _clearing = false;
+
+  /// Idiomas soportados: el nombre se muestra en el propio idioma (cada
+  /// usuario lo reconoce aunque aún no lea la interfaz).
+  ///
+  /// IMPORTANTE: mantener en sync con los ARB de `lib/l10n/` — al agregar un
+  /// idioma nuevo hay que crear su `app_xx.arb`, regenerar (`flutter
+  /// gen-l10n`) y añadirlo aquí para que aparezca en el dropdown.
+  static const List<_LocaleOption> _localeOptions = [
+    _LocaleOption(Locale('es'), 'Español'),
+    _LocaleOption(Locale('en'), 'English'),
+    _LocaleOption(Locale('pt', 'BR'), 'Português (Brasil)'),
+    _LocaleOption(Locale('ru'), 'Русский'),
+    _LocaleOption(Locale('ja'), '日本語'),
+    _LocaleOption(Locale('ko'), '한국어'),
+    _LocaleOption(Locale('zh'), '中文'),
+  ];
 
   @override
   void initState() {
@@ -98,10 +113,6 @@ class _SettingsViewState extends State<SettingsView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final themeController = context.watch<ThemeController>();
-    final base = theme.colorScheme.surfaceContainerHighest.withValues(
-      alpha: 0.55,
-    );
 
     return Container(
       // Margen flotante + sombra exterior (fuera del clip). Top 12 =
@@ -126,12 +137,17 @@ class _SettingsViewState extends State<SettingsView> {
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
+              // Cristal gris neutro: la MISMA receta del sidebar (dos tonos
+              // oscuros translúcidos al 55%), sin tinte del acento — el
+              // degradado con acento queda solo para el player.
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  themeController.accentColor?.withValues(alpha: 0.20) ?? base,
-                  base,
+                  theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.55,
+                  ),
+                  theme.colorScheme.surfaceContainer.withValues(alpha: 0.55),
                 ],
               ),
             ),
@@ -163,7 +179,8 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
 
-  /// Idioma: selector Español / English (persistido entre sesiones).
+  /// Idioma: dropdown con todos los idiomas soportados (nombre mostrado en
+  /// su propio idioma; persistido entre sesiones).
   Widget _buildLanguageSection(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
     final controller = context.watch<LocaleController>();
@@ -171,18 +188,53 @@ class _SettingsViewState extends State<SettingsView> {
       icon: Icons.language,
       title: l10n.language,
       caption: l10n.languageHint,
-      child: SegmentedButton<Locale>(
-        segments: const [
-          ButtonSegment(value: Locale('es'), label: Text('Español')),
-          ButtonSegment(value: Locale('en'), label: Text('English')),
-        ],
-        selected: {controller.locale},
-        onSelectionChanged: (selection) {
-          final locale = selection.first;
-          final settings = context.read<SettingsStore>();
-          unawaited(controller.setLocale(locale, settings));
-        },
-        showSelectedIcon: false,
+      // Campo compacto RECTANGULAR (no ocupa todo el ancho de la tarjeta ni
+      // es una píldora larga y fina): ancho fijo de 240px y el mismo radio de
+      // esquinas redondeadas (14) que usan las tarjetas de sección.
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          width: 240,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.35,
+            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: DropdownButton<Locale>(
+            // `value` controlado: cuando el locale cambia (desde el provider),
+            // el dropdown se actualiza solo vía didUpdateWidget.
+            value: controller.locale,
+            isExpanded: true,
+            isDense: true,
+            underline: const SizedBox.shrink(),
+            borderRadius: BorderRadius.circular(14),
+            // El menú desplegado no usa el popupMenuTheme: cae a canvasColor,
+            // así que el color se fija aquí (mismo #1E1E1E del tema).
+            dropdownColor: const Color(0xFF1E1E1E),
+            icon: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: theme.colorScheme.primary,
+            ),
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurface,
+            ),
+            items: [
+              for (final option in _localeOptions)
+                DropdownMenuItem<Locale>(
+                  value: option.locale,
+                  child: Text(option.label),
+                ),
+            ],
+            onChanged: (locale) {
+              if (locale == null) return;
+              final settings = context.read<SettingsStore>();
+              unawaited(controller.setLocale(locale, settings));
+            },
+          ),
+        ),
       ),
     );
   }
@@ -284,6 +336,14 @@ class _SettingsViewState extends State<SettingsView> {
       ),
     );
   }
+}
+
+/// Opción de idioma del selector: el [Locale] y su nombre en su propio idioma.
+class _LocaleOption {
+  final Locale locale;
+  final String label;
+
+  const _LocaleOption(this.locale, this.label);
 }
 
 /// Tarjeta de sección: fondo sutil redondeado con icono, título y caption.

@@ -16,6 +16,7 @@ import '../../services/playlist_cover_store.dart';
 import '../../services/player_service.dart';
 import '../playback.dart';
 import '../theme_controller.dart';
+import '../widgets/context_menu_item.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/scrup_snackbar.dart';
@@ -173,25 +174,15 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         position.dy,
       ),
       items: [
-        PopupMenuItem(
+        ContextMenuItem(
           value: 'play',
-          child: Row(
-            children: [
-              Icon(Icons.play_arrow_rounded),
-              const SizedBox(width: 10),
-              Text(l10n.play),
-            ],
-          ),
+          icon: Icons.play_arrow_rounded,
+          label: l10n.play,
         ),
-        PopupMenuItem(
+        ContextMenuItem(
           value: 'remove',
-          child: Row(
-            children: [
-              Icon(Icons.remove_circle_outline),
-              const SizedBox(width: 10),
-              Text(l10n.removeFromPlaylist),
-            ],
-          ),
+          icon: Icons.remove_circle_outline,
+          label: l10n.removeFromPlaylist,
         ),
       ],
     );
@@ -455,26 +446,23 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                       ),
                                       label: Text(l10n.play),
                                     ),
-                                    ValueListenableBuilder<bool>(
-                                      valueListenable: context
-                                          .read<PlayerService>()
-                                          .shuffle,
-                                      builder: (context, shuffleOn, _) {
-                                        return IconButton(
-                                          icon: Icon(
-                                            Icons.shuffle,
-                                            color: shuffleOn
-                                                ? theme.colorScheme.primary
-                                                : theme
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                          ),
-                                          tooltip: l10n.playShuffled,
-                                          onPressed: count == 0
-                                              ? null
-                                              : _playShuffled,
-                                        );
-                                      },
+                                    FilledButton.icon(
+                                      onPressed: count == 0
+                                          ? null
+                                          : _playShuffled,
+                                      // Mismo diseño que el botón de play,
+                                      // pero con fondo blanco y el texto/icono
+                                      // en el color acento de la playlist.
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: Colors.white,
+                                        foregroundColor:
+                                            theme.colorScheme.primary,
+                                      ),
+                                      // Label corto: solo "Aleatorio"; el
+                                      // texto largo anterior agrandaba el
+                                      // botón respecto al de play.
+                                      icon: const Icon(Icons.shuffle),
+                                      label: Text(l10n.shuffle),
                                     ),
                                     Text(
                                       _countAndDuration,

@@ -8,6 +8,7 @@ import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
+import '../widgets/context_menu_item.dart';
 import '../widgets/player_bar.dart' show kPlayerOverlayInset;
 
 /// Pantalla de inicio: barra de búsqueda arriba y las reproducciones
@@ -179,15 +180,10 @@ class _RecentCardState extends State<_RecentCard> {
         position.dy,
       ),
       items: [
-        PopupMenuItem(
+        ContextMenuItem(
           value: 'add',
-          child: Row(
-            children: [
-              Icon(Icons.playlist_add),
-              const SizedBox(width: 10),
-              Text(l10n.addToPlaylist),
-            ],
-          ),
+          icon: Icons.playlist_add,
+          label: l10n.addToPlaylist,
         ),
       ],
     );

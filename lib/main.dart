@@ -94,7 +94,7 @@ Future<void> main() async {
   var initialLocale = const Locale('es');
   try {
     final saved = await settings.loadLocale();
-    if (saved != null) initialLocale = Locale(saved);
+    if (saved != null) initialLocale = parseStoredLocale(saved);
   } catch (_) {}
 
   runApp(
@@ -288,6 +288,78 @@ class ScrupApp extends StatelessWidget {
         backgroundColor: const Color(0xFF000000),
         indicatorColor: seed.withValues(alpha: 0.16),
       ),
+      // Cursor de mano en TODOS los botones al hacer hover: en desktop los
+      // IconButton/TextButton/FilledButton no cambian el cursor por defecto.
+      iconButtonTheme: IconButtonThemeData(style: _clickCursorStyle),
+      textButtonTheme: TextButtonThemeData(style: _clickCursorStyle),
+      filledButtonTheme: FilledButtonThemeData(style: _clickCursorStyle),
+      // Menús contextuales (clic derecho) y dropdowns: fondo oscuro con
+      // borde sutil y sombra suave, coherente con el cristal del resto de la
+      // app. Aplica de una sola vez a todos los showMenu. (Los iconos de los
+      // items se estilizan en ContextMenuItem con el acento.)
+      popupMenuTheme: PopupMenuThemeData(
+        color: const Color(0xFF1E1E1E),
+        surfaceTintColor: Colors.transparent,
+        // Menú compacto: padding contenido, no un bloque alto.
+        menuPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        // En Material 3 el texto de los items usa `labelTextStyle` (no
+        // `textStyle`), que se aplica vía AnimatedDefaultTextStyle.
+        labelTextStyle: WidgetStatePropertyAll(
+          const TextStyle(color: Colors.white, fontSize: 14),
+        ),
+        elevation: 8,
+        shadowColor: Colors.black.withValues(alpha: 0.45),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+      ),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF141414),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+        ),
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(const Color(0xFF1E1E1E)),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+          ),
+        ),
+      ),
+      // Tooltips: negro cristal en vez del blanco por defecto, con un borde
+      // sutil para que no se fundan con el fondo negro puro.
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        textStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        waitDuration: const Duration(milliseconds: 350),
+      ),
     );
   }
 }
+
+/// Cursor de mano (pointer) cuando el botón está habilitado y el cursor
+/// normal cuando está deshabilitado. Compartido por los tres temas de botón.
+final ButtonStyle _clickCursorStyle = ButtonStyle(
+  mouseCursor: WidgetStateProperty.resolveWith(
+    (states) => states.contains(WidgetState.disabled)
+        ? SystemMouseCursors.basic
+        : SystemMouseCursors.click,
+  ),
+);

@@ -45,10 +45,11 @@ class SettingsStore {
     return prefs.getString(_lastTrackKey);
   }
 
-  /// Guarda el idioma de la interfaz (código BCP-47, p. ej. `es`, `en`).
-  Future<void> saveLocale(String languageCode) async {
+  /// Guarda el idioma de la interfaz (código BCP-47 completo, con posible
+  /// región: `es`, `en`, `pt_BR`).
+  Future<void> saveLocale(String localeString) async {
     final prefs = await _instance;
-    await prefs.setString(_localeKey, languageCode);
+    await prefs.setString(_localeKey, localeString);
   }
 
   /// `null` si el usuario nunca cambió el idioma (por defecto: español).

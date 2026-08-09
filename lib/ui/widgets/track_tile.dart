@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
-import '../../services/player_service.dart';
 
 /// Fila de una pista (resultados, recientes, playlists).
 ///
-/// - [onPlay]: reproduce la pista al tocar la fila o el botón play.
+/// - [onPlay]: reproduce la pista al tocar la fila.
 /// - [onAddToPlaylist]: muestra un botón "+" para añadir a playlist.
 /// - [trailing]: widget extra opcional al final (p. ej. quitar de playlist).
-///
-/// Muestra un spinner en el botón play mientras esa pista se está
-/// preparando (extrayendo URL con yt-dlp o abriendo el stream).
 class TrackTile extends StatelessWidget {
   final Track track;
   final VoidCallback onPlay;
@@ -39,7 +34,6 @@ class TrackTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final player = context.read<PlayerService>();
 
     return InkWell(
       onTap: onPlay,
@@ -111,31 +105,6 @@ class TrackTile extends StatelessWidget {
               ),
             // Widget extra (quitar, etc.)
             ?trailing,
-            // Botón reproducir (spinner mientras se prepara)
-            ValueListenableBuilder<String?>(
-              valueListenable: player.preparingTrackId,
-              builder: (context, preparingId, _) {
-                final isPreparing = preparingId == track.id;
-                if (isPreparing) {
-                  return const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
-                    ),
-                  );
-                }
-                return IconButton(
-                  icon: Icon(
-                    Icons.play_circle_outline,
-                    color: theme.colorScheme.primary,
-                  ),
-                  onPressed: onPlay,
-                  tooltip: l10n.play,
-                );
-              },
-            ),
           ],
         ),
       ),
