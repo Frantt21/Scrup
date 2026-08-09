@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'data/database.dart';
 import 'services/audio_cache_service.dart';
 import 'services/deezer_service.dart';
 import 'services/player_service.dart';
+import 'services/settings_store.dart';
 import 'services/ytdlp_service.dart';
 import 'ui/app_shell.dart';
 import 'ui/theme_controller.dart';
@@ -39,6 +41,30 @@ Future<void> main() async {
   runApp(const ScrupApp());
 }
 
+/// Restaura la sesión anterior al arrancar: el volumen y la última pista
+/// reproducida (queda cargada y pausada, lista para continuar con play).
+/// Best-effort: si algo falla, la app arranca con los valores por defecto.
+Future<void> _restoreSession(
+  PlayerService player,
+  SettingsStore settings,
+  AppDatabase db,
+) async {
+  try {
+    final volume = await settings.loadVolume();
+    if (volume != null) {
+      await player.setVolume(volume.clamp(0.0, 1.0));
+    }
+    final lastId = await settings.loadLastTrackId();
+    if (lastId == null) return;
+    final track = await db.getCachedTrack(lastId);
+    if (track != null) {
+      await player.restoreLastTrack(track);
+    }
+  } catch (_) {
+    // La restauración nunca debe impedir el arranque.
+  }
+}
+
 class ScrupApp extends StatelessWidget {
   const ScrupApp({super.key});
 
@@ -53,6 +79,7 @@ class ScrupApp extends StatelessWidget {
               AudioCacheService(ytdlp: context.read<YtDlpService>()),
         ),
         Provider<DeezerService>(create: (_) => DeezerService()),
+        Provider<SettingsStore>(create: (_) => SettingsStore()),
         Provider<PlayerService>(
           // Inyecta la resolución de fuente (cache-first con yt-dlp), la
           // búsqueda de radio y el enriquecimiento de metadatos (Deezer).
@@ -60,7 +87,9 @@ class ScrupApp extends StatelessWidget {
             final ytdlp = context.read<YtDlpService>();
             final cache = context.read<AudioCacheService>();
             final deezer = context.read<DeezerService>();
-            return PlayerService(
+            final db = context.read<AppDatabase>();
+            final settings = context.read<SettingsStore>();
+            final player = PlayerService(
               // Cache-first con reproducción progresiva: si la pista no
               // está cacheada, se empieza a reproducir en cuanto hay datos
               // y la descarga continúa en segundo plano quedando en disco.
@@ -81,11 +110,31 @@ class ScrupApp extends StatelessWidget {
               // Metadatos: Deezer aporta título/álbum/portada limpios
               enrich: (track) async =>
                   deezer.apply(track, await deezer.enrich(track)),
+              // Persistir el enriquecimiento cuando llega (sin bloquear la
+              // reproducción): así las recientes muestran el artwork real.
+              onEnriched: (track) async => db.updateTrackMetadata(track),
               // Historial: registra cada pista que realmente empieza a sonar
               // (manual, auto-advance o radio)
-              onPlayed: (track) async =>
-                  context.read<AppDatabase>().recordPlay(track),
+              onPlayed: (track) async => db.recordPlay(track),
             );
+            // Persistir la última pista cuando cambia.
+            player.currentTrack.listen((t) {
+              if (t != null) settings.saveLastTrackId(t.id);
+            });
+            // Persistir el volumen con debounce: el drag del slider emite
+            // decenas de cambios por segundo y no conviene escribir a disco
+            // en cada tick.
+            Timer? volumeDebounce;
+            player.volume.addListener(() {
+              volumeDebounce?.cancel();
+              volumeDebounce = Timer(
+                const Duration(milliseconds: 300),
+                () => settings.saveVolume(player.volume.value),
+              );
+            });
+            // Restaurar la sesión anterior (volumen + última pista, pausada).
+            unawaited(_restoreSession(player, settings, db));
+            return player;
           },
           dispose: (_, player) => player.dispose(),
         ),

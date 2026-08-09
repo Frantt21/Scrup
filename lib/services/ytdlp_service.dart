@@ -168,7 +168,7 @@ class YtDlpService {
   }
 
   /// Descarga en streaming: arranca el proceso y resuelve en cuanto el
-  /// archivo `.part` tiene datos suficientes para reproducir (2 MiB, o bien
+  /// archivo `.part` tiene datos suficientes para reproducir (1 MiB, o bien
   /// 6s transcurridos con al menos 64 KiB en conexiones lentas). La descarga
   /// continúa en segundo plano y [StreamingDownload.finalPath] resuelve al
   /// terminar, cuando el `.part` ya se renombró al archivo definitivo.
@@ -222,7 +222,7 @@ class YtDlpService {
 
     // Vigilar el archivo `.part` hasta que sea reproducible.
     Future<void> pollPartial() async {
-      const minBytes = 2 * 1024 * 1024;
+      const minBytes = 1024 * 1024;
       const timeout = Duration(seconds: 20);
       final deadline = started.add(timeout);
       while (DateTime.now().isBefore(deadline)) {

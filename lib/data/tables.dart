@@ -33,6 +33,10 @@ class Playlists extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// Portada de la playlist (URL del artwork de una de sus canciones, o
+  /// null si aún no tiene).
+  TextColumn get coverUrl => text().nullable()();
 }
 
 /// Relación N:M entre playlists y canciones, con posición de orden.

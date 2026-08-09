@@ -63,6 +63,11 @@ class PlayerService {
   /// o radio). Se usa para registrar el historial de reproducciones.
   final Future<void> Function(Track track)? onPlayed;
 
+  /// Notifica cuando llegan metadatos enriquecidos (Deezer) de la pista en
+  /// reproducción, para persistirlos (recientes con artwork/álbum reales)
+  /// sin bloquear el arranque de la reproducción.
+  final Future<void> Function(Track track)? onEnriched;
+
   final _positionController = StreamController<Duration>.broadcast();
   final _durationController = StreamController<Duration?>.broadcast();
   final _playingController = StreamController<bool>.broadcast();
@@ -76,6 +81,15 @@ class PlayerService {
   Stream<bool> get buffering => _bufferingController.stream;
   Stream<Track?> get currentTrack => _trackController.stream;
   Stream<String> get errors => _errorController.stream;
+
+  /// La pista actual (si la hay). Útil para lecturas puntuales, p. ej. que un
+  /// widget construido después de publicar la pista (sesión restaurada)
+  /// también la vea.
+  Track? get currentTrackValue => _currentTrack;
+
+  /// Última duración reportada por el medio (si la hay), para lecturas
+  /// puntuales de widgets construidos tarde.
+  Duration? get durationValue => _lastDuration;
 
   /// Id de la pista que se está preparando (descargando al caché o abriendo
   /// el medio), o `null` cuando no hay ninguna. Es un [ValueNotifier] para
@@ -102,6 +116,7 @@ class PlayerService {
   bool _playing = false;
   Duration _lastPosition = Duration.zero;
   Track? _currentTrack;
+  Duration? _lastDuration;
 
   /// Momento en que se abrió el medio actual. media_kit emite un `completed`
   /// espurio al abrir o reemplazar un medio (el `stop` interno de `open`), y
@@ -135,12 +150,16 @@ class PlayerService {
     this.recommend,
     this.enrich,
     this.onPlayed,
+    this.onEnriched,
   }) {
     _player.stream.position.listen((p) {
       _lastPosition = p;
       _positionController.add(p);
     });
-    _player.stream.duration.listen((d) => _durationController.add(d));
+    _player.stream.duration.listen((d) {
+      _lastDuration = d;
+      _durationController.add(d);
+    });
     _player.stream.playing.listen((p) {
       _playing = p;
       _playingController.add(p);
@@ -168,6 +187,39 @@ class PlayerService {
     _queueIndex = -1;
     _prematureRetries.clear();
     return _openAndPlay(track);
+  }
+
+  /// Restaura la última pista reproducida al arrancar: carga el medio
+  /// (pausado, sin historial ni enriquecimiento) y la publica en la UI para
+  /// que el usuario pueda continuar con play. Best-effort: si la fuente no
+  /// se resuelve, la pista no se restaura.
+  Future<bool> restoreLastTrack(Track track) async {
+    final token = ++_playToken;
+    _queue.clear();
+    _queueIndex = -1;
+    _prematureRetries.clear();
+    _clearPlaybackState();
+    preparingTrackId.value = track.id;
+    try {
+      await _player.pause();
+      final src = await resolveSource(track);
+      if (token != _playToken) return false;
+      _lastSourceIsLocal = src.isLocal;
+      // Marcar ANTES de abrir (el `completed` espurio de open cae en la
+      // ventana de 3s).
+      _openedAt = DateTime.now();
+      await _player.open(Media(_mediaUri(src)));
+      if (token != _playToken) return false;
+      // Queda pausada y lista; no se reproduce ni se registra historial.
+      _publishTrack(track);
+      return true;
+    } catch (_) {
+      // Silencioso: la restauración es best-effort y no debe mostrar errores
+      // al arrancar (p. ej. si el caché fue evictado y no hay red).
+      return false;
+    } finally {
+      if (token == _playToken) preparingTrackId.value = null;
+    }
   }
 
   /// Reproduce una lista de pistas como cola, empezando por [startIndex].
@@ -376,22 +428,14 @@ class PlayerService {
       // stop() de media_kit emite el evento `completed`, que dispararía el
       // auto-advance y podría saltar de canción indebidamente.
       await _player.pause();
-      // Resolver la fuente y enriquecer con Deezer en paralelo. El presupuesto
-      // para esperar a Deezer es adaptativo: si la pista ya estaba en caché
-      // (resolución instantánea), se espera poco (800ms); si se está
-      // descargando por primera vez, hay margen (2s, oculto tras la descarga).
-      final stopwatch = Stopwatch()..start();
+      // Resolver la fuente y arrancar Deezer en paralelo. La reproducción NO
+      // espera a Deezer: empieza en cuanto hay datos reproducibles (el .part)
+      // y el enriquecimiento se aplica en segundo plano al llegar (evita la
+      // espera visible al reproducir una pista nueva en conexiones rápidas).
       final srcFuture = resolveSource(track);
       final enrichFuture = _enrich(track);
       final src = await srcFuture;
-      final sourceWasCached = stopwatch.elapsedMilliseconds < 300;
       if (token != _playToken) return false;
-      final enriched = await _enrichWithTimeout(
-        enrichFuture,
-        sourceWasCached ? 800 : 2000,
-      );
-      if (token != _playToken) return false;
-      final display = _applyEnriched(track, enriched);
       _lastSourceIsLocal = src.isLocal;
       // Marcar ANTES de abrir: el `completed` espurio se emite durante el
       // open y debe caer dentro de la ventana de 3s sí o sí.
@@ -399,7 +443,11 @@ class PlayerService {
       await _player.open(Media(_mediaUri(src)));
       if (token != _playToken) return false;
       await _player.play();
-      unawaited(_notifyPlayed(display));
+      // Publicar la pista (metadatos de YouTube por ahora), registrar el
+      // historial y enriquecer en segundo plano (reemplaza la UI y persiste).
+      _publishTrack(track);
+      unawaited(_notifyPlayed(track));
+      unawaited(_enrichThenApply(track, enrichFuture, token));
       return true;
     } catch (e) {
       _errorController.add('No se pudo reproducir "${track.title}": $e');
@@ -423,26 +471,23 @@ class PlayerService {
     try {
       // Silenciar la pista anterior al instante (mismo motivo que en _playAt).
       await _player.pause();
-      // Enriquecer en paralelo con la resolución de la fuente (ver _playAt).
-      final stopwatch = Stopwatch()..start();
+      // Resolver la fuente y arrancar Deezer en paralelo; reproducir primero,
+      // enriquecer después en segundo plano (ver _playAt).
       final srcFuture = resolveSource(track);
       final enrichFuture = _enrich(track);
       final src = await srcFuture;
-      final sourceWasCached = stopwatch.elapsedMilliseconds < 300;
       if (token != _playToken) return false;
-      final enriched = await _enrichWithTimeout(
-        enrichFuture,
-        sourceWasCached ? 800 : 2000,
-      );
-      if (token != _playToken) return false;
-      final display = _applyEnriched(track, enriched);
       _lastSourceIsLocal = src.isLocal;
       // Marcar ANTES de abrir (mismo motivo que en _playAt).
       _openedAt = DateTime.now();
       await _player.open(Media(_mediaUri(src)));
       if (token != _playToken) return false;
       await _player.play();
-      unawaited(_notifyPlayed(display));
+      // Publicar la pista, registrar el historial y enriquecer en segundo
+      // plano (reemplaza la UI y persiste al llegar).
+      _publishTrack(track);
+      unawaited(_notifyPlayed(track));
+      unawaited(_enrichThenApply(track, enrichFuture, token));
       return true;
     } catch (e) {
       _errorController.add('No se pudo reproducir "${track.title}": $e');
@@ -465,19 +510,6 @@ class PlayerService {
     }
   }
 
-  /// Aplica un tope temporal al enriquecimiento en curso; si excede el
-  /// presupuesto, devuelve null y la reproducción sigue con YouTube.
-  Future<Track?> _enrichWithTimeout(
-    Future<Track?> future,
-    int milliseconds,
-  ) async {
-    try {
-      return await future.timeout(Duration(milliseconds: milliseconds));
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// Vacía el estado de reproducción expuesto a la UI: al cambiar de pista,
   /// el reproductor se queda sin datos mientras la nueva se descarga/carga
   /// (sin restos de la pista anterior en la barra).
@@ -492,18 +524,34 @@ class PlayerService {
     _bufferingController.add(false);
   }
 
-  /// Aplica los metadatos enriquecidos (Deezer) si son válidos: emite el
-  /// track final a la UI y lo devuelve para persistir en el historial.
-  /// El callback [enrich] ya aplica Deezer sobre el original conservando el
-  /// id de YouTube; si no hubo match fiable devuelve null y se usa el
-  /// original.
-  Track _applyEnriched(Track original, Track? enriched) {
-    final display = (enriched != null && enriched.id == original.id)
-        ? enriched
-        : original;
-    _currentTrack = display;
-    _trackController.add(display);
-    return display;
+  /// Publica la pista actual en la UI.
+  void _publishTrack(Track track) {
+    _currentTrack = track;
+    _trackController.add(track);
+  }
+
+  /// Aplica el enriquecimiento de Deezer en segundo plano: cuando llega,
+  /// actualiza la UI y la persistencia (recientes con el artwork/álbum de
+  /// Deezer). Nunca bloquea la reproducción ni toca nada si la pista ya
+  /// cambió (guardia por token). [enrich] ya es best-effort (nunca lanza,
+  /// con tope de 8s en Deezer), así que aquí solo se espera y se aplica.
+  Future<void> _enrichThenApply(
+    Track original,
+    Future<Track?> enrichFuture,
+    int token,
+  ) async {
+    final enriched = await enrichFuture;
+    if (token != _playToken) return;
+    if (enriched == null || enriched.id != original.id) return;
+    _publishTrack(enriched);
+    final cb = onEnriched;
+    if (cb != null) {
+      try {
+        await cb(enriched);
+      } catch (_) {
+        // Silencioso: la persistencia de metadatos es secundaria.
+      }
+    }
   }
 
   /// Registra la reproducción de una pista en el historial (best-effort:

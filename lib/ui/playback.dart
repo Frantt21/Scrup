@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../core/track.dart';
 import '../services/player_service.dart';
+import 'widgets/scrup_snackbar.dart';
 
 /// Reproduce una pista individual (resuelve la fuente cache-first y la
 /// reproduce). El historial lo registra el propio [PlayerService] vía el
@@ -15,9 +16,7 @@ Future<void> playTrack(BuildContext context, Track track) async {
   try {
     await player.playTrack(track);
   } catch (e) {
-    messenger.showSnackBar(
-      SnackBar(content: Text('No se pudo reproducir: $e')),
-    );
+    showScrupSnackBar(messenger, 'No se pudo reproducir: $e');
   }
 }
 

@@ -6,12 +6,15 @@ import 'package:provider/provider.dart';
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../playback.dart';
+import '../widgets/player_bar.dart' show kPlayerOverlayInset;
 
-/// Pantalla de inicio: barra de búsqueda en la parte superior y las
-/// reproducciones recientes en un grid 1:1 con el artwork completo.
+/// Pantalla de inicio: barra de búsqueda arriba y las reproducciones
+/// recientes en un grid 1:1 de SOLO DOS FILAS (las columnas se acomodan al
+/// ancho de la ventana; las demás recientes no se muestran). Las playlists
+/// viven en el contenedor lateral.
 class HomeView extends StatefulWidget {
   /// Se llama al enviar una búsqueda desde el inicio (AppShell cambia a la
-  /// pestaña Buscar y le pasa la consulta).
+  /// vista Buscar y le pasa la consulta).
   final ValueChanged<String>? onSearch;
 
   const HomeView({super.key, this.onSearch});
@@ -25,6 +28,10 @@ class _HomeViewState extends State<HomeView> {
   StreamSubscription<List<Track>>? _sub;
   List<Track> _recent = const [];
   bool _loaded = false;
+
+  /// Tamaño fijo de las tarjetas (~200px); las columnas se deducen del ancho.
+  static const _cardExtent = 200.0;
+  static const _rows = 2;
 
   @override
   void initState() {
@@ -56,30 +63,21 @@ class _HomeViewState extends State<HomeView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return CustomScrollView(
-      slivers: [
-        // Cabecera: título + barra de búsqueda
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Inicio',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Busca, reproduce y descubre',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Columnas que caben en el ancho disponible (tarjetas de ~200px).
+        final cols = ((constraints.maxWidth - 32) / (_cardExtent + 12))
+            .floor()
+            .clamp(1, 10);
+        final visible = _recent.length.clamp(0, cols * _rows);
+
+        return CustomScrollView(
+          slivers: [
+            // Barra de búsqueda (sin título ni subtítulo)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                child: TextField(
                   onSubmitted: _submitSearch,
                   textInputAction: TextInputAction.search,
                   decoration: InputDecoration(
@@ -93,54 +91,65 @@ class _HomeViewState extends State<HomeView> {
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  'Recientes',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // Grid 1:1 de recientes
-        if (!_loaded)
-          const SliverFillRemaining(
-            hasScrollBody: false,
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (_recent.isEmpty)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: _EmptyRecent(theme: theme),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1,
               ),
-              delegate: SliverChildBuilderDelegate((context, i) {
-                final track = _recent[i];
-                return _RecentCard(
-                  track: track,
-                  onPlay: () => playTrack(context, track),
-                );
-              }, childCount: _recent.length),
             ),
-          ),
-      ],
+            if (!_loaded)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 48),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ),
+            if (_loaded)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                  child: _recent.isEmpty
+                      ? _EmptyHint(theme: theme)
+                      : Text(
+                          'Recientes',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              ),
+            if (_loaded && _recent.isNotEmpty)
+              SliverPadding(
+                // El player flotante cubre la parte inferior: dejar espacio
+                // para que la última fila del grid quede accesible.
+                padding: const EdgeInsets.fromLTRB(
+                  16,
+                  0,
+                  16,
+                  kPlayerOverlayInset,
+                ),
+                sliver: SliverGrid(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: cols,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1,
+                  ),
+                  delegate: SliverChildBuilderDelegate((context, i) {
+                    final track = _recent[i];
+                    return _RecentCard(
+                      track: track,
+                      onPlay: () => playTrack(context, track),
+                    );
+                  }, childCount: visible),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
 
 /// Tarjeta cuadrada con el artwork completo y título/artista en la esquina
-/// inferior, con un hover que muestra el botón de play.
+/// inferior, con un hover que muestra el botón de play (sin animación de
+/// escala).
 class _RecentCard extends StatefulWidget {
   final Track track;
   final VoidCallback onPlay;
@@ -163,96 +172,92 @@ class _RecentCardState extends State<_RecentCard> {
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedScale(
-        scale: _hovered ? 1.03 : 1.0,
+      child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: _hovered
-                  ? theme.colorScheme.primary.withValues(alpha: 0.6)
-                  : Colors.transparent,
-            ),
-            boxShadow: _hovered
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ]
-                : null,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: _hovered
+                ? theme.colorScheme.primary.withValues(alpha: 0.6)
+                : Colors.transparent,
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(13),
-            child: InkWell(
-              onTap: widget.onPlay,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Artwork completo
-                  _artwork(theme),
-                  // Gradiente inferior para legibilidad del texto
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black54],
-                        stops: [0.5, 1.0],
+          boxShadow: _hovered
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(13),
+          child: InkWell(
+            onTap: widget.onPlay,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Artwork completo
+                _artwork(theme),
+                // Gradiente inferior para legibilidad del texto
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black54],
+                      stops: [0.5, 1.0],
+                    ),
+                  ),
+                ),
+                // Título + artista en la esquina inferior
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 10,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        track.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Play al hacer hover
+                if (_hovered)
+                  Center(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        shape: BoxShape.circle,
+                      ),
+                      padding: const EdgeInsets.all(10),
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        size: 36,
+                        color: theme.colorScheme.primary,
                       ),
                     ),
                   ),
-                  // Título + artista en la esquina inferior
-                  Positioned(
-                    left: 10,
-                    right: 10,
-                    bottom: 10,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          track.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          track.artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Play al hacer hover
-                  if (_hovered)
-                    Center(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          shape: BoxShape.circle,
-                        ),
-                        padding: const EdgeInsets.all(10),
-                        child: Icon(
-                          Icons.play_arrow_rounded,
-                          size: 36,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
@@ -290,37 +295,37 @@ class _RecentCardState extends State<_RecentCard> {
   }
 }
 
-class _EmptyRecent extends StatelessWidget {
+/// Aviso compacto cuando no hay reproducciones recientes.
+class _EmptyHint extends StatelessWidget {
   final ThemeData theme;
-  const _EmptyRecent({required this.theme});
+
+  const _EmptyHint({required this.theme});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.history,
-            size: 64,
-            color: theme.colorScheme.primary.withValues(alpha: 0.4),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.history,
+          size: 40,
+          color: theme.colorScheme.primary.withValues(alpha: 0.4),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Aún no has reproducido nada',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
           ),
-          const SizedBox(height: 12),
-          Text(
-            'Aún no has reproducido nada',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Usa la búsqueda de arriba para empezar',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Usa la búsqueda de arriba para empezar',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

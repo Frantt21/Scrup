@@ -7,6 +7,8 @@ import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../services/ytdlp_service.dart';
 import '../playback.dart';
+import '../widgets/player_bar.dart' show kPlayerOverlayInset;
+import '../widgets/scrup_snackbar.dart';
 import '../widgets/track_tile.dart';
 
 /// Vista de búsqueda: busca canciones en YouTube y permite reproducirlas
@@ -18,7 +20,10 @@ class SearchView extends StatefulWidget {
   /// idéntica.
   final ValueNotifier<String?>? searchRequest;
 
-  const SearchView({super.key, this.searchRequest});
+  /// Vuelve al inicio (ya no hay barra lateral).
+  final VoidCallback? onBack;
+
+  const SearchView({super.key, this.searchRequest, this.onBack});
 
   @override
   State<SearchView> createState() => _SearchViewState();
@@ -127,9 +132,7 @@ class _SearchViewState extends State<SearchView> {
     );
     if (selected == null) return;
     await db.addToPlaylist(selected, track);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Añadida a la playlist')),
-    );
+    showScrupSnackBar(messenger, 'Añadida a la playlist');
   }
 
   /// Crea una playlist y la selecciona en el bottom sheet actual.
@@ -187,15 +190,24 @@ class _SearchViewState extends State<SearchView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+          padding: const EdgeInsets.fromLTRB(12, 12, 24, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Buscar',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: 'Volver al inicio',
+                    onPressed: widget.onBack,
+                  ),
+                  Text(
+                    'Buscar',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               TextField(
@@ -307,7 +319,9 @@ class _SearchViewState extends State<SearchView> {
 
     return ListView.separated(
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      // El player flotante cubre la parte inferior: dejar espacio para que
+      // los últimos resultados queden accesibles.
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, kPlayerOverlayInset),
       itemCount: _results.length,
       separatorBuilder: (_, _) => const SizedBox(height: 4),
       itemBuilder: (context, i) {

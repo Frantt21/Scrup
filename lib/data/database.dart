@@ -11,10 +11,15 @@ class Playlist {
   final int id;
   final String name;
   final DateTime createdAt;
+
+  /// Portada de la playlist (URL del artwork de una de sus canciones).
+  final String? coverUrl;
+
   const Playlist({
     required this.id,
     required this.name,
     required this.createdAt,
+    this.coverUrl,
   });
 }
 
@@ -25,7 +30,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -40,6 +45,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 3) {
         // Álbum enriquecido (Deezer)
         await m.addColumn(tracks, tracks.album);
+      }
+      if (from < 4) {
+        // Portada de la playlist
+        await m.addColumn(playlists, playlists.coverUrl);
       }
     },
   );
@@ -59,6 +68,12 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
   }
+
+  /// Actualiza los metadatos cacheados de una pista (p. ej. al llegar el
+  /// enriquecimiento de Deezer) sin tocar el historial. Como las recientes
+  /// hacen JOIN con `tracks`, el artwork/álbum enriquecidos se reflejan al
+  /// instante en el inicio.
+  Future<void> updateTrackMetadata(Track track) => cacheTrack(track);
 
   /// Devuelve los metadatos cacheados de una pista, si existen.
   Future<Track?> getCachedTrack(String id) async {
@@ -125,9 +140,49 @@ class AppDatabase extends _$AppDatabase {
       ..orderBy([(p) => OrderingTerm.desc(p.createdAt)]);
     return query.watch().map(
       (rows) => rows
-          .map((r) => Playlist(id: r.id, name: r.name, createdAt: r.createdAt))
+          .map(
+            (r) => Playlist(
+              id: r.id,
+              name: r.name,
+              createdAt: r.createdAt,
+              coverUrl: r.coverUrl,
+            ),
+          )
           .toList(),
     );
+  }
+
+  /// Observa una playlist concreta (para reflejar cambios de portada en el
+  /// detalle).
+  Stream<Playlist?> watchPlaylist(int id) {
+    final query = select(playlists)..where((p) => p.id.equals(id));
+    return query.watchSingleOrNull().map(
+      (r) => r == null
+          ? null
+          : Playlist(
+              id: r.id,
+              name: r.name,
+              createdAt: r.createdAt,
+              coverUrl: r.coverUrl,
+            ),
+    );
+  }
+
+  /// Número de canciones por playlist (para mostrar en las tarjetas del
+  /// grid).
+  Stream<Map<int, int>> watchPlaylistTrackCounts() {
+    final query = selectOnly(playlistTracks)
+      ..addColumns([playlistTracks.playlistId, playlistTracks.trackId.count()])
+      ..groupBy([playlistTracks.playlistId]);
+    return query.watch().map((rows) {
+      final counts = <int, int>{};
+      for (final row in rows) {
+        final id = row.read(playlistTracks.playlistId);
+        final count = row.read(playlistTracks.trackId.count()) ?? 0;
+        if (id != null) counts[id] = count;
+      }
+      return counts;
+    });
   }
 
   /// Crea una playlist y devuelve su id.
@@ -150,7 +205,19 @@ class AppDatabase extends _$AppDatabase {
       playlists,
     )..where((p) => p.id.equals(id))).getSingleOrNull();
     if (row == null) return null;
-    return Playlist(id: row.id, name: row.name, createdAt: row.createdAt);
+    return Playlist(
+      id: row.id,
+      name: row.name,
+      createdAt: row.createdAt,
+      coverUrl: row.coverUrl,
+    );
+  }
+
+  /// Establece la portada de una playlist (o la quita con `null`).
+  Future<void> setPlaylistCover(int playlistId, String? coverUrl) async {
+    await (update(playlists)..where((p) => p.id.equals(playlistId))).write(
+      PlaylistsCompanion(coverUrl: Value(coverUrl)),
+    );
   }
 
   /// Canciones de una playlist (con metadatos cacheados), en orden.
@@ -195,6 +262,15 @@ class AppDatabase extends _$AppDatabase {
         position: nextPosition,
       ),
     );
+
+    // Portada por defecto: si la playlist aún no tiene y la canción trae
+    // artwork, usarlo como portada.
+    final playlist = await getPlaylist(playlistId);
+    if (playlist != null &&
+        playlist.coverUrl == null &&
+        track.thumbnailUrl != null) {
+      await setPlaylistCover(playlistId, track.thumbnailUrl);
+    }
   }
 
   Future<void> removeFromPlaylist(int playlistId, String trackId) async {

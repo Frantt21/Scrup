@@ -84,6 +84,35 @@ void main() {
     });
 
     test(
+      'updateTrackMetadata refleja el artwork enriquecido en recientes',
+      () async {
+        final original = Track(id: 'enr1', title: 'Original', artist: 'YT');
+        await db.recordPlay(original);
+
+        final enriched = Track(
+          id: 'enr1',
+          title: 'Título Deezer',
+          artist: 'Artista Real',
+          album: 'Álbum',
+          thumbnailUrl:
+              'https://e-cdns-images.dzcdn.net/images/cover/x/500x500.jpg',
+        );
+        await db.updateTrackMetadata(enriched);
+
+        final cached = await db.getCachedTrack('enr1');
+        expect(cached, isNotNull);
+        expect(cached!.title, 'Título Deezer');
+        expect(cached.album, 'Álbum');
+
+        // Las recientes reflejan el artwork enriquecido, sin duplicar.
+        final recientes = await db.watchRecentlyPlayed().first;
+        expect(recientes.length, 1);
+        expect(recientes.first.thumbnailUrl, enriched.thumbnailUrl);
+        expect(recientes.first.album, 'Álbum');
+      },
+    );
+
+    test(
       'recordPlay guarda el álbum del track enriquecido en recientes',
       () async {
         final track = Track(
@@ -127,6 +156,44 @@ void main() {
       final tracks = await db.watchPlaylistTracks(playlistId).first;
       expect(tracks.length, 1);
       expect(tracks.first.id, 'r1');
+    });
+
+    test('setPlaylistCover establece y quita la portada', () async {
+      final id = await db.createPlaylist('Portada');
+      expect(await db.getPlaylist(id), isNotNull);
+      expect((await db.getPlaylist(id))!.coverUrl, isNull);
+
+      await db.setPlaylistCover(id, 'https://img/portada.jpg');
+      final playlists = await db.watchPlaylists().first;
+      expect(playlists.first.coverUrl, 'https://img/portada.jpg');
+      expect((await db.getPlaylist(id))!.coverUrl, 'https://img/portada.jpg');
+
+      // Quitar la portada
+      await db.setPlaylistCover(id, null);
+      expect((await db.getPlaylist(id))!.coverUrl, isNull);
+    });
+
+    test('addToPlaylist usa el artwork como portada si no tenía', () async {
+      final id = await db.createPlaylist('Auto');
+      final track = Track(
+        id: 'auto1',
+        title: 'Canción',
+        artist: 'Artista',
+        thumbnailUrl: 'https://img/thumb.jpg',
+      );
+
+      await db.addToPlaylist(id, track);
+      expect((await db.getPlaylist(id))!.coverUrl, 'https://img/thumb.jpg');
+
+      // Si ya tiene portada, no la sobreescribe con otra canción
+      final track2 = Track(
+        id: 'auto2',
+        title: 'Otra',
+        artist: 'Otro',
+        thumbnailUrl: 'https://img/other.jpg',
+      );
+      await db.addToPlaylist(id, track2);
+      expect((await db.getPlaylist(id))!.coverUrl, 'https://img/thumb.jpg');
     });
 
     test('quitar canción de playlist', () async {

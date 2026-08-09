@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,9 +9,16 @@ import '../../services/audio_cache_service.dart';
 import '../../services/player_service.dart';
 import '../theme_controller.dart';
 
-/// Barra inferior compacta con los controles del reproductor: progreso con
-/// tiempos (recorrido/duración), artwork, título/artista, controles centrados
-/// y volumen. Alturas fijas en cada zona para que la barra nunca salte.
+/// Espacio vertical que ocupa el player flotante en la parte inferior de la
+/// ventana (barra + márgenes). Los scrollables de las vistas lo usan como
+/// padding inferior para que sus últimos items queden accesibles por encima
+/// del player.
+const double kPlayerOverlayInset = 104;
+
+/// Player flotante tipo glass: tarjeta translúcida con blur que flota sobre
+/// el contenido. La barra de progreso (sin dot, con tiempos) queda entre la
+/// información de la canción (izquierda) y el control de volumen (derecha),
+/// con los controles de reproducción encima.
 class PlayerBar extends StatefulWidget {
   const PlayerBar({super.key});
 
@@ -36,6 +44,11 @@ class _PlayerBarState extends State<PlayerBar> {
   void initState() {
     super.initState();
     final player = context.read<PlayerService>();
+    // Valores iniciales: si la sesión se restauró antes de que este widget
+    // se construyera (los streams broadcast no re-emiten lo pasado), leer la
+    // pista/duración actuales evita la pantalla "Sin reproducción".
+    _track = player.currentTrackValue;
+    _duration = player.durationValue;
     _subs.addAll([
       player.currentTrack.listen((t) {
         if (!mounted) return;
@@ -96,106 +109,160 @@ class _PlayerBarState extends State<PlayerBar> {
         ? Duration(milliseconds: (_dragValue! * total.inMilliseconds).round())
         : _position;
 
-    return Material(
-      elevation: 12,
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: Container(
-        // Tinte sutil del color del artwork, desvaneciéndose hacia la derecha
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              themeController.accentColor?.withValues(alpha: 0.20) ??
-                  Colors.transparent,
-              Colors.transparent,
-            ],
+    // Base translúcida del cristal (el blur se aplica detrás).
+    final base = theme.colorScheme.surfaceContainerHighest.withValues(
+      alpha: 0.55,
+    );
+
+    return Container(
+      // Sombra exterior (fuera del clip para que no se recorte)
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.45),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
           ),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Progreso compacto con tiempos: recorrido | barra | duración.
-              // Altura fija de 24px (pulgar/overlay reducidos para que quepa).
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 2, 12, 0),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: BackdropFilter(
+          // Cristal: difumina el contenido que pasa por detrás
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              // Translúcido + tinte sutil del artwork, desvaneciéndose a la
+              // derecha. Sin borde: el cristal se funde con el fondo.
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  themeController.accentColor?.withValues(alpha: 0.20) ?? base,
+                  base,
+                ],
+              ),
+            ),
+            child: Material(
+              // Material transparente para que los ripples de los botones se
+              // dibujen sobre el cristal
+              color: Colors.transparent,
+              child: SafeArea(
+                top: false,
                 child: SizedBox(
-                  height: 24,
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 42,
-                        child: Text(
-                          _fmt(hasTrack ? shownPosition : Duration.zero),
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontFeatures: const [FontFeature.tabularFigures()],
+                  height: 64,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Row(
+                      children: [
+                        // Izquierda: información de la canción
+                        Expanded(child: _buildTrackInfo(theme, cache, player)),
+                        const SizedBox(width: 12),
+                        // Centro: controles y, debajo, la barra de progreso
+                        // (con tiempos), entre la info y el volumen.
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _buildControls(theme, player, hasTrack),
+                              SizedBox(
+                                height: 22,
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 38,
+                                      child: Text(
+                                        _fmt(
+                                          hasTrack
+                                              ? shownPosition
+                                              : Duration.zero,
+                                        ),
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color: theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                              fontFeatures: const [
+                                                FontFeature.tabularFigures(),
+                                              ],
+                                            ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: SliderTheme(
+                                        data: SliderTheme.of(context).copyWith(
+                                          trackHeight: 3,
+                                          // Sin dot: el pulgar es invisible;
+                                          // se arrastra/toca la línea.
+                                          thumbShape:
+                                              const RoundSliderThumbShape(
+                                                enabledThumbRadius: 0,
+                                              ),
+                                          overlayShape:
+                                              const RoundSliderOverlayShape(
+                                                overlayRadius: 0,
+                                              ),
+                                          showValueIndicator:
+                                              ShowValueIndicator.never,
+                                          activeTrackColor:
+                                              theme.colorScheme.primary,
+                                        ),
+                                        child: Slider(
+                                          value: shownProgress,
+                                          onChanged: hasTrack
+                                              ? (v) => setState(
+                                                  () => _dragValue = v,
+                                                )
+                                              : null,
+                                          onChangeEnd: hasTrack
+                                              ? (v) {
+                                                  final target = Duration(
+                                                    milliseconds:
+                                                        (v * total.inMilliseconds)
+                                                            .round(),
+                                                  );
+                                                  player.seek(target);
+                                                  setState(
+                                                    () => _dragValue = null,
+                                                  );
+                                                }
+                                              : null,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 38,
+                                      child: Text(
+                                        _fmt(total),
+                                        textAlign: TextAlign.right,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color: theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                              fontFeatures: const [
+                                                FontFeature.tabularFigures(),
+                                              ],
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      Expanded(
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            trackHeight: 3,
-                            thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 5,
-                            ),
-                            overlayShape: const RoundSliderOverlayShape(
-                              overlayRadius: 11,
-                            ),
-                          ),
-                          child: Slider(
-                            value: shownProgress,
-                            onChanged: hasTrack
-                                ? (v) => setState(() => _dragValue = v)
-                                : null,
-                            onChangeEnd: hasTrack
-                                ? (v) {
-                                    final target = Duration(
-                                      milliseconds: (v * total.inMilliseconds)
-                                          .round(),
-                                    );
-                                    player.seek(target);
-                                    setState(() => _dragValue = null);
-                                  }
-                                : null,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 42,
-                        child: Text(
-                          _fmt(total),
-                          textAlign: TextAlign.right,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        // Derecha: volumen
+                        Expanded(child: _buildVolume(context, theme, player)),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              // Fila principal (altura fija 48px): info | controles | volumen
-              SizedBox(
-                height: 48,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    children: [
-                      Expanded(child: _buildTrackInfo(theme, cache, player)),
-                      const SizedBox(width: 8),
-                      _buildControls(theme, player, hasTrack),
-                      const SizedBox(width: 8),
-                      Expanded(child: _buildVolume(context, theme, player)),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

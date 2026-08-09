@@ -18,6 +18,9 @@ const Color kDefaultAccent = Color(0xFFC084FC);
 /// mantiene el acento por defecto (lila) sin romper nada.
 class ThemeController extends ChangeNotifier {
   ThemeController(this._player) {
+    // Leer la pista ya publicada (p. ej. sesión restaurada): los streams
+    // broadcast no re-emiten lo pasado, así que el acento se aplica aquí.
+    _onTrackChanged(_player.currentTrackValue);
     _sub = _player.currentTrack.listen(_onTrackChanged);
   }
 
@@ -35,13 +38,29 @@ class ThemeController extends ChangeNotifier {
   /// una portada, se descarta el resultado obsoleto.
   int _token = 0;
 
+  /// Debounce de cambio de pista: el reproductor publica primero el track
+  /// de YouTube y poco después el enriquecido con Deezer (portada distinta).
+  /// Esperar un instante evita extraer la paleta dos veces seguidas (que el
+  /// acento "parpadee" del color de la miniatura al de la portada real) y
+  /// descargar dos portadas cuando gana el enriquecimiento.
+  Timer? _debounce;
+
   void _onTrackChanged(Track? track) {
     final token = ++_token;
     final url = track?.thumbnailUrl;
     if (url == null) {
+      _debounce?.cancel();
       _setAccent(null);
       return;
     }
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 600), () {
+      if (token != _token) return;
+      _extract(token, url);
+    });
+  }
+
+  void _extract(int token, String url) {
     // containsKey: también se cachea el fallo (null) para no re-descargar
     // la misma portada fallida cada vez que suena la pista.
     if (_paletteCache.containsKey(url)) {
@@ -99,6 +118,7 @@ class ThemeController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _sub?.cancel();
     super.dispose();
   }
