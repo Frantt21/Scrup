@@ -23,3 +23,27 @@ class History extends Table {
   TextColumn get trackId => text().references(Tracks, #id)();
   DateTimeColumn get playedAt => dateTime()();
 }
+
+/// Playlist creada por el usuario.
+@DataClassName('PlaylistRow')
+class Playlists extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(
+        currentDateAndTime,
+      )();
+}
+
+/// Relación N:M entre playlists y canciones, con posición de orden.
+@DataClassName('PlaylistTrackRow')
+class PlaylistTracks extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get playlistId => integer().references(Playlists, #id)();
+  TextColumn get trackId => text().references(Tracks, #id)();
+  IntColumn get position => integer()();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+        {playlistId, trackId},
+      ];
+}

@@ -51,6 +51,15 @@ void main() {
       final track = Track.fromYtDlp({'id': 't2', 'title': 'T'});
       expect(track.thumbnailUrl, isNull);
     });
+
+    test('limpia tags de publicación del título', () {
+      final track = Track.fromYtDlp({
+        'id': 't3',
+        'title': 'Mi Canción (Official Video)',
+        'channel': 'Canal',
+      });
+      expect(track.title, 'Mi Canción');
+    });
   });
 
   group('Track.copyWith', () {

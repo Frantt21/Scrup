@@ -1,30 +1,50 @@
 # Scrup 🎵
 
-Reproductor de música por **streaming** desde YouTube, sin descargar archivos.
+Reproductor de música desde YouTube con **caché local**: descarga cada pista
+con `yt-dlp` y la reproduce desde archivo con `media_kit` (motor mpv). Las
+primeras reproducciones descargan la pista (con progreso en la barra del
+reproductor); las siguientes se sirven al instante desde el caché local,
+evitando los cortes de los streams remotos de YouTube.
 
-Extrae la pista de audio con `yt-dlp`, reproduce su URL directa con `media_kit`
-(motor mpv) y cachea los metadatos en una base local SQLite (`drift`).
+Los metadatos, el historial y las playlists se guardan en una base local
+SQLite (`drift`).
 
 Plataformas objetivo: **Windows, Linux y macOS** (una sola base de código Flutter).
+
+## Funcionalidades
+
+- **Inicio**: reproducciones recientes (desde SQLite) en el arranque.
+- **Búsqueda**: busca canciones en YouTube y las reproduce al instante.
+- **Playlists**: crea, elimina y añade canciones; reproduce toda la playlist
+  como cola con auto-advance al terminar cada pista.
+- **Title bar personalizado** (Windows/Linux): área de arrastre y botones de
+  minimizar/maximizar/cerrar.
+- **Caché local de audio**: evicción LRU por tamaño (2 GiB por defecto),
+  descargas con progreso y deduplicación de descargas concurrentes.
 
 ## Arquitectura
 
 ```
-┌────────────────────────────────────────────┐
-│  UI Flutter (búsqueda, lista, player bar)  │
-├────────────────────────────────────────────┤
-│  yt-dlp  → busca pistas y extrae URL       │  (subproceso + parseo JSON)
-│  media_kit (libmpv) → reproduce el stream  │  (sin escribir archivos)
-│  drift (SQLite) → cache de metadatos       │  (título, artista, duración, historial)
-│  Binarios sidecar → yt-dlp + ffmpeg por OS │  (embebidos junto al ejecutable)
-└────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  UI Flutter (title bar, navegación, player bar)  │
+├──────────────────────────────────────────────────┤
+│  yt-dlp → busca y descarga audio (progreso)      │  (subproceso + parseo JSON)
+│  AudioCacheService → caché local con límite LRU  │  (2 GiB, evicción por mtime)
+│  media_kit (libmpv) → reproduce archivo local    │
+│  PlayerService → cola, repeat, shuffle, radio    │
+│  drift (SQLite) → historial, playlists           │
+│  Binarios sidecar → yt-dlp + ffmpeg por OS       │
+└──────────────────────────────────────────────────┘
 ```
 
 ### Notas técnicas clave
 
-- **Las URLs de audio de YouTube expiran (~6 h).** Nunca se cachean; se re-extraen
-  con `yt-dlp` en el momento de reproducir (~1-2 s). Solo se cachean metadatos.
-- El cifrado de firma lo resuelve `yt-dlp`; `mpv` reproduce la URL final.
+- **El caché de audio vive en el directorio de soporte de la app**
+  (`%APPDATA%/<org>/scrup/audio_cache` en Windows). Límite por defecto: 2 GiB,
+  configurable con `SCRUP_CACHE_MAX_MB` si se expone.
+- **Los streams remotos pueden cortarse** (expiración/rate-limit de YouTube);
+  por eso la reproducción es cache-first: archivo local estable.
+- El cifrado de firma lo resuelve `yt-dlp`; `mpv` reproduce el archivo final.
 - `yt-dlp` se actualiza a menudo (YouTube cambia cosas): el script de binarios
   siempre descarga la versión más reciente.
 
@@ -59,9 +79,13 @@ las variables de entorno `SCRUP_YTDLP_PATH` y `SCRUP_FFMPEG_PATH`.
 ```
 lib/
 ├── core/          # Binaries (resolución sidecar) y modelo Track
-├── data/          # Drift: tablas, DB y cache/historial
-├── services/      # YtDlpService (extracción) y PlayerService (media_kit)
-└── ui/            # HomePage + widgets (player bar, track tile)
+├── data/          # Drift: tablas, DB, historial y playlists
+├── services/      # YtDlpService, AudioCacheService y PlayerService
+└── ui/
+    ├── app_shell.dart        # Title bar + navegación + player bar
+    ├── playback.dart         # Helper playTrack / playQueue
+    ├── views/                # HomeView, SearchView, PlaylistsView, PlaylistDetail
+    └── widgets/              # CustomTitleBar, PlayerBar, TrackTile
 tool/
 └── fetch_binaries.sh   # Descarga yt-dlp + ffmpeg por SO
 bin/<plataforma>/       # Binarios sidecar (no versionados)
@@ -73,3 +97,20 @@ bin/<plataforma>/       # Binarios sidecar (no versionados)
 flutter analyze
 flutter test
 ```
+
+## Si mueves el proyecto de carpeta
+
+El cache de CMake guarda las rutas absolutas. Tras mover el proyecto a otra
+ubicación (o deshacer una carpeta duplicada), limpia los caches antes de
+recompilar:
+
+```bash
+rm -rf build .dart_tool
+flutter pub get
+dart run build_runner build
+flutter build windows
+```
+
+Después, recuerda volver a copiar los binarios sidecar junto al ejecutable
+(`cp bin/windows/yt-dlp.exe build/windows/x64/runner/Debug/` y lo mismo con
+`ffmpeg/`), o simplemente ejecuta `tool/fetch_binaries.sh` desde el build.

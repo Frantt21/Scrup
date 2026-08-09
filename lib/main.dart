@@ -1,16 +1,36 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:provider/provider.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'core/binaries.dart';
 import 'data/database.dart';
+import 'services/audio_cache_service.dart';
 import 'services/player_service.dart';
 import 'services/ytdlp_service.dart';
-import 'ui/home_page.dart';
+import 'ui/app_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+
+  // Ventana con title bar oculto (Windows/Linux) para usar el personalizado
+  await windowManager.ensureInitialized();
+  if (!Platform.isMacOS) {
+    const windowOptions = WindowOptions(
+      size: Size(1120, 720),
+      minimumSize: Size(760, 520),
+      center: true,
+      title: 'Scrup',
+      titleBarStyle: TitleBarStyle.hidden,
+    );
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
 
   Binaries.logBinaries();
 
@@ -26,8 +46,34 @@ class ScrupApp extends StatelessWidget {
       providers: [
         Provider<AppDatabase>(create: (_) => AppDatabase()),
         Provider<YtDlpService>(create: (_) => YtDlpService()),
+        Provider<AudioCacheService>(
+          create: (context) =>
+              AudioCacheService(ytdlp: context.read<YtDlpService>()),
+        ),
         Provider<PlayerService>(
-          create: (_) => PlayerService(),
+          // Inyecta la resolución de fuente (cache-first con yt-dlp) y la
+          // búsqueda de radio para que la cola pueda auto-avanzar sin
+          // intervención de la UI.
+          create: (context) {
+            final ytdlp = context.read<YtDlpService>();
+            final cache = context.read<AudioCacheService>();
+            return PlayerService(
+              // Cache-first: descarga la pista al caché local y la
+              // reproduce desde archivo (estable y rápido en próximas
+              // sesiones).
+              resolveSource: (track) async {
+                final path =
+                    await cache.ensure(track.id, title: track.title);
+                return PlayableSource(path, isLocal: true);
+              },
+              // Radio: busca canciones del mismo artista/género
+              recommend: (track) async {
+                final query =
+                    track.artist.isNotEmpty ? track.artist : track.title;
+                return ytdlp.search(query, limit: 10);
+              },
+            );
+          },
           dispose: (_, player) => player.dispose(),
         ),
       ],
@@ -35,13 +81,29 @@ class ScrupApp extends StatelessWidget {
         title: 'Scrup',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFE91E63),
-            brightness: Brightness.dark,
-          ),
           useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            // Acento lila sobre fondo negro puro
+            seedColor: const Color(0xFFC084FC),
+            brightness: Brightness.dark,
+          ).copyWith(
+            // Negro puro como color base
+            surface: const Color(0xFF000000),
+            // Paneles casi-negros escalonados para dar profundidad
+            surfaceContainerLowest: const Color(0xFF000000),
+            surfaceContainerLow: const Color(0xFF0D0D0D),
+            surfaceContainer: const Color(0xFF141414),
+            surfaceContainerHigh: const Color(0xFF1B1B1B),
+            surfaceContainerHighest: const Color(0xFF222222),
+          ),
+          scaffoldBackgroundColor: const Color(0xFF000000),
+          // Sutil tinte lila en superficies de navegación
+          navigationRailTheme: NavigationRailThemeData(
+            backgroundColor: const Color(0xFF000000),
+            indicatorColor: const Color(0xFFC084FC).withValues(alpha: 0.16),
+          ),
         ),
-        home: const HomePage(),
+        home: const AppShell(),
       ),
     );
   }

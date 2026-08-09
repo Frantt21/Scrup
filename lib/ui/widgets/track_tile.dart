@@ -1,13 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
+import '../../services/player_service.dart';
 
-/// Fila de una pista en los resultados de búsqueda.
+/// Fila de una pista (resultados, recientes, playlists).
+///
+/// - [onPlay]: reproduce la pista al tocar la fila o el botón play.
+/// - [onAddToPlaylist]: muestra un botón "+" para añadir a playlist.
+/// - [trailing]: widget extra opcional al final (p. ej. quitar de playlist).
+///
+/// Muestra un spinner en el botón play mientras esa pista se está
+/// preparando (extrayendo URL con yt-dlp o abriendo el stream).
 class TrackTile extends StatelessWidget {
   final Track track;
   final VoidCallback onPlay;
+  final VoidCallback? onAddToPlaylist;
+  final Widget? trailing;
 
-  const TrackTile({super.key, required this.track, required this.onPlay});
+  const TrackTile({
+    super.key,
+    required this.track,
+    required this.onPlay,
+    this.onAddToPlaylist,
+    this.trailing,
+  });
 
   String get _durationText {
     final d = track.duration;
@@ -20,6 +37,7 @@ class TrackTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final player = context.read<PlayerService>();
 
     return InkWell(
       onTap: onPlay,
@@ -79,12 +97,40 @@ class TrackTile extends StatelessWidget {
                 ),
               ),
             const SizedBox(width: 4),
-            // Botón reproducir
-            IconButton(
-              icon: Icon(Icons.play_circle_outline,
-                  color: theme.colorScheme.primary),
-              onPressed: onPlay,
-              tooltip: 'Reproducir',
+            // Botón añadir a playlist
+            if (onAddToPlaylist != null)
+              IconButton(
+                icon: Icon(
+                  Icons.playlist_add,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                onPressed: onAddToPlaylist,
+                tooltip: 'Añadir a playlist',
+              ),
+            // Widget extra (quitar, etc.)
+            ?trailing,
+            // Botón reproducir (spinner mientras se prepara)
+            ValueListenableBuilder<String?>(
+              valueListenable: player.preparingTrackId,
+              builder: (context, preparingId, _) {
+                final isPreparing = preparingId == track.id;
+                if (isPreparing) {
+                  return const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    ),
+                  );
+                }
+                return IconButton(
+                  icon: Icon(Icons.play_circle_outline,
+                      color: theme.colorScheme.primary),
+                  onPressed: onPlay,
+                  tooltip: 'Reproducir',
+                );
+              },
             ),
           ],
         ),

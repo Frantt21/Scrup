@@ -90,30 +90,121 @@ class YtDlpService {
     return tracks;
   }
 
-  /// Extrae la URL directa de audio de una pista SIN descargarla.
+  /// Descarga el mejor audio de una pista a [outputDir] y devuelve la ruta
+  /// local del archivo. El nombre final es `<videoId>.<ext>`.
   ///
-  /// Elige el mejor formato de solo-audio (m4a/opus). Estas URLs expiran,
-  /// por lo que SIEMPRE debe llamarse en el momento de reproducir.
-  Future<String> getAudioUrl(String videoId, {String? title}) async {
-    final result = await _run([
-      '--no-playlist',
-      '--no-warnings',
-      '--skip-download',
-      '-f',
-      'bestaudio/best',
-      '-g',
-      'https://www.youtube.com/watch?v=$videoId',
-    ]);
-
-    final lines = (result.stdout as String)
-        .trim()
-        .split('\n')
-        .where((l) => l.trim().isNotEmpty)
-        .toList();
-    if (lines.isEmpty) {
-      throw YtDlpException('No se pudo extraer audio de "${title ?? videoId}".');
+  /// Lee la salida en vivo para notificar el progreso (0.0–1.0) vía
+  /// [onProgress], y usa `--print after_move:filepath` para obtener la ruta
+  /// exacta que escribió yt-dlp (el formato puede variar entre m4a/opus/webm).
+  Future<String> downloadAudio(
+    String videoId, {
+    required String outputDir,
+    String? title,
+    void Function(double? percent)? onProgress,
+  }) async {
+    final ytdlp = Binaries.ytdlpPath;
+    if (ytdlp == null) {
+      throw YtDlpException(
+        'yt-dlp no encontrado. Ejecuta "bash tool/fetch_binaries.sh" '
+        'o define SCRUP_YTDLP_PATH.',
+      );
     }
-    return lines.first.trim();
+
+    final env = {...Platform.environment};
+    final ffmpeg = Binaries.ffmpegPath;
+    if (ffmpeg != null) {
+      final sep = Platform.isWindows ? ';' : ':';
+      final path = env['PATH'] ?? '';
+      env['PATH'] = '${p.dirname(ffmpeg)}$sep$path';
+    }
+
+    debugPrint('[yt-dlp] download $videoId');
+    final process = await Process.start(
+      ytdlp,
+      [
+        '--no-playlist',
+        '--no-warnings',
+        '--newline',
+        // El mtime debe ser el de la descarga, no la fecha de subida del
+        // video, para que la evicción LRU del caché sea correcta.
+        '--no-mtime',
+        '-f',
+        'bestaudio/best',
+        '-o',
+        p.join(outputDir, '%(id)s.%(ext)s'),
+        '--print',
+        'after_move:filepath',
+        'https://www.youtube.com/watch?v=$videoId',
+      ],
+      environment: env,
+    );
+
+    // Parseo en vivo: progreso `[download] xx.x%` y ruta final del archivo.
+    final progressRe = RegExp(r'\[download\]\s+(\d+(?:\.\d+)?)%');
+    var stderr = '';
+    var printedPath = '';
+    process.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen((line) {
+      final m = progressRe.firstMatch(line);
+      if (m != null) {
+        onProgress?.call(double.parse(m.group(1)!) / 100);
+      }
+      final trimmed = line.trim();
+      if (trimmed.isNotEmpty && !trimmed.contains('[download]')) {
+        printedPath = trimmed;
+      }
+    });
+    process.stderr.transform(utf8.decoder).listen((chunk) => stderr += chunk);
+
+    int exitCode;
+    try {
+      exitCode = await process.exitCode
+          .timeout(const Duration(minutes: 10));
+    } on TimeoutException {
+      process.kill();
+      throw YtDlpException(
+        'La descarga de "${title ?? videoId}" tardó demasiado.',
+      );
+    }
+
+    if (exitCode != 0) {
+      onProgress?.call(null);
+      throw YtDlpException(
+        stderr.trim().isNotEmpty
+            ? stderr.trim()
+            : 'No se pudo descargar "${title ?? videoId}".',
+      );
+    }
+
+    // Ruta final: primero la impresa por `--print`, con fallback a escanear
+    // el directorio por `<videoId>.*` (robusto ante cambios de formato).
+    String? filePath;
+    if (printedPath.isNotEmpty && File(printedPath).existsSync()) {
+      filePath = printedPath;
+    } else {
+      final dir = Directory(outputDir);
+      if (await dir.exists()) {
+        final files = await dir
+            .list()
+            .where((e) =>
+                e is File &&
+                p.basename(e.path).startsWith('$videoId.') &&
+                !p.basename(e.path).endsWith('.part'))
+            .cast<File>()
+            .toList();
+        if (files.isNotEmpty) filePath = files.first.path;
+      }
+    }
+    if (filePath == null) {
+      onProgress?.call(null);
+      throw YtDlpException(
+        'La descarga de "${title ?? videoId}" no produjo un archivo.',
+      );
+    }
+    onProgress?.call(1.0);
+    return filePath;
   }
 
   /// Extrae metadatos completos de una pista (útil para refrescar el cache).

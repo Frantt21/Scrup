@@ -1,3 +1,5 @@
+import 'title_cleaner.dart';
+
 /// Modelo de una pista de audio extraída de YouTube.
 class Track {
   final String id;
@@ -28,7 +30,8 @@ class Track {
 
     return Track(
       id: json['id'] as String? ?? '',
-      title: json['title'] as String? ?? 'Sin título',
+      // Limpia tags como "(Official Video)", " | Lyrics", etc.
+      title: TitleCleaner.clean(json['title'] as String? ?? 'Sin título'),
       artist: (json['channel'] ?? json['uploader'] ?? json['artist'] ?? '') as String? ??
           '',
       duration: durationSec is num && durationSec > 0
