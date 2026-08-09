@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -100,28 +101,38 @@ class AudioCacheService {
 
   /// Ruta local de la pista si ya está cacheada (actualizando el LRU), o
   /// `null` si hay que descargarla.
+  ///
+  /// El escaneo del directorio corre en un isolate de fondo: listar +
+  /// statSync por archivo en el hilo UI congelaría la interfaz con un caché
+  /// grande (se llama en cada reproducción). Solo se cruzan valores
+  /// enviables (paths) entre isolates.
   Future<String?> cachedPath(String videoId) async {
     final dir = await cacheDir();
-    final files = await dir
-        .list()
-        .where(
-          (e) => e is File && p.basenameWithoutExtension(e.path) == videoId,
-        )
-        .cast<File>()
-        .toList();
-    if (files.isEmpty) return null;
-    // Puede haber variantes (m4a/opus/webm): quedarse con la más reciente.
-    files.sort(
-      (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
-    );
-    final best = files.first;
-    try {
-      // Touch: actualizar el mtime para que el LRU la considere reciente.
-      await best.setLastModified(DateTime.now());
-    } catch (_) {
-      // Si el FS no lo permite, no es crítico.
-    }
-    return best.path;
+    final dirPath = dir.path;
+    return Isolate.run(() {
+      final d = Directory(dirPath);
+      if (!d.existsSync()) return null;
+      final files = d
+          .listSync()
+          .where(
+            (e) => e is File && p.basenameWithoutExtension(e.path) == videoId,
+          )
+          .cast<File>()
+          .toList();
+      if (files.isEmpty) return null;
+      // Puede haber variantes (m4a/opus/webm): quedarse con la más reciente.
+      files.sort(
+        (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
+      );
+      final best = files.first;
+      try {
+        // Touch: actualizar el mtime para que el LRU la considere reciente.
+        best.setLastModifiedSync(DateTime.now());
+      } catch (_) {
+        // Si el FS no lo permite, no es crítico.
+      }
+      return best.path;
+    });
   }
 
   /// Fuente para reproducir con reproducción progresiva: devuelve al
@@ -240,26 +251,32 @@ class AudioCacheService {
   }
 
   /// Elimina archivos desde el más antiguo (LRU) hasta quedar bajo el límite.
+  ///
+  /// Corre en un isolate de fondo: sumar tamaños + statSync + borrados en el
+  /// hilo UI congelaría la interfaz con un caché grande (se llama al terminar
+  /// cada descarga). Solo se cruzan valores enviables (paths/ints).
   Future<void> _enforceLimit(Directory dir) async {
-    final files = await dir
-        .list()
-        .where((e) => e is File)
-        .cast<File>()
-        .toList();
-    var total = 0;
-    for (final f in files) {
-      total += f.statSync().size;
-    }
-    if (total <= maxSizeBytes) return;
-    files.sort(
-      (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
-    );
-    for (final f in files) {
-      if (total <= maxSizeBytes) return;
-      final size = f.statSync().size;
-      await f.delete();
-      total -= size;
-    }
+    final dirPath = dir.path;
+    final limit = maxSizeBytes;
+    await Isolate.run(() {
+      final d = Directory(dirPath);
+      if (!d.existsSync()) return;
+      final files = d.listSync().whereType<File>().toList();
+      var total = 0;
+      for (final f in files) {
+        total += f.statSync().size;
+      }
+      if (total <= limit) return;
+      files.sort(
+        (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
+      );
+      for (final f in files) {
+        if (total <= limit) return;
+        final size = f.statSync().size;
+        f.deleteSync();
+        total -= size;
+      }
+    });
   }
 
   /// Borra todo el caché.
@@ -272,22 +289,30 @@ class AudioCacheService {
   }
 
   /// Resumen del caché: número de archivos y tamaño total en bytes.
+  ///
+  /// Corre en un isolate de fondo (la pantalla de configuración lo invoca al
+  /// abrir): listar + statSync de un caché grande en el hilo UI congelaría
+  /// la interfaz.
   Future<CacheStats> stats() async {
     final dir = await cacheDir();
-    var count = 0;
-    var bytes = 0;
-    if (await dir.exists()) {
-      await for (final e in dir.list()) {
-        if (e is File) {
-          count++;
-          try {
-            bytes += e.statSync().size;
-          } catch (_) {
-            // Archivo desaparecido durante el conteo: se ignora.
+    final dirPath = dir.path;
+    return Isolate.run(() {
+      var count = 0;
+      var bytes = 0;
+      final d = Directory(dirPath);
+      if (d.existsSync()) {
+        for (final e in d.listSync()) {
+          if (e is File) {
+            count++;
+            try {
+              bytes += e.statSync().size;
+            } catch (_) {
+              // Archivo desaparecido durante el conteo: se ignora.
+            }
           }
         }
       }
-    }
-    return CacheStats(fileCount: count, bytes: bytes);
+      return CacheStats(fileCount: count, bytes: bytes);
+    });
   }
 }

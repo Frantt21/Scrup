@@ -41,6 +41,24 @@ class StreamingDownload {
 /// - Búsqueda de pistas (`ytsearchN:query`)
 /// - Descarga completa o en streaming (reproducir mientras descarga)
 class YtDlpService {
+  /// Máximo de consultas cacheadas en memoria (LRU).
+  static const int _searchCacheMax = 20;
+
+  /// TTL del caché de búsquedas: el modo radio re-pide recomendaciones del
+  /// mismo artista/género con frecuencia, y re-ejecutar yt-dlp (~3s) cada
+  /// vez es un desperdicio; con este TTL las repeticiones cercanas son
+  /// instantáneas sin volverse obsoletas.
+  static const Duration _searchCacheTtl = Duration(minutes: 5);
+
+  /// Caché LRU en memoria de búsquedas recientes (clave = `query|limit`).
+  final Map<String, _SearchCacheEntry> _searchCache = {};
+
+  /// Búsquedas en vuelo por clave (dedupe de llamadas concurrentes): el modo
+  /// radio puede pedir el mismo artista/género varias veces en paralelo, y
+  /// sin esto cada llamada arrancaría su propio proceso yt-dlp (~3s). La
+  /// segunda llamada espera el Future de la primera.
+  final Map<String, Future<List<Track>>> _searchInflight = {};
+
   /// Argumentos comunes para descargar el mejor audio de una pista.
   List<String> _downloadArgs(String videoId, String outputDir) {
     return [
@@ -60,15 +78,17 @@ class YtDlpService {
     ];
   }
 
-  /// Entorno con el directorio de ffmpeg añadido al PATH.
-  Map<String, String> _envWithFfmpeg() {
+  /// Entorno con los directorios de los binarios sidecar añadidos al PATH:
+  /// ffmpeg (para remux/merge de yt-dlp) y el directorio de binarios (donde
+  /// vive deno, el runtime JS que yt-dlp detecta solo y que mantiene la
+  /// extracción de YouTube completa).
+  Map<String, String> _envWithSidecars() {
     final env = {...Platform.environment};
-    final ffmpeg = Binaries.ffmpegPath;
-    if (ffmpeg != null) {
-      final sep = Platform.isWindows ? ';' : ':';
-      final path = env['PATH'] ?? '';
-      env['PATH'] = '${p.dirname(ffmpeg)}$sep$path';
-    }
+    final dirs = Binaries.pathDirs;
+    if (dirs.isEmpty) return env;
+    final sep = Platform.isWindows ? ';' : ':';
+    final path = env['PATH'] ?? '';
+    env['PATH'] = '${dirs.join(sep)}$sep$path';
     return env;
   }
 
@@ -112,20 +132,12 @@ class YtDlpService {
     }
 
     debugPrint('[yt-dlp] ${args.join(' ')}');
-    final env = {...Platform.environment};
-    final ffmpeg = Binaries.ffmpegPath;
-    if (ffmpeg != null) {
-      // Añadir el directorio de ffmpeg al PATH para que yt-dlp lo encuentre
-      final sep = Platform.isWindows ? ';' : ':';
-      final path = env['PATH'] ?? '';
-      env['PATH'] = '${p.dirname(ffmpeg)}$sep$path';
-    }
     final result = await Process.run(
       ytdlp,
       args,
       stdoutEncoding: utf8,
       stderrEncoding: utf8,
-      environment: env,
+      environment: _envWithSidecars(),
     ).timeout(timeout);
 
     if (result.exitCode != 0) {
@@ -139,9 +151,52 @@ class YtDlpService {
   }
 
   /// Busca canciones en YouTube. Devuelve lista de [Track].
+  ///
+  /// Cachea en memoria las consultas recientes (LRU + TTL): el modo radio
+  /// pide recomendaciones del mismo artista/género repetidamente y no
+  /// conviene re-ejecutar yt-dlp (~3s) en cada petición.
   Future<List<Track>> search(String query, {int limit = 10}) async {
     if (query.trim().isEmpty) return const [];
 
+    final key = '$query|$limit';
+    final cached = _searchCache[key];
+    if (cached != null &&
+        DateTime.now().difference(cached.at) < _searchCacheTtl) {
+      return cached.tracks;
+    }
+
+    // Dedupe de llamadas concurrentes: si ya hay una búsqueda idéntica en
+    // vuelo, esperarla en vez de spawnear otro yt-dlp.
+    final inflight = _searchInflight[key];
+    if (inflight != null) return inflight;
+
+    final future = _doSearch(query, limit);
+    _searchInflight[key] = future;
+    try {
+      final tracks = await future;
+      // Almacenar con evicción LRU: si se llenó, descartar la más antigua.
+      if (tracks.isNotEmpty) {
+        if (_searchCache.length >= _searchCacheMax) {
+          String? oldestKey;
+          DateTime? oldestAt;
+          for (final e in _searchCache.entries) {
+            if (oldestAt == null || e.value.at.isBefore(oldestAt)) {
+              oldestAt = e.value.at;
+              oldestKey = e.key;
+            }
+          }
+          if (oldestKey != null) _searchCache.remove(oldestKey);
+        }
+        _searchCache[key] = _SearchCacheEntry(tracks, DateTime.now());
+      }
+      return tracks;
+    } finally {
+      _searchInflight.remove(key);
+    }
+  }
+
+  /// Ejecuta yt-dlp para una consulta y parsea los resultados.
+  Future<List<Track>> _doSearch(String query, int limit) async {
     final result = await _run([
       'ytsearch$limit:$query',
       '--flat-playlist',
@@ -194,15 +249,21 @@ class YtDlpService {
     final process = await Process.start(
       ytdlp,
       _downloadArgs(videoId, outputDir),
-      environment: _envWithFfmpeg(),
+      environment: _envWithSidecars(),
     );
 
     final started = DateTime.now();
     final progressRe = RegExp(r'\[download\]\s+(\d+(?:\.\d+)?)%');
+    // yt-dlp imprime `[download] Destination: <ruta>` cuando empieza a
+    // escribir: la ruta EXACTA del `.part`. Con ella el poll es O(1) — se
+    // comprueba solo ese archivo en vez de listar todo el directorio caché
+    // (que con cientos de pistas era un escaneo O(n) cada 250ms).
+    final destinationRe = RegExp(r'\[download\]\s+Destination:\s+(.+)$');
     final partialCompleter = Completer<String>();
     final doneCompleter = Completer<String>();
     var stderr = '';
     var printedPath = '';
+    var destinationPath = '';
     var processExited = false;
 
     process.stdout
@@ -213,6 +274,10 @@ class YtDlpService {
           if (m != null) {
             onProgress?.call(double.parse(m.group(1)!) / 100);
           }
+          final dm = destinationRe.firstMatch(line);
+          if (dm != null) {
+            destinationPath = dm.group(1)!.trim();
+          }
           final trimmed = line.trim();
           if (trimmed.isNotEmpty && !trimmed.contains('[download]')) {
             printedPath = trimmed;
@@ -220,31 +285,58 @@ class YtDlpService {
         });
     process.stderr.transform(utf8.decoder).listen((chunk) => stderr += chunk);
 
-    // Vigilar el archivo `.part` hasta que sea reproducible.
+    // Vigilar el archivo `.part` hasta que sea reproducible. Con la ruta
+    // conocida (Destination) se comprueba un solo archivo; sin ella (p. ej.
+    // la salida no lo reportó) se cae al escaneo del directorio una sola vez
+    // al final, nunca en bucle.
     Future<void> pollPartial() async {
       const minBytes = 1024 * 1024;
       const timeout = Duration(seconds: 20);
       final deadline = started.add(timeout);
+      var known = destinationPath;
       while (DateTime.now().isBefore(deadline)) {
         if (processExited) return;
-        final partial = await _findPartial(outputDir, videoId);
-        if (partial != null) {
-          final size = await partial.length();
-          final elapsedMs = DateTime.now().difference(started).inMilliseconds;
-          if (size >= minBytes || (elapsedMs >= 6000 && size >= 64 * 1024)) {
-            if (!partialCompleter.isCompleted) {
-              partialCompleter.complete(partial.path);
+        if (known.isEmpty) known = destinationPath;
+        if (known.isNotEmpty) {
+          final f = File(known);
+          if (await f.exists()) {
+            final size = await f.length();
+            final elapsedMs = DateTime.now().difference(started).inMilliseconds;
+            if (size >= minBytes || (elapsedMs >= 6000 && size >= 64 * 1024)) {
+              if (!partialCompleter.isCompleted) {
+                partialCompleter.complete(known);
+              }
+              return;
             }
-            return;
+          } else {
+            // El `.part` ya no existe: la descarga terminó y yt-dlp lo
+            // renombró al archivo final (o está en post-proceso/merge).
+            // Completar con el archivo final para no esperar al deadline ni
+            // reportar un falso error.
+            final finalPath = await _findFinal(outputDir, videoId);
+            if (finalPath != null) {
+              if (!partialCompleter.isCompleted) {
+                partialCompleter.complete(finalPath);
+              }
+              return;
+            }
           }
         }
         await Future<void>.delayed(const Duration(milliseconds: 250));
       }
       // Timeout: reproducir con lo que haya, o fallar si no hay nada.
-      final partial = await _findPartial(outputDir, videoId);
-      if (partial != null) {
+      // Sin ruta conocida se hace UN solo escaneo del directorio (no en
+      // bucle): suficiente para los casos en que yt-dlp no reportó destino.
+      String? partialPath = known.isNotEmpty && await File(known).exists()
+          ? known
+          : null;
+      if (partialPath == null) {
+        final partial = await _findPartial(outputDir, videoId);
+        partialPath = partial?.path;
+      }
+      if (partialPath != null) {
         if (!partialCompleter.isCompleted) {
-          partialCompleter.complete(partial.path);
+          partialCompleter.complete(partialPath);
         }
       } else if (!partialCompleter.isCompleted) {
         partialCompleter.completeError(
@@ -324,11 +416,19 @@ class YtDlpService {
   }
 
   /// Extrae metadatos completos de una pista (útil para refrescar el cache).
+  ///
+  /// Usa el cliente de extracción `android`, que es ~20% más rápido que el
+  /// `web` por defecto para SOLO metadatos (medido: 3.4s vs 4.2s). NO debe
+  /// usarse para descargas: el cliente android selecciona formatos
+  /// progresivos (mp4 con video, ~2.7x más grandes); las descargas siguen
+  /// con el cliente web por defecto en [startStreaming].
   Future<Track?> getTrackInfo(String videoId) async {
     final result = await _run([
       '--no-playlist',
       '--no-warnings',
       '--skip-download',
+      '--extractor-args',
+      'youtube:player_client=android',
       '-J',
       'https://www.youtube.com/watch?v=$videoId',
     ]);
@@ -339,4 +439,12 @@ class YtDlpService {
       return null;
     }
   }
+}
+
+/// Entrada del caché LRU de búsquedas: resultados + momento del fetch.
+class _SearchCacheEntry {
+  final List<Track> tracks;
+  final DateTime at;
+
+  const _SearchCacheEntry(this.tracks, this.at);
 }

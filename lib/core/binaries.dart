@@ -25,7 +25,8 @@ class Binaries {
   /// Directorio donde buscaremos los binarios, si existe.
   static String? _searchDir() {
     final env = Platform.environment;
-    if (env['SCRUP_YTDLP_PATH'] != null && env['SCRUP_YTDLP_PATH']!.isNotEmpty) {
+    if (env['SCRUP_YTDLP_PATH'] != null &&
+        env['SCRUP_YTDLP_PATH']!.isNotEmpty) {
       return p.dirname(env['SCRUP_YTDLP_PATH']!);
     }
     // Modo empaquetado: los binarios van junto al .exe
@@ -46,6 +47,7 @@ class Binaries {
 
   static String? _ytdlpPath;
   static String? _ffmpegPath;
+  static String? _denoPath;
 
   static String? get ytdlpPath {
     if (_ytdlpPath != null) return _ytdlpPath;
@@ -94,12 +96,61 @@ class Binaries {
     return null;
   }
 
+  /// Runtime JS de yt-dlp (deno) junto a los binarios, o `null` si no hay.
+  ///
+  /// yt-dlp 2026+ ha **deprecado la extracción sin runtime JS** de YouTube
+  /// ("some formats may be missing"). Si deno está en el PATH de los
+  /// subprocesos, yt-dlp lo detecta solo y la extracción queda completa y a
+  /// prueba del cierre del camino sin JS. Se busca en el directorio de
+  /// binarios (descargado por `tool/fetch_binaries.sh`), en `SCRUP_DENO_PATH`
+  /// y en el PATH del sistema (por si el usuario lo tiene instalado).
+  static String? get denoPath {
+    if (_denoPath != null) return _denoPath;
+    final env = Platform.environment['SCRUP_DENO_PATH'];
+    if (env != null && env.isNotEmpty) {
+      _denoPath = env;
+      return _denoPath;
+    }
+    final dir = _searchDir();
+    if (dir != null) {
+      final candidate = p.join(dir, 'deno$_exeExt');
+      if (File(candidate).existsSync()) {
+        _denoPath = candidate;
+        return _denoPath;
+      }
+    }
+    final inPath = _which('deno');
+    if (inPath != null) {
+      _denoPath = inPath;
+      return _denoPath;
+    }
+    return null;
+  }
+
+  /// Directorios que deben añadirse al PATH de los subprocesos (yt-dlp busca
+  /// ahí ffmpeg y el runtime JS): el directorio de binarios (donde vive deno)
+  /// y el directorio de ffmpeg. Sin duplicados y en orden estable.
+  static List<String> get pathDirs {
+    final dirs = <String>[];
+    final binDir = _searchDir();
+    if (binDir != null) dirs.add(binDir);
+    final ffmpeg = ffmpegPath;
+    if (ffmpeg != null) {
+      final ffDir = p.dirname(ffmpeg);
+      if (!dirs.contains(ffDir)) dirs.add(ffDir);
+    }
+    return dirs;
+  }
+
   static String? _which(String name) {
     if (Platform.isWindows) {
       final cmd = Process.runSync('where', [name]);
       if (cmd.exitCode == 0) {
-        final lines =
-            (cmd.stdout as String).trim().split('\n').where((l) => l.isNotEmpty).toList();
+        final lines = (cmd.stdout as String)
+            .trim()
+            .split('\n')
+            .where((l) => l.isNotEmpty)
+            .toList();
         return lines.isEmpty ? null : lines.first.trim();
       }
       return null;

@@ -83,7 +83,15 @@ flutter build windows    # o build linux / build macos
 
 Los binarios sidecar se copian junto al ejecutable en el build (o se resuelven
 desde `bin/<plataforma>/` en desarrollo). También puedes anular sus rutas con
-las variables de entorno `SCRUP_YTDLP_PATH` y `SCRUP_FFMPEG_PATH`.
+las variables de entorno `SCRUP_YTDLP_PATH`, `SCRUP_FFMPEG_PATH` y
+`SCRUP_DENO_PATH`.
+
+**deno (opcional pero recomendado)**: `fetch_binaries.sh` descarga también el
+runtime JS de yt-dlp. yt-dlp 2026+ deprecó la extracción de YouTube sin
+runtime JS ("some formats may be missing"); con deno en el PATH del
+subproceso la extracción queda completa y a prueba del cierre del camino sin
+JS. Si la descarga de deno falla, la app sigue funcionando (extracción
+degradada), y también se detecta un deno ya instalado en el sistema.
 
 ## Flujo de desarrollo (importante)
 
@@ -126,7 +134,7 @@ lib/
     ├── views/                # HomeView, SearchView, PlaylistsView, PlaylistDetail
     └── widgets/              # CustomTitleBar, PlayerBar, TrackTile
 tool/
-└── fetch_binaries.sh   # Descarga yt-dlp + ffmpeg por SO
+└── fetch_binaries.sh   # Descarga yt-dlp + ffmpeg + deno por SO
 bin/<plataforma>/       # Binarios sidecar (no versionados)
 ```
 

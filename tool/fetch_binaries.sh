@@ -74,4 +74,35 @@ esac
 chmod +x "$DEST/ffmpeg/ffmpeg" "$DEST/ffmpeg/ffprobe" 2>/dev/null || true
 echo "==> ffmpeg:"
 "$DEST/ffmpeg/ffmpeg" -version | head -1
+
+# --- deno (runtime JS de yt-dlp) -----------------------------------------
+# yt-dlp 2026+ deprecó la extracción de YouTube sin runtime JS ("some formats
+# may be missing"). deno en el PATH del subproceso mantiene la extracción
+# completa. Es OPCIONAL: si falla la descarga, la app sigue funcionando (la
+# extracción sin JS aún funciona, solo degradada).
+ARCH="$(uname -m)"
+case "$PLATFORM/$ARCH" in
+  windows/x86_64) DENO_TARGET="x86_64-pc-windows-msvc" ;;
+  linux/x86_64)   DENO_TARGET="x86_64-unknown-linux-gnu" ;;
+  linux/aarch64)  DENO_TARGET="aarch64-unknown-linux-gnu" ;;
+  macos/arm64)    DENO_TARGET="aarch64-apple-darwin" ;;
+  macos/x86_64)   DENO_TARGET="x86_64-apple-darwin" ;;
+  *) echo "==> deno: arquitectura no soportada ($ARCH), se omite (extracción sin runtime JS, degradada)"; DENO_TARGET="" ;;
+esac
+if [ -n "$DENO_TARGET" ]; then
+  ZIP="$DEST/deno-tmp.zip"
+  echo "==> Descargando deno ($DENO_TARGET)..."
+  curl -L --fail --progress-bar -o "$ZIP" "https://github.com/denoland/deno/releases/latest/download/deno-$DENO_TARGET.zip" \
+    && rm -f "$DEST/deno$EXT" \
+    && unzip -j -o "$ZIP" "deno$EXT" -d "$DEST" >/dev/null \
+    && chmod +x "$DEST/deno$EXT" 2>/dev/null || true
+  rm -f "$ZIP"
+  if [ -x "$DEST/deno$EXT" ]; then
+    echo "==> deno:"
+    "$DEST/deno$EXT" --version 2>/dev/null | head -1 || echo "    (no se pudo ejecutar; se usará el runtime del sistema si existe)"
+  else
+    echo "==> deno: descarga fallida (opcional); la extracción de YouTube puede degradarse"
+  fi
+fi
+
 echo "==> Listo. Binarios en $DEST"
