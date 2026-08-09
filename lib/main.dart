@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import 'l10n/generated/app_localizations.dart';
 import 'services/audio_cache_service.dart';
 import 'services/deezer_service.dart';
 import 'services/player_service.dart';
+import 'services/scrup_audio_handler.dart';
 import 'services/settings_store.dart';
 import 'services/ytdlp_service.dart';
 import 'ui/app_shell.dart';
@@ -21,6 +23,26 @@ import 'ui/theme_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+
+  // Controles multimedia nativos del OS (SMTC en Windows, Now Playing en
+  // macOS; MPRIS en Linux con el paquete compañero). El handler se crea aquí
+  // pero se conecta al reproductor cuando el árbol de providers construye el
+  // PlayerService ([attach]). Best-effort: si el OS no lo soporta, la app
+  // sigue funcionando sin controles nativos.
+  ScrupAudioHandler audioHandler;
+  try {
+    audioHandler = await AudioService.init(
+      builder: () => ScrupAudioHandler(),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'com.scrup.music.channel',
+        androidNotificationChannelName: 'Scrup',
+        androidNotificationOngoing: true,
+        androidStopForegroundOnPause: true,
+      ),
+    );
+  } catch (_) {
+    audioHandler = ScrupAudioHandler();
+  }
 
   // Ventana con title bar oculto (Windows/Linux) para usar el personalizado.
   // Abre SIEMPRE maximizada; al restaurar (modo ventana) el mínimo es
@@ -66,6 +88,7 @@ Future<void> main() async {
       database: database,
       settings: settings,
       initialLocale: initialLocale,
+      audioHandler: audioHandler,
     ),
   );
 }
@@ -101,11 +124,15 @@ class ScrupApp extends StatelessWidget {
   /// Idioma inicial: el guardado en la última sesión (o español).
   final Locale initialLocale;
 
+  /// Puente con los controles multimedia nativos del OS.
+  final ScrupAudioHandler audioHandler;
+
   const ScrupApp({
     super.key,
     required this.database,
     required this.settings,
     required this.initialLocale,
+    required this.audioHandler,
   });
 
   @override
@@ -120,6 +147,7 @@ class ScrupApp extends StatelessWidget {
         ),
         Provider<DeezerService>(create: (_) => DeezerService()),
         Provider<SettingsStore>(create: (_) => settings),
+        Provider<ScrupAudioHandler>(create: (_) => audioHandler),
         Provider<PlayerService>(
           // Inyecta la resolución de fuente (cache-first con yt-dlp), la
           // búsqueda de radio y el enriquecimiento de metadatos (Deezer).
@@ -157,6 +185,9 @@ class ScrupApp extends StatelessWidget {
               // (manual, auto-advance o radio)
               onPlayed: (track) async => db.recordPlay(track),
             );
+            // Controles nativos del OS: sincronizar metadatos/estado y
+            // reenviar comandos (play/pausa/siguiente/anterior/seek).
+            context.read<ScrupAudioHandler>().attach(player);
             // Persistir la última pista cuando cambia.
             player.currentTrack.listen((t) {
               if (t != null) settings.saveLastTrackId(t.id);
@@ -176,7 +207,12 @@ class ScrupApp extends StatelessWidget {
             unawaited(_restoreSession(player, settings, db));
             return player;
           },
-          dispose: (_, player) => player.dispose(),
+          dispose: (_, player) async {
+            await player.dispose();
+            // Liberar las suscripciones del handler nativo del OS (los
+            // streams del reproductor ya están cerrados).
+            await audioHandler.dispose();
+          },
         ),
         // Tema dinámico: el color de acento sigue al artwork de la pista.
         // ThemeController es un ChangeNotifier, así que necesita

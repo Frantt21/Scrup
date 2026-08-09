@@ -269,6 +269,12 @@ class PlayerService {
 
   Future<void> togglePlayPause() => _playing ? _player.pause() : _player.play();
 
+  /// Reanuda la reproducción (usado por los controles nativos del OS).
+  Future<void> play() => _player.play();
+
+  /// Pausa la reproducción (usado por los controles nativos del OS).
+  Future<void> pause() => _player.pause();
+
   Future<void> seek(Duration position) => _player.seek(position);
 
   /// Establece el volumen (0.0–1.0).
