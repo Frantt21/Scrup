@@ -368,8 +368,8 @@ class PlayerService {
     final token = ++_playToken;
     _queueIndex = index;
     final track = _queue[index];
-    _currentTrack = track;
-    _trackController.add(track);
+    // La UI se queda sin datos mientras se carga la nueva pista.
+    _clearPlaybackState();
     preparingTrackId.value = track.id;
     try {
       // Detener la pista anterior al instante. Se usa pause y no stop porque
@@ -417,8 +417,8 @@ class PlayerService {
   /// una pista más nueva la reemplazó durante la resolución.
   Future<bool> _openAndPlay(Track track) async {
     final token = ++_playToken;
-    _currentTrack = track;
-    _trackController.add(track);
+    // La UI se queda sin datos mientras se carga la nueva pista.
+    _clearPlaybackState();
     preparingTrackId.value = track.id;
     try {
       // Silenciar la pista anterior al instante (mismo motivo que en _playAt).
@@ -478,20 +478,32 @@ class PlayerService {
     }
   }
 
-  /// Aplica la pista enriquecida a la UI (y la devuelve para persistirla)
-  /// si Deezer aportó algo nuevo; si no, devuelve la original sin tocar el
-  /// estado.
+  /// Vacía el estado de reproducción expuesto a la UI: al cambiar de pista,
+  /// el reproductor se queda sin datos mientras la nueva se descarga/carga
+  /// (sin restos de la pista anterior en la barra).
+  void _clearPlaybackState() {
+    _lastPosition = Duration.zero;
+    _currentTrack = null;
+    _trackController.add(null);
+    _positionController.add(Duration.zero);
+    _durationController.add(null);
+    _playing = false;
+    _playingController.add(false);
+    _bufferingController.add(false);
+  }
+
+  /// Aplica los metadatos enriquecidos (Deezer) si son válidos: emite el
+  /// track final a la UI y lo devuelve para persistir en el historial.
+  /// El callback [enrich] ya aplica Deezer sobre el original conservando el
+  /// id de YouTube; si no hubo match fiable devuelve null y se usa el
+  /// original.
   Track _applyEnriched(Track original, Track? enriched) {
-    if (enriched == null || enriched.id != original.id) return original;
-    final same =
-        enriched.title == original.title &&
-        enriched.artist == original.artist &&
-        enriched.thumbnailUrl == original.thumbnailUrl &&
-        enriched.album == original.album;
-    if (same) return original;
-    _currentTrack = enriched;
-    _trackController.add(enriched);
-    return enriched;
+    final display = (enriched != null && enriched.id == original.id)
+        ? enriched
+        : original;
+    _currentTrack = display;
+    _trackController.add(display);
+    return display;
   }
 
   /// Registra la reproducción de una pista en el historial (best-effort:

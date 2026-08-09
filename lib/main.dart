@@ -61,12 +61,15 @@ class ScrupApp extends StatelessWidget {
             final cache = context.read<AudioCacheService>();
             final deezer = context.read<DeezerService>();
             return PlayerService(
-              // Cache-first: descarga la pista al caché local y la
-              // reproduce desde archivo (estable y rápido en próximas
-              // sesiones).
+              // Cache-first con reproducción progresiva: si la pista no
+              // está cacheada, se empieza a reproducir en cuanto hay datos
+              // y la descarga continúa en segundo plano quedando en disco.
               resolveSource: (track) async {
-                final path = await cache.ensure(track.id, title: track.title);
-                return PlayableSource(path, isLocal: true);
+                final source = await cache.ensureStreaming(
+                  track.id,
+                  title: track.title,
+                );
+                return PlayableSource(source.path, isLocal: true);
               },
               // Radio: busca canciones del mismo artista/género
               recommend: (track) async {

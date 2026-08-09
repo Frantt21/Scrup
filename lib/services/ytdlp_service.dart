@@ -17,10 +17,87 @@ class YtDlpException implements Exception {
   String toString() => message;
 }
 
+/// Descarga en streaming de yt-dlp en curso: el audio se escribe en un
+/// archivo `.part` que crece mientras se descarga.
+///
+/// - [playablePath]: resuelve en cuanto el archivo parcial tiene datos
+///   suficientes para empezar a reproducir (sin esperar a que termine).
+/// - [finalPath]: resuelve al terminar, con la ruta final ya cacheada
+///   (yt-dlp renombra el `.part` al nombre definitivo).
+/// - [cancel]: mata el proceso.
+class StreamingDownload {
+  final Future<String> playablePath;
+  final Future<String> finalPath;
+  final void Function() cancel;
+
+  StreamingDownload({
+    required this.playablePath,
+    required this.finalPath,
+    required this.cancel,
+  });
+}
+
 /// Servicio que orquesta yt-dlp vía subprocesos:
 /// - Búsqueda de pistas (`ytsearchN:query`)
-/// - Extracción de la URL de audio directa (sin descargar el archivo)
+/// - Descarga completa o en streaming (reproducir mientras descarga)
 class YtDlpService {
+  /// Argumentos comunes para descargar el mejor audio de una pista.
+  List<String> _downloadArgs(String videoId, String outputDir) {
+    return [
+      '--no-playlist',
+      '--no-warnings',
+      '--newline',
+      // El mtime debe ser el de la descarga, no la fecha de subida del
+      // video, para que la evicción LRU del caché sea correcta.
+      '--no-mtime',
+      '-f',
+      'bestaudio/best',
+      '-o',
+      p.join(outputDir, '%(id)s.%(ext)s'),
+      '--print',
+      'after_move:filepath',
+      'https://www.youtube.com/watch?v=$videoId',
+    ];
+  }
+
+  /// Entorno con el directorio de ffmpeg añadido al PATH.
+  Map<String, String> _envWithFfmpeg() {
+    final env = {...Platform.environment};
+    final ffmpeg = Binaries.ffmpegPath;
+    if (ffmpeg != null) {
+      final sep = Platform.isWindows ? ';' : ':';
+      final path = env['PATH'] ?? '';
+      env['PATH'] = '${p.dirname(ffmpeg)}$sep$path';
+    }
+    return env;
+  }
+
+  /// Busca en [dir] un archivo parcial (`<videoId>.*.part`) en descarga.
+  Future<File?> _findPartial(String dir, String videoId) async {
+    final d = Directory(dir);
+    if (!await d.exists()) return null;
+    final files = await d.list().where((e) => e is File).cast<File>().toList();
+    for (final f in files) {
+      final name = p.basename(f.path);
+      if (name.startsWith('$videoId.') && name.endsWith('.part')) return f;
+    }
+    return null;
+  }
+
+  /// Busca en [dir] el archivo final (`<videoId>.*` sin `.part`).
+  Future<String?> _findFinal(String dir, String videoId) async {
+    final d = Directory(dir);
+    if (!await d.exists()) return null;
+    final files = await d.list().where((e) => e is File).cast<File>().toList();
+    for (final f in files) {
+      final name = p.basename(f.path);
+      if (name.startsWith('$videoId.') && !name.endsWith('.part')) {
+        return f.path;
+      }
+    }
+    return null;
+  }
+
   /// Ejecuta yt-dlp y devuelve la salida (stdout) o lanza [YtDlpException].
   Future<ProcessResult> _run(
     List<String> args, {
@@ -90,13 +167,16 @@ class YtDlpService {
     return tracks;
   }
 
-  /// Descarga el mejor audio de una pista a [outputDir] y devuelve la ruta
-  /// local del archivo. El nombre final es `<videoId>.<ext>`.
+  /// Descarga en streaming: arranca el proceso y resuelve en cuanto el
+  /// archivo `.part` tiene datos suficientes para reproducir (2 MiB, o bien
+  /// 6s transcurridos con al menos 64 KiB en conexiones lentas). La descarga
+  /// continúa en segundo plano y [StreamingDownload.finalPath] resuelve al
+  /// terminar, cuando el `.part` ya se renombró al archivo definitivo.
   ///
-  /// Lee la salida en vivo para notificar el progreso (0.0–1.0) vía
-  /// [onProgress], y usa `--print after_move:filepath` para obtener la ruta
-  /// exacta que escribió yt-dlp (el formato puede variar entre m4a/opus/webm).
-  Future<String> downloadAudio(
+  /// Si el proceso se cuelga (red detenida, etc.) se mata a los 10 minutos
+  /// para que [StreamingDownload.finalPath] nunca quede sin resolver (un
+  /// finalPath colgado bloquearía el slot del caché para siempre).
+  Future<StreamingDownload> startStreaming(
     String videoId, {
     required String outputDir,
     String? title,
@@ -110,101 +190,137 @@ class YtDlpService {
       );
     }
 
-    final env = {...Platform.environment};
-    final ffmpeg = Binaries.ffmpegPath;
-    if (ffmpeg != null) {
-      final sep = Platform.isWindows ? ';' : ':';
-      final path = env['PATH'] ?? '';
-      env['PATH'] = '${p.dirname(ffmpeg)}$sep$path';
-    }
-
-    debugPrint('[yt-dlp] download $videoId');
+    debugPrint('[yt-dlp] stream $videoId');
     final process = await Process.start(
       ytdlp,
-      [
-        '--no-playlist',
-        '--no-warnings',
-        '--newline',
-        // El mtime debe ser el de la descarga, no la fecha de subida del
-        // video, para que la evicción LRU del caché sea correcta.
-        '--no-mtime',
-        '-f',
-        'bestaudio/best',
-        '-o',
-        p.join(outputDir, '%(id)s.%(ext)s'),
-        '--print',
-        'after_move:filepath',
-        'https://www.youtube.com/watch?v=$videoId',
-      ],
-      environment: env,
+      _downloadArgs(videoId, outputDir),
+      environment: _envWithFfmpeg(),
     );
 
-    // Parseo en vivo: progreso `[download] xx.x%` y ruta final del archivo.
+    final started = DateTime.now();
     final progressRe = RegExp(r'\[download\]\s+(\d+(?:\.\d+)?)%');
+    final partialCompleter = Completer<String>();
+    final doneCompleter = Completer<String>();
     var stderr = '';
     var printedPath = '';
+    var processExited = false;
+
     process.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
-      final m = progressRe.firstMatch(line);
-      if (m != null) {
-        onProgress?.call(double.parse(m.group(1)!) / 100);
-      }
-      final trimmed = line.trim();
-      if (trimmed.isNotEmpty && !trimmed.contains('[download]')) {
-        printedPath = trimmed;
-      }
-    });
+          final m = progressRe.firstMatch(line);
+          if (m != null) {
+            onProgress?.call(double.parse(m.group(1)!) / 100);
+          }
+          final trimmed = line.trim();
+          if (trimmed.isNotEmpty && !trimmed.contains('[download]')) {
+            printedPath = trimmed;
+          }
+        });
     process.stderr.transform(utf8.decoder).listen((chunk) => stderr += chunk);
 
-    int exitCode;
-    try {
-      exitCode = await process.exitCode
-          .timeout(const Duration(minutes: 10));
-    } on TimeoutException {
-      process.kill();
-      throw YtDlpException(
-        'La descarga de "${title ?? videoId}" tardó demasiado.',
-      );
-    }
-
-    if (exitCode != 0) {
-      onProgress?.call(null);
-      throw YtDlpException(
-        stderr.trim().isNotEmpty
-            ? stderr.trim()
-            : 'No se pudo descargar "${title ?? videoId}".',
-      );
-    }
-
-    // Ruta final: primero la impresa por `--print`, con fallback a escanear
-    // el directorio por `<videoId>.*` (robusto ante cambios de formato).
-    String? filePath;
-    if (printedPath.isNotEmpty && File(printedPath).existsSync()) {
-      filePath = printedPath;
-    } else {
-      final dir = Directory(outputDir);
-      if (await dir.exists()) {
-        final files = await dir
-            .list()
-            .where((e) =>
-                e is File &&
-                p.basename(e.path).startsWith('$videoId.') &&
-                !p.basename(e.path).endsWith('.part'))
-            .cast<File>()
-            .toList();
-        if (files.isNotEmpty) filePath = files.first.path;
+    // Vigilar el archivo `.part` hasta que sea reproducible.
+    Future<void> pollPartial() async {
+      const minBytes = 2 * 1024 * 1024;
+      const timeout = Duration(seconds: 20);
+      final deadline = started.add(timeout);
+      while (DateTime.now().isBefore(deadline)) {
+        if (processExited) return;
+        final partial = await _findPartial(outputDir, videoId);
+        if (partial != null) {
+          final size = await partial.length();
+          final elapsedMs = DateTime.now().difference(started).inMilliseconds;
+          if (size >= minBytes || (elapsedMs >= 6000 && size >= 64 * 1024)) {
+            if (!partialCompleter.isCompleted) {
+              partialCompleter.complete(partial.path);
+            }
+            return;
+          }
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+      // Timeout: reproducir con lo que haya, o fallar si no hay nada.
+      final partial = await _findPartial(outputDir, videoId);
+      if (partial != null) {
+        if (!partialCompleter.isCompleted) {
+          partialCompleter.complete(partial.path);
+        }
+      } else if (!partialCompleter.isCompleted) {
+        partialCompleter.completeError(
+          YtDlpException(
+            'La descarga de "${title ?? videoId}" no generó datos '
+            'reproducibles.',
+          ),
+        );
       }
     }
-    if (filePath == null) {
-      onProgress?.call(null);
-      throw YtDlpException(
-        'La descarga de "${title ?? videoId}" no produjo un archivo.',
-      );
-    }
-    onProgress?.call(1.0);
-    return filePath;
+
+    unawaited(pollPartial());
+
+    // Esperar al proceso con un tope: si yt-dlp se cuelga, se mata y se
+    // completa con error (nunca dejar un finalPath sin resolver).
+    unawaited(() async {
+      int code;
+      try {
+        code = await process.exitCode.timeout(const Duration(minutes: 10));
+      } on TimeoutException {
+        process.kill();
+        final err = 'La descarga de "${title ?? videoId}" tardó demasiado.';
+        onProgress?.call(null);
+        if (!doneCompleter.isCompleted) {
+          doneCompleter.completeError(YtDlpException(err));
+        }
+        if (!partialCompleter.isCompleted) {
+          partialCompleter.completeError(YtDlpException(err));
+        }
+        return;
+      }
+      processExited = true;
+      if (code == 0) {
+        String? finalPath;
+        if (printedPath.isNotEmpty && File(printedPath).existsSync()) {
+          finalPath = printedPath;
+        } else {
+          finalPath = await _findFinal(outputDir, videoId);
+        }
+        if (finalPath == null) {
+          final err =
+              'La descarga de "${title ?? videoId}" no produjo '
+              'un archivo.';
+          if (!doneCompleter.isCompleted) {
+            doneCompleter.completeError(YtDlpException(err));
+          }
+          if (!partialCompleter.isCompleted) {
+            partialCompleter.completeError(YtDlpException(err));
+          }
+        } else {
+          if (!doneCompleter.isCompleted) {
+            doneCompleter.complete(finalPath);
+          }
+          if (!partialCompleter.isCompleted) {
+            partialCompleter.complete(finalPath);
+          }
+        }
+      } else {
+        final err = stderr.trim().isNotEmpty
+            ? stderr.trim()
+            : 'No se pudo descargar "${title ?? videoId}".';
+        onProgress?.call(null);
+        if (!doneCompleter.isCompleted) {
+          doneCompleter.completeError(YtDlpException(err));
+        }
+        if (!partialCompleter.isCompleted) {
+          partialCompleter.completeError(YtDlpException(err));
+        }
+      }
+    }());
+
+    return StreamingDownload(
+      playablePath: partialCompleter.future,
+      finalPath: doneCompleter.future,
+      cancel: process.kill,
+    );
   }
 
   /// Extrae metadatos completos de una pista (útil para refrescar el cache).

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,17 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'ytdlp_service.dart';
+
+/// Fuente local de reproducción: una ruta ya cacheada (instantánea) o un
+/// archivo parcial que aún se está descargando (reproducción progresiva).
+class StreamingSource {
+  final String path;
+
+  /// `true` si ya estaba cacheado y se reproduce al instante.
+  final bool fromCache;
+
+  const StreamingSource(this.path, {this.fromCache = false});
+}
 
 /// Caché local de audio descargado con yt-dlp.
 ///
@@ -49,7 +61,10 @@ class AudioCacheService {
   final ValueNotifier<double?> progress = ValueNotifier<double?>(null);
 
   /// Descargas en curso por videoId (dedupe de peticiones concurrentes).
-  final Map<String, Future<String>> _inflight = {};
+  /// El slot se reserva con un [Completer] de forma SÍNCRONA (antes de
+  /// cualquier await) para que dos llamadas simultáneas al mismo videoId
+  /// compartan la misma descarga en vez de arrancar dos procesos.
+  final Map<String, Completer<StreamingDownload>> _inflight = {};
 
   Directory? _dir;
 
@@ -75,12 +90,16 @@ class AudioCacheService {
     final dir = await cacheDir();
     final files = await dir
         .list()
-        .where((e) => e is File && p.basenameWithoutExtension(e.path) == videoId)
+        .where(
+          (e) => e is File && p.basenameWithoutExtension(e.path) == videoId,
+        )
         .cast<File>()
         .toList();
     if (files.isEmpty) return null;
     // Puede haber variantes (m4a/opus/webm): quedarse con la más reciente.
-    files.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
+    files.sort(
+      (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
+    );
     final best = files.first;
     try {
       // Touch: actualizar el mtime para que el LRU la considere reciente.
@@ -91,42 +110,118 @@ class AudioCacheService {
     return best.path;
   }
 
-  /// Devuelve la ruta local de la pista, descargándola si hace falta.
-  ///
-  /// Las llamadas concurrentes para el mismo [videoId] comparten una única
-  /// descarga (no se descarga dos veces).
-  Future<String> ensure(String videoId, {String? title}) async {
+  /// Fuente para reproducir con reproducción progresiva: devuelve al
+  /// instante si la pista ya está cacheada; si no, arranca la descarga y
+  /// resuelve en cuanto hay datos reproducibles (el archivo `.part`), que
+  /// se reproduce mientras la descarga continúa en segundo plano y termina
+  /// quedando cacheada en disco.
+  Future<StreamingSource> ensureStreaming(
+    String videoId, {
+    String? title,
+  }) async {
     final cached = await cachedPath(videoId);
-    if (cached != null) return cached;
+    if (cached != null) return StreamingSource(cached, fromCache: true);
 
-    final inFlight = _inflight[videoId];
-    if (inFlight != null) return inFlight;
-
-    final future = _download(videoId, title: title);
-    _inflight[videoId] = future;
-    try {
-      return await future;
-    } finally {
-      _inflight.remove(videoId);
+    // Dedupe de llamadas concurrentes: reservar el slot de forma síncrona
+    // (sin awaits intermedios) para que la segunda llamada reutilice la
+    // descarga de la primera en vez de arrancar otro proceso.
+    var completer = _inflight[videoId];
+    if (completer == null) {
+      completer = Completer<StreamingDownload>();
+      _inflight[videoId] = completer;
+      unawaited(_startDownload(videoId, completer, title: title));
     }
+    final download = await completer.future;
+    final path = await download.playablePath.timeout(
+      const Duration(seconds: 25),
+    );
+    return StreamingSource(path);
   }
 
-  Future<String> _download(String videoId, {String? title}) async {
-    final dir = await cacheDir();
-    downloadingId.value = videoId;
-    progress.value = null;
+  /// Arranca la descarga en streaming en segundo plano y completa
+  /// [completer] cuando yt-dlp devuelve el [StreamingDownload]. Si el
+  /// arranque falla, completa con error y libera el slot (para permitir
+  /// reintentos).
+  Future<void> _startDownload(
+    String videoId,
+    Completer<StreamingDownload> completer, {
+    String? title,
+  }) async {
     try {
-      final path = await ytdlp.downloadAudio(
+      final dir = await cacheDir();
+      downloadingId.value = videoId;
+      progress.value = null;
+      final download = await ytdlp.startStreaming(
         videoId,
         outputDir: dir.path,
         title: title,
         onProgress: (pct) => progress.value = pct,
       );
-      await _enforceLimit(dir);
-      return path;
-    } finally {
-      if (downloadingId.value == videoId) downloadingId.value = null;
-      progress.value = null;
+      // La limpieza (LRU al terminar, borrado del `.part` si falla y
+      // liberación del slot) la hace [_trackDownload] cuando la descarga
+      // termina de verdad.
+      _trackDownload(download, videoId, completer);
+      if (!completer.isCompleted) completer.complete(download);
+    } catch (e) {
+      if (downloadingId.value == videoId) {
+        downloadingId.value = null;
+        progress.value = null;
+      }
+      if (identical(_inflight[videoId], completer)) {
+        _inflight.remove(videoId);
+      }
+      if (!completer.isCompleted) completer.completeError(e);
+    }
+  }
+
+  /// Sigue una descarga en segundo plano: cuando termina aplica el límite
+  /// LRU y libera el slot; si falla, borra el `.part` incompleto. Nunca
+  /// lanza (es un fire-and-forget de limpieza).
+  void _trackDownload(
+    StreamingDownload download,
+    String videoId,
+    Completer<StreamingDownload> completer,
+  ) {
+    unawaited(() async {
+      final Directory dir;
+      try {
+        dir = await cacheDir();
+      } catch (_) {
+        return;
+      }
+      try {
+        await download.finalPath;
+        await _enforceLimit(dir);
+      } catch (_) {
+        try {
+          await _cleanupPartial(dir, videoId);
+        } catch (_) {
+          // Silencioso: el cleanup no debe romper nada.
+        }
+      } finally {
+        if (identical(_inflight[videoId], completer)) {
+          _inflight.remove(videoId);
+        }
+        if (downloadingId.value == videoId) {
+          downloadingId.value = null;
+          progress.value = null;
+        }
+      }
+    }());
+  }
+
+  /// Borra los `.part` incompletos de [videoId] (descargas fallidas).
+  Future<void> _cleanupPartial(Directory dir, String videoId) async {
+    if (!await dir.exists()) return;
+    await for (final e in dir.list()) {
+      if (e is File) {
+        final name = p.basename(e.path);
+        if (name.startsWith('$videoId.') && name.endsWith('.part')) {
+          try {
+            await e.delete();
+          } catch (_) {}
+        }
+      }
     }
   }
 
@@ -142,7 +237,9 @@ class AudioCacheService {
       total += f.statSync().size;
     }
     if (total <= maxSizeBytes) return;
-    files.sort((a, b) => a.statSync().modified.compareTo(b.statSync().modified));
+    files.sort(
+      (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
+    );
     for (final f in files) {
       if (total <= maxSizeBytes) return;
       final size = f.statSync().size;

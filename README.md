@@ -1,10 +1,11 @@
 # Scrup 🎵
 
-Reproductor de música desde YouTube con **caché local**: descarga cada pista
-con `yt-dlp` y la reproduce desde archivo con `media_kit` (motor mpv). Las
-primeras reproducciones descargan la pista (con progreso en la barra del
-reproductor); las siguientes se sirven al instante desde el caché local,
-evitando los cortes de los streams remotos de YouTube.
+Reproductor de música desde YouTube con **caché local y reproducción
+progresiva**: descarga cada pista con `yt-dlp` y la reproduce desde archivo
+con `media_kit` (motor mpv). La primera reproducción **empieza a sonar en
+cuanto el `.part` tiene datos** (mientras la descarga continúa en segundo
+plano y queda cacheada en disco); las siguientes se sirven al instante desde
+el caché local, evitando los cortes de los streams remotos de YouTube.
 
 Los metadatos, el historial y las playlists se guardan en una base local
 SQLite (`drift`).
@@ -21,6 +22,9 @@ Plataformas objetivo: **Windows, Linux y macOS** (una sola base de código Flutt
   minimizar/maximizar/cerrar.
 - **Caché local de audio**: evicción LRU por tamaño (2 GiB por defecto),
   descargas con progreso y deduplicación de descargas concurrentes.
+- **Reproducción progresiva**: al reproducir por primera vez, arranca el
+  audio con los primeros datos del `.part` (sin esperar la descarga
+  completa) y la descarga sigue en segundo plano hasta cachearse.
 - **Metadatos vía Deezer**: al reproducir, se enriquece la pista con título/
   artista/álbum/portada limpios de la API pública de Deezer (best-effort,
   sin clave).

@@ -8,9 +8,9 @@ import '../../services/audio_cache_service.dart';
 import '../../services/player_service.dart';
 import '../theme_controller.dart';
 
-/// Barra inferior fija con los controles del reproductor: artwork, título,
-/// progreso, loader y controles (shuffle, anterior, play/pausa, siguiente,
-/// repeat y radio).
+/// Barra inferior compacta con los controles del reproductor: progreso con
+/// tiempos (recorrido/duración), artwork, título/artista, controles centrados
+/// y volumen. Alturas fijas en cada zona para que la barra nunca salte.
 class PlayerBar extends StatefulWidget {
   const PlayerBar({super.key});
 
@@ -27,7 +27,7 @@ class _PlayerBarState extends State<PlayerBar> {
 
   /// Posición del slider durante el arrastre: mientras se arrastra NO se
   /// hace seek (el seek real ocurre al soltar), solo se muestra la posición
-  /// del dedo en la UI.
+  /// del dedo en la UI (slider y tiempo).
   double? _dragValue;
 
   final List<StreamSubscription> _subs = [];
@@ -71,6 +71,13 @@ class _PlayerBarState extends State<PlayerBar> {
     super.dispose();
   }
 
+  /// Formatea una duración como `m:ss` (dígitos tabulares para que no baile).
+  static String _fmt(Duration d) {
+    final m = d.inMinutes;
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -85,6 +92,9 @@ class _PlayerBarState extends State<PlayerBar> {
     // Durante el arrastre se muestra la posición del dedo; el seek real se
     // hace al soltar (onChangeEnd), no en cada tick.
     final shownProgress = _dragValue ?? progress;
+    final shownPosition = _dragValue != null
+        ? Duration(milliseconds: (_dragValue! * total.inMilliseconds).round())
+        : _position;
 
     return Material(
       elevation: 12,
@@ -104,169 +114,189 @@ class _PlayerBarState extends State<PlayerBar> {
         ),
         child: SafeArea(
           top: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Barra de progreso (altura fija para que la barra no salte;
-                // 28px para no recortar el overlay del pulgar al pulsar)
-                SizedBox(
-                  height: 28,
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 3,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 7,
-                      ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 14,
-                      ),
-                    ),
-                    child: Slider(
-                      value: shownProgress,
-                      onChanged: hasTrack
-                          ? (v) => setState(() => _dragValue = v)
-                          : null,
-                      onChangeEnd: hasTrack
-                          ? (v) {
-                              final target = Duration(
-                                milliseconds: (v * total.inMilliseconds)
-                                    .round(),
-                              );
-                              player.seek(target);
-                              setState(() => _dragValue = null);
-                            }
-                          : null,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  height: 48,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Progreso compacto con tiempos: recorrido | barra | duración.
+              // Altura fija de 24px (pulgar/overlay reducidos para que quepa).
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 2, 12, 0),
+                child: SizedBox(
+                  height: 24,
                   child: Row(
                     children: [
-                      // Izquierda: artwork + metadatos
-                      Expanded(
-                        child: Row(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: SizedBox(
-                                width: 44,
-                                height: 44,
-                                child: hasTrack && _track!.thumbnailUrl != null
-                                    ? Image.network(
-                                        _track!.thumbnailUrl!,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) =>
-                                            _artworkFallback(theme),
-                                      )
-                                    : _artworkFallback(theme),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // Metadatos
-                            Expanded(
-                              child: hasTrack
-                                  ? Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        ValueListenableBuilder<double?>(
-                                          valueListenable: cache.progress,
-                                          builder: (context, downloadPct, _) {
-                                            return ValueListenableBuilder<
-                                              String?
-                                            >(
-                                              valueListenable:
-                                                  player.preparingTrackId,
-                                              builder: (context, preparingId, _) {
-                                                // Solo mostrar el % si la descarga
-                                                // es de la pista que se está
-                                                // preparando (si el usuario saltó
-                                                // de pista, la descarga sigue en
-                                                // segundo plano).
-                                                final downloadingCurrent =
-                                                    cache.downloadingId.value ==
-                                                    preparingId;
-                                                final String label;
-                                                if (downloadPct != null &&
-                                                    downloadPct < 1 &&
-                                                    downloadingCurrent) {
-                                                  label =
-                                                      'Descargando… '
-                                                      '${(downloadPct * 100).round()}%';
-                                                } else if (preparingId !=
-                                                    null) {
-                                                  label = 'Preparando…';
-                                                } else {
-                                                  label = _track!.title;
-                                                }
-                                                return Text(
-                                                  label,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: theme
-                                                      .textTheme
-                                                      .titleSmall,
-                                                );
-                                              },
-                                            );
-                                          },
-                                        ),
-                                        Text(
-                                          _track!.artist,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                                color: theme
-                                                    .colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                        ),
-                                      ],
-                                    )
-                                  : Text(
-                                      'Sin reproducción',
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                    ),
-                            ),
-                          ],
+                      SizedBox(
+                        width: 42,
+                        child: Text(
+                          _fmt(hasTrack ? shownPosition : Duration.zero),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
                         ),
                       ),
+                      Expanded(
+                        child: SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: 3,
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 5,
+                            ),
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 11,
+                            ),
+                          ),
+                          child: Slider(
+                            value: shownProgress,
+                            onChanged: hasTrack
+                                ? (v) => setState(() => _dragValue = v)
+                                : null,
+                            onChangeEnd: hasTrack
+                                ? (v) {
+                                    final target = Duration(
+                                      milliseconds: (v * total.inMilliseconds)
+                                          .round(),
+                                    );
+                                    player.seek(target);
+                                    setState(() => _dragValue = null);
+                                  }
+                                : null,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 42,
+                        child: Text(
+                          _fmt(total),
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Fila principal (altura fija 48px): info | controles | volumen
+              SizedBox(
+                height: 48,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      Expanded(child: _buildTrackInfo(theme, cache, player)),
                       const SizedBox(width: 8),
-                      // Centro: controles de reproducción
-                      _buildControls(context, theme, player, hasTrack),
+                      _buildControls(theme, player, hasTrack),
                       const SizedBox(width: 8),
-                      // Derecha: volumen
                       Expanded(child: _buildVolume(context, theme, player)),
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildControls(
-    BuildContext context,
+  /// Izquierda: artwork + título (con estado de descarga) y artista.
+  Widget _buildTrackInfo(
     ThemeData theme,
+    AudioCacheService cache,
     PlayerService player,
-    bool hasTrack,
   ) {
+    if (_track == null) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Sin reproducción',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: SizedBox(
+            width: 36,
+            height: 36,
+            child: _track!.thumbnailUrl != null
+                ? Image.network(
+                    _track!.thumbnailUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _artworkFallback(theme),
+                  )
+                : _artworkFallback(theme),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ValueListenableBuilder<double?>(
+                valueListenable: cache.progress,
+                builder: (context, downloadPct, _) {
+                  return ValueListenableBuilder<String?>(
+                    valueListenable: player.preparingTrackId,
+                    builder: (context, preparingId, _) {
+                      // Solo mostrar el % si la descarga es de la pista que
+                      // se está preparando (si el usuario saltó de pista, la
+                      // descarga sigue en segundo plano).
+                      final downloadingCurrent =
+                          cache.downloadingId.value == preparingId;
+                      final String label;
+                      if (downloadPct != null &&
+                          downloadPct < 1 &&
+                          downloadingCurrent) {
+                        label = 'Descargando… ${(downloadPct * 100).round()}%';
+                      } else if (preparingId != null) {
+                        label = 'Preparando…';
+                      } else {
+                        label = _track!.title;
+                      }
+                      return Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall,
+                      );
+                    },
+                  );
+                },
+              ),
+              Text(
+                _track!.artist,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Centro: controles de reproducción. Todos los botones usan constraints
+  /// explícitos idénticos (34x40) con el play en su propia caja fija, para
+  /// que toda la fila quede perfectamente alineada verticalmente.
+  Widget _buildControls(ThemeData theme, PlayerService player, bool hasTrack) {
     final primary = theme.colorScheme.primary;
     final muted = theme.colorScheme.onSurfaceVariant;
+    const iconSize = 20.0;
+    const btnConstraints = BoxConstraints.tightFor(width: 34, height: 40);
 
     return ValueListenableBuilder<String?>(
       valueListenable: player.preparingTrackId,
@@ -275,12 +305,15 @@ class _PlayerBarState extends State<PlayerBar> {
 
         return Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Shuffle
             ValueListenableBuilder<bool>(
               valueListenable: player.shuffle,
               builder: (context, on, _) => IconButton(
-                icon: Icon(Icons.shuffle, size: 20),
+                icon: Icon(Icons.shuffle, size: iconSize),
+                constraints: btnConstraints,
+                padding: EdgeInsets.zero,
                 color: on ? primary : muted,
                 tooltip: on ? 'Aleatorio: activo' : 'Aleatorio',
                 onPressed: player.toggleShuffle,
@@ -289,24 +322,31 @@ class _PlayerBarState extends State<PlayerBar> {
             // Anterior
             IconButton(
               icon: const Icon(Icons.skip_previous),
+              constraints: btnConstraints,
+              padding: EdgeInsets.zero,
               color: muted,
               tooltip: 'Anterior',
               onPressed: hasTrack ? player.previous : null,
             ),
-            // Play / Pausa (o loader). Footprint fijo (56x48) para que la
-            // barra no cambie de altura al alternar entre botón y spinner.
+            // Play / Pausa (o loader). Footprint fijo (44x40) para que la
+            // barra no cambie de tamaño ni el botón se desalinee.
             SizedBox(
-              width: 56,
-              height: 48,
+              width: 44,
+              height: 40,
               child: Center(
                 child: preparing || _buffering
                     ? const SizedBox(
-                        width: 24,
-                        height: 24,
+                        width: 22,
+                        height: 22,
                         child: CircularProgressIndicator(strokeWidth: 2.5),
                       )
                     : IconButton(
-                        iconSize: 40,
+                        iconSize: 36,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 40,
+                          height: 40,
+                        ),
                         icon: Icon(
                           _playing
                               ? Icons.pause_circle_filled
@@ -321,6 +361,8 @@ class _PlayerBarState extends State<PlayerBar> {
             // Siguiente
             IconButton(
               icon: const Icon(Icons.skip_next),
+              constraints: btnConstraints,
+              padding: EdgeInsets.zero,
               color: muted,
               tooltip: 'Siguiente',
               onPressed: hasTrack ? player.next : null,
@@ -333,8 +375,10 @@ class _PlayerBarState extends State<PlayerBar> {
                 return IconButton(
                   icon: Icon(
                     mode == LoopMode.one ? Icons.repeat_one : Icons.repeat,
-                    size: 20,
+                    size: iconSize,
                   ),
+                  constraints: btnConstraints,
+                  padding: EdgeInsets.zero,
                   color: active ? primary : muted,
                   tooltip: switch (mode) {
                     LoopMode.off => 'Repetir: desactivado',
@@ -349,7 +393,13 @@ class _PlayerBarState extends State<PlayerBar> {
             ValueListenableBuilder<bool>(
               valueListenable: player.radio,
               builder: (context, on, _) => IconButton(
-                icon: Icon(Icons.radio, size: 20, color: on ? primary : muted),
+                icon: Icon(
+                  Icons.radio,
+                  size: iconSize,
+                  color: on ? primary : muted,
+                ),
+                constraints: btnConstraints,
+                padding: EdgeInsets.zero,
                 tooltip: on ? 'Radio: activa' : 'Radio: inactiva',
                 onPressed: player.toggleRadio,
               ),
@@ -371,7 +421,7 @@ class _PlayerBarState extends State<PlayerBar> {
     );
   }
 
-  /// Control de volumen: icono (con mute) + slider, alineado a la derecha.
+  /// Derecha: control de volumen compacto (icono con mute + slider corto).
   Widget _buildVolume(
     BuildContext context,
     ThemeData theme,
@@ -381,7 +431,6 @@ class _PlayerBarState extends State<PlayerBar> {
     return ValueListenableBuilder<double>(
       valueListenable: player.volume,
       builder: (context, vol, _) {
-        // Icono: mute / bajo / alto. Tocar silencia o restaura.
         final icon = vol <= 0
             ? Icons.volume_off
             : (vol < 0.5 ? Icons.volume_down : Icons.volume_up);
@@ -391,20 +440,22 @@ class _PlayerBarState extends State<PlayerBar> {
           children: [
             IconButton(
               icon: Icon(icon, size: 20),
+              constraints: const BoxConstraints.tightFor(width: 34, height: 40),
+              padding: EdgeInsets.zero,
               color: muted,
               tooltip: vol <= 0 ? 'Activar sonido' : 'Silenciar',
               onPressed: player.toggleMute,
             ),
             SizedBox(
-              width: 110,
+              width: 96,
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 3,
                   thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 7,
+                    enabledThumbRadius: 5,
                   ),
                   overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 14,
+                    overlayRadius: 11,
                   ),
                 ),
                 child: Slider(
