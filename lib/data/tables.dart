@@ -37,6 +37,9 @@ class Playlists extends Table {
   /// Portada de la playlist (URL del artwork de una de sus canciones, o
   /// null si aún no tiene).
   TextColumn get coverUrl => text().nullable()();
+
+  /// Descripción opcional escrita por el usuario.
+  TextColumn get description => text().nullable()();
 }
 
 /// Relación N:M entre playlists y canciones, con posición de orden.

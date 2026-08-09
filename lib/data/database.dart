@@ -12,14 +12,19 @@ class Playlist {
   final String name;
   final DateTime createdAt;
 
-  /// Portada de la playlist (URL del artwork de una de sus canciones).
+  /// Portada de la playlist (URL del artwork de una de sus canciones, o
+  /// ruta local si la eligió el usuario).
   final String? coverUrl;
+
+  /// Descripción opcional escrita por el usuario.
+  final String? description;
 
   const Playlist({
     required this.id,
     required this.name,
     required this.createdAt,
     this.coverUrl,
+    this.description,
   });
 }
 
@@ -30,7 +35,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -49,6 +54,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 4) {
         // Portada de la playlist
         await m.addColumn(playlists, playlists.coverUrl);
+      }
+      if (from < 5) {
+        // Descripción de la playlist
+        await m.addColumn(playlists, playlists.description);
       }
     },
   );
@@ -146,6 +155,7 @@ class AppDatabase extends _$AppDatabase {
               name: r.name,
               createdAt: r.createdAt,
               coverUrl: r.coverUrl,
+              description: r.description,
             ),
           )
           .toList(),
@@ -164,6 +174,7 @@ class AppDatabase extends _$AppDatabase {
               name: r.name,
               createdAt: r.createdAt,
               coverUrl: r.coverUrl,
+              description: r.description,
             ),
     );
   }
@@ -210,6 +221,7 @@ class AppDatabase extends _$AppDatabase {
       name: row.name,
       createdAt: row.createdAt,
       coverUrl: row.coverUrl,
+      description: row.description,
     );
   }
 
@@ -217,6 +229,16 @@ class AppDatabase extends _$AppDatabase {
   Future<void> setPlaylistCover(int playlistId, String? coverUrl) async {
     await (update(playlists)..where((p) => p.id.equals(playlistId))).write(
       PlaylistsCompanion(coverUrl: Value(coverUrl)),
+    );
+  }
+
+  /// Establece la descripción de una playlist (o la quita con `null`).
+  Future<void> setPlaylistDescription(
+    int playlistId,
+    String? description,
+  ) async {
+    await (update(playlists)..where((p) => p.id.equals(playlistId))).write(
+      PlaylistsCompanion(description: Value(description)),
     );
   }
 

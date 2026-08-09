@@ -173,6 +173,23 @@ void main() {
       expect((await db.getPlaylist(id))!.coverUrl, isNull);
     });
 
+    test('setPlaylistDescription establece y quita la descripción', () async {
+      final id = await db.createPlaylist('Descripción');
+      expect((await db.getPlaylist(id))!.description, isNull);
+
+      await db.setPlaylistDescription(id, 'Mis canciones favoritas');
+      final playlists = await db.watchPlaylists().first;
+      expect(playlists.first.description, 'Mis canciones favoritas');
+      expect(
+        (await db.getPlaylist(id))!.description,
+        'Mis canciones favoritas',
+      );
+
+      // Quitar la descripción
+      await db.setPlaylistDescription(id, null);
+      expect((await db.getPlaylist(id))!.description, isNull);
+    });
+
     test('addToPlaylist usa el artwork como portada si no tenía', () async {
       final id = await db.createPlaylist('Auto');
       final track = Track(

@@ -3,21 +3,25 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:palette_generator/palette_generator.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../data/database.dart';
+import '../../services/playlist_cover_store.dart';
 import '../playback.dart';
+import '../theme_controller.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/player_bar.dart' show kPlayerOverlayInset;
 import '../widgets/scrup_snackbar.dart';
 import '../widgets/track_tile.dart';
 
-/// Detalle de una playlist renderizado EN EL MISMO espacio que el grid (sin
-/// abrir rutas): cabecera con portada y acciones (cambiar portada, reproducir
-/// todas) y la lista de canciones con reproducción individual o en cola.
+/// Detalle de una playlist renderizado EN EL MISMO espacio (sin abrir rutas):
+/// cabecera de presentación con la portada grande, el título a la derecha,
+/// una descripción editable y un ambiente teñido con el color del artwork;
+/// debajo, la lista de canciones con reproducción individual o en cola.
 class PlaylistDetailView extends StatefulWidget {
   final Playlist playlist;
   final VoidCallback onBack;
@@ -39,8 +43,20 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   StreamSubscription<Playlist?>? _playlistSub;
   List<Track> _tracks = const [];
 
-  /// Playlist en vivo (la portada puede cambiar desde este mismo detalle).
+  /// Playlist en vivo (portada/descripción pueden cambiar desde este detalle).
   Playlist? _playlist;
+
+  /// Color de ambiente extraído de la portada (para el degradado del hero y
+  /// como `primary` del detalle: botones y elementos usan el color de la
+  /// PLAYLIST, no el de la canción en reproducción).
+  Color? _ambientColor;
+  String? _ambientFor;
+  int _ambientToken = 0;
+
+  /// Caché de color extraído por portada, compartida entre instancias del
+  /// detalle: evita re-descargar/re-analizar la misma portada en la sesión
+  /// (también cachea los fallos con `null` para no reintentar).
+  static final Map<String, Color?> _paletteCache = {};
 
   @override
   void initState() {
@@ -53,12 +69,14 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       setState(() {
         if (p != null) _playlist = p;
       });
+      if (p != null) _maybeExtractAmbient(p.coverUrl);
     });
     _tracksStream = db.watchPlaylistTracks(widget.playlist.id);
     _tracksSub = _tracksStream.listen((tracks) {
       if (!mounted) return;
       setState(() => _tracks = tracks);
     });
+    _maybeExtractAmbient(widget.playlist.coverUrl);
   }
 
   @override
@@ -66,6 +84,51 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     _tracksSub?.cancel();
     _playlistSub?.cancel();
     super.dispose();
+  }
+
+  /// Extrae el color ambiente de la portada solo cuando esta cambia (evita
+  /// re-analizar en cada rebuild) y usa el caché de la sesión cuando existe.
+  void _maybeExtractAmbient(String? coverUrl) {
+    if (coverUrl == null || coverUrl == _ambientFor) return;
+    _ambientFor = coverUrl;
+    if (_paletteCache.containsKey(coverUrl)) {
+      setState(() => _ambientColor = _paletteCache[coverUrl]);
+      return;
+    }
+    // Limpiar el color viejo de inmediato (si lo hay) para que el hero no
+    // muestre el ambiente de la portada anterior mientras se extrae el nuevo.
+    // El guard evita setState durante initState (allí el color ya es null).
+    if (_ambientColor != null) {
+      setState(() => _ambientColor = null);
+    }
+    final token = ++_ambientToken;
+    unawaited(_extractAmbient(coverUrl, token));
+  }
+
+  Future<void> _extractAmbient(String source, int token) async {
+    Color? color;
+    try {
+      final bytes = CoverImage.isLocalPath(source)
+          ? await File(source).readAsBytes()
+          : (await http
+                    .get(
+                      Uri.parse(source),
+                      headers: const {'User-Agent': 'Scrup/0.1 (music player)'},
+                    )
+                    .timeout(const Duration(seconds: 10)))
+                .bodyBytes;
+      final palette = await PaletteGenerator.fromImageProvider(
+        MemoryImage(bytes),
+        maximumColorCount: 16,
+      );
+      color = ThemeController.pickAccent(palette);
+    } catch (_) {
+      color = null;
+    }
+    // Guardar también los fallos (null) para no reintentar la misma portada.
+    _paletteCache[source] = color;
+    if (!mounted || token != _ambientToken) return;
+    setState(() => _ambientColor = color);
   }
 
   Future<void> _playAll() async {
@@ -78,6 +141,44 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     await context.read<AppDatabase>().removeFromPlaylist(
       widget.playlist.id,
       track.id,
+    );
+  }
+
+  /// Editor de descripción (dialog simple con texto multilínea).
+  Future<void> _editDescription() async {
+    final controller = TextEditingController(
+      text: _playlist?.description ?? '',
+    );
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Descripción'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          maxLength: 300,
+          decoration: const InputDecoration(
+            hintText: '¿De qué trata esta playlist?',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    if (result == null || !mounted) return;
+    final description = result.isEmpty ? null : result;
+    await context.read<AppDatabase>().setPlaylistDescription(
+      widget.playlist.id,
+      description,
     );
   }
 
@@ -192,20 +293,19 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     try {
       final current = await db.getPlaylist(widget.playlist.id);
       final currentCover = current?.coverUrl;
-      final base = await getApplicationSupportDirectory();
-      final coversDir = Directory(p.join(base.path, 'playlist_covers'));
-      await coversDir.create(recursive: true);
-      final ext = p.extension(file.path);
-      final dest = p.join(coversDir.path, 'playlist_${widget.playlist.id}$ext');
+      final dest = await copyPlaylistCoverToAppDir(
+        widget.playlist.id,
+        file.path,
+      );
       if (p.equals(file.path, dest)) {
         // El archivo elegido ya es la portada actual.
         if (!mounted) return;
         showScrupSnackBar(messenger, 'Esa imagen ya es la portada');
         return;
       }
-      // Copiar PRIMERO (si el copy falla, la portada anterior se conserva) y
-      // luego limpiar la portada local anterior para no acumular huérfanos.
-      await File(file.path).copy(dest);
+      // copyPlaylistCoverToAppDir ya copió el archivo al destino. Si el copy
+      // falla, la portada anterior se conserva; solo después limpiamos la
+      // portada local anterior para no acumular huérfanos.
       await db.setPlaylistCover(widget.playlist.id, dest);
       if (currentCover != null &&
           CoverImage.isLocalPath(currentCover) &&
@@ -232,137 +332,10 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final playlist = _playlist ?? widget.playlist;
-    final count = _tracks.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Cabecera: volver + portada + nombre + acciones
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 16, 8),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Volver a playlists',
-                onPressed: widget.onBack,
-              ),
-              const SizedBox(width: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 52,
-                  height: 52,
-                  child: _coverArt(theme, playlist.coverUrl),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      playlist.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$count ${count == 1 ? 'canción' : 'canciones'}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.photo_library_outlined),
-                tooltip: 'Portada de la playlist',
-                onPressed: _pickCover,
-              ),
-              if (_tracks.isNotEmpty)
-                IconButton(
-                  icon: const Icon(Icons.playlist_play),
-                  tooltip: 'Reproducir todas',
-                  onPressed: _playAll,
-                ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: _tracks.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.music_off,
-                        size: 64,
-                        color: theme.colorScheme.onSurfaceVariant.withValues(
-                          alpha: 0.4,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Playlist vacía',
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Añade canciones desde la búsqueda',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.7,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.separated(
-                  // El player flotante cubre la parte inferior: dejar espacio
-                  // para que la última canción quede accesible.
-                  padding: const EdgeInsets.fromLTRB(
-                    16,
-                    8,
-                    16,
-                    kPlayerOverlayInset,
-                  ),
-                  itemCount: _tracks.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 4),
-                  itemBuilder: (context, i) {
-                    final track = _tracks[i];
-                    return TrackTile(
-                      track: track,
-                      onPlay: () => playTrack(context, track),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
-                        tooltip: 'Quitar de la playlist',
-                        onPressed: () => _removeTrack(track),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
   Widget _coverArt(ThemeData theme, String? url) {
     return CoverImage(
       source: url,
-      cacheWidth: 200,
+      cacheWidth: 400,
       fallback: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -376,9 +349,214 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         ),
         child: Icon(
           Icons.queue_music,
-          size: 24,
+          size: 40,
           color: theme.colorScheme.primary.withValues(alpha: 0.5),
         ),
+      ),
+    );
+  }
+
+  /// Deriva un tema con el color de la portada como `primary` (y un
+  /// `onPrimary` con contraste legible), en lugar del acento de la canción
+  /// actual.
+  ThemeData _themeWithPlaylistColor(ThemeData base, Color color) {
+    final onPrimary =
+        ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+    return base.copyWith(
+      colorScheme: base.colorScheme.copyWith(
+        primary: color,
+        onPrimary: onPrimary,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    final playlistColor = _ambientColor;
+    // Mientras se ve la playlist, los botones y elementos usan el color de
+    // SU portada (no el acento de la canción en reproducción).
+    final theme = playlistColor != null
+        ? _themeWithPlaylistColor(baseTheme, playlistColor)
+        : baseTheme;
+    final playlist = _playlist ?? widget.playlist;
+    final count = _tracks.length;
+    final ambient = _ambientColor;
+
+    return Theme(
+      data: theme,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Hero de presentación: ambiente del artwork + portada grande +
+          // título a la derecha + descripción + acciones.
+          Container(
+            decoration: BoxDecoration(
+              // Ambiente: el degradado se tiñe con el color extraído de la
+              // portada y se desvanece hacia abajo sobre el negro.
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  ambient?.withValues(alpha: 0.30) ?? Colors.transparent,
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 1.0],
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 24, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: 'Volver a playlists',
+                    onPressed: widget.onBack,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      // Portada grande
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: SizedBox(
+                          width: 160,
+                          height: 160,
+                          child: _coverArt(theme, playlist.coverUrl),
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      // Título + metadatos + descripción + acciones
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              playlist.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.displaySmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                height: 1.05,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '$count '
+                              '${count == 1 ? 'canción' : 'canciones'}',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            if (playlist.description != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                playlist.description!,
+                                maxLines: 4,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.9),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 16),
+                            Wrap(
+                              spacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                FilledButton.icon(
+                                  onPressed: _tracks.isEmpty ? null : _playAll,
+                                  icon: const Icon(Icons.play_arrow_rounded),
+                                  label: const Text('Reproducir'),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.photo_library_outlined,
+                                  ),
+                                  tooltip: 'Portada de la playlist',
+                                  onPressed: _pickCover,
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.notes_rounded),
+                                  tooltip: playlist.description == null
+                                      ? 'Añadir descripción'
+                                      : 'Editar descripción',
+                                  onPressed: _editDescription,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: _tracks.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.music_off,
+                          size: 64,
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Playlist vacía',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Añade canciones desde la búsqueda',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    // El player flotante cubre la parte inferior: dejar espacio
+                    // para que la última canción quede accesible.
+                    padding: const EdgeInsets.fromLTRB(
+                      16,
+                      8,
+                      16,
+                      kPlayerOverlayInset,
+                    ),
+                    itemCount: _tracks.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 4),
+                    itemBuilder: (context, i) {
+                      final track = _tracks[i];
+                      return TrackTile(
+                        track: track,
+                        onPlay: () => playTrack(context, track),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          tooltip: 'Quitar de la playlist',
+                          onPressed: () => _removeTrack(track),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }

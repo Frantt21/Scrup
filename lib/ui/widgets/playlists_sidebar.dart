@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' show ImageFilter;
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../../data/database.dart';
+import '../../services/playlist_cover_store.dart';
 import '../../services/settings_store.dart';
 import '../theme_controller.dart';
 import 'cover_image.dart';
@@ -79,10 +83,10 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
     }
   }
 
-  void _toggleGridMode() {
+  void _toggleGridMode(bool grid) {
     _userToggled = true;
-    setState(() => _gridMode = !_gridMode);
-    unawaited(context.read<SettingsStore>().saveSidebarGridMode(_gridMode));
+    setState(() => _gridMode = grid);
+    unawaited(context.read<SettingsStore>().saveSidebarGridMode(grid));
   }
 
   @override
@@ -95,31 +99,38 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   Future<void> _createPlaylist() async {
     final messenger = ScaffoldMessenger.of(context);
     final db = context.read<AppDatabase>();
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nueva playlist'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Nombre'),
-          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Crear'),
-          ),
-        ],
-      ),
-    );
-    if (name == null || name.isEmpty || !mounted) return;
-    final id = await db.createPlaylist(name);
+    final data =
+        await showDialog<
+          ({String name, String? description, String? imagePath})
+        >(context: context, builder: (_) => const _CreatePlaylistDialog());
+    if (data == null || !mounted) return;
+    final name = data.name.trim();
+    if (name.isEmpty) return;
+    final int id;
+    try {
+      id = await db.createPlaylist(name);
+    } catch (_) {
+      if (!mounted) return;
+      showScrupSnackBar(messenger, 'No se pudo crear la playlist');
+      return;
+    }
+    // Descripción y portada: best-effort (si la portada falla, la playlist
+    // ya existe y se crea igual, solo sin imagen).
+    final description = data.description;
+    if (description != null && description.isNotEmpty) {
+      try {
+        await db.setPlaylistDescription(id, description);
+      } catch (_) {}
+    }
+    final imagePath = data.imagePath;
+    if (imagePath != null) {
+      try {
+        final dest = await copyPlaylistCoverToAppDir(id, imagePath);
+        await db.setPlaylistCover(id, dest);
+      } catch (_) {
+        // Silencioso: la playlist se crea igual sin portada.
+      }
+    }
     showScrupSnackBar(messenger, 'Playlist "$name" creada');
     // Abrir la recién creada directamente.
     if (!mounted) return;
@@ -151,6 +162,19 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
     );
     if (confirmed != true) return;
     await db.deletePlaylist(playlist.id);
+    // Si la portada era un archivo local (elegido por el usuario), borrarlo
+    // para no dejar huérfanos en playlist_covers/.
+    final cover = playlist.coverUrl;
+    if (cover != null && CoverImage.isLocalPath(cover)) {
+      final file = File(cover);
+      if (await file.exists()) {
+        try {
+          await file.delete();
+        } catch (_) {
+          // Silencioso: el cleanup no debe romper el borrado.
+        }
+      }
+    }
     // Si se eliminó la playlist abierta, cerrar el detalle.
     if (widget.openPlaylistId == playlist.id) {
       widget.onSelectPlaylist(null);
@@ -218,19 +242,30 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
                             ),
                           ),
                         ),
-                        IconButton(
-                          icon: Icon(
-                            _gridMode
-                                ? Icons.view_list_outlined
-                                : Icons.grid_view_rounded,
-                            size: 20,
+                        // Toggle lista/cuadrícula: ambos modos visibles, con
+                        // el activo resaltado (más claro que un icono suelto).
+                        SegmentedButton<bool>(
+                          segments: const [
+                            ButtonSegment<bool>(
+                              value: false,
+                              icon: Icon(Icons.view_list_outlined, size: 17),
+                              tooltip: 'Vista de lista',
+                            ),
+                            ButtonSegment<bool>(
+                              value: true,
+                              icon: Icon(Icons.grid_view_rounded, size: 17),
+                              tooltip: 'Vista de cuadrícula',
+                            ),
+                          ],
+                          selected: {_gridMode},
+                          showSelectedIcon: false,
+                          style: SegmentedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
                           ),
-                          visualDensity: VisualDensity.compact,
-                          tooltip: _gridMode
-                              ? 'Ver como lista'
-                              : 'Ver como cuadrícula',
-                          color: theme.colorScheme.onSurfaceVariant,
-                          onPressed: _toggleGridMode,
+                          onSelectionChanged: (selection) =>
+                              _toggleGridMode(selection.first),
                         ),
                       ],
                     ),
@@ -651,7 +686,9 @@ class _CreatePlaylistTile extends StatelessWidget {
 }
 
 /// Celda que emula una playlist pero es un botón para crear una nueva
-/// (vista cuadrícula).
+/// (vista cuadrícula). Usa EXACTAMENTE la misma estructura que las celdas de
+/// playlist (bloque de portada + dos líneas de texto) para que las
+/// dimensiones coincidan.
 class _CreateGridCell extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -665,6 +702,7 @@ class _CreateGridCell extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Mismo bloque que la portada de las celdas de playlist
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -674,27 +712,189 @@ class _CreateGridCell extends StatelessWidget {
                 ),
                 color: theme.colorScheme.primary.withValues(alpha: 0.08),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add, size: 30, color: theme.colorScheme.primary),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Nueva playlist',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                ],
+              child: Center(
+                child: Icon(
+                  Icons.add,
+                  size: 32,
+                  color: theme.colorScheme.primary,
+                ),
               ),
             ),
           ),
-          // El GridView impone el mismo tamaño a todas las celdas
-          // (childAspectRatio), así que no hace falta reservar altura.
           const SizedBox(height: 6),
+          Text(
+            'Nueva playlist',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          Text(
+            'Crea una nueva',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontSize: 11,
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Dialog de creación de playlist: nombre, descripción opcional y portada
+/// opcional elegida desde archivo (con vista previa).
+class _CreatePlaylistDialog extends StatefulWidget {
+  const _CreatePlaylistDialog();
+
+  @override
+  State<_CreatePlaylistDialog> createState() => _CreatePlaylistDialogState();
+}
+
+class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
+  final _nameController = TextEditingController();
+  final _descController = TextEditingController();
+  String? _imagePath;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    const images = XTypeGroup(
+      label: 'Imágenes',
+      extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'],
+    );
+    final file = await openFile(acceptedTypeGroups: [images]);
+    if (file == null || !mounted) return;
+    setState(() => _imagePath = file.path);
+  }
+
+  void _submit() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+    Navigator.pop(context, (
+      name: name,
+      description: _descController.text.trim(),
+      imagePath: _imagePath,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Nueva playlist'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _nameController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Nombre',
+                hintText: 'Mi playlist',
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _descController,
+              maxLines: 3,
+              maxLength: 300,
+              decoration: const InputDecoration(
+                labelText: 'Descripción (opcional)',
+                hintText: '¿De qué trata esta playlist?',
+              ),
+            ),
+            const SizedBox(height: 4),
+            // Portada: preview + selector de archivo
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: _imagePath != null
+                        ? Image.file(
+                            File(_imagePath!),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => _placeholder(theme),
+                          )
+                        : _placeholder(theme),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _imagePath == null
+                        ? 'Sin portada'
+                        : p.basename(_imagePath!),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _pickImage,
+                  icon: Icon(
+                    _imagePath == null
+                        ? Icons.image_outlined
+                        : Icons.swap_horiz,
+                    size: 18,
+                  ),
+                  label: Text(_imagePath == null ? 'Elegir imagen' : 'Cambiar'),
+                ),
+                if (_imagePath != null)
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    tooltip: 'Quitar imagen',
+                    onPressed: () => setState(() => _imagePath = null),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Crear')),
+      ],
+    );
+  }
+
+  Widget _placeholder(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            theme.colorScheme.surfaceContainerHigh,
+            theme.colorScheme.surfaceContainer,
+          ],
+        ),
+      ),
+      child: Icon(
+        Icons.queue_music,
+        size: 20,
+        color: theme.colorScheme.primary.withValues(alpha: 0.5),
       ),
     );
   }

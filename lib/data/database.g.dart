@@ -828,8 +828,25 @@ class $PlaylistsTable extends Playlists
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, name, createdAt, coverUrl];
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    createdAt,
+    coverUrl,
+    description,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -865,6 +882,15 @@ class $PlaylistsTable extends Playlists
         coverUrl.isAcceptableOrUnknown(data['cover_url']!, _coverUrlMeta),
       );
     }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -890,6 +916,10 @@ class $PlaylistsTable extends Playlists
         DriftSqlType.string,
         data['${effectivePrefix}cover_url'],
       ),
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
     );
   }
 
@@ -907,11 +937,15 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
   /// Portada de la playlist (URL del artwork de una de sus canciones, o
   /// null si aún no tiene).
   final String? coverUrl;
+
+  /// Descripción opcional escrita por el usuario.
+  final String? description;
   const PlaylistRow({
     required this.id,
     required this.name,
     required this.createdAt,
     this.coverUrl,
+    this.description,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -921,6 +955,9 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     map['created_at'] = Variable<DateTime>(createdAt);
     if (!nullToAbsent || coverUrl != null) {
       map['cover_url'] = Variable<String>(coverUrl);
+    }
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
     }
     return map;
   }
@@ -933,6 +970,9 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       coverUrl: coverUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(coverUrl),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
     );
   }
 
@@ -946,6 +986,7 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       name: serializer.fromJson<String>(json['name']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       coverUrl: serializer.fromJson<String?>(json['coverUrl']),
+      description: serializer.fromJson<String?>(json['description']),
     );
   }
   @override
@@ -956,6 +997,7 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       'name': serializer.toJson<String>(name),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'coverUrl': serializer.toJson<String?>(coverUrl),
+      'description': serializer.toJson<String?>(description),
     };
   }
 
@@ -964,11 +1006,13 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     String? name,
     DateTime? createdAt,
     Value<String?> coverUrl = const Value.absent(),
+    Value<String?> description = const Value.absent(),
   }) => PlaylistRow(
     id: id ?? this.id,
     name: name ?? this.name,
     createdAt: createdAt ?? this.createdAt,
     coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
+    description: description.present ? description.value : this.description,
   );
   PlaylistRow copyWithCompanion(PlaylistsCompanion data) {
     return PlaylistRow(
@@ -976,6 +1020,9 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       name: data.name.present ? data.name.value : this.name,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       coverUrl: data.coverUrl.present ? data.coverUrl.value : this.coverUrl,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
     );
   }
 
@@ -985,13 +1032,14 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('createdAt: $createdAt, ')
-          ..write('coverUrl: $coverUrl')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('description: $description')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, createdAt, coverUrl);
+  int get hashCode => Object.hash(id, name, createdAt, coverUrl, description);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -999,7 +1047,8 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
           other.id == this.id &&
           other.name == this.name &&
           other.createdAt == this.createdAt &&
-          other.coverUrl == this.coverUrl);
+          other.coverUrl == this.coverUrl &&
+          other.description == this.description);
 }
 
 class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
@@ -1007,29 +1056,34 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
   final Value<String> name;
   final Value<DateTime> createdAt;
   final Value<String?> coverUrl;
+  final Value<String?> description;
   const PlaylistsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.coverUrl = const Value.absent(),
+    this.description = const Value.absent(),
   });
   PlaylistsCompanion.insert({
     this.id = const Value.absent(),
     required String name,
     this.createdAt = const Value.absent(),
     this.coverUrl = const Value.absent(),
+    this.description = const Value.absent(),
   }) : name = Value(name);
   static Insertable<PlaylistRow> custom({
     Expression<int>? id,
     Expression<String>? name,
     Expression<DateTime>? createdAt,
     Expression<String>? coverUrl,
+    Expression<String>? description,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (createdAt != null) 'created_at': createdAt,
       if (coverUrl != null) 'cover_url': coverUrl,
+      if (description != null) 'description': description,
     });
   }
 
@@ -1038,12 +1092,14 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     Value<String>? name,
     Value<DateTime>? createdAt,
     Value<String?>? coverUrl,
+    Value<String?>? description,
   }) {
     return PlaylistsCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
       createdAt: createdAt ?? this.createdAt,
       coverUrl: coverUrl ?? this.coverUrl,
+      description: description ?? this.description,
     );
   }
 
@@ -1062,6 +1118,9 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     if (coverUrl.present) {
       map['cover_url'] = Variable<String>(coverUrl.value);
     }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
     return map;
   }
 
@@ -1071,7 +1130,8 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('createdAt: $createdAt, ')
-          ..write('coverUrl: $coverUrl')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('description: $description')
           ..write(')'))
         .toString();
   }
@@ -2146,6 +2206,7 @@ typedef $$PlaylistsTableCreateCompanionBuilder =
       required String name,
       Value<DateTime> createdAt,
       Value<String?> coverUrl,
+      Value<String?> description,
     });
 typedef $$PlaylistsTableUpdateCompanionBuilder =
     PlaylistsCompanion Function({
@@ -2153,6 +2214,7 @@ typedef $$PlaylistsTableUpdateCompanionBuilder =
       Value<String> name,
       Value<DateTime> createdAt,
       Value<String?> coverUrl,
+      Value<String?> description,
     });
 
 final class $$PlaylistsTableReferences
@@ -2204,6 +2266,11 @@ class $$PlaylistsTableFilterComposer
 
   ColumnFilters<String> get coverUrl => $composableBuilder(
     column: $table.coverUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2261,6 +2328,11 @@ class $$PlaylistsTableOrderingComposer
     column: $table.coverUrl,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PlaylistsTableAnnotationComposer
@@ -2283,6 +2355,11 @@ class $$PlaylistsTableAnnotationComposer
 
   GeneratedColumn<String> get coverUrl =>
       $composableBuilder(column: $table.coverUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
 
   Expression<T> playlistTracksRefs<T extends Object>(
     Expression<T> Function($$PlaylistTracksTableAnnotationComposer a) f,
@@ -2342,11 +2419,13 @@ class $$PlaylistsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
+                Value<String?> description = const Value.absent(),
               }) => PlaylistsCompanion(
                 id: id,
                 name: name,
                 createdAt: createdAt,
                 coverUrl: coverUrl,
+                description: description,
               ),
           createCompanionCallback:
               ({
@@ -2354,11 +2433,13 @@ class $$PlaylistsTableTableManager
                 required String name,
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
+                Value<String?> description = const Value.absent(),
               }) => PlaylistsCompanion.insert(
                 id: id,
                 name: name,
                 createdAt: createdAt,
                 coverUrl: coverUrl,
+                description: description,
               ),
           withReferenceMapper: (p0) => p0
               .map(
