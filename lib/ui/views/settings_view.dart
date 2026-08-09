@@ -179,7 +179,7 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
 
-  /// Idioma: dropdown con todos los idiomas soportados (nombre mostrado en
+  /// Idioma: selector con todos los idiomas soportados (nombre mostrado en
   /// su propio idioma; persistido entre sesiones).
   Widget _buildLanguageSection(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
@@ -190,53 +190,111 @@ class _SettingsViewState extends State<SettingsView> {
       caption: l10n.languageHint,
       // Campo compacto RECTANGULAR (no ocupa todo el ancho de la tarjeta ni
       // es una píldora larga y fina): ancho fijo de 240px y el mismo radio de
-      // esquinas redondeadas (14) que usan las tarjetas de sección.
+      // esquinas redondeadas (14) que usan las tarjetas de sección. Abre un
+      // menú propio vía showMenu en vez de un DropdownButton: así el hover
+      // de los items queda full-bleed (el DropdownButton mete 8px fijos de
+      // padding en su menú) y el campo no conserva el brillo de focus.
       child: Align(
         alignment: Alignment.centerLeft,
-        child: Container(
-          width: 240,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: theme.colorScheme.surfaceContainerHighest.withValues(
-              alpha: 0.35,
-            ),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-          ),
-          child: DropdownButton<Locale>(
-            // `value` controlado: cuando el locale cambia (desde el provider),
-            // el dropdown se actualiza solo vía didUpdateWidget.
-            value: controller.locale,
-            isExpanded: true,
-            isDense: true,
-            underline: const SizedBox.shrink(),
-            borderRadius: BorderRadius.circular(14),
-            // El menú desplegado no usa el popupMenuTheme: cae a canvasColor,
-            // así que el color se fija aquí (mismo #1E1E1E del tema).
-            dropdownColor: const Color(0xFF1E1E1E),
-            icon: Icon(
-              Icons.keyboard_arrow_down_rounded,
-              color: theme.colorScheme.primary,
-            ),
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurface,
-            ),
-            items: [
-              for (final option in _localeOptions)
-                DropdownMenuItem<Locale>(
-                  value: option.locale,
-                  child: Text(option.label),
+        child: Builder(
+          // Semantics: el campo sustituye al DropdownButton, así que se le
+          // da el rol de botón y el idioma activo como label accesible.
+          builder: (fieldContext) => Semantics(
+            button: true,
+            label: _localeLabel(controller.locale),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              // Sin brillo de focus persistente tras abrir el menú; el hover
+              // es un destello sutil acorde al cristal.
+              focusColor: Colors.transparent,
+              hoverColor: Colors.white.withValues(alpha: 0.04),
+              onTap: () => _openLanguageMenu(fieldContext),
+              child: Container(
+                width: 240,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
                 ),
-            ],
-            onChanged: (locale) {
-              if (locale == null) return;
-              final settings = context.read<SettingsStore>();
-              unawaited(controller.setLocale(locale, settings));
-            },
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.35,
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _localeLabel(controller.locale),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
     );
+  }
+
+  /// Abre el menú de idiomas ALINEADO con el campo (anclado a su rectángulo,
+  /// con el mismo ancho) y con los mismos items full-bleed que los context
+  /// menus: menuPadding cero + clip antiAlias para las esquinas redondeadas.
+  Future<void> _openLanguageMenu(BuildContext fieldContext) async {
+    final controller = context.read<LocaleController>();
+    final box = fieldContext.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(fieldContext).context.findRenderObject()! as RenderBox;
+    final locale = await showMenu<Locale>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(
+          box.localToGlobal(Offset.zero, ancestor: overlay),
+          box.localToGlobal(
+            box.size.bottomRight(Offset.zero),
+            ancestor: overlay,
+          ),
+        ),
+        Offset.zero & overlay.size,
+      ),
+      // Mismo ancho que el campo y altura tope para que, si en el futuro
+      // hay más idiomas de los que caben, el menú haga scroll (con showMenu
+      // sin maxHeight crecería hasta desbordar la ventana).
+      constraints: const BoxConstraints(minWidth: 240, maxHeight: 380),
+      clipBehavior: Clip.antiAlias,
+      items: [
+        for (final option in _localeOptions)
+          PopupMenuItem<Locale>(
+            value: option.locale,
+            child: Text(option.label),
+          ),
+      ],
+    );
+    if (locale == null || !mounted) return;
+    final settings = context.read<SettingsStore>();
+    unawaited(controller.setLocale(locale, settings));
+  }
+
+  /// Nombre mostrado del idioma activo (para el campo del selector).
+  String _localeLabel(Locale locale) {
+    for (final option in _localeOptions) {
+      if (option.locale == locale) return option.label;
+    }
+    return locale.toString();
   }
 
   /// Caché: tamaño usado (del límite) + nº de archivos + vaciar.

@@ -6,8 +6,11 @@ import '../core/track.dart';
 import 'player_service.dart';
 
 /// Puente con los **controles multimedia nativos del OS** vía audio_service:
-/// - Windows → SMTC (SystemMediaTransportControls: overlay de medios, teclas
-///   multimedia, barra de progreso).
+/// - Windows → SMTC (SystemMediaTransportControls: overlay de medios y
+///   teclas multimedia), implementado por el paquete `audio_service_win`
+///   (audio_service NO soporta Windows: usa un NoOp por defecto). Nota:
+///   `audio_service_win` no implementa la línea de tiempo, así que la barra
+///   de progreso/seek del SMTC no aparece en Windows.
 /// - macOS → Now Playing (lock screen / Control Center).
 /// - Linux → MPRIS (con el paquete compañero `audio_service_mpris`).
 ///
@@ -38,12 +41,21 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
       player.currentTrack.listen((track) {
         if (track == null) {
           _hasTrack = false;
+          // audio_service ignora los items nulos: el SMTC conserva la
+          // metadata anterior hasta que llegue la nueva pista (el estado se
+          // publica solo cuando hay pista, ver _publishPlaybackState).
           mediaItem.add(null);
-          _publishPlaybackState();
           return;
         }
         _hasTrack = true;
         mediaItem.add(_mediaItemFor(track));
+        // Publicar el estado JUNTO con la metadata: el nativo de Windows
+        // solo fija el PlaybackStatus en updateState (no en setMediaItem), y
+        // sin este publish el SMTC quedaría con un estado indefinido — p. ej.
+        // al restaurar la sesión pausada (nunca llega un evento playing) o si
+        // el evento `playing` del nuevo medio llega antes de publicar la
+        // pista (race en el cambio de canción).
+        _publishPlaybackState();
       }),
       player.playing.listen((playing) {
         _playing = playing;
@@ -58,7 +70,9 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
         _publishPlaybackState();
       }),
     ]);
-    _publishPlaybackState();
+    // Sin pista no se publica nada (guardia de _publishPlaybackState): el
+    // SMTC/Now Playing/MPRIS no se encienden vacíos; el primer estado real
+    // llega con la primera pista vía el listener de currentTrack.
   }
 
   /// Convierte una pista en el [MediaItem] que ve el OS.
@@ -75,16 +89,18 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
     );
   }
 
-  /// Publica el estado de reproducción en el OS. Sin pista, se publica un
-  /// estado inactivo (el OS oculta los controles hasta que haya medios).
+  /// Publica el estado de reproducción en el OS. Sin pista NO se publica
+  /// nada: audio_service reenvía cada estado al platform, y en Windows eso
+  /// encendería un SMTC vacío (sin metadata) al arrancar. El estado correcto
+  /// se publica en cuanto llega la primera pista (que es cuando el OS
+  /// empieza a mostrar el overlay).
   void _publishPlaybackState() {
-    final controls = _hasTrack
-        ? [
-            MediaControl.skipToPrevious,
-            _playing ? MediaControl.pause : MediaControl.play,
-            MediaControl.skipToNext,
-          ]
-        : const <MediaControl>[];
+    if (!_hasTrack) return;
+    final controls = [
+      MediaControl.skipToPrevious,
+      _playing ? MediaControl.pause : MediaControl.play,
+      MediaControl.skipToNext,
+    ];
     playbackState.add(
       playbackState.value.copyWith(
         controls: controls,
@@ -136,10 +152,13 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> stop() async {
-    _hasTrack = false;
+    // Publicar PAUSADO antes de limpiar la pista: así el OS refleja el
+    // estado correcto (si se limpiara primero, _publishPlaybackState no
+    // publicaría nada por la guardia de _hasTrack).
     _playing = false;
-    mediaItem.add(null);
     _publishPlaybackState();
+    _hasTrack = false;
+    mediaItem.add(null);
     // Pausar en vez de `_player.stop()`: stop() de media_kit emite el evento
     // `completed`, que el PlayerService interpreta como fin de canción y
     // dispararía el auto-advance/radio (el propio servicio evita stop() por

@@ -57,6 +57,17 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# audio_service_win usa C++/WinRT (winrt), que al compilarse en C++17 incluye
+# <experimental/coroutine>: los MSVC recientes (BuildTools 18 / VS 2022 17.x)
+# lo tratan como error duro (STL1011). El propio STL recomienda definir
+# _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS para suprimirlo hasta
+# que el plugin compile en C++20. Escopado solo a ese target (los demas
+# plugins y el runner no lo necesitan).
+if(TARGET audio_service_win_plugin)
+  target_compile_definitions(audio_service_win_plugin PRIVATE
+    _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+endif()
+
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can

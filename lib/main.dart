@@ -24,9 +24,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
 
-  // Controles multimedia nativos del OS (SMTC en Windows, Now Playing en
-  // macOS; MPRIS en Linux con el paquete compañero). El handler se crea aquí
-  // pero se conecta al reproductor cuando el árbol de providers construye el
+  // Controles multimedia nativos del OS: SMTC en Windows (vía el paquete
+  // `audio_service_win`, que se registra solo — audio_service por sí solo
+  // NO soporta Windows), Now Playing en macOS, y MPRIS en Linux (con el
+  // paquete compañero `audio_service_mpris`). El handler se crea aquí pero
+  // se conecta al reproductor cuando el árbol de providers construye el
   // PlayerService ([attach]). Best-effort: si el OS no lo soporta, la app
   // sigue funcionando sin controles nativos.
   ScrupAudioHandler audioHandler;
@@ -300,8 +302,10 @@ class ScrupApp extends StatelessWidget {
       popupMenuTheme: PopupMenuThemeData(
         color: const Color(0xFF1E1E1E),
         surfaceTintColor: Colors.transparent,
-        // Menú compacto: padding contenido, no un bloque alto.
-        menuPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        // Sin padding vertical: el hover de los items llega completo al
+        // borde superior/inferior del menú (los showMenu pasan clipBehavior
+        // antiAlias para recortarlo a las esquinas redondeadas).
+        menuPadding: EdgeInsets.zero,
         // En Material 3 el texto de los items usa `labelTextStyle` (no
         // `textStyle`), que se aplica vía AnimatedDefaultTextStyle.
         labelTextStyle: WidgetStatePropertyAll(

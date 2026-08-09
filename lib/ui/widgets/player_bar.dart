@@ -147,6 +147,9 @@ class _PlayerBarState extends State<PlayerBar> {
         position.dx,
         position.dy,
       ),
+      // Recortar el menú a sus esquinas redondeadas: con el menuPadding a
+      // cero, el hover de los items queda full-bleed sin desbordar.
+      clipBehavior: Clip.antiAlias,
       items: [
         ContextMenuItem(
           value: 'add',

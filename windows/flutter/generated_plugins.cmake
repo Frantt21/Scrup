@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audio_service_win
   file_selector_windows
   media_kit_libs_windows_audio
   screen_retriever_windows
