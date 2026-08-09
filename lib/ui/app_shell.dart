@@ -72,6 +72,13 @@ class _AppShellState extends State<AppShell> {
     setState(() => _openPlaylist = playlist);
   }
 
+  /// Actualiza la playlist abierta tras una edición (p. ej. renombrada) para
+  /// que la title bar muestre el nombre nuevo.
+  void _onPlaylistUpdated(Playlist playlist) {
+    if (_openPlaylist?.id != playlist.id) return;
+    setState(() => _openPlaylist = playlist);
+  }
+
   @override
   Widget build(BuildContext context) {
     final openPlaylist = _openPlaylist;
@@ -79,8 +86,26 @@ class _AppShellState extends State<AppShell> {
     return Scaffold(
       body: Column(
         children: [
-          // Title bar personalizado (solo en desktop; en macOS se deja el nativo)
-          if (!Platform.isMacOS) const CustomTitleBar(title: 'Scrup'),
+          // Title bar personalizado (solo en desktop; en macOS se deja el
+          // nativo). Con una playlist abierta muestra el botón de volver y su
+          // nombre, ahorrando espacio en el detalle.
+          if (!Platform.isMacOS)
+            CustomTitleBar(
+              title: openPlaylist?.name ?? 'Scrup',
+              leading: openPlaylist != null
+                  ? IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 40,
+                        height: 40,
+                      ),
+                      padding: EdgeInsets.zero,
+                      tooltip: 'Volver a playlists',
+                      onPressed: () => _selectPlaylist(null),
+                    )
+                  : null,
+            ),
           Expanded(
             // El sidebar ocupa su propio espacio; el player flota SOLO sobre
             // el área de contenido (no cubre el sidebar).
@@ -116,6 +141,7 @@ class _AppShellState extends State<AppShell> {
                               key: ValueKey(openPlaylist.id),
                               playlist: openPlaylist,
                               onBack: () => _selectPlaylist(null),
+                              onUpdated: _onPlaylistUpdated,
                             )
                           else
                             const SizedBox.shrink(),

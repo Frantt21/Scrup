@@ -19,12 +19,16 @@ class Playlist {
   /// Descripción opcional escrita por el usuario.
   final String? description;
 
+  /// Playlist especial de Favoritos (siempre al final, no se puede borrar).
+  final bool isFavorites;
+
   const Playlist({
     required this.id,
     required this.name,
     required this.createdAt,
     this.coverUrl,
     this.description,
+    this.isFavorites = false,
   });
 }
 
@@ -35,7 +39,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -58,6 +62,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 5) {
         // Descripción de la playlist
         await m.addColumn(playlists, playlists.description);
+      }
+      if (from < 6) {
+        // Playlist especial de Favoritos
+        await m.addColumn(playlists, playlists.isFavorites);
       }
     },
   );
@@ -145,8 +153,13 @@ class AppDatabase extends _$AppDatabase {
 
   // ------------------------------------------------------------ playlists
   Stream<List<Playlist>> watchPlaylists() {
+    // Favoritos siempre al final (isFavorites=false primero); el resto por
+    // creación, las más recientes primero.
     final query = select(playlists)
-      ..orderBy([(p) => OrderingTerm.desc(p.createdAt)]);
+      ..orderBy([
+        (p) => OrderingTerm.asc(p.isFavorites),
+        (p) => OrderingTerm.desc(p.createdAt),
+      ]);
     return query.watch().map(
       (rows) => rows
           .map(
@@ -156,6 +169,7 @@ class AppDatabase extends _$AppDatabase {
               createdAt: r.createdAt,
               coverUrl: r.coverUrl,
               description: r.description,
+              isFavorites: r.isFavorites,
             ),
           )
           .toList(),
@@ -175,6 +189,7 @@ class AppDatabase extends _$AppDatabase {
               createdAt: r.createdAt,
               coverUrl: r.coverUrl,
               description: r.description,
+              isFavorites: r.isFavorites,
             ),
     );
   }
@@ -222,6 +237,7 @@ class AppDatabase extends _$AppDatabase {
       createdAt: row.createdAt,
       coverUrl: row.coverUrl,
       description: row.description,
+      isFavorites: row.isFavorites,
     );
   }
 
@@ -240,6 +256,37 @@ class AppDatabase extends _$AppDatabase {
     await (update(playlists)..where((p) => p.id.equals(playlistId))).write(
       PlaylistsCompanion(description: Value(description)),
     );
+  }
+
+  /// Cambia el nombre de una playlist.
+  Future<void> renamePlaylist(int playlistId, String name) async {
+    await (update(playlists)..where((p) => p.id.equals(playlistId))).write(
+      PlaylistsCompanion(name: Value(name)),
+    );
+  }
+
+  /// Devuelve el id de la playlist de Favoritos, creándola si no existe.
+  Future<int> ensureFavoritesPlaylist() async {
+    final existing =
+        await (select(playlists)..where((p) => p.isFavorites.equals(true)))
+            .getSingleOrNull();
+    if (existing != null) return existing.id;
+    return into(playlists).insert(
+      PlaylistsCompanion.insert(
+        name: 'Favoritos',
+        isFavorites: const Value(true),
+      ),
+    );
+  }
+
+  /// `true` mientras la pista esté en la playlist (stream reactivo).
+  Stream<bool> watchTrackInPlaylist(int playlistId, String trackId) {
+    final query = select(playlistTracks)
+      ..where(
+        (pt) =>
+            pt.playlistId.equals(playlistId) & pt.trackId.equals(trackId),
+      );
+    return query.watch().map((rows) => rows.isNotEmpty);
   }
 
   /// Canciones de una playlist (con metadatos cacheados), en orden.

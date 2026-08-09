@@ -38,7 +38,14 @@ Future<void> main() async {
 
   Binaries.logBinaries();
 
-  runApp(const ScrupApp());
+  // Crear la base y asegurar la playlist de Favoritos antes de arrancar
+  // (best-effort: si falla, se crea la primera vez que se necesite).
+  final database = AppDatabase();
+  try {
+    await database.ensureFavoritesPlaylist();
+  } catch (_) {}
+
+  runApp(ScrupApp(database: database));
 }
 
 /// Restaura la sesión anterior al arrancar: el volumen y la última pista
@@ -66,13 +73,15 @@ Future<void> _restoreSession(
 }
 
 class ScrupApp extends StatelessWidget {
-  const ScrupApp({super.key});
+  final AppDatabase database;
+
+  const ScrupApp({super.key, required this.database});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider<AppDatabase>(create: (_) => AppDatabase()),
+        Provider<AppDatabase>(create: (_) => database),
         Provider<YtDlpService>(create: (_) => YtDlpService()),
         Provider<AudioCacheService>(
           create: (context) =>

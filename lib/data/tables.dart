@@ -40,6 +40,9 @@ class Playlists extends Table {
 
   /// Descripción opcional escrita por el usuario.
   TextColumn get description => text().nullable()();
+
+  /// Playlist especial de Favoritos (siempre al final, no se puede borrar).
+  BoolColumn get isFavorites => boolean().withDefault(const Constant(false))();
 }
 
 /// Relación N:M entre playlists y canciones, con posición de orden.

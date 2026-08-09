@@ -839,6 +839,21 @@ class $PlaylistsTable extends Playlists
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _isFavoritesMeta = const VerificationMeta(
+    'isFavorites',
+  );
+  @override
+  late final GeneratedColumn<bool> isFavorites = GeneratedColumn<bool>(
+    'is_favorites',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_favorites" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -846,6 +861,7 @@ class $PlaylistsTable extends Playlists
     createdAt,
     coverUrl,
     description,
+    isFavorites,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -891,6 +907,15 @@ class $PlaylistsTable extends Playlists
         ),
       );
     }
+    if (data.containsKey('is_favorites')) {
+      context.handle(
+        _isFavoritesMeta,
+        isFavorites.isAcceptableOrUnknown(
+          data['is_favorites']!,
+          _isFavoritesMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -920,6 +945,10 @@ class $PlaylistsTable extends Playlists
         DriftSqlType.string,
         data['${effectivePrefix}description'],
       ),
+      isFavorites: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_favorites'],
+      )!,
     );
   }
 
@@ -940,12 +969,16 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
 
   /// Descripción opcional escrita por el usuario.
   final String? description;
+
+  /// Playlist especial de Favoritos (siempre al final, no se puede borrar).
+  final bool isFavorites;
   const PlaylistRow({
     required this.id,
     required this.name,
     required this.createdAt,
     this.coverUrl,
     this.description,
+    required this.isFavorites,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -959,6 +992,7 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
     }
+    map['is_favorites'] = Variable<bool>(isFavorites);
     return map;
   }
 
@@ -973,6 +1007,7 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       description: description == null && nullToAbsent
           ? const Value.absent()
           : Value(description),
+      isFavorites: Value(isFavorites),
     );
   }
 
@@ -987,6 +1022,7 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       coverUrl: serializer.fromJson<String?>(json['coverUrl']),
       description: serializer.fromJson<String?>(json['description']),
+      isFavorites: serializer.fromJson<bool>(json['isFavorites']),
     );
   }
   @override
@@ -998,6 +1034,7 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'coverUrl': serializer.toJson<String?>(coverUrl),
       'description': serializer.toJson<String?>(description),
+      'isFavorites': serializer.toJson<bool>(isFavorites),
     };
   }
 
@@ -1007,12 +1044,14 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     DateTime? createdAt,
     Value<String?> coverUrl = const Value.absent(),
     Value<String?> description = const Value.absent(),
+    bool? isFavorites,
   }) => PlaylistRow(
     id: id ?? this.id,
     name: name ?? this.name,
     createdAt: createdAt ?? this.createdAt,
     coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
     description: description.present ? description.value : this.description,
+    isFavorites: isFavorites ?? this.isFavorites,
   );
   PlaylistRow copyWithCompanion(PlaylistsCompanion data) {
     return PlaylistRow(
@@ -1023,6 +1062,9 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       description: data.description.present
           ? data.description.value
           : this.description,
+      isFavorites: data.isFavorites.present
+          ? data.isFavorites.value
+          : this.isFavorites,
     );
   }
 
@@ -1033,13 +1075,15 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
           ..write('name: $name, ')
           ..write('createdAt: $createdAt, ')
           ..write('coverUrl: $coverUrl, ')
-          ..write('description: $description')
+          ..write('description: $description, ')
+          ..write('isFavorites: $isFavorites')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, createdAt, coverUrl, description);
+  int get hashCode =>
+      Object.hash(id, name, createdAt, coverUrl, description, isFavorites);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1048,7 +1092,8 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
           other.name == this.name &&
           other.createdAt == this.createdAt &&
           other.coverUrl == this.coverUrl &&
-          other.description == this.description);
+          other.description == this.description &&
+          other.isFavorites == this.isFavorites);
 }
 
 class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
@@ -1057,12 +1102,14 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
   final Value<DateTime> createdAt;
   final Value<String?> coverUrl;
   final Value<String?> description;
+  final Value<bool> isFavorites;
   const PlaylistsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.coverUrl = const Value.absent(),
     this.description = const Value.absent(),
+    this.isFavorites = const Value.absent(),
   });
   PlaylistsCompanion.insert({
     this.id = const Value.absent(),
@@ -1070,6 +1117,7 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     this.createdAt = const Value.absent(),
     this.coverUrl = const Value.absent(),
     this.description = const Value.absent(),
+    this.isFavorites = const Value.absent(),
   }) : name = Value(name);
   static Insertable<PlaylistRow> custom({
     Expression<int>? id,
@@ -1077,6 +1125,7 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     Expression<DateTime>? createdAt,
     Expression<String>? coverUrl,
     Expression<String>? description,
+    Expression<bool>? isFavorites,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1084,6 +1133,7 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
       if (createdAt != null) 'created_at': createdAt,
       if (coverUrl != null) 'cover_url': coverUrl,
       if (description != null) 'description': description,
+      if (isFavorites != null) 'is_favorites': isFavorites,
     });
   }
 
@@ -1093,6 +1143,7 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     Value<DateTime>? createdAt,
     Value<String?>? coverUrl,
     Value<String?>? description,
+    Value<bool>? isFavorites,
   }) {
     return PlaylistsCompanion(
       id: id ?? this.id,
@@ -1100,6 +1151,7 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
       createdAt: createdAt ?? this.createdAt,
       coverUrl: coverUrl ?? this.coverUrl,
       description: description ?? this.description,
+      isFavorites: isFavorites ?? this.isFavorites,
     );
   }
 
@@ -1121,6 +1173,9 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     if (description.present) {
       map['description'] = Variable<String>(description.value);
     }
+    if (isFavorites.present) {
+      map['is_favorites'] = Variable<bool>(isFavorites.value);
+    }
     return map;
   }
 
@@ -1131,7 +1186,8 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
           ..write('name: $name, ')
           ..write('createdAt: $createdAt, ')
           ..write('coverUrl: $coverUrl, ')
-          ..write('description: $description')
+          ..write('description: $description, ')
+          ..write('isFavorites: $isFavorites')
           ..write(')'))
         .toString();
   }
@@ -2207,6 +2263,7 @@ typedef $$PlaylistsTableCreateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<String?> coverUrl,
       Value<String?> description,
+      Value<bool> isFavorites,
     });
 typedef $$PlaylistsTableUpdateCompanionBuilder =
     PlaylistsCompanion Function({
@@ -2215,6 +2272,7 @@ typedef $$PlaylistsTableUpdateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<String?> coverUrl,
       Value<String?> description,
+      Value<bool> isFavorites,
     });
 
 final class $$PlaylistsTableReferences
@@ -2271,6 +2329,11 @@ class $$PlaylistsTableFilterComposer
 
   ColumnFilters<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isFavorites => $composableBuilder(
+    column: $table.isFavorites,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2333,6 +2396,11 @@ class $$PlaylistsTableOrderingComposer
     column: $table.description,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get isFavorites => $composableBuilder(
+    column: $table.isFavorites,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PlaylistsTableAnnotationComposer
@@ -2358,6 +2426,11 @@ class $$PlaylistsTableAnnotationComposer
 
   GeneratedColumn<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isFavorites => $composableBuilder(
+    column: $table.isFavorites,
     builder: (column) => column,
   );
 
@@ -2420,12 +2493,14 @@ class $$PlaylistsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<bool> isFavorites = const Value.absent(),
               }) => PlaylistsCompanion(
                 id: id,
                 name: name,
                 createdAt: createdAt,
                 coverUrl: coverUrl,
                 description: description,
+                isFavorites: isFavorites,
               ),
           createCompanionCallback:
               ({
@@ -2434,12 +2509,14 @@ class $$PlaylistsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<bool> isFavorites = const Value.absent(),
               }) => PlaylistsCompanion.insert(
                 id: id,
                 name: name,
                 createdAt: createdAt,
                 coverUrl: coverUrl,
                 description: description,
+                isFavorites: isFavorites,
               ),
           withReferenceMapper: (p0) => p0
               .map(

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../playback.dart';
+import '../playlist_actions.dart';
 import '../widgets/player_bar.dart' show kPlayerOverlayInset;
 
 /// Pantalla de inicio: barra de búsqueda arriba y las reproducciones
@@ -163,101 +164,134 @@ class _RecentCard extends StatefulWidget {
 class _RecentCardState extends State<_RecentCard> {
   bool _hovered = false;
 
+  /// Menú contextual (clic derecho) sobre la tarjeta: añadir a playlist.
+  Future<void> _showMenu(Offset position) async {
+    final action = await showMenu<String>(
+      context: context,
+      // Anclaje correcto: recta de tamaño cero en la posición del cursor.
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: 'add',
+          child: Row(
+            children: [
+              Icon(Icons.playlist_add),
+              SizedBox(width: 10),
+              Text('Añadir a playlist'),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (!mounted || action == null) return;
+    if (action == 'add') {
+      await showAddToPlaylistSheet(context, widget.track);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final track = widget.track;
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: _hovered
-                ? theme.colorScheme.primary.withValues(alpha: 0.6)
-                : Colors.transparent,
+    return GestureDetector(
+      onSecondaryTapUp: (details) => _showMenu(details.globalPosition),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _hovered
+                  ? theme.colorScheme.primary.withValues(alpha: 0.6)
+                  : Colors.transparent,
+            ),
+            boxShadow: _hovered
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
           ),
-          boxShadow: _hovered
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(13),
-          child: InkWell(
-            onTap: widget.onPlay,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Artwork completo
-                _artwork(theme),
-                // Gradiente inferior para legibilidad del texto
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Colors.black54],
-                      stops: [0.5, 1.0],
-                    ),
-                  ),
-                ),
-                // Título + artista en la esquina inferior
-                Positioned(
-                  left: 10,
-                  right: 10,
-                  bottom: 10,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        track.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        track.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Play al hacer hover
-                if (_hovered)
-                  Center(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        shape: BoxShape.circle,
-                      ),
-                      padding: const EdgeInsets.all(10),
-                      child: Icon(
-                        Icons.play_arrow_rounded,
-                        size: 36,
-                        color: theme.colorScheme.primary,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(13),
+            child: InkWell(
+              onTap: widget.onPlay,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Artwork completo
+                  _artwork(theme),
+                  // Gradiente inferior para legibilidad del texto
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Colors.black54],
+                        stops: [0.5, 1.0],
                       ),
                     ),
                   ),
-              ],
+                  // Título + artista en la esquina inferior
+                  Positioned(
+                    left: 10,
+                    right: 10,
+                    bottom: 10,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          track.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          track.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Play al hacer hover
+                  if (_hovered)
+                    Center(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          shape: BoxShape.circle,
+                        ),
+                        padding: const EdgeInsets.all(10),
+                        child: Icon(
+                          Icons.play_arrow_rounded,
+                          size: 36,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

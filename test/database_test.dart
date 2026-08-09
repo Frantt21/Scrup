@@ -190,6 +190,14 @@ void main() {
       expect((await db.getPlaylist(id))!.description, isNull);
     });
 
+    test('renamePlaylist cambia el nombre', () async {
+      final id = await db.createPlaylist('Antes');
+      await db.renamePlaylist(id, 'Después');
+      expect((await db.getPlaylist(id))!.name, 'Después');
+      final playlists = await db.watchPlaylists().first;
+      expect(playlists.first.name, 'Después');
+    });
+
     test('addToPlaylist usa el artwork como portada si no tenía', () async {
       final id = await db.createPlaylist('Auto');
       final track = Track(

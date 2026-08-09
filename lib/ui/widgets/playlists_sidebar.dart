@@ -242,30 +242,11 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
                             ),
                           ),
                         ),
-                        // Toggle lista/cuadrícula: ambos modos visibles, con
-                        // el activo resaltado (más claro que un icono suelto).
-                        SegmentedButton<bool>(
-                          segments: const [
-                            ButtonSegment<bool>(
-                              value: false,
-                              icon: Icon(Icons.view_list_outlined, size: 17),
-                              tooltip: 'Vista de lista',
-                            ),
-                            ButtonSegment<bool>(
-                              value: true,
-                              icon: Icon(Icons.grid_view_rounded, size: 17),
-                              tooltip: 'Vista de cuadrícula',
-                            ),
-                          ],
-                          selected: {_gridMode},
-                          showSelectedIcon: false,
-                          style: SegmentedButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                          ),
-                          onSelectionChanged: (selection) =>
-                              _toggleGridMode(selection.first),
+                        // Toggle lista/cuadrícula: chip compacto con los dos
+                        // modos siempre visibles; el activo se resalta en lila.
+                        _ViewToggle(
+                          gridMode: _gridMode,
+                          onChanged: _toggleGridMode,
                         ),
                       ],
                     ),
@@ -357,6 +338,84 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Toggle compacto lista/cuadrícula: chip redondeado con los DOS iconos
+/// siempre visibles (sin cajas individuales). El modo activo se resalta con
+/// el color primario (lila) sobre un fondo sutil.
+class _ViewToggle extends StatelessWidget {
+  final bool gridMode;
+  final ValueChanged<bool> onChanged;
+
+  const _ViewToggle({required this.gridMode, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.35,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _seg(
+            context: context,
+            icon: Icons.view_list_outlined,
+            tooltip: 'Vista de lista',
+            active: !gridMode,
+            onTap: () => onChanged(false),
+          ),
+          _seg(
+            context: context,
+            icon: Icons.grid_view_rounded,
+            tooltip: 'Vista de cuadrícula',
+            active: gridMode,
+            onTap: () => onChanged(true),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _seg({
+    required BuildContext context,
+    required IconData icon,
+    required String tooltip,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return Material(
+      color: active
+          ? theme.colorScheme.primary.withValues(alpha: 0.25)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Tooltip(
+          message: tooltip,
+          waitDuration: const Duration(milliseconds: 400),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Icon(
+              icon,
+              size: 17,
+              color: active
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -74,21 +74,24 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
             const SizedBox(width: 8),
           ],
           if (widget.title != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                widget.title!,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+            // Ancho acotado + ellipsis: un título largo (p. ej. el nombre de
+            // una playlist) no debe empujar los botones de ventana.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  widget.title!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),
           // Área de arrastre ocupa el espacio restante
-          Expanded(
-            child: DragToMoveArea(
-              child: SizedBox.expand(),
-            ),
-          ),
+          Expanded(child: DragToMoveArea(child: SizedBox.expand())),
           // Controles de ventana
           _WindowButton(
             icon: Icons.remove,
