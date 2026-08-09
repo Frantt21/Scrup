@@ -17,7 +17,7 @@ import '../../services/player_service.dart';
 import '../playback.dart';
 import '../theme_controller.dart';
 import '../widgets/cover_image.dart';
-import '../widgets/player_bar.dart' show kPlayerOverlayInset;
+import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/scrup_snackbar.dart';
 import '../widgets/track_tile.dart';
 
@@ -349,10 +349,10 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       data: theme,
       child: Container(
         // Margen flotante + sombra exterior (fuera del clip). Top 12 =
-        // alineado con el sidebar; bottom = kPlayerOverlayInset para que el
-        // contenedor termine POR ENCIMA del player (separado, sin pasar por
-        // detrás).
-        margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerOverlayInset),
+        // alineado con el sidebar; bottom = kPlayerClearance para que el
+        // contenedor termine POR ENCIMA del player con el MISMO hueco (12)
+        // que lo separa del sidebar y del borde derecho (espaciado uniforme).
+        margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           boxShadow: [

@@ -19,6 +19,14 @@ import '../theme_controller.dart';
 /// del player.
 const double kPlayerOverlayInset = 104;
 
+/// Margen inferior de los contenedores principales (detalle de playlist y
+/// configuración) para que terminen POR ENCIMA del player: el player ocupa
+/// ~84px desde el borde inferior del área (12 de padding inferior + 64 de
+/// barra + 8 de padding superior), y el contenedor debe quedar a 12px de él
+/// — el mismo hueco que separa al contenedor del sidebar y del borde
+/// derecho, para espaciados uniformes y simétricos (84 + 12 = 96).
+const double kPlayerClearance = 96;
+
 /// Player flotante tipo glass: tarjeta translúcida con blur que flota sobre
 /// el contenido. La barra de progreso (sin dot, con tiempos) queda entre la
 /// información de la canción (izquierda) y el control de volumen (derecha),
