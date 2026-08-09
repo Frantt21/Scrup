@@ -18,8 +18,10 @@ Plataformas objetivo: **Windows, Linux y macOS** (una sola base de código Flutt
 - **Búsqueda**: busca canciones en YouTube y las reproduce al instante.
 - **Playlists**: crea, elimina y añade canciones; reproduce toda la playlist
   como cola con auto-advance al terminar cada pista.
-- **Title bar personalizado** (Windows/Linux): área de arrastre y botones de
-  minimizar/maximizar/cerrar.
+- **Title bar personalizado** (solo Windows): área de arrastre y botones de
+  minimizar/maximizar/cerrar. En Linux y macOS se usa la title bar nativa de
+  la distro/OS (cada gestor de ventanas dibuja la suya), con una barra
+  superior ligera para volver/configuración.
 - **Caché local de audio**: evicción LRU por tamaño (2 GiB por defecto),
   descargas con progreso y deduplicación de descargas concurrentes.
 - **Reproducción progresiva**: al reproducir por primera vez, arranca el
@@ -99,6 +101,12 @@ Mientras se itera, el ciclo es solo código + recarga en la consola de
 | `r` | Hot reload | Cambios de UI/lógica que **no** tocan `main.dart` ni singletons |
 | `R` | Hot restart | Cambios en `main.dart` o en `PlayerService` (singleton) |
 | `q` | Quit | Cerrar la app y la sesión de debug |
+
+> 💡 **Title bar por plataforma**: Windows usa la title bar personalizada
+> (oculta la nativa vía `window_manager`). Linux y macOS conservan la title
+> bar nativa del sistema — ocultarla en Linux depende del gestor de ventanas
+> (Mutter, KWin, XFWM…) y es poco fiable, así que ahí solo se dibuja una
+> barra superior con back + configuración.
 
 > ⚠️ **`media_kit` + hot restart**: cada `R` crea un `Player` nativo (libmpv)
 > nuevo en el mismo proceso. En Windows esto puede crashear la app. Si al

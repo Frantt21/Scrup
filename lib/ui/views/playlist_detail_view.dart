@@ -344,10 +344,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         : baseTheme;
     final playlist = _playlist ?? widget.playlist;
     final count = _tracks.length;
-    final ambient = _ambientColor;
-    final base = theme.colorScheme.surfaceContainerHighest.withValues(
-      alpha: 0.55,
-    );
 
     return Theme(
       data: theme,
@@ -372,11 +368,17 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                // Translúcido + tinte del color de la portada
+                // Cristal limpio: dos tonos oscuros translúcidos, sin el
+                // tinte del color de la portada.
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [ambient?.withValues(alpha: 0.20) ?? base, base],
+                  colors: [
+                    theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.55,
+                    ),
+                    theme.colorScheme.surfaceContainer.withValues(alpha: 0.55),
+                  ],
                 ),
               ),
               child: Material(
@@ -384,114 +386,94 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Hero de presentación
-                    Container(
-                      decoration: BoxDecoration(
-                        // Ambiente: degradado del color de la portada que se
-                        // desvanece hacia abajo.
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            ambient?.withValues(alpha: 0.30) ??
-                                Colors.transparent,
-                            Colors.transparent,
-                          ],
-                          stops: const [0.0, 1.0],
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 24, 20),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            // Portada grande (hover muestra acciones de
-                            // edición)
-                            _heroCover(theme, playlist.coverUrl),
-                            const SizedBox(width: 24),
-                            // Título + descripción + acciones
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    playlist.name,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.displaySmall
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w800,
-                                          height: 1.05,
-                                        ),
+                    // Hero de presentación (cristal limpio, sin ambiente de
+                    // color de la portada)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 24, 20),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          // Portada grande (hover muestra acciones de
+                          // edición)
+                          _heroCover(theme, playlist.coverUrl),
+                          const SizedBox(width: 24),
+                          // Título + descripción + acciones
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  playlist.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.displaySmall?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.05,
                                   ),
-                                  if (playlist.description != null) ...[
-                                    const SizedBox(height: 8),
+                                ),
+                                if (playlist.description != null) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    playlist.description!,
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.9),
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 16),
+                                // Reproducir + shuffle + conteo/duración
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 8,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    FilledButton.icon(
+                                      onPressed: count == 0 ? null : _playAll,
+                                      icon: const Icon(
+                                        Icons.play_arrow_rounded,
+                                      ),
+                                      label: Text(l10n.play),
+                                    ),
+                                    ValueListenableBuilder<bool>(
+                                      valueListenable: context
+                                          .read<PlayerService>()
+                                          .shuffle,
+                                      builder: (context, shuffleOn, _) {
+                                        return IconButton(
+                                          icon: Icon(
+                                            Icons.shuffle,
+                                            color: shuffleOn
+                                                ? theme.colorScheme.primary
+                                                : theme
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                          ),
+                                          tooltip: l10n.playShuffled,
+                                          onPressed: count == 0
+                                              ? null
+                                              : _playShuffled,
+                                        );
+                                      },
+                                    ),
                                     Text(
-                                      playlist.description!,
-                                      maxLines: 4,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodyMedium
+                                      _countAndDuration,
+                                      style: theme.textTheme.bodySmall
                                           ?.copyWith(
                                             color: theme
                                                 .colorScheme
-                                                .onSurfaceVariant
-                                                .withValues(alpha: 0.9),
+                                                .onSurfaceVariant,
                                           ),
                                     ),
                                   ],
-                                  const SizedBox(height: 16),
-                                  // Reproducir + shuffle + conteo/duración
-                                  Wrap(
-                                    spacing: 10,
-                                    runSpacing: 8,
-                                    crossAxisAlignment:
-                                        WrapCrossAlignment.center,
-                                    children: [
-                                      FilledButton.icon(
-                                        onPressed: count == 0 ? null : _playAll,
-                                        icon: const Icon(
-                                          Icons.play_arrow_rounded,
-                                        ),
-                                        label: Text(l10n.play),
-                                      ),
-                                      ValueListenableBuilder<bool>(
-                                        valueListenable: context
-                                            .read<PlayerService>()
-                                            .shuffle,
-                                        builder: (context, shuffleOn, _) {
-                                          return IconButton(
-                                            icon: Icon(
-                                              Icons.shuffle,
-                                              color: shuffleOn
-                                                  ? theme.colorScheme.primary
-                                                  : theme
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                            ),
-                                            tooltip: l10n.playShuffled,
-                                            onPressed: count == 0
-                                                ? null
-                                                : _playShuffled,
-                                          );
-                                        },
-                                      ),
-                                      Text(
-                                        _countAndDuration,
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: theme
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                     Expanded(

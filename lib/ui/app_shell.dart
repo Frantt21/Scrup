@@ -114,8 +114,9 @@ class _AppShellState extends State<AppShell> {
     final openPlaylist = _openPlaylist;
     // Barra superior: con una playlist o la configuración abiertas muestra el
     // botón de volver y su nombre; el engranaje de configuración vive a la
-    // derecha. Compartido entre la CustomTitleBar (Windows/Linux) y la barra
-    // simple de macOS (donde la title bar nativa conserva los traffic lights).
+    // derecha. Compartido entre la CustomTitleBar (solo Windows, donde
+    // sustituye a la nativa) y la barra simple de Linux/macOS (donde la
+    // title bar nativa de la distro/OS sigue visible con sus controles).
     final barTitle = _showSettings
         ? l10n.settings
         : (openPlaylist?.name ?? 'Scrup');
@@ -146,16 +147,18 @@ class _AppShellState extends State<AppShell> {
     return Scaffold(
       body: Column(
         children: [
-          if (!Platform.isMacOS)
+          if (Platform.isWindows)
             CustomTitleBar(
               title: barTitle,
               leading: barLeading,
               trailing: barTrailing,
             )
           else
-            // macOS: barra simple (sin área de arrastre ni botones de ventana;
-            // los traffic lights nativos siguen en la title bar del sistema).
-            _MacTopBar(
+            // Linux/macOS: barra simple (sin área de arrastre ni botones de
+            // ventana; la title bar nativa sigue con sus controles). En Linux
+            // esto evita depender del gestor de ventanas (Mutter, KWin,
+            // XFWM…) para ocultar decoraciones.
+            _SimpleTopBar(
               title: barTitle,
               leading: barLeading,
               trailing: barTrailing,
@@ -226,16 +229,16 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-/// Barra superior para macOS: la title bar nativa se conserva (con sus
-/// traffic lights), así que aquí solo se replican las acciones de la
-/// CustomTitleBar (back + título + engranaje de configuración), sin área de
-/// arrastre ni botones de ventana.
-class _MacTopBar extends StatelessWidget {
+/// Barra superior para Linux y macOS: la title bar nativa de la distro/OS se
+/// conserva (con sus controles de ventana), así que aquí solo se replican las
+/// acciones de la CustomTitleBar (back + título + engranaje de configuración),
+/// sin área de arrastre ni botones de ventana.
+class _SimpleTopBar extends StatelessWidget {
   final String title;
   final Widget? leading;
   final Widget? trailing;
 
-  const _MacTopBar({required this.title, this.leading, this.trailing});
+  const _SimpleTopBar({required this.title, this.leading, this.trailing});
 
   @override
   Widget build(BuildContext context) {

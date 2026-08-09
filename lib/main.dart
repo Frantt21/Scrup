@@ -45,23 +45,36 @@ Future<void> main() async {
   }
 
   // Ventana: abre SIEMPRE maximizada y, en modo ventana, el mínimo es
-  // 1220x700 y el tamaño por defecto 1280x800. En Windows/Linux se oculta la
-  // title bar nativa para usar la personalizada; en macOS se conserva la
-  // nativa (con los traffic lights), así que solo se aplican tamaño/estado.
+  // 1220x700 y el tamaño por defecto 1280x800. La title bar personalizada
+  // (ocultando la nativa) solo se usa en Windows; en Linux y macOS se deja la
+  // nativa de la distro/OS (cada gestor de ventanas de Linux — Mutter/KWin/
+  // XFWM y otros — dibuja la suya, y ocultarla es poco fiable y propenso a
+  // fugas de listeners en algunos WMs).
   await windowManager.ensureInitialized();
   final windowOptions = WindowOptions(
     size: const Size(1280, 800),
     minimumSize: const Size(1220, 700),
     center: true,
     title: 'Scrup',
-    titleBarStyle: Platform.isMacOS
-        ? TitleBarStyle.normal
-        : TitleBarStyle.hidden,
+    // Ocultar la nativa solo en Windows (donde la personalizada la sustituye
+    // de forma fiable). En Linux/macOS, `normal`.
+    titleBarStyle: Platform.isWindows
+        ? TitleBarStyle.hidden
+        : TitleBarStyle.normal,
   );
   windowManager.waitUntilReadyToShow(windowOptions, () async {
-    // Maximizar ANTES de mostrar: la ventana se crea oculta y así se ve
-    // directamente maximizada, sin parpadeo a tamaño normal.
-    await windowManager.maximize();
+    // Maximizar ANTES de mostrar (la ventana se crea oculta): se ve
+    // directamente maximizada sin parpadeo. En Windows es determinista y
+    // debe cumplirse siempre; en Linux/macOS es best-effort porque algunos
+    // gestores de Linux/Wayland ignoran el maximize antes de mapear la
+    // ventana, y nunca debe impedir el arranque.
+    if (Platform.isWindows) {
+      await windowManager.maximize();
+    } else {
+      try {
+        await windowManager.maximize();
+      } catch (_) {}
+    }
     await windowManager.show();
     await windowManager.focus();
   });

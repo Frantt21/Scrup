@@ -11,7 +11,6 @@ import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/settings_store.dart';
-import '../theme_controller.dart';
 import 'cover_image.dart';
 import 'scrup_snackbar.dart';
 
@@ -192,10 +191,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final themeController = context.watch<ThemeController>();
-    final base = theme.colorScheme.surfaceContainerHighest.withValues(
-      alpha: 0.55,
-    );
 
     return Container(
       width: kSidebarWidth,
@@ -222,13 +217,16 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              // Translúcido + tinte sutil del artwork, como el player
+              // Cristal limpio: dos tonos oscuros translúcidos, sin el tinte
+              // del artwork (UI más neutro y limpio).
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  themeController.accentColor?.withValues(alpha: 0.20) ?? base,
-                  base,
+                  theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.55,
+                  ),
+                  theme.colorScheme.surfaceContainer.withValues(alpha: 0.55),
                 ],
               ),
             ),
