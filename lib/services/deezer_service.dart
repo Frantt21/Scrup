@@ -13,7 +13,7 @@ import '../core/track.dart';
 /// la app se queda con los metadatos originales de YouTube.
 class DeezerService {
   DeezerService({http.Client? client, this.userAgent = _defaultUserAgent})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   static const _searchUrl = 'https://api.deezer.com/search';
   static const _defaultUserAgent =
@@ -48,16 +48,16 @@ class DeezerService {
   }
 
   Future<Track?> _searchAndPick(Track track) async {
-    final query = [track.artist, track.title]
-        .where((s) => s.trim().isNotEmpty)
-        .join(' ');
+    final query = [
+      track.artist,
+      track.title,
+    ].where((s) => s.trim().isNotEmpty).join(' ');
     if (query.trim().isEmpty) return null;
 
     try {
-      final uri = Uri.parse(_searchUrl).replace(queryParameters: {
-        'q': query,
-        'limit': '5',
-      });
+      final uri = Uri.parse(
+        _searchUrl,
+      ).replace(queryParameters: {'q': query, 'limit': '5'});
       final resp = await _client
           .get(uri, headers: {'User-Agent': userAgent})
           .timeout(const Duration(seconds: 8));
@@ -109,7 +109,7 @@ class DeezerService {
       album: album as String?,
       thumbnailUrl: md5 != null && md5.isNotEmpty
           ? 'https://e-cdns-images.dzcdn.net/images/cover/$md5/'
-              '500x500-000000-80-0-0.jpg'
+                '500x500-000000-80-0-0.jpg'
           : null,
     );
   }
@@ -144,12 +144,35 @@ class DeezerService {
   /// Normaliza para comparar: minúsculas, sin diacríticos, sin puntuación,
   /// sin espacios extra. ("Música" → "musica", "Café" → "cafe".)
   static const Map<String, String> _diacritics = {
-    'á': 'a', 'à': 'a', 'â': 'a', 'ä': 'a', 'ã': 'a', 'å': 'a',
-    'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
-    'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
-    'ó': 'o', 'ò': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o',
-    'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
-    'ñ': 'n', 'ç': 'c', 'ø': 'o', 'æ': 'ae', 'œ': 'oe', 'ß': 'ss',
+    'á': 'a',
+    'à': 'a',
+    'â': 'a',
+    'ä': 'a',
+    'ã': 'a',
+    'å': 'a',
+    'é': 'e',
+    'è': 'e',
+    'ê': 'e',
+    'ë': 'e',
+    'í': 'i',
+    'ì': 'i',
+    'î': 'i',
+    'ï': 'i',
+    'ó': 'o',
+    'ò': 'o',
+    'ô': 'o',
+    'ö': 'o',
+    'õ': 'o',
+    'ú': 'u',
+    'ù': 'u',
+    'û': 'u',
+    'ü': 'u',
+    'ñ': 'n',
+    'ç': 'c',
+    'ø': 'o',
+    'æ': 'ae',
+    'œ': 'oe',
+    'ß': 'ss',
   };
 
   static String _norm(String s) {

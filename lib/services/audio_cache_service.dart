@@ -18,6 +18,20 @@ class StreamingSource {
   const StreamingSource(this.path, {this.fromCache = false});
 }
 
+/// Resumen del contenido actual del caché (para la pantalla de
+/// configuración: tamaño usado y nº de archivos).
+class CacheStats {
+  const CacheStats({required this.fileCount, required this.bytes});
+
+  /// Número de archivos cacheados.
+  final int fileCount;
+
+  /// Tamaño total en bytes.
+  final int bytes;
+
+  bool get isEmpty => fileCount == 0 && bytes == 0;
+}
+
 /// Caché local de audio descargado con yt-dlp.
 ///
 /// Primera reproducción: descarga la pista completa al disco y la reproduce
@@ -255,5 +269,25 @@ class AudioCacheService {
     await for (final e in dir.list()) {
       if (e is File) await e.delete();
     }
+  }
+
+  /// Resumen del caché: número de archivos y tamaño total en bytes.
+  Future<CacheStats> stats() async {
+    final dir = await cacheDir();
+    var count = 0;
+    var bytes = 0;
+    if (await dir.exists()) {
+      await for (final e in dir.list()) {
+        if (e is File) {
+          count++;
+          try {
+            bytes += e.statSync().size;
+          } catch (_) {
+            // Archivo desaparecido durante el conteo: se ignora.
+          }
+        }
+      }
+    }
+    return CacheStats(fileCount: count, bytes: bytes);
   }
 }

@@ -4,10 +4,7 @@ import 'package:scrup/core/title_cleaner.dart';
 void main() {
   group('TitleCleaner.clean', () {
     test('quita (Official Video) del final', () {
-      expect(
-        TitleCleaner.clean('Mi Canción (Official Video)'),
-        'Mi Canción',
-      );
+      expect(TitleCleaner.clean('Mi Canción (Official Video)'), 'Mi Canción');
     });
 
     test('quita [Official Audio] en medio', () {
@@ -18,17 +15,11 @@ void main() {
     });
 
     test('quita | Lyrics como sufijo', () {
-      expect(
-        TitleCleaner.clean('Mi Canción | Lyrics'),
-        'Mi Canción',
-      );
+      expect(TitleCleaner.clean('Mi Canción | Lyrics'), 'Mi Canción');
     });
 
     test('quita - Video Oficial como sufijo', () {
-      expect(
-        TitleCleaner.clean('Mi Canción - Video Oficial'),
-        'Mi Canción',
-      );
+      expect(TitleCleaner.clean('Mi Canción - Video Oficial'), 'Mi Canción');
     });
 
     test('quita múltiples tags', () {
@@ -39,10 +30,7 @@ void main() {
     });
 
     test('quita (Letra)', () {
-      expect(
-        TitleCleaner.clean('Mi Canción (Letra)'),
-        'Mi Canción',
-      );
+      expect(TitleCleaner.clean('Mi Canción (Letra)'), 'Mi Canción');
     });
 
     test('conserva el nombre real y los feats', () {
@@ -60,10 +48,7 @@ void main() {
     });
 
     test('limpia espacios múltiples sobrantes', () {
-      expect(
-        TitleCleaner.clean('Canción   (Audio)   2024'),
-        'Canción 2024',
-      );
+      expect(TitleCleaner.clean('Canción   (Audio)   2024'), 'Canción 2024');
     });
   });
 }

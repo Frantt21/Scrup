@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/database.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
 import 'views/home_view.dart';
 import 'views/playlist_detail_view.dart';
 import 'views/search_view.dart';
+import 'views/settings_view.dart';
 import 'widgets/custom_title_bar.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/playlists_sidebar.dart';
@@ -32,6 +34,15 @@ class _AppShellState extends State<AppShell> {
   /// sin abrir rutas).
   Playlist? _openPlaylist;
 
+  /// `true` mientras la pantalla de configuración esté abierta.
+  bool _showSettings = false;
+
+  /// Veces que se ha abierto la configuración: se usa como key para recrear
+  /// la vista cada vez y que las estadísticas del caché se recalculen al
+  /// abrir (el IndexedStack mantiene vivos a todos los hijos, así que el
+  /// initState solo corre al arrancar si no se fuerza un State nuevo).
+  int _settingsOpenCount = 0;
+
   /// Consulta de búsqueda lanzada desde el inicio: el HomeView la escribe y
   /// la SearchView la ejecuta al cambiar de vista.
   final ValueNotifier<String?> _searchRequest = ValueNotifier<String?>(null);
@@ -42,9 +53,10 @@ class _AppShellState extends State<AppShell> {
     // Errores de reproducción globales (URL expirada, 403, etc.)
     _errorSub = context.read<PlayerService>().errors.listen((message) {
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
       showScrupSnackBar(
         ScaffoldMessenger.of(context),
-        'Error de reproducción: $message',
+        l10n.playbackErrorWithDetails(message),
       );
     });
   }
@@ -69,7 +81,24 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _selectPlaylist(Playlist? playlist) {
-    setState(() => _openPlaylist = playlist);
+    setState(() {
+      _openPlaylist = playlist;
+      // Abrir una playlist cierra la configuración (y viceversa): solo hay
+      // un contenido "abierto" a la vez además de inicio/búsqueda.
+      _showSettings = false;
+    });
+  }
+
+  void _openSettings() {
+    setState(() {
+      _showSettings = true;
+      _openPlaylist = null;
+      _settingsOpenCount++;
+    });
+  }
+
+  void _closeSettings() {
+    setState(() => _showSettings = false);
   }
 
   /// Actualiza la playlist abierta tras una edición (p. ej. renombrada) para
@@ -81,18 +110,22 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final openPlaylist = _openPlaylist;
 
     return Scaffold(
       body: Column(
         children: [
           // Title bar personalizado (solo en desktop; en macOS se deja el
-          // nativo). Con una playlist abierta muestra el botón de volver y su
-          // nombre, ahorrando espacio en el detalle.
+          // nativo). Con una playlist o la configuración abiertas muestra el
+          // botón de volver y su nombre; el engranaje de configuración vive
+          // a la derecha (antes de los botones de ventana).
           if (!Platform.isMacOS)
             CustomTitleBar(
-              title: openPlaylist?.name ?? 'Scrup',
-              leading: openPlaylist != null
+              title: _showSettings
+                  ? l10n.settings
+                  : (openPlaylist?.name ?? 'Scrup'),
+              leading: _showSettings || openPlaylist != null
                   ? IconButton(
                       icon: const Icon(Icons.arrow_back),
                       visualDensity: VisualDensity.compact,
@@ -101,10 +134,30 @@ class _AppShellState extends State<AppShell> {
                         height: 40,
                       ),
                       padding: EdgeInsets.zero,
-                      tooltip: 'Volver a playlists',
-                      onPressed: () => _selectPlaylist(null),
+                      tooltip: _showSettings
+                          ? l10n.backToHome
+                          : l10n.backToPlaylists,
+                      onPressed: _showSettings
+                          ? _closeSettings
+                          : () => _selectPlaylist(null),
                     )
                   : null,
+              trailing: IconButton(
+                icon: Icon(
+                  Icons.settings_outlined,
+                  color: _showSettings
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                ),
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints.tightFor(
+                  width: 40,
+                  height: 40,
+                ),
+                padding: EdgeInsets.zero,
+                tooltip: l10n.settings,
+                onPressed: _showSettings ? _closeSettings : _openSettings,
+              ),
             ),
           Expanded(
             // El sidebar ocupa su propio espacio; el player flota SOLO sobre
@@ -124,7 +177,9 @@ class _AppShellState extends State<AppShell> {
                       // detalle de playlist vive en el IndexedStack para
                       // preservar el estado de Home/Buscar al volver.
                       IndexedStack(
-                        index: openPlaylist != null ? 2 : _selectedIndex,
+                        index: openPlaylist != null
+                            ? 2
+                            : (_showSettings ? 3 : _selectedIndex),
                         children: [
                           HomeView(onSearch: _submitSearch),
                           SearchView(
@@ -145,6 +200,7 @@ class _AppShellState extends State<AppShell> {
                             )
                           else
                             const SizedBox.shrink(),
+                          SettingsView(key: ValueKey(_settingsOpenCount)),
                         ],
                       ),
                       // Player flotante tipo glass. El padding exterior es el

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../data/database.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
 import '../widgets/player_bar.dart' show kPlayerOverlayInset;
@@ -63,6 +64,7 @@ class _HomeViewState extends State<HomeView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -82,7 +84,7 @@ class _HomeViewState extends State<HomeView> {
                   onSubmitted: _submitSearch,
                   textInputAction: TextInputAction.search,
                   decoration: InputDecoration(
-                    hintText: 'Buscar canciones en YouTube…',
+                    hintText: l10n.searchHint,
                     prefixIcon: const Icon(Icons.search),
                     filled: true,
                     border: OutlineInputBorder(
@@ -108,7 +110,7 @@ class _HomeViewState extends State<HomeView> {
                   child: _recent.isEmpty
                       ? _EmptyHint(theme: theme)
                       : Text(
-                          'Recientes',
+                          l10n.recentTitle,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -166,6 +168,7 @@ class _RecentCardState extends State<_RecentCard> {
 
   /// Menú contextual (clic derecho) sobre la tarjeta: añadir a playlist.
   Future<void> _showMenu(Offset position) async {
+    final l10n = AppLocalizations.of(context);
     final action = await showMenu<String>(
       context: context,
       // Anclaje correcto: recta de tamaño cero en la posición del cursor.
@@ -175,14 +178,14 @@ class _RecentCardState extends State<_RecentCard> {
         position.dx,
         position.dy,
       ),
-      items: const [
+      items: [
         PopupMenuItem(
           value: 'add',
           child: Row(
             children: [
               Icon(Icons.playlist_add),
-              SizedBox(width: 10),
-              Text('Añadir a playlist'),
+              const SizedBox(width: 10),
+              Text(l10n.addToPlaylist),
             ],
           ),
         ),
@@ -347,14 +350,14 @@ class _EmptyHint extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Aún no has reproducido nada',
+          AppLocalizations.of(context).recentEmptyTitle,
           style: theme.textTheme.bodyLarge?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 2),
         Text(
-          'Usa la búsqueda de arriba para empezar',
+          AppLocalizations.of(context).recentEmptyHint,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
           ),

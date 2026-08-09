@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../../data/database.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/settings_store.dart';
 import '../theme_controller.dart';
@@ -98,6 +99,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
 
   Future<void> _createPlaylist() async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context);
     final db = context.read<AppDatabase>();
     final data =
         await showDialog<
@@ -111,7 +113,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
       id = await db.createPlaylist(name);
     } catch (_) {
       if (!mounted) return;
-      showScrupSnackBar(messenger, 'No se pudo crear la playlist');
+      showScrupSnackBar(messenger, l10n.cantCreatePlaylist);
       return;
     }
     // Descripción y portada: best-effort (si la portada falla, la playlist
@@ -131,7 +133,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
         // Silencioso: la playlist se crea igual sin portada.
       }
     }
-    showScrupSnackBar(messenger, 'Playlist "$name" creada');
+    showScrupSnackBar(messenger, l10n.playlistCreated(name));
     // Abrir la recién creada directamente.
     if (!mounted) return;
     final playlist = await db.getPlaylist(id);
@@ -142,22 +144,23 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
 
   Future<void> _deletePlaylist(Playlist playlist) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context);
     final db = context.read<AppDatabase>();
     // Favoritos es una playlist especial: nunca se borra.
     if (playlist.isFavorites) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Eliminar playlist'),
-        content: Text('¿Eliminar "${playlist.name}"?'),
+        title: Text(l10n.deletePlaylistTitle),
+        content: Text(l10n.confirmDeletePlaylist(playlist.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Eliminar'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -182,12 +185,13 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
       widget.onSelectPlaylist(null);
     }
     if (!mounted) return;
-    showScrupSnackBar(messenger, 'Playlist eliminada');
+    showScrupSnackBar(messenger, l10n.playlistDeleted);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final themeController = context.watch<ThemeController>();
     final base = theme.colorScheme.surfaceContainerHighest.withValues(
       alpha: 0.55,
@@ -241,7 +245,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
                       children: [
                         Expanded(
                           child: Text(
-                            'Playlists',
+                            l10n.playlistsTitle,
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
@@ -334,14 +338,14 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Aún no tienes playlists',
+            AppLocalizations.of(context).noPlaylists,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 2),
           Text(
-            'Crea una desde aquí',
+            AppLocalizations.of(context).createOneHere,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
             ),
@@ -379,14 +383,14 @@ class _ViewToggle extends StatelessWidget {
           _seg(
             context: context,
             icon: Icons.view_list_outlined,
-            tooltip: 'Vista de lista',
+            tooltip: AppLocalizations.of(context).listViewTooltip,
             active: !gridMode,
             onTap: () => onChanged(false),
           ),
           _seg(
             context: context,
             icon: Icons.grid_view_rounded,
-            tooltip: 'Vista de cuadrícula',
+            tooltip: AppLocalizations.of(context).gridViewTooltip,
             active: gridMode,
             onTap: () => onChanged(true),
           ),
@@ -500,8 +504,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
                         ),
                       ),
                       Text(
-                        '${widget.count} '
-                        '${widget.count == 1 ? 'canción' : 'canciones'}',
+                        AppLocalizations.of(context).songCount(widget.count),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -520,7 +523,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
                         ? IconButton(
                             icon: const Icon(Icons.delete_outline, size: 18),
                             visualDensity: VisualDensity.compact,
-                            tooltip: 'Eliminar',
+                            tooltip: AppLocalizations.of(context).delete,
                             color: theme.colorScheme.onSurfaceVariant,
                             onPressed: widget.onDelete,
                           )
@@ -743,8 +746,7 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
               ),
             ),
             Text(
-              '${widget.count} '
-              '${widget.count == 1 ? 'canción' : 'canciones'}',
+              AppLocalizations.of(context).songCount(widget.count),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(
@@ -798,7 +800,7 @@ class _CreatePlaylistTile extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Nueva playlist',
+                  AppLocalizations.of(context).newPlaylist,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleSmall?.copyWith(
@@ -853,7 +855,7 @@ class _CreateGridCell extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Nueva playlist',
+            AppLocalizations.of(context).newPlaylist,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
@@ -862,7 +864,7 @@ class _CreateGridCell extends StatelessWidget {
             ),
           ),
           Text(
-            'Crea una nueva',
+            AppLocalizations.of(context).newPlaylistHint,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
@@ -898,8 +900,8 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
   }
 
   Future<void> _pickImage() async {
-    const images = XTypeGroup(
-      label: 'Imágenes',
+    final images = XTypeGroup(
+      label: AppLocalizations.of(context).images,
       extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'],
     );
     final file = await openFile(acceptedTypeGroups: [images]);
@@ -920,8 +922,9 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Nueva playlist'),
+      title: Text(l10n.newPlaylist),
       content: SizedBox(
         width: 400,
         child: Column(
@@ -931,9 +934,9 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
             TextField(
               controller: _nameController,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Nombre',
-                hintText: 'Mi playlist',
+              decoration: InputDecoration(
+                labelText: l10n.playlistName,
+                hintText: l10n.playlistNameHint,
               ),
               onSubmitted: (_) => _submit(),
             ),
@@ -942,9 +945,9 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
               controller: _descController,
               maxLines: 3,
               maxLength: 300,
-              decoration: const InputDecoration(
-                labelText: 'Descripción (opcional)',
-                hintText: '¿De qué trata esta playlist?',
+              decoration: InputDecoration(
+                labelText: l10n.descriptionOptional,
+                hintText: l10n.descriptionHint,
               ),
             ),
             const SizedBox(height: 4),
@@ -968,9 +971,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    _imagePath == null
-                        ? 'Sin portada'
-                        : p.basename(_imagePath!),
+                    _imagePath == null ? l10n.noCover : p.basename(_imagePath!),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -986,12 +987,14 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                         : Icons.swap_horiz,
                     size: 18,
                   ),
-                  label: Text(_imagePath == null ? 'Elegir imagen' : 'Cambiar'),
+                  label: Text(
+                    _imagePath == null ? l10n.chooseImage : l10n.changeImage,
+                  ),
                 ),
                 if (_imagePath != null)
                   IconButton(
                     icon: const Icon(Icons.close, size: 18),
-                    tooltip: 'Quitar imagen',
+                    tooltip: l10n.removeImage,
                     onPressed: () => setState(() => _imagePath = null),
                   ),
               ],
@@ -1002,9 +1005,9 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          child: Text(l10n.cancel),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Crear')),
+        FilledButton(onPressed: _submit, child: Text(l10n.create)),
       ],
     );
   }

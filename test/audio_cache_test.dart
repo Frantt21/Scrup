@@ -212,4 +212,24 @@ void main() {
     await cache.clear();
     expect(await cache.cachedPath('abc123'), isNull);
   });
+
+  test('stats reporta el número de archivos y el tamaño total', () async {
+    expect((await cache.stats()).isEmpty, isTrue);
+
+    await cache.ensureStreaming('abc123');
+    ytdlp.finishPending();
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    final stats = await cache.stats();
+    expect(stats.fileCount, 1);
+    expect(stats.bytes, ytdlp.fileSize);
+    expect(stats.isEmpty, isFalse);
+
+    // Tras vaciar, el resumen vuelve a cero.
+    await cache.clear();
+    final after = await cache.stats();
+    expect(after.fileCount, 0);
+    expect(after.bytes, 0);
+    expect(after.isEmpty, isTrue);
+  });
 }

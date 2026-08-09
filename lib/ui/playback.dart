@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/track.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
 import 'widgets/scrup_snackbar.dart';
 
@@ -12,11 +13,12 @@ import 'widgets/scrup_snackbar.dart';
 /// Se usa desde cualquier vista (inicio, resultados, playlists).
 Future<void> playTrack(BuildContext context, Track track) async {
   final messenger = ScaffoldMessenger.of(context);
+  final l10n = AppLocalizations.of(context);
   final player = context.read<PlayerService>();
   try {
     await player.playTrack(track);
   } catch (e) {
-    showScrupSnackBar(messenger, 'No se pudo reproducir: $e');
+    showScrupSnackBar(messenger, l10n.cantPlay(e.toString()));
   }
 }
 

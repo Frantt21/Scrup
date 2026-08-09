@@ -9,10 +9,7 @@ import 'package:scrup/services/deezer_service.dart';
 /// Construye una respuesta de Deezer en memoria (bytes UTF-8 para que los
 /// acentos no se corrompan con el latin1 por defecto de http.Response).
 http.Response _deezerResponse(List<Map<String, dynamic>> data) {
-  return http.Response.bytes(
-    utf8.encode(jsonEncode({'data': data})),
-    200,
-  );
+  return http.Response.bytes(utf8.encode(jsonEncode({'data': data})), 200);
 }
 
 Map<String, dynamic> _dzTrack({
@@ -33,30 +30,35 @@ Map<String, dynamic> _dzTrack({
 
 void main() {
   group('DeezerService.enrich', () {
-    test('enriquece con título, artista, álbum y portada en alta resolución',
-        () async {
-      final client = MockClient((_) async => _deezerResponse([_dzTrack()]));
-      final service = DeezerService(client: client);
+    test(
+      'enriquece con título, artista, álbum y portada en alta resolución',
+      () async {
+        final client = MockClient((_) async => _deezerResponse([_dzTrack()]));
+        final service = DeezerService(client: client);
 
-      final original = Track(
-        id: 'yt1',
-        title: 'One More Time (Official Video)',
-        artist: 'Daft Punk',
-      );
-      final enriched = service.apply(original, await service.enrich(original));
+        final original = Track(
+          id: 'yt1',
+          title: 'One More Time (Official Video)',
+          artist: 'Daft Punk',
+        );
+        final enriched = service.apply(
+          original,
+          await service.enrich(original),
+        );
 
-      expect(enriched, isNotNull);
-      expect(enriched!.id, 'yt1'); // se conserva el id de YouTube
-      expect(enriched.title, 'One More Time');
-      expect(enriched.artist, 'Daft Punk');
-      expect(enriched.album, 'Discovery');
-      expect(
-        enriched.thumbnailUrl,
-        'https://e-cdns-images.dzcdn.net/images/cover/abc123/'
-        '500x500-000000-80-0-0.jpg',
-      );
-      expect(enriched.duration, original.duration);
-    });
+        expect(enriched, isNotNull);
+        expect(enriched!.id, 'yt1'); // se conserva el id de YouTube
+        expect(enriched.title, 'One More Time');
+        expect(enriched.artist, 'Daft Punk');
+        expect(enriched.album, 'Discovery');
+        expect(
+          enriched.thumbnailUrl,
+          'https://e-cdns-images.dzcdn.net/images/cover/abc123/'
+          '500x500-000000-80-0-0.jpg',
+        );
+        expect(enriched.duration, original.duration);
+      },
+    );
 
     test('elige el mejor match entre varios resultados', () async {
       final client = MockClient(
@@ -67,7 +69,11 @@ void main() {
       );
       final service = DeezerService(client: client);
 
-      final original = Track(id: 'yt2', title: 'One More Time', artist: 'Daft Punk');
+      final original = Track(
+        id: 'yt2',
+        title: 'One More Time',
+        artist: 'Daft Punk',
+      );
       final enriched = service.apply(original, await service.enrich(original));
 
       expect(enriched, isNotNull);
@@ -84,8 +90,11 @@ void main() {
       );
       final service = DeezerService(client: client);
 
-      final original =
-          Track(id: 'yt3', title: 'One More Time', artist: 'Daft Punk');
+      final original = Track(
+        id: 'yt3',
+        title: 'One More Time',
+        artist: 'Daft Punk',
+      );
       final result = await service.enrich(original);
 
       expect(result, isNull);
@@ -117,7 +126,11 @@ void main() {
       });
       final service = DeezerService(client: client);
 
-      final original = Track(id: 'yt5', title: 'One More Time', artist: 'Daft Punk');
+      final original = Track(
+        id: 'yt5',
+        title: 'One More Time',
+        artist: 'Daft Punk',
+      );
       final first = await service.enrich(original);
       final second = await service.enrich(original);
 
@@ -159,8 +172,7 @@ void main() {
       );
       final service = DeezerService(client: client);
 
-      final original =
-          Track(id: 'yt9', title: 'Musica', artist: 'Daft Punk');
+      final original = Track(id: 'yt9', title: 'Musica', artist: 'Daft Punk');
       final result = await service.enrich(original);
 
       expect(result, isNotNull);

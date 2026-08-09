@@ -8,29 +8,36 @@ import 'package:window_manager/window_manager.dart';
 
 import 'core/binaries.dart';
 import 'data/database.dart';
+import 'l10n/generated/app_localizations.dart';
 import 'services/audio_cache_service.dart';
 import 'services/deezer_service.dart';
 import 'services/player_service.dart';
 import 'services/settings_store.dart';
 import 'services/ytdlp_service.dart';
 import 'ui/app_shell.dart';
+import 'ui/locale_controller.dart';
 import 'ui/theme_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
 
-  // Ventana con title bar oculto (Windows/Linux) para usar el personalizado
+  // Ventana con title bar oculto (Windows/Linux) para usar el personalizado.
+  // Abre SIEMPRE maximizada; al restaurar (modo ventana) el mínimo es
+  // 1220x700 y el tamaño por defecto 1280x800.
   await windowManager.ensureInitialized();
   if (!Platform.isMacOS) {
     const windowOptions = WindowOptions(
-      size: Size(1120, 720),
-      minimumSize: Size(760, 520),
+      size: Size(1280, 800),
+      minimumSize: Size(1220, 700),
       center: true,
       title: 'Scrup',
       titleBarStyle: TitleBarStyle.hidden,
     );
     windowManager.waitUntilReadyToShow(windowOptions, () async {
+      // Maximizar ANTES de mostrar: la ventana se crea oculta y así se ve
+      // directamente maximizada, sin parpadeo a tamaño normal.
+      await windowManager.maximize();
       await windowManager.show();
       await windowManager.focus();
     });
@@ -45,7 +52,22 @@ Future<void> main() async {
     await database.ensureFavoritesPlaylist();
   } catch (_) {}
 
-  runApp(ScrupApp(database: database));
+  // Instancia única de preferencias: se comparte entre los providers y la
+  // carga del idioma inicial (restaurado entre sesiones).
+  final settings = SettingsStore();
+  var initialLocale = const Locale('es');
+  try {
+    final saved = await settings.loadLocale();
+    if (saved != null) initialLocale = Locale(saved);
+  } catch (_) {}
+
+  runApp(
+    ScrupApp(
+      database: database,
+      settings: settings,
+      initialLocale: initialLocale,
+    ),
+  );
 }
 
 /// Restaura la sesión anterior al arrancar: el volumen y la última pista
@@ -74,8 +96,17 @@ Future<void> _restoreSession(
 
 class ScrupApp extends StatelessWidget {
   final AppDatabase database;
+  final SettingsStore settings;
 
-  const ScrupApp({super.key, required this.database});
+  /// Idioma inicial: el guardado en la última sesión (o español).
+  final Locale initialLocale;
+
+  const ScrupApp({
+    super.key,
+    required this.database,
+    required this.settings,
+    required this.initialLocale,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +119,7 @@ class ScrupApp extends StatelessWidget {
               AudioCacheService(ytdlp: context.read<YtDlpService>()),
         ),
         Provider<DeezerService>(create: (_) => DeezerService()),
-        Provider<SettingsStore>(create: (_) => SettingsStore()),
+        Provider<SettingsStore>(create: (_) => settings),
         Provider<PlayerService>(
           // Inyecta la resolución de fuente (cache-first con yt-dlp), la
           // búsqueda de radio y el enriquecimiento de metadatos (Deezer).
@@ -154,16 +185,28 @@ class ScrupApp extends StatelessWidget {
         ChangeNotifierProvider<ThemeController>(
           create: (context) => ThemeController(context.read<PlayerService>()),
         ),
+        // Idioma de la interfaz: al cambiar, el MaterialApp se reconstruye
+        // con el nuevo locale (y se persiste entre sesiones).
+        ChangeNotifierProvider<LocaleController>(
+          create: (_) => LocaleController(initialLocale),
+        ),
       ],
       child: Consumer<ThemeController>(
-        builder: (context, themeController, _) => MaterialApp(
-          title: 'Scrup',
-          debugShowCheckedModeBanner: false,
-          // Transición suave cuando el color cambia de pista a pista
-          themeAnimationDuration: const Duration(milliseconds: 700),
-          themeAnimationCurve: Curves.easeInOut,
-          theme: _buildTheme(themeController.accentColor),
-          home: const AppShell(),
+        builder: (context, themeController, _) => Consumer<LocaleController>(
+          builder: (context, localeController, _) => MaterialApp(
+            title: 'Scrup',
+            debugShowCheckedModeBanner: false,
+            // i18n: delegados + idiomas soportados (es/en). El locale activo
+            // lo decide LocaleController (persistido entre sesiones).
+            locale: localeController.locale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            // Transición suave cuando el color cambia de pista a pista
+            themeAnimationDuration: const Duration(milliseconds: 700),
+            themeAnimationCurve: Curves.easeInOut,
+            theme: _buildTheme(themeController.accentColor),
+            home: const AppShell(),
+          ),
         ),
       ),
     );

@@ -7,6 +7,7 @@ class SettingsStore {
   static const _volumeKey = 'player.volume';
   static const _lastTrackKey = 'player.last_track_id';
   static const _sidebarGridKey = 'ui.sidebar_grid_mode';
+  static const _localeKey = 'app.locale';
 
   SharedPreferences? _prefs;
 
@@ -42,5 +43,17 @@ class SettingsStore {
   Future<String?> loadLastTrackId() async {
     final prefs = await _instance;
     return prefs.getString(_lastTrackKey);
+  }
+
+  /// Guarda el idioma de la interfaz (código BCP-47, p. ej. `es`, `en`).
+  Future<void> saveLocale(String languageCode) async {
+    final prefs = await _instance;
+    await prefs.setString(_localeKey, languageCode);
+  }
+
+  /// `null` si el usuario nunca cambió el idioma (por defecto: español).
+  Future<String?> loadLocale() async {
+    final prefs = await _instance;
+    return prefs.getString(_localeKey);
   }
 }

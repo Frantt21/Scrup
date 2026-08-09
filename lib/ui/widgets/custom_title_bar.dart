@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
-/// Barra de título personalizada: área de arrastre + botones de control
-/// (minimizar, maximizar/restaurar, cerrar).
+import '../../l10n/generated/app_localizations.dart';
+
+/// Barra de título personalizada: área de arrastre + acciones opcionales
+/// ([leading] a la izquierda, [trailing] antes de los controles de ventana)
+/// + botones de control (minimizar, maximizar/restaurar, cerrar).
 class CustomTitleBar extends StatefulWidget {
   final Widget? leading;
   final String? title;
 
-  const CustomTitleBar({super.key, this.leading, this.title});
+  /// Acción opcional alineada a la derecha (p. ej. el botón de configuración).
+  final Widget? trailing;
+
+  const CustomTitleBar({super.key, this.leading, this.title, this.trailing});
 
   @override
   State<CustomTitleBar> createState() => _CustomTitleBarState();
@@ -92,22 +98,26 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
             ),
           // Área de arrastre ocupa el espacio restante
           Expanded(child: DragToMoveArea(child: SizedBox.expand())),
+          // Acción opcional (p. ej. configuración) antes de los controles
+          if (widget.trailing != null) widget.trailing!,
           // Controles de ventana
           _WindowButton(
             icon: Icons.remove,
-            tooltip: 'Minimizar',
+            tooltip: AppLocalizations.of(context).minimize,
             onPressed: _minimize,
             hoverColor: onSurface.withValues(alpha: 0.08),
           ),
           _WindowButton(
             icon: _maximized ? Icons.filter_none : Icons.crop_square,
-            tooltip: _maximized ? 'Restaurar' : 'Maximizar',
+            tooltip: _maximized
+                ? AppLocalizations.of(context).restore
+                : AppLocalizations.of(context).maximize,
             onPressed: _toggleMaximize,
             hoverColor: onSurface.withValues(alpha: 0.08),
           ),
           _WindowButton(
             icon: Icons.close,
-            tooltip: 'Cerrar',
+            tooltip: AppLocalizations.of(context).close,
             onPressed: _close,
             hoverColor: const Color(0xFFE81123),
             isClose: true,

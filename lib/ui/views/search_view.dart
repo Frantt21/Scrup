@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../services/ytdlp_service.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
@@ -96,6 +97,7 @@ class _SearchViewState extends State<SearchView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,11 +111,11 @@ class _SearchViewState extends State<SearchView> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back),
-                    tooltip: 'Volver al inicio',
+                    tooltip: l10n.backToHome,
                     onPressed: widget.onBack,
                   ),
                   Text(
-                    'Buscar',
+                    l10n.searchTitle,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -126,7 +128,7 @@ class _SearchViewState extends State<SearchView> {
                 onSubmitted: _search,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
-                  hintText: 'Buscar canciones en YouTube…',
+                  hintText: l10n.searchHint,
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _searching
                       ? const Padding(
@@ -174,6 +176,7 @@ class _SearchViewState extends State<SearchView> {
   }
 
   Widget _buildBody(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     if (_error != null) {
       return Center(
         child: Padding(
@@ -206,7 +209,7 @@ class _SearchViewState extends State<SearchView> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Busca una canción para empezar a reproducirla',
+              l10n.searchStartHint,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -220,7 +223,7 @@ class _SearchViewState extends State<SearchView> {
     if (_results.isEmpty && !_searching) {
       return Center(
         child: Text(
-          'Sin resultados. Prueba otra búsqueda.',
+          l10n.searchNoResults,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),

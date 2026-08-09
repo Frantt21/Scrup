@@ -3,12 +3,14 @@ import 'package:provider/provider.dart';
 
 import '../core/track.dart';
 import '../data/database.dart';
+import '../l10n/generated/app_localizations.dart';
 import 'widgets/scrup_snackbar.dart';
 
 /// Muestra el selector de playlist y añade [track] a la elegida (o a una
 /// recién creada). Compartido entre el buscador, las recientes, etc.
 Future<void> showAddToPlaylistSheet(BuildContext context, Track track) async {
   final messenger = ScaffoldMessenger.of(context);
+  final l10n = AppLocalizations.of(context);
   final db = context.read<AppDatabase>();
   final playlists = await db.watchPlaylists().first;
   if (!context.mounted) return;
@@ -22,7 +24,7 @@ Future<void> showAddToPlaylistSheet(BuildContext context, Track track) async {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              'Añadir a playlist',
+              l10n.addToPlaylist,
               style: Theme.of(ctx).textTheme.titleMedium,
             ),
           ),
@@ -30,7 +32,7 @@ Future<void> showAddToPlaylistSheet(BuildContext context, Track track) async {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'No tienes playlists todavía. Crea una nueva.',
+                l10n.noPlaylistsYet,
                 style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                   color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                 ),
@@ -44,7 +46,7 @@ Future<void> showAddToPlaylistSheet(BuildContext context, Track track) async {
             ),
           ListTile(
             leading: const Icon(Icons.add),
-            title: const Text('Nueva playlist'),
+            title: Text(l10n.newPlaylist),
             onTap: () => _createAndSelect(ctx, db, track),
           ),
         ],
@@ -53,7 +55,7 @@ Future<void> showAddToPlaylistSheet(BuildContext context, Track track) async {
   );
   if (selected == null || !context.mounted) return;
   await db.addToPlaylist(selected, track);
-  showScrupSnackBar(messenger, 'Añadida a la playlist');
+  showScrupSnackBar(messenger, l10n.addedToPlaylist);
 }
 
 /// Crea una playlist y la selecciona en el bottom sheet actual.
@@ -71,24 +73,25 @@ Future<void> _createAndSelect(
 
 Future<String?> _promptCreatePlaylist(BuildContext context) {
   final controller = TextEditingController();
+  final l10n = AppLocalizations.of(context);
   return showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Nueva playlist'),
+      title: Text(l10n.newPlaylist),
       content: TextField(
         controller: controller,
         autofocus: true,
-        decoration: const InputDecoration(hintText: 'Nombre de la playlist'),
+        decoration: InputDecoration(hintText: l10n.playlistNamePrompt),
         onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancelar'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-          child: const Text('Crear'),
+          child: Text(l10n.create),
         ),
       ],
     ),

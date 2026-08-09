@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../services/player_service.dart';
 
 /// Fila de una pista (resultados, recientes, playlists).
@@ -37,6 +38,7 @@ class TrackTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final player = context.read<PlayerService>();
 
     return InkWell(
@@ -77,7 +79,7 @@ class TrackTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    track.artist.isEmpty ? 'Artista desconocido' : track.artist,
+                    track.artist.isEmpty ? l10n.unknownArtist : track.artist,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -105,7 +107,7 @@ class TrackTile extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
                 onPressed: onAddToPlaylist,
-                tooltip: 'Añadir a playlist',
+                tooltip: l10n.addToPlaylist,
               ),
             // Widget extra (quitar, etc.)
             ?trailing,
@@ -125,10 +127,12 @@ class TrackTile extends StatelessWidget {
                   );
                 }
                 return IconButton(
-                  icon: Icon(Icons.play_circle_outline,
-                      color: theme.colorScheme.primary),
+                  icon: Icon(
+                    Icons.play_circle_outline,
+                    color: theme.colorScheme.primary,
+                  ),
                   onPressed: onPlay,
-                  tooltip: 'Reproducir',
+                  tooltip: l10n.play,
                 );
               },
             ),
@@ -141,10 +145,7 @@ class TrackTile extends StatelessWidget {
   Widget _thumbnailFallback(ThemeData theme) {
     return Container(
       color: theme.colorScheme.surfaceContainerHighest,
-      child: Icon(
-        Icons.music_note,
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
+      child: Icon(Icons.music_note, color: theme.colorScheme.onSurfaceVariant),
     );
   }
 }

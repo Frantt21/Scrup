@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../data/database.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/player_service.dart';
 import '../playback.dart';
@@ -160,6 +161,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
 
   /// Menú contextual (clic derecho) sobre una canción del playlist.
   Future<void> _showTrackMenu(Track track, Offset position) async {
+    final l10n = AppLocalizations.of(context);
     final action = await showMenu<String>(
       context: context,
       // Anclaje correcto: la recta es de tamaño cero en la posición del
@@ -170,14 +172,14 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         position.dx,
         position.dy,
       ),
-      items: const [
+      items: [
         PopupMenuItem(
           value: 'play',
           child: Row(
             children: [
               Icon(Icons.play_arrow_rounded),
-              SizedBox(width: 10),
-              Text('Reproducir'),
+              const SizedBox(width: 10),
+              Text(l10n.play),
             ],
           ),
         ),
@@ -186,8 +188,8 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
           child: Row(
             children: [
               Icon(Icons.remove_circle_outline),
-              SizedBox(width: 10),
-              Text('Quitar de la playlist'),
+              const SizedBox(width: 10),
+              Text(l10n.removeFromPlaylist),
             ],
           ),
         ),
@@ -206,6 +208,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
 
   /// Modal para editar la playlist (nombre, descripción y portada).
   Future<void> _editPlaylist() async {
+    final l10n = AppLocalizations.of(context);
     final db = context.read<AppDatabase>();
     final playlist = _playlist ?? widget.playlist;
     final result =
@@ -260,34 +263,34 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       }
 
       if (!mounted) return;
-      showScrupSnackBar(messenger, 'Playlist actualizada');
+      showScrupSnackBar(messenger, l10n.playlistUpdated);
       final updated = await db.getPlaylist(playlist.id);
       if (mounted && updated != null) {
         widget.onUpdated?.call(updated);
       }
     } catch (_) {
       if (!mounted) return;
-      showScrupSnackBar(messenger, 'No se pudo guardar los cambios');
+      showScrupSnackBar(messenger, l10n.cantSaveChanges);
     }
   }
 
-  String _fmtDuration(Duration d) {
+  String _fmtDuration(Duration d, AppLocalizations l10n) {
     final m = d.inMinutes;
-    if (m < 1) return 'menos de 1 min';
-    if (m < 60) return '$m min';
+    if (m < 1) return l10n.lessThanOneMinute;
+    if (m < 60) return l10n.durationMinutes(m);
     final h = m ~/ 60;
     final rem = m % 60;
-    return rem == 0 ? '$h h' : '$h h $rem min';
+    return rem == 0 ? l10n.durationHours(h) : l10n.durationHoursMinutes(h, rem);
   }
 
   String get _countAndDuration {
+    final l10n = AppLocalizations.of(context);
     final count = _tracks.length;
     final total = _tracks.fold(
       Duration.zero,
       (acc, t) => acc + (t.duration ?? Duration.zero),
     );
-    return '$count ${count == 1 ? 'canción' : 'canciones'}'
-        ' · ${_fmtDuration(total)}';
+    return l10n.playlistMeta(l10n.songCount(count), _fmtDuration(total, l10n));
   }
 
   Widget _coverArt(ThemeData theme, String? url) {
@@ -332,6 +335,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   @override
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final playlistColor = _ambientColor;
     // Mientras se ve la playlist, botones y elementos usan el color de SU
     // portada (no el acento de la canción en reproducción).
@@ -449,7 +453,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                         icon: const Icon(
                                           Icons.play_arrow_rounded,
                                         ),
-                                        label: const Text('Reproducir'),
+                                        label: Text(l10n.play),
                                       ),
                                       ValueListenableBuilder<bool>(
                                         valueListenable: context
@@ -465,7 +469,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                                         .colorScheme
                                                         .onSurfaceVariant,
                                             ),
-                                            tooltip: 'Reproducir en aleatorio',
+                                            tooltip: l10n.playShuffled,
                                             onPressed: count == 0
                                                 ? null
                                                 : _playShuffled,
@@ -504,14 +508,14 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    'Playlist vacía',
+                                    l10n.emptyPlaylist,
                                     style: theme.textTheme.bodyLarge?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Añade canciones desde la búsqueda',
+                                    l10n.emptyPlaylistHint,
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant
                                           .withValues(alpha: 0.7),
@@ -586,11 +590,11 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                           IconButton(
                             icon: const Icon(Icons.edit_rounded, size: 26),
                             color: Colors.white,
-                            tooltip: 'Editar playlist',
+                            tooltip: AppLocalizations.of(context).editPlaylist,
                             onPressed: _editPlaylist,
                           ),
                           Text(
-                            'Editar',
+                            AppLocalizations.of(context).edit,
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: Colors.white,
                             ),
@@ -644,8 +648,8 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
   }
 
   Future<void> _pickImage() async {
-    const images = XTypeGroup(
-      label: 'Imágenes',
+    final images = XTypeGroup(
+      label: AppLocalizations.of(context).images,
       extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'],
     );
     final file = await openFile(acceptedTypeGroups: [images]);
@@ -668,7 +672,7 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Portada desde una canción',
+                AppLocalizations.of(ctx).coverFromTrack,
                 style: Theme.of(ctx).textTheme.titleMedium,
               ),
             ),
@@ -731,10 +735,11 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
   }
 
   String get _previewLabel {
+    final l10n = AppLocalizations.of(context);
     if (_imagePath != null) return p.basename(_imagePath!);
-    if (_trackCoverUrl != null) return 'Portada de una canción';
-    if (_removeCover) return 'Sin portada';
-    return widget.playlist.coverUrl != null ? 'Portada actual' : 'Sin portada';
+    if (_trackCoverUrl != null) return l10n.coverFromTrackLabel;
+    if (_removeCover) return l10n.noCover;
+    return widget.playlist.coverUrl != null ? l10n.currentCover : l10n.noCover;
   }
 
   void _submit() {
@@ -753,8 +758,9 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Editar playlist'),
+      title: Text(l10n.editPlaylist),
       content: SizedBox(
         width: 420,
         child: Column(
@@ -764,7 +770,7 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
             TextField(
               controller: _nameController,
               autofocus: true,
-              decoration: const InputDecoration(labelText: 'Nombre'),
+              decoration: InputDecoration(labelText: l10n.playlistName),
               onSubmitted: (_) => _submit(),
             ),
             const SizedBox(height: 12),
@@ -772,7 +778,7 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
               controller: _descController,
               maxLines: 3,
               maxLength: 300,
-              decoration: const InputDecoration(labelText: 'Descripción'),
+              decoration: InputDecoration(labelText: l10n.description),
             ),
             const SizedBox(height: 4),
             // Portada: preview + acciones
@@ -821,18 +827,18 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.image_outlined, size: 20),
-                  tooltip: 'Elegir imagen',
+                  tooltip: l10n.chooseImage,
                   onPressed: _pickImage,
                 ),
                 IconButton(
                   icon: const Icon(Icons.library_music_outlined, size: 20),
-                  tooltip: 'Portada de una canción',
+                  tooltip: l10n.coverFromTrackLabel,
                   onPressed: _pickTrackCover,
                 ),
                 if (_previewSource != null)
                   IconButton(
                     icon: const Icon(Icons.delete_outline, size: 20),
-                    tooltip: 'Quitar portada',
+                    tooltip: l10n.removeCover,
                     onPressed: () => setState(() {
                       _imagePath = null;
                       _trackCoverUrl = null;
@@ -847,9 +853,9 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          child: Text(l10n.cancel),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Guardar')),
+        FilledButton(onPressed: _submit, child: Text(l10n.save)),
       ],
     );
   }

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../data/database.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/player_service.dart';
 import '../playlist_actions.dart';
@@ -125,6 +126,7 @@ class _PlayerBarState extends State<PlayerBar> {
   Future<void> _showContextMenu(Offset position) async {
     final track = _track;
     if (track == null) return;
+    final l10n = AppLocalizations.of(context);
     final action = await showMenu<String>(
       context: context,
       // Anclaje correcto: recta de tamaño cero en la posición del cursor.
@@ -134,14 +136,14 @@ class _PlayerBarState extends State<PlayerBar> {
         position.dx,
         position.dy,
       ),
-      items: const [
+      items: [
         PopupMenuItem(
           value: 'add',
           child: Row(
             children: [
               Icon(Icons.playlist_add),
-              SizedBox(width: 10),
-              Text('Añadir a playlist'),
+              const SizedBox(width: 10),
+              Text(l10n.addToPlaylist),
             ],
           ),
         ),
@@ -375,7 +377,7 @@ class _PlayerBarState extends State<PlayerBar> {
       return Align(
         alignment: Alignment.centerLeft,
         child: Text(
-          'Sin reproducción',
+          AppLocalizations.of(context).nothingPlaying,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodySmall?.copyWith(
@@ -421,9 +423,11 @@ class _PlayerBarState extends State<PlayerBar> {
                       if (downloadPct != null &&
                           downloadPct < 1 &&
                           downloadingCurrent) {
-                        label = 'Descargando… ${(downloadPct * 100).round()}%';
+                        label = AppLocalizations.of(
+                          context,
+                        ).downloadingPercent((downloadPct * 100).round());
                       } else if (preparingId != null) {
-                        label = 'Preparando…';
+                        label = AppLocalizations.of(context).preparing;
                       } else {
                         label = _track!.title;
                       }
@@ -456,6 +460,7 @@ class _PlayerBarState extends State<PlayerBar> {
   /// explícitos idénticos (34x40) con el play en su propia caja fija, para
   /// que toda la fila quede perfectamente alineada verticalmente.
   Widget _buildControls(ThemeData theme, PlayerService player, bool hasTrack) {
+    final l10n = AppLocalizations.of(context);
     final primary = theme.colorScheme.primary;
     final muted = theme.colorScheme.onSurfaceVariant;
     const iconSize = 20.0;
@@ -482,7 +487,7 @@ class _PlayerBarState extends State<PlayerBar> {
                 constraints: btnConstraints,
                 padding: EdgeInsets.zero,
                 color: on ? primary : muted,
-                tooltip: on ? 'Aleatorio: activo' : 'Aleatorio',
+                tooltip: on ? l10n.shuffleOn : l10n.shuffle,
                 onPressed: player.toggleShuffle,
               ),
             ),
@@ -492,7 +497,7 @@ class _PlayerBarState extends State<PlayerBar> {
               constraints: btnConstraints,
               padding: EdgeInsets.zero,
               color: muted,
-              tooltip: 'Anterior',
+              tooltip: l10n.previous,
               onPressed: hasTrack ? player.previous : null,
             ),
             // Play / Pausa (o loader). Footprint fijo (44x40) para que la
@@ -520,7 +525,7 @@ class _PlayerBarState extends State<PlayerBar> {
                               : Icons.play_circle_fill,
                           color: primary,
                         ),
-                        tooltip: _playing ? 'Pausar' : 'Reproducir',
+                        tooltip: _playing ? l10n.pause : l10n.play,
                         onPressed: hasTrack ? player.togglePlayPause : null,
                       ),
               ),
@@ -531,7 +536,7 @@ class _PlayerBarState extends State<PlayerBar> {
               constraints: btnConstraints,
               padding: EdgeInsets.zero,
               color: muted,
-              tooltip: 'Siguiente',
+              tooltip: l10n.next,
               onPressed: hasTrack ? player.next : null,
             ),
             // Repeat (cicla off → all → one)
@@ -548,9 +553,9 @@ class _PlayerBarState extends State<PlayerBar> {
                   padding: EdgeInsets.zero,
                   color: active ? primary : muted,
                   tooltip: switch (mode) {
-                    LoopMode.off => 'Repetir: desactivado',
-                    LoopMode.all => 'Repetir: toda la cola',
-                    LoopMode.one => 'Repetir: canción actual',
+                    LoopMode.off => l10n.repeatOff,
+                    LoopMode.all => l10n.repeatAll,
+                    LoopMode.one => l10n.repeatOne,
                   },
                   onPressed: player.toggleRepeat,
                 );
@@ -567,7 +572,7 @@ class _PlayerBarState extends State<PlayerBar> {
                 ),
                 constraints: btnConstraints,
                 padding: EdgeInsets.zero,
-                tooltip: on ? 'Radio: activa' : 'Radio: inactiva',
+                tooltip: on ? l10n.radioOn : l10n.radioOff,
                 onPressed: player.toggleRadio,
               ),
             ),
@@ -582,8 +587,8 @@ class _PlayerBarState extends State<PlayerBar> {
               padding: EdgeInsets.zero,
               color: _isFavorite ? primary : muted,
               tooltip: _isFavorite
-                  ? 'Quitar de favoritos'
-                  : 'Añadir a favoritos',
+                  ? l10n.removeFromFavorites
+                  : l10n.addToFavorites,
               onPressed: _track == null ? null : _toggleFavorite,
             ),
           ],
@@ -609,6 +614,7 @@ class _PlayerBarState extends State<PlayerBar> {
     ThemeData theme,
     PlayerService player,
   ) {
+    final l10n = AppLocalizations.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     return ValueListenableBuilder<double>(
       valueListenable: player.volume,
@@ -625,7 +631,7 @@ class _PlayerBarState extends State<PlayerBar> {
               constraints: const BoxConstraints.tightFor(width: 34, height: 40),
               padding: EdgeInsets.zero,
               color: muted,
-              tooltip: vol <= 0 ? 'Activar sonido' : 'Silenciar',
+              tooltip: vol <= 0 ? l10n.unmute : l10n.mute,
               onPressed: player.toggleMute,
             ),
             SizedBox(

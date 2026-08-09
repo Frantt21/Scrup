@@ -1,0 +1,173 @@
+{
+  "@@locale": "en",
+  "appTitle": "Scrup",
+
+  "settings": "Settings",
+  "backToPlaylists": "Back to playlists",
+  "playbackErrorWithDetails": "Playback error: {details}",
+  "@playbackErrorWithDetails": {
+    "placeholders": {
+      "details": { "type": "String" }
+    }
+  },
+
+  "searchHint": "Search songs on YouTube…",
+  "recentTitle": "Recent",
+  "addToPlaylist": "Add to playlist",
+  "recentEmptyTitle": "Nothing played yet",
+  "recentEmptyHint": "Use the search above to get started",
+
+  "backToHome": "Back to home",
+  "searchTitle": "Search",
+  "searchStartHint": "Search for a song to start playing it",
+  "searchNoResults": "No results. Try another search.",
+
+  "cantCreatePlaylist": "Could not create the playlist",
+  "playlistCreated": "Playlist \"{name}\" created",
+  "@playlistCreated": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "deletePlaylistTitle": "Delete playlist",
+  "confirmDeletePlaylist": "Delete \"{name}\"?",
+  "@confirmDeletePlaylist": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "playlistDeleted": "Playlist deleted",
+  "playlistsTitle": "Playlists",
+  "listViewTooltip": "List view",
+  "gridViewTooltip": "Grid view",
+  "noPlaylists": "No playlists yet",
+  "createOneHere": "Create one from here",
+  "songCount": "{count, plural, =1{1 song} other{{count} songs}}",
+  "@songCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "newPlaylist": "New playlist",
+  "newPlaylistHint": "Create a new one",
+  "playlistName": "Name",
+  "playlistNameHint": "My playlist",
+  "descriptionOptional": "Description (optional)",
+  "descriptionHint": "What is this playlist about?",
+  "description": "Description",
+  "noCover": "No cover",
+  "chooseImage": "Choose image",
+  "changeImage": "Change",
+  "removeImage": "Remove image",
+  "images": "Images",
+  "create": "Create",
+
+  "play": "Play",
+  "playShuffled": "Play shuffled",
+  "emptyPlaylist": "Empty playlist",
+  "emptyPlaylistHint": "Add songs from the search",
+  "removeFromPlaylist": "Remove from playlist",
+  "editPlaylist": "Edit playlist",
+  "edit": "Edit",
+  "playlistUpdated": "Playlist updated",
+  "cantSaveChanges": "Could not save the changes",
+  "lessThanOneMinute": "less than 1 min",
+  "durationMinutes": "{m} min",
+  "@durationMinutes": {
+    "placeholders": {
+      "m": { "type": "int" }
+    }
+  },
+  "durationHours": "{h} h",
+  "@durationHours": {
+    "placeholders": {
+      "h": { "type": "int" }
+    }
+  },
+  "durationHoursMinutes": "{h} h {m} min",
+  "@durationHoursMinutes": {
+    "placeholders": {
+      "h": { "type": "int" },
+      "m": { "type": "int" }
+    }
+  },
+  "playlistMeta": "{songs} · {duration}",
+  "@playlistMeta": {
+    "placeholders": {
+      "songs": { "type": "String" },
+      "duration": { "type": "String" }
+    }
+  },
+  "coverFromTrack": "Cover from a song",
+  "coverFromTrackLabel": "Cover from a song",
+  "currentCover": "Current cover",
+  "removeCover": "Remove cover",
+  "save": "Save",
+
+  "nothingPlaying": "Nothing playing",
+  "downloadingPercent": "Downloading… {percent}%",
+  "@downloadingPercent": {
+    "placeholders": {
+      "percent": { "type": "int" }
+    }
+  },
+  "preparing": "Preparing…",
+  "shuffleOn": "Shuffle: on",
+  "shuffle": "Shuffle",
+  "previous": "Previous",
+  "pause": "Pause",
+  "next": "Next",
+  "repeatOff": "Repeat: off",
+  "repeatAll": "Repeat: all",
+  "repeatOne": "Repeat: one",
+  "radioOn": "Radio: on",
+  "radioOff": "Radio: off",
+  "removeFromFavorites": "Remove from favorites",
+  "addToFavorites": "Add to favorites",
+  "unmute": "Unmute",
+  "mute": "Mute",
+  "unknownArtist": "Unknown artist",
+
+  "minimize": "Minimize",
+  "restore": "Restore",
+  "maximize": "Maximize",
+  "close": "Close",
+
+  "noPlaylistsYet": "You don't have any playlists yet. Create a new one.",
+  "addedToPlaylist": "Added to playlist",
+  "playlistNamePrompt": "Playlist name",
+  "cantPlay": "Could not play: {error}",
+  "@cantPlay": {
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+
+  "language": "Language",
+  "languageHint": "The interface language is saved between sessions",
+  "cache": "Cache",
+  "cacheHint": "Downloaded songs are stored locally for faster playback",
+  "cacheUsed": "{used} of {limit}",
+  "@cacheUsed": {
+    "placeholders": {
+      "used": { "type": "String" },
+      "limit": { "type": "String" }
+    }
+  },
+  "cacheFiles": "{count, plural, =1{1 file} other{{count} files}}",
+  "@cacheFiles": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "refresh": "Refresh",
+  "clearCache": "Clear cache",
+  "confirmClearCacheTitle": "Clear cache",
+  "confirmClearCacheBody": "All downloaded songs will be deleted. You'll need to download them again to play them.",
+  "cacheCleared": "Cache cleared",
+  "cantClearCache": "Could not clear the cache",
+  "about": "About",
+  "version": "Version"
+}

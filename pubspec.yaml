@@ -12,7 +12,10 @@ dependencies:
   file_selector: ^1.1.0
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   http: ^1.6.0
+  intl: ^0.20.2
   media_kit: ^1.2.6
   media_kit_libs_audio: ^1.0.7
   palette_generator: ^0.3.3+7
@@ -31,3 +34,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Genera las localizaciones (AppLocalizations) automáticamente al compilar
+  # desde lib/l10n/*.arb (ver l10n.yaml).
+  generate: true

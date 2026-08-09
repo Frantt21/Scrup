@@ -40,4 +40,15 @@ void main() {
     await store.saveSidebarGridMode(false); // lista
     expect(await store.loadSidebarGridMode(), isFalse);
   });
+
+  test('guarda y restaura el idioma', () async {
+    final store = SettingsStore();
+    expect(await store.loadLocale(), isNull);
+
+    await store.saveLocale('en');
+    expect(await store.loadLocale(), 'en');
+
+    await store.saveLocale('es');
+    expect(await store.loadLocale(), 'es');
+  });
 }
