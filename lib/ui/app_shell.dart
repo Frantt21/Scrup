@@ -112,52 +112,53 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final openPlaylist = _openPlaylist;
+    // Barra superior: con una playlist o la configuración abiertas muestra el
+    // botón de volver y su nombre; el engranaje de configuración vive a la
+    // derecha. Compartido entre la CustomTitleBar (Windows/Linux) y la barra
+    // simple de macOS (donde la title bar nativa conserva los traffic lights).
+    final barTitle = _showSettings
+        ? l10n.settings
+        : (openPlaylist?.name ?? 'Scrup');
+    final Widget? barLeading = _showSettings || openPlaylist != null
+        ? IconButton(
+            icon: const Icon(Icons.arrow_back),
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+            padding: EdgeInsets.zero,
+            tooltip: _showSettings ? l10n.backToHome : l10n.backToPlaylists,
+            onPressed: _showSettings
+                ? _closeSettings
+                : () => _selectPlaylist(null),
+          )
+        : null;
+    final Widget barTrailing = IconButton(
+      icon: Icon(
+        Icons.settings_outlined,
+        color: _showSettings ? Theme.of(context).colorScheme.primary : null,
+      ),
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+      padding: EdgeInsets.zero,
+      tooltip: l10n.settings,
+      onPressed: _showSettings ? _closeSettings : _openSettings,
+    );
 
     return Scaffold(
       body: Column(
         children: [
-          // Title bar personalizado (solo en desktop; en macOS se deja el
-          // nativo). Con una playlist o la configuración abiertas muestra el
-          // botón de volver y su nombre; el engranaje de configuración vive
-          // a la derecha (antes de los botones de ventana).
           if (!Platform.isMacOS)
             CustomTitleBar(
-              title: _showSettings
-                  ? l10n.settings
-                  : (openPlaylist?.name ?? 'Scrup'),
-              leading: _showSettings || openPlaylist != null
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      visualDensity: VisualDensity.compact,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 40,
-                        height: 40,
-                      ),
-                      padding: EdgeInsets.zero,
-                      tooltip: _showSettings
-                          ? l10n.backToHome
-                          : l10n.backToPlaylists,
-                      onPressed: _showSettings
-                          ? _closeSettings
-                          : () => _selectPlaylist(null),
-                    )
-                  : null,
-              trailing: IconButton(
-                icon: Icon(
-                  Icons.settings_outlined,
-                  color: _showSettings
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
-                ),
-                visualDensity: VisualDensity.compact,
-                constraints: const BoxConstraints.tightFor(
-                  width: 40,
-                  height: 40,
-                ),
-                padding: EdgeInsets.zero,
-                tooltip: l10n.settings,
-                onPressed: _showSettings ? _closeSettings : _openSettings,
-              ),
+              title: barTitle,
+              leading: barLeading,
+              trailing: barTrailing,
+            )
+          else
+            // macOS: barra simple (sin área de arrastre ni botones de ventana;
+            // los traffic lights nativos siguen en la title bar del sistema).
+            _MacTopBar(
+              title: barTitle,
+              leading: barLeading,
+              trailing: barTrailing,
             ),
           Expanded(
             // El sidebar ocupa su propio espacio; el player flota SOLO sobre
@@ -219,6 +220,44 @@ class _AppShellState extends State<AppShell> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Barra superior para macOS: la title bar nativa se conserva (con sus
+/// traffic lights), así que aquí solo se replican las acciones de la
+/// CustomTitleBar (back + título + engranaje de configuración), sin área de
+/// arrastre ni botones de ventana.
+class _MacTopBar extends StatelessWidget {
+  final String title;
+  final Widget? leading;
+  final Widget? trailing;
+
+  const _MacTopBar({required this.title, this.leading, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      height: 40,
+      color: theme.colorScheme.surface,
+      padding: const EdgeInsets.only(left: 8, right: 4),
+      child: Row(
+        children: [
+          if (leading != null) ...[leading!, const SizedBox(width: 8)],
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          ?trailing,
         ],
       ),
     );

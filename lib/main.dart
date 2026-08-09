@@ -44,26 +44,27 @@ Future<void> main() async {
     audioHandler = ScrupAudioHandler();
   }
 
-  // Ventana con title bar oculto (Windows/Linux) para usar el personalizado.
-  // Abre SIEMPRE maximizada; al restaurar (modo ventana) el mínimo es
-  // 1220x700 y el tamaño por defecto 1280x800.
+  // Ventana: abre SIEMPRE maximizada y, en modo ventana, el mínimo es
+  // 1220x700 y el tamaño por defecto 1280x800. En Windows/Linux se oculta la
+  // title bar nativa para usar la personalizada; en macOS se conserva la
+  // nativa (con los traffic lights), así que solo se aplican tamaño/estado.
   await windowManager.ensureInitialized();
-  if (!Platform.isMacOS) {
-    const windowOptions = WindowOptions(
-      size: Size(1280, 800),
-      minimumSize: Size(1220, 700),
-      center: true,
-      title: 'Scrup',
-      titleBarStyle: TitleBarStyle.hidden,
-    );
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
-      // Maximizar ANTES de mostrar: la ventana se crea oculta y así se ve
-      // directamente maximizada, sin parpadeo a tamaño normal.
-      await windowManager.maximize();
-      await windowManager.show();
-      await windowManager.focus();
-    });
-  }
+  final windowOptions = WindowOptions(
+    size: const Size(1280, 800),
+    minimumSize: const Size(1220, 700),
+    center: true,
+    title: 'Scrup',
+    titleBarStyle: Platform.isMacOS
+        ? TitleBarStyle.normal
+        : TitleBarStyle.hidden,
+  );
+  windowManager.waitUntilReadyToShow(windowOptions, () async {
+    // Maximizar ANTES de mostrar: la ventana se crea oculta y así se ve
+    // directamente maximizada, sin parpadeo a tamaño normal.
+    await windowManager.maximize();
+    await windowManager.show();
+    await windowManager.focus();
+  });
 
   Binaries.logBinaries();
 
