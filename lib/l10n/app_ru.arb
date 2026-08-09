@@ -82,6 +82,10 @@
   "unmute": "Включить звук",
   "mute": "Выключить звук",
   "unknownArtist": "Неизвестный исполнитель",
+  "queue": "Очередь",
+  "queueTitle": "Очередь воспроизведения",
+  "queueEmpty": "Очередь пуста",
+  "queueEmptyHint": "Воспроизведите плейлист или песню, чтобы увидеть её здесь",
 
   "minimize": "Свернуть",
   "restore": "Восстановить",
@@ -110,8 +114,5 @@
 
   "discordPresence": "Присутствие в Discord",
   "discordPresenceHint": "Показывает в вашем профиле Discord песню, которую вы слушаете",
-  "discordEnabled": "Включить присутствие",
-  "discordClientId": "ID приложения",
-  "discordClientIdHint": "Создайте приложение на discord.com/developers и вставьте сюда его Application ID",
-  "discordRequiresClientId": "Нужно создать приложение на портале разработчиков Discord, чтобы присутствие отображалось"
+  "discordEnabled": "Включить присутствие"
 }

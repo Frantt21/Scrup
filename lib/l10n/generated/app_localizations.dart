@@ -565,6 +565,30 @@ abstract class AppLocalizations {
   /// **'Artista desconocido'**
   String get unknownArtist;
 
+  /// No description provided for @queue.
+  ///
+  /// In es, this message translates to:
+  /// **'Cola'**
+  String get queue;
+
+  /// No description provided for @queueTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Cola de reproducción'**
+  String get queueTitle;
+
+  /// No description provided for @queueEmpty.
+  ///
+  /// In es, this message translates to:
+  /// **'La cola está vacía'**
+  String get queueEmpty;
+
+  /// No description provided for @queueEmptyHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Reproduce una playlist o una canción para verla aquí'**
+  String get queueEmptyHint;
+
   /// No description provided for @minimize.
   ///
   /// In es, this message translates to:
@@ -714,24 +738,6 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Activar presencia'**
   String get discordEnabled;
-
-  /// No description provided for @discordClientId.
-  ///
-  /// In es, this message translates to:
-  /// **'Id de aplicación'**
-  String get discordClientId;
-
-  /// No description provided for @discordClientIdHint.
-  ///
-  /// In es, this message translates to:
-  /// **'Crea una aplicación en discord.com/developers y pega aquí su Application ID'**
-  String get discordClientIdHint;
-
-  /// No description provided for @discordRequiresClientId.
-  ///
-  /// In es, this message translates to:
-  /// **'Necesitas crear una aplicación en Discord Developer Portal para que la presencia aparezca'**
-  String get discordRequiresClientId;
 }
 
 class _AppLocalizationsDelegate

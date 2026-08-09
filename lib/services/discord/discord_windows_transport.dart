@@ -68,7 +68,7 @@ class DiscordWindowsTransport implements DiscordIpcTransport {
         _events.add(DiscordIpcMessage(opcode, payload));
       } catch (_) {}
     } else if (message is Map && message['t'] == 'ready') {
-      // El isolate ya escucha comandos.
+      // El isolate ya escucha comandos: los `send()` ya son seguros.
       _isolatePort = message['port'] as SendPort?;
       _ready?.complete();
     }
@@ -142,12 +142,13 @@ void _isolateEntry(Map<String, dynamic> args) async {
         await Future<void>.delayed(Duration(milliseconds: retryMs));
         continue;
       }
-      mainPort.send({'t': 'connected'});
 
-      // Handshake: se presenta con client_id y espera el READY.
+      // Handshake: se presenta con client_id y espera el READY. El evento
+      // `connected` se envía DESPUÉS del READY: el servicio publica la
+      // presencia al recibirlo, y para entonces el `ready` (port de
+      // comandos) ya llegó al main — si se enviara antes, el primer
+      // SET_ACTIVITY se perdería (send() sin port).
       pipe.writeFrame(DiscordOpcode.handshake, {'v': 1, 'client_id': clientId});
-      // READY con timeout (Discord puede tardar o no responder si el id es
-      // inválido): si no llega, se cierra y se reintenta.
       final first = pipe.readFrame(timeout: const Duration(seconds: 8));
       if (first != null) {
         mainPort.send({
@@ -155,6 +156,7 @@ void _isolateEntry(Map<String, dynamic> args) async {
           'opcode': first.opcode.value,
           'payload': first.payload,
         });
+        mainPort.send({'t': 'connected'});
       } else {
         // Sin READY: pipe sospechoso, se descarta.
         throw const SocketException('Handshake sin respuesta');

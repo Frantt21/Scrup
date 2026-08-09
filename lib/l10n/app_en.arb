@@ -129,6 +129,10 @@
   "unmute": "Unmute",
   "mute": "Mute",
   "unknownArtist": "Unknown artist",
+  "queue": "Queue",
+  "queueTitle": "Play queue",
+  "queueEmpty": "The queue is empty",
+  "queueEmptyHint": "Play a playlist or a song to see it here",
 
   "minimize": "Minimize",
   "restore": "Restore",
@@ -173,8 +177,5 @@
 
   "discordPresence": "Discord Presence",
   "discordPresenceHint": "Show what you're listening to on your Discord profile",
-  "discordEnabled": "Enable presence",
-  "discordClientId": "Application ID",
-  "discordClientIdHint": "Create an app at discord.com/developers and paste its Application ID here",
-  "discordRequiresClientId": "You need to create an app in the Discord Developer Portal for the presence to show"
+  "discordEnabled": "Enable presence"
 }

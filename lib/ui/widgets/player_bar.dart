@@ -34,7 +34,18 @@ const double kPlayerClearance = 88;
 /// información de la canción (izquierda) y el control de volumen (derecha),
 /// con los controles de reproducción encima.
 class PlayerBar extends StatefulWidget {
-  const PlayerBar({super.key});
+  /// `true` si el panel de la cola está abierto (el botón se resalta).
+  final bool queueOpen;
+
+  /// Abre/cierra el panel de la cola (lo gestiona el AppShell, que monta el
+  /// panel en el Row para que empuje el contenido).
+  final VoidCallback onToggleQueue;
+
+  const PlayerBar({
+    super.key,
+    this.queueOpen = false,
+    required this.onToggleQueue,
+  });
 
   @override
   State<PlayerBar> createState() => _PlayerBarState();
@@ -363,9 +374,9 @@ class _PlayerBarState extends State<PlayerBar> {
                               ),
                             ),
                             const SizedBox(width: 12),
-                            // Derecha: volumen
+                            // Derecha: botón de cola + volumen
                             Expanded(
-                              child: _buildVolume(context, theme, player),
+                              child: _buildRight(context, theme, player),
                             ),
                           ],
                         ),
@@ -619,53 +630,73 @@ class _PlayerBarState extends State<PlayerBar> {
     );
   }
 
-  /// Derecha: control de volumen compacto (icono con mute + slider corto).
-  Widget _buildVolume(
+  /// Derecha: botón de la COLA (abre el panel que empuja el contenido) y,
+  /// al lado, el control de volumen compacto (icono con mute + slider corto).
+  Widget _buildRight(
     BuildContext context,
     ThemeData theme,
     PlayerService player,
   ) {
     final l10n = AppLocalizations.of(context);
+    final primary = theme.colorScheme.primary;
     final muted = theme.colorScheme.onSurfaceVariant;
-    return ValueListenableBuilder<double>(
-      valueListenable: player.volume,
-      builder: (context, vol, _) {
-        final icon = vol <= 0
-            ? Icons.volume_off
-            : (vol < 0.5 ? Icons.volume_down : Icons.volume_up);
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(icon, size: 20),
-              constraints: const BoxConstraints.tightFor(width: 34, height: 40),
-              padding: EdgeInsets.zero,
-              color: muted,
-              tooltip: vol <= 0 ? l10n.unmute : l10n.mute,
-              onPressed: player.toggleMute,
-            ),
-            SizedBox(
-              width: 96,
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 3,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 5,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Cola primero: resaltada en lila cuando el panel está abierto.
+        IconButton(
+          icon: const Icon(Icons.queue_music, size: 20),
+          constraints: const BoxConstraints.tightFor(width: 34, height: 40),
+          padding: EdgeInsets.zero,
+          color: widget.queueOpen ? primary : muted,
+          tooltip: l10n.queue,
+          onPressed: widget.onToggleQueue,
+        ),
+        const SizedBox(width: 2),
+        ValueListenableBuilder<double>(
+          valueListenable: player.volume,
+          builder: (context, vol, _) {
+            final icon = vol <= 0
+                ? Icons.volume_off
+                : (vol < 0.5 ? Icons.volume_down : Icons.volume_up);
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(icon, size: 20),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 34,
+                    height: 40,
                   ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 11,
+                  padding: EdgeInsets.zero,
+                  color: muted,
+                  tooltip: vol <= 0 ? l10n.unmute : l10n.mute,
+                  onPressed: player.toggleMute,
+                ),
+                SizedBox(
+                  width: 96,
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 5,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 11,
+                      ),
+                    ),
+                    child: Slider(
+                      value: vol.clamp(0.0, 1.0),
+                      onChanged: player.setVolume,
+                    ),
                   ),
                 ),
-                child: Slider(
-                  value: vol.clamp(0.0, 1.0),
-                  onChanged: player.setVolume,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }

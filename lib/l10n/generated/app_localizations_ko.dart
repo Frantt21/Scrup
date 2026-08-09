@@ -260,6 +260,18 @@ class AppLocalizationsKo extends AppLocalizations {
   String get unknownArtist => '알 수 없는 아티스트';
 
   @override
+  String get queue => '대기열';
+
+  @override
+  String get queueTitle => '재생 대기열';
+
+  @override
+  String get queueEmpty => '대기열이 비어 있습니다';
+
+  @override
+  String get queueEmptyHint => '플레이리스트나 노래를 재생하면 여기에 표시됩니다';
+
+  @override
   String get minimize => '최소화';
 
   @override
@@ -345,15 +357,4 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get discordEnabled => '상태 표시 활성화';
-
-  @override
-  String get discordClientId => '애플리케이션 ID';
-
-  @override
-  String get discordClientIdHint =>
-      'discord.com/developers에서 앱을 만들고 Application ID를 여기에 붙여넣으세요';
-
-  @override
-  String get discordRequiresClientId =>
-      '상태를 표시하려면 Discord Developer Portal에서 앱을 만들어야 합니다';
 }

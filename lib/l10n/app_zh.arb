@@ -82,6 +82,10 @@
   "unmute": "取消静音",
   "mute": "静音",
   "unknownArtist": "未知艺术家",
+  "queue": "播放队列",
+  "queueTitle": "播放队列",
+  "queueEmpty": "队列为空",
+  "queueEmptyHint": "播放播放列表或歌曲后会显示在这里",
 
   "minimize": "最小化",
   "restore": "还原",
@@ -110,8 +114,5 @@
 
   "discordPresence": "Discord 状态",
   "discordPresenceHint": "在您的 Discord 个人资料中显示正在播放的歌曲",
-  "discordEnabled": "启用状态显示",
-  "discordClientId": "应用程序 ID",
-  "discordClientIdHint": "在 discord.com/developers 创建应用，并将 Application ID 粘贴到这里",
-  "discordRequiresClientId": "需要先在 Discord 开发者门户创建应用，状态才能显示"
+  "discordEnabled": "启用状态显示"
 }

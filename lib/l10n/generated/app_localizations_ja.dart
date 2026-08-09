@@ -260,6 +260,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String get unknownArtist => '不明なアーティスト';
 
   @override
+  String get queue => 'キュー';
+
+  @override
+  String get queueTitle => '再生キュー';
+
+  @override
+  String get queueEmpty => 'キューは空です';
+
+  @override
+  String get queueEmptyHint => 'プレイリストや曲を再生するとここに表示されます';
+
+  @override
   String get minimize => '最小化';
 
   @override
@@ -345,15 +357,4 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get discordEnabled => 'プレゼンスを有効にする';
-
-  @override
-  String get discordClientId => 'アプリケーションID';
-
-  @override
-  String get discordClientIdHint =>
-      'discord.com/developers でアプリを作成し、Application ID をここに貼り付けます';
-
-  @override
-  String get discordRequiresClientId =>
-      'プレゼンスを表示するには Discord Developer Portal でアプリを作成する必要があります';
 }

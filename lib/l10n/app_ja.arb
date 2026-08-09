@@ -82,6 +82,10 @@
   "unmute": "ミュート解除",
   "mute": "ミュート",
   "unknownArtist": "不明なアーティスト",
+  "queue": "キュー",
+  "queueTitle": "再生キュー",
+  "queueEmpty": "キューは空です",
+  "queueEmptyHint": "プレイリストや曲を再生するとここに表示されます",
 
   "minimize": "最小化",
   "restore": "元に戻す",
@@ -110,8 +114,5 @@
 
   "discordPresence": "Discord プレゼンス",
   "discordPresenceHint": "Discordプロフィールに再生中の曲を表示します",
-  "discordEnabled": "プレゼンスを有効にする",
-  "discordClientId": "アプリケーションID",
-  "discordClientIdHint": "discord.com/developers でアプリを作成し、Application ID をここに貼り付けます",
-  "discordRequiresClientId": "プレゼンスを表示するには Discord Developer Portal でアプリを作成する必要があります"
+  "discordEnabled": "プレゼンスを有効にする"
 }

@@ -82,6 +82,10 @@
   "unmute": "Ativar som",
   "mute": "Silenciar",
   "unknownArtist": "Artista desconhecido",
+  "queue": "Fila",
+  "queueTitle": "Fila de reprodução",
+  "queueEmpty": "A fila está vazia",
+  "queueEmptyHint": "Reproduza uma playlist ou música para vê-la aqui",
 
   "minimize": "Minimizar",
   "restore": "Restaurar",
@@ -110,8 +114,5 @@
 
   "discordPresence": "Presença do Discord",
   "discordPresenceHint": "Mostra no seu perfil do Discord a música que você está ouvindo",
-  "discordEnabled": "Ativar presença",
-  "discordClientId": "ID do aplicativo",
-  "discordClientIdHint": "Crie um app em discord.com/developers e cole aqui o ID do aplicativo",
-  "discordRequiresClientId": "Você precisa criar um app no Portal de Desenvolvedores do Discord para a presença aparecer"
+  "discordEnabled": "Ativar presença"
 }

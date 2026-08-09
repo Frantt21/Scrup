@@ -151,6 +151,19 @@ class PlayerService {
   final List<Track> _queue = [];
   int _queueIndex = -1;
 
+  /// Cola expuesta a la UI (panel de cola). [ValueNotifier] con lista
+  /// inmutable: la UI la lee puntualmente y reacciona a los cambios.
+  final ValueNotifier<List<Track>> queue = ValueNotifier<List<Track>>(const []);
+
+  /// Índice de la pista actual dentro de la cola (o -1).
+  final ValueNotifier<int> queueIndex = ValueNotifier<int>(-1);
+
+  /// Publica el estado de la cola a la UI.
+  void _notifyQueueChanged() {
+    queue.value = List.unmodifiable(_queue);
+    queueIndex.value = _queueIndex;
+  }
+
   /// Volumen previo antes de silenciar, para restaurarlo al desmutear.
   double _lastVolumeBeforeMute = 1.0;
 
@@ -197,6 +210,7 @@ class PlayerService {
     _queue.clear();
     _queueIndex = -1;
     _prematureRetries.clear();
+    _notifyQueueChanged();
     return _openAndPlay(track);
   }
 
@@ -211,6 +225,7 @@ class PlayerService {
     _queue.clear();
     _queueIndex = -1;
     _prematureRetries.clear();
+    _notifyQueueChanged();
     _clearPlaybackState();
     preparingTrackId.value = track.id;
     try {
@@ -254,7 +269,15 @@ class PlayerService {
       ..clear()
       ..addAll(tracks);
     _prematureRetries.clear();
+    _notifyQueueChanged();
     await _playAt(startIndex);
+  }
+
+  /// Reproduce la pista de la cola en [index] SIN tocar la cola (salto
+  /// directo desde el panel de cola).
+  Future<void> playQueueAt(int index) async {
+    if (index < 0 || index >= _queue.length) return;
+    await _playAt(index);
   }
 
   /// Reproduce la siguiente pista de la cola (o radio si se agotó).
@@ -438,6 +461,7 @@ class PlayerService {
       final fresh = tracks.where((t) => !known.contains(t.id)).toList();
       if (fresh.isEmpty) return;
       _queue.addAll(fresh);
+      _notifyQueueChanged();
       await _playAt(_queue.length - fresh.length);
     } catch (e) {
       _errorController.add('No se pudo recomendar música: $e');
@@ -450,6 +474,7 @@ class PlayerService {
     if (index < 0 || index >= _queue.length) return false;
     final token = ++_playToken;
     _queueIndex = index;
+    _notifyQueueChanged();
     final track = _queue[index];
     // La UI se queda sin datos mientras se carga la nueva pista.
     _clearPlaybackState();
@@ -617,5 +642,7 @@ class PlayerService {
     radio.dispose();
     activePlaylistId.dispose();
     volume.dispose();
+    queue.dispose();
+    queueIndex.dispose();
   }
 }

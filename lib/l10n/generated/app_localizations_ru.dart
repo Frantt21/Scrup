@@ -264,6 +264,19 @@ class AppLocalizationsRu extends AppLocalizations {
   String get unknownArtist => 'Неизвестный исполнитель';
 
   @override
+  String get queue => 'Очередь';
+
+  @override
+  String get queueTitle => 'Очередь воспроизведения';
+
+  @override
+  String get queueEmpty => 'Очередь пуста';
+
+  @override
+  String get queueEmptyHint =>
+      'Воспроизведите плейлист или песню, чтобы увидеть её здесь';
+
+  @override
   String get minimize => 'Свернуть';
 
   @override
@@ -354,15 +367,4 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get discordEnabled => 'Включить присутствие';
-
-  @override
-  String get discordClientId => 'ID приложения';
-
-  @override
-  String get discordClientIdHint =>
-      'Создайте приложение на discord.com/developers и вставьте сюда его Application ID';
-
-  @override
-  String get discordRequiresClientId =>
-      'Нужно создать приложение на портале разработчиков Discord, чтобы присутствие отображалось';
 }

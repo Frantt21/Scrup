@@ -261,6 +261,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get unknownArtist => 'Artista desconocido';
 
   @override
+  String get queue => 'Cola';
+
+  @override
+  String get queueTitle => 'Cola de reproducción';
+
+  @override
+  String get queueEmpty => 'La cola está vacía';
+
+  @override
+  String get queueEmptyHint =>
+      'Reproduce una playlist o una canción para verla aquí';
+
+  @override
   String get minimize => 'Minimizar';
 
   @override
@@ -350,15 +363,4 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get discordEnabled => 'Activar presencia';
-
-  @override
-  String get discordClientId => 'Id de aplicación';
-
-  @override
-  String get discordClientIdHint =>
-      'Crea una aplicación en discord.com/developers y pega aquí su Application ID';
-
-  @override
-  String get discordRequiresClientId =>
-      'Necesitas crear una aplicación en Discord Developer Portal para que la presencia aparezca';
 }

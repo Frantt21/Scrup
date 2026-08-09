@@ -261,6 +261,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get unknownArtist => 'Artista desconhecido';
 
   @override
+  String get queue => 'Fila';
+
+  @override
+  String get queueTitle => 'Fila de reprodução';
+
+  @override
+  String get queueEmpty => 'A fila está vazia';
+
+  @override
+  String get queueEmptyHint =>
+      'Reproduza uma playlist ou música para vê-la aqui';
+
+  @override
   String get minimize => 'Minimizar';
 
   @override
@@ -349,17 +362,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get discordEnabled => 'Ativar presença';
-
-  @override
-  String get discordClientId => 'ID da aplicação';
-
-  @override
-  String get discordClientIdHint =>
-      'Crie uma app em discord.com/developers e cole aqui o ID da aplicação';
-
-  @override
-  String get discordRequiresClientId =>
-      'Precisa de criar uma app no Portal de Desenvolvedores do Discord para a presença aparecer';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -619,6 +621,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get unknownArtist => 'Artista desconhecido';
 
   @override
+  String get queue => 'Fila';
+
+  @override
+  String get queueTitle => 'Fila de reprodução';
+
+  @override
+  String get queueEmpty => 'A fila está vazia';
+
+  @override
+  String get queueEmptyHint =>
+      'Reproduza uma playlist ou música para vê-la aqui';
+
+  @override
   String get minimize => 'Minimizar';
 
   @override
@@ -707,15 +722,4 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get discordEnabled => 'Ativar presença';
-
-  @override
-  String get discordClientId => 'ID do aplicativo';
-
-  @override
-  String get discordClientIdHint =>
-      'Crie um app em discord.com/developers e cole aqui o ID do aplicativo';
-
-  @override
-  String get discordRequiresClientId =>
-      'Você precisa criar um app no Portal de Desenvolvedores do Discord para a presença aparecer';
 }

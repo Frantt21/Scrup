@@ -28,7 +28,6 @@ class _SettingsViewState extends State<SettingsView> {
 
   /// Estado de la presencia de Discord (cargado desde el store al abrir).
   bool _discordEnabled = false;
-  final _clientIdController = TextEditingController();
 
   /// Idiomas soportados: el nombre se muestra en el propio idioma (cada
   /// usuario lo reconoce aunque aún no lea la interfaz).
@@ -53,26 +52,15 @@ class _SettingsViewState extends State<SettingsView> {
     _loadDiscordPrefs();
   }
 
-  /// Carga el toggle y el id de Discord guardados (best-effort).
+  /// Carga el toggle de Discord guardado (best-effort).
   Future<void> _loadDiscordPrefs() async {
     try {
-      final store = context.read<SettingsStore>();
-      final enabled = await store.loadDiscordEnabled();
-      final clientId = await store.loadDiscordClientId();
+      final enabled = await context.read<SettingsStore>().loadDiscordEnabled();
       if (!mounted) return;
       setState(() => _discordEnabled = enabled);
-      if (clientId != null && clientId.isNotEmpty) {
-        _clientIdController.text = clientId;
-      }
     } catch (_) {
       // La configuración nunca debe romper la vista.
     }
-  }
-
-  @override
-  void dispose() {
-    _clientIdController.dispose();
-    super.dispose();
   }
 
   Future<void> _refreshStats() async {
@@ -326,8 +314,9 @@ class _SettingsViewState extends State<SettingsView> {
     return locale.toString();
   }
 
-  /// Discord: activa la presencia de Rich Presence (requiere el id de una
-  /// aplicación creada en Discord Developer Portal) y campo para el id.
+  /// Discord: activa la presencia de Rich Presence. El id de aplicación de
+  /// Scrup está embebido en el cliente: funciona de fábrica, solo hay que
+  /// tener Discord abierto y darle al interruptor.
   Widget _buildDiscordSection(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
     final service = context.read<DiscordPresenceService>();
@@ -336,57 +325,25 @@ class _SettingsViewState extends State<SettingsView> {
       icon: Icons.headphones_rounded,
       title: l10n.discordPresence,
       caption: l10n.discordPresenceHint,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            // Mismo ancho del selector de idioma (240): compacto y con las
-            // mismas esquinas redondeadas que las tarjetas de sección.
-            title: SizedBox(
-              width: 240,
-              child: Text(
-                l10n.discordEnabled,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-            ),
-            value: _discordEnabled,
-            onChanged: (value) async {
-              setState(() => _discordEnabled = value);
-              await service.setEnabled(value);
-              if (value) {
-                showScrupToast(
-                  l10n.discordRequiresClientId,
-                  kind: ScrupToastKind.info,
-                );
-              }
-            },
-          ),
-          const SizedBox(height: 4),
-          TextField(
-            controller: _clientIdController,
-            decoration: InputDecoration(
-              labelText: l10n.discordClientId,
-              hintText: l10n.discordClientIdHint,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              isDense: true,
-            ),
-            onSubmitted: (value) async {
-              await service.setClientId(value);
-            },
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.discordRequiresClientId,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+      child: SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        // Fondo transparente explícito: el ListTile por defecto advierte que
+        // sus ink splashes pueden ser invisibles sobre el cristal.
+        tileColor: Colors.transparent,
+        title: SizedBox(
+          width: 240,
+          child: Text(
+            l10n.discordEnabled,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurface,
             ),
           ),
-        ],
+        ),
+        value: _discordEnabled,
+        onChanged: (value) async {
+          setState(() => _discordEnabled = value);
+          await service.setEnabled(value);
+        },
       ),
     );
   }

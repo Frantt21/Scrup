@@ -260,6 +260,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get unknownArtist => '未知艺术家';
 
   @override
+  String get queue => '播放队列';
+
+  @override
+  String get queueTitle => '播放队列';
+
+  @override
+  String get queueEmpty => '队列为空';
+
+  @override
+  String get queueEmptyHint => '播放播放列表或歌曲后会显示在这里';
+
+  @override
   String get minimize => '最小化';
 
   @override
@@ -344,14 +356,4 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get discordEnabled => '启用状态显示';
-
-  @override
-  String get discordClientId => '应用程序 ID';
-
-  @override
-  String get discordClientIdHint =>
-      '在 discord.com/developers 创建应用，并将 Application ID 粘贴到这里';
-
-  @override
-  String get discordRequiresClientId => '需要先在 Discord 开发者门户创建应用，状态才能显示';
 }

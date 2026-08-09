@@ -14,6 +14,7 @@ import 'views/settings_view.dart';
 import 'widgets/custom_title_bar.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/playlists_sidebar.dart';
+import 'widgets/queue_panel.dart';
 import 'widgets/scrup_toasts.dart';
 
 /// Contenedor principal de la app: title bar personalizado, contenedor
@@ -46,6 +47,10 @@ class _AppShellState extends State<AppShell> {
   /// Consulta de búsqueda lanzada desde el inicio: el HomeView la escribe y
   /// la SearchView la ejecuta al cambiar de vista.
   final ValueNotifier<String?> _searchRequest = ValueNotifier<String?>(null);
+
+  /// `true` mientras el panel de la cola esté abierto (se desliza desde la
+  /// derecha empujando el contenido).
+  bool _queueOpen = false;
 
   @override
   void initState() {
@@ -215,7 +220,11 @@ class _AppShellState extends State<AppShell> {
                         alignment: Alignment.bottomCenter,
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                          child: const PlayerBar(),
+                          child: PlayerBar(
+                            queueOpen: _queueOpen,
+                            onToggleQueue: () =>
+                                setState(() => _queueOpen = !_queueOpen),
+                          ),
                         ),
                       ),
                       // Notificaciones superiores (reemplazan al SnackBar de
@@ -224,6 +233,11 @@ class _AppShellState extends State<AppShell> {
                     ],
                   ),
                 ),
+                // Cola: panel glass que se desliza desde la derecha y EMPUJA
+                // el contenedor principal (contenido + player). Vive en el
+                // Row para que el ancho animado corra el contenido, no para
+                // superponerse.
+                QueuePanel(open: _queueOpen),
               ],
             ),
           ),

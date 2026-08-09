@@ -21,6 +21,15 @@ class DiscordUnixTransport implements DiscordIpcTransport {
   /// arbitrarios y hay que ensamblarlos).
   final BytesBuilder _incoming = BytesBuilder();
 
+  /// Frames encolados ANTES de recibir el READY del handshake: el primer
+  /// SET_ACTIVITY del servicio llega justo tras `connected`; si se enviara
+  /// antes de que Discord procese el handshake, se perdería. Se drenan al
+  /// llegar el READY.
+  final List<List<int>> _pendingSends = [];
+
+  /// `true` cuando el READY del handshake ya llegó.
+  bool _handshakeDone = false;
+
   bool _closed = false;
 
   DiscordUnixTransport(this.clientId);
@@ -39,9 +48,29 @@ class DiscordUnixTransport implements DiscordIpcTransport {
       try {
         await _tryConnect();
         if (_closed) return;
-        // Conectado: se envía el handshake (el READY llega como primer
-        // frame vía _handleFrame) y se emite el evento de conexión.
+        // Enviar el handshake y esperar el READY: recién ahí se emite
+        // `connected` (los sends previos se encolan y drenan al llegar).
         await _handshake();
+        _handshakeDone = false;
+        _pendingSends.clear();
+        // Esperar el READY con timeout: si no llega, es un pipe/socket
+        // sospechoso (client id inválido) y se reintenta.
+        final ready = Completer<void>();
+        late StreamSubscription<void> sub;
+        sub = _events.stream.listen((e) {
+          if (e is DiscordIpcMessage &&
+              e.payload['evt'] == 'READY' &&
+              !ready.isCompleted) {
+            ready.complete();
+          }
+        });
+        await ready.future.timeout(
+          const Duration(seconds: 8),
+          onTimeout: () {},
+        );
+        await sub.cancel();
+        _handshakeDone = true;
+        _drainPending();
         // Guardia anti-race: close() pudo llegar mientras conectábamos.
         if (_closed) return;
         _events.add(const DiscordIpcConnected());
@@ -158,9 +187,13 @@ class DiscordUnixTransport implements DiscordIpcTransport {
   void _handleFrame(Uint8List frameBytes) {
     try {
       final decoded = DiscordIpcCodec.decodeFrame(frameBytes);
-      // El READY del handshake ya se gestiona en el servicio; el resto se
-      // reenvía (SET_ACTIVITY acks, pings, etc.).
       _events.add(DiscordIpcMessage(decoded.opcode, decoded.payload));
+      // Al llegar el READY, drenar los frames que se encolaron antes del
+      // handshake (el SET_ACTIVITY inicial del servicio).
+      if (decoded.payload['evt'] == 'READY' && !_handshakeDone) {
+        _handshakeDone = true;
+        _drainPending();
+      }
     } catch (_) {
       // Frame corrupto: se ignora y se sigue con el siguiente.
     }
@@ -181,11 +214,29 @@ class DiscordUnixTransport implements DiscordIpcTransport {
   void send(DiscordOpcode opcode, Map<String, dynamic> payload) {
     final socket = _socket;
     if (socket == null) return;
+    final frame = DiscordIpcCodec.encodeFrame(opcode, payload);
+    // Si el handshake aún no terminó (READY pendiente), encolar: enviar
+    // antes de que Discord procese el handshake puede perder el frame.
+    if (!_handshakeDone) {
+      _pendingSends.add(frame);
+      return;
+    }
     try {
-      socket.add(DiscordIpcCodec.encodeFrame(opcode, payload));
+      socket.add(frame);
     } catch (_) {
       // Socket cerrado: el reconnect lo retomará.
     }
+  }
+
+  void _drainPending() {
+    final socket = _socket;
+    if (socket == null) return;
+    for (final frame in _pendingSends) {
+      try {
+        socket.add(frame);
+      } catch (_) {}
+    }
+    _pendingSends.clear();
   }
 
   Future<void> _closeSocket() async {
@@ -199,6 +250,8 @@ class DiscordUnixTransport implements DiscordIpcTransport {
       } catch (_) {}
     }
     _incoming.clear();
+    _pendingSends.clear();
+    _handshakeDone = false;
   }
 
   @override

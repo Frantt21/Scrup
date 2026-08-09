@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import '../../core/track.dart';
 import '../player_service.dart';
 import '../settings_store.dart';
@@ -25,15 +27,13 @@ class DiscordPresenceService {
   final PlayerService player;
   final SettingsStore settings;
 
-  /// Id de aplicación por defecto en Discord Developer Portal. El usuario
-  /// debe crear su propia aplicación y pegar su id en Configuración; con el
-  /// id por defecto el handshake falla y la presencia simplemente no se
-  /// activa (los assets de la portada se resuelven por URL remota, no
-  /// requieren subir assets).
-  static const String defaultClientId = '0';
+  /// Id de aplicación de Scrup en Discord Developer Portal. Al estar
+  /// embebido, la presencia funciona de fábrica: el handshake IPC solo
+  /// necesita el Application ID (público por diseño) — no hace falta
+  /// configurar nada. El nombre/ícono que se ve en el perfil es el de la
+  /// aplicación de Scrup.
+  static const String clientId = '1536098905479970826';
 
-  /// Client id en uso (default o el guardado por el usuario).
-  String _clientId = defaultClientId;
   bool _enabled = false;
 
   /// Cada cuánto se reintenta conectar cuando Discord no está corriendo.
@@ -43,11 +43,17 @@ class DiscordPresenceService {
   /// (el C lib oficial usa el mismo intervalo).
   static const _heartbeatInterval = Duration(seconds: 15);
 
-  /// Frecuencia con la que se refresca el timestamp de inicio mientras
-  /// suena: Discord muestra un cronómetro desde `start`, y sin refresco el
-  /// recorrido mostrado se quedaría congelado al valor de la última
-  /// actualización.
-  static const _positionSyncInterval = Duration(seconds: 10);
+  /// Frecuencia con la que se re-publica la actividad mientras suena:
+  /// Discord CACHEA la presencia en el perfil y no la refresca sola mientras
+  /// la conexión IPC sigue viva (si no, hay que reiniciar Discord para ver
+  /// la canción nueva). Re-publicar con el timestamp actualizado también
+  /// mantiene el cronómetro sincronizado con la posición real.
+  static const _positionSyncInterval = Duration(seconds: 15);
+
+  /// Cada cuánto se RECONECTA el IPC a propósito: Discord solo re-validar la
+  /// actividad en el perfil con un handshake nuevo; una conexión de larga
+  /// duración queda con la presencia congelada hasta reiniciar el cliente.
+  static const _reconnectInterval = Duration(minutes: 3);
 
   final _events = StreamController<DiscordIpcEvent>.broadcast();
 
@@ -58,7 +64,12 @@ class DiscordPresenceService {
   StreamSubscription<Duration>? _positionSub;
   Timer? _heartbeat;
   Timer? _positionSync;
+  Timer? _reconnect;
   bool _connected = false;
+
+  /// `true` cuando el servicio ya se liberó (dispose): las reconexiones
+  /// programadas no deben re-arrancar el transporte.
+  bool _closed = false;
 
   Track? _track;
   bool _playing = false;
@@ -74,10 +85,6 @@ class DiscordPresenceService {
   Future<void> start() async {
     try {
       _enabled = await settings.loadDiscordEnabled();
-      final savedId = await settings.loadDiscordClientId();
-      if (savedId != null && savedId.trim().isNotEmpty) {
-        _clientId = savedId.trim();
-      }
     } catch (_) {
       // La configuración nunca debe romper el arranque.
     }
@@ -98,13 +105,13 @@ class DiscordPresenceService {
     _positionSub = player.position.listen((p) => _position = p);
   }
 
-  /// (Re)arranca el transporte con el client id actual. Idempotente: si ya
-  /// está corriendo con el mismo id no hace nada.
+  /// (Re)arranca el transporte con el client id embebido. Idempotente: si
+  /// ya está corriendo no hace nada.
   void _startTransport() {
     if (_transport != null) return;
     final DiscordIpcTransport transport = Platform.isWindows
-        ? DiscordWindowsTransport(_clientId)
-        : DiscordUnixTransport(_clientId);
+        ? DiscordWindowsTransport(clientId)
+        : DiscordUnixTransport(clientId);
     _transport = transport;
     _transportSub = transport.events.listen(_onTransportEvent);
     unawaited(transport.connect(retryDelay: _retryDelay));
@@ -119,19 +126,6 @@ class DiscordPresenceService {
       _startTransport();
     } else {
       await _stopTransport();
-    }
-  }
-
-  /// Actualiza el client id desde Configuración: reinicia el transporte si
-  /// estaba activo para que el handshake use el id nuevo.
-  Future<void> setClientId(String clientId) async {
-    final trimmed = clientId.trim();
-    if (trimmed == _clientId) return;
-    _clientId = trimmed.isEmpty ? defaultClientId : trimmed;
-    await settings.saveDiscordClientId(_clientId);
-    if (_enabled && _transport != null) {
-      await _stopTransport();
-      _startTransport();
     }
   }
 
@@ -160,13 +154,25 @@ class DiscordPresenceService {
       case DiscordIpcConnected():
         _connected = true;
         _startTimers();
+        debugPrint('[discord] conectado, publicando presencia…');
         _publishPresence();
+        // Programar la próxima reconexión: fuerza a Discord a re-validar la
+        // actividad en el perfil (workaround del cacheo de Rich Presence).
+        _reconnect?.cancel();
+        _reconnect = Timer(_reconnectInterval, () {
+          debugPrint('[discord] reconectando para refrescar la presencia…');
+          unawaited(_forceReconnect());
+        });
       case DiscordIpcDisconnected():
         _connected = false;
         _stopTimers();
-      case DiscordIpcMessage(:final opcode):
+      case DiscordIpcMessage(:final opcode, :final payload):
         if (opcode == DiscordOpcode.ping) {
           _transport?.send(DiscordOpcode.pong, {});
+        } else if (opcode == DiscordOpcode.frame) {
+          // El READY (evt=READY) o el ack de SET_ACTIVITY confirman que el
+          // comando llegó a Discord.
+          debugPrint('[discord] frame: ${payload['evt'] ?? payload['cmd']}');
         }
     }
   }
@@ -187,6 +193,18 @@ class DiscordPresenceService {
     _heartbeat = null;
     _positionSync?.cancel();
     _positionSync = null;
+    _reconnect?.cancel();
+    _reconnect = null;
+  }
+
+  /// Cierra y reabre el transporte IPC: el handshake nuevo hace que Discord
+  /// re-validar la actividad y la muestre sin reiniciar el cliente.
+  Future<void> _forceReconnect() async {
+    if (_transport == null) return;
+    final wasEnabled = _enabled;
+    await _stopTransport();
+    if (_closed) return;
+    if (wasEnabled) _startTransport();
   }
 
   /// Publica (o limpia) la actividad según el estado del reproductor.
@@ -195,6 +213,7 @@ class DiscordPresenceService {
     if (transport == null || !_connected) return;
     final track = _track;
     if (track == null) {
+      debugPrint('[discord] sin pista, limpiando actividad');
       transport.send(DiscordOpcode.frame, {
         'cmd': 'SET_ACTIVITY',
         'args': {'pid': pid, 'activity': null},
@@ -208,6 +227,7 @@ class DiscordPresenceService {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final start = now - _position.inSeconds;
 
+    debugPrint('[discord] SET_ACTIVITY: ${track.title} — ${track.artist}');
     transport.send(DiscordOpcode.frame, {
       'cmd': 'SET_ACTIVITY',
       'args': {
@@ -217,14 +237,11 @@ class DiscordPresenceService {
           'details': _details(track),
           'state': track.artist.isNotEmpty ? track.artist : 'Scrup',
           'timestamps': {'start': start},
-          'assets': {
-            if (track.thumbnailUrl != null)
-              // URL remota directa (YouTube) como imagen grande
-              'large_image': track.thumbnailUrl,
-            'large_text': track.title,
-            'small_image': 'scrup',
-            'small_text': 'Scrup',
-          },
+          // SIN assets custom: Discord NO acepta URLs remotas en
+          // `large_image`/`small_image` (solo claves de assets subidos al
+          // Developer Portal) — un asset inválido rechaza TODO el frame.
+          // Sin assets, la actividad usa el ícono por defecto de la
+          // aplicación de Scrup y siempre renderiza.
           'buttons': [
             {
               'label': 'Escuchar en YouTube',
@@ -252,6 +269,9 @@ class DiscordPresenceService {
   String _nonce() => 'scrup_${DateTime.now().microsecondsSinceEpoch}';
 
   Future<void> dispose() async {
+    _closed = true;
+    _reconnect?.cancel();
+    _reconnect = null;
     await _trackSub?.cancel();
     _trackSub = null;
     await _playingSub?.cancel();
