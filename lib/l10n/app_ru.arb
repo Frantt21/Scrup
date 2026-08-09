@@ -106,5 +106,12 @@
   "cacheCleared": "Кэш очищен",
   "cantClearCache": "Не удалось очистить кэш",
   "about": "О программе",
-  "version": "Версия"
+  "version": "Версия",
+
+  "discordPresence": "Присутствие в Discord",
+  "discordPresenceHint": "Показывает в вашем профиле Discord песню, которую вы слушаете",
+  "discordEnabled": "Включить присутствие",
+  "discordClientId": "ID приложения",
+  "discordClientIdHint": "Создайте приложение на discord.com/developers и вставьте сюда его Application ID",
+  "discordRequiresClientId": "Нужно создать приложение на портале разработчиков Discord, чтобы присутствие отображалось"
 }

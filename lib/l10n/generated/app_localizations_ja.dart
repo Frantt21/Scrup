@@ -336,4 +336,24 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get version => 'バージョン';
+
+  @override
+  String get discordPresence => 'Discord プレゼンス';
+
+  @override
+  String get discordPresenceHint => 'Discordプロフィールに再生中の曲を表示します';
+
+  @override
+  String get discordEnabled => 'プレゼンスを有効にする';
+
+  @override
+  String get discordClientId => 'アプリケーションID';
+
+  @override
+  String get discordClientIdHint =>
+      'discord.com/developers でアプリを作成し、Application ID をここに貼り付けます';
+
+  @override
+  String get discordRequiresClientId =>
+      'プレゼンスを表示するには Discord Developer Portal でアプリを作成する必要があります';
 }

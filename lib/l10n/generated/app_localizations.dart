@@ -696,6 +696,42 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Versión'**
   String get version;
+
+  /// No description provided for @discordPresence.
+  ///
+  /// In es, this message translates to:
+  /// **'Presencia de Discord'**
+  String get discordPresence;
+
+  /// No description provided for @discordPresenceHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Muestra en tu perfil de Discord la canción que estás escuchando'**
+  String get discordPresenceHint;
+
+  /// No description provided for @discordEnabled.
+  ///
+  /// In es, this message translates to:
+  /// **'Activar presencia'**
+  String get discordEnabled;
+
+  /// No description provided for @discordClientId.
+  ///
+  /// In es, this message translates to:
+  /// **'Id de aplicación'**
+  String get discordClientId;
+
+  /// No description provided for @discordClientIdHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Crea una aplicación en discord.com/developers y pega aquí su Application ID'**
+  String get discordClientIdHint;
+
+  /// No description provided for @discordRequiresClientId.
+  ///
+  /// In es, this message translates to:
+  /// **'Necesitas crear una aplicación en Discord Developer Portal para que la presencia aparezca'**
+  String get discordRequiresClientId;
 }
 
 class _AppLocalizationsDelegate

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:palette_generator/palette_generator.dart';
 
 import '../core/track.dart';
+import '../services/palette_cache_store.dart';
 import '../services/player_service.dart';
 
 /// Lila por defecto cuando no hay pista o el artwork no carga.
@@ -17,7 +18,7 @@ const Color kDefaultAccent = Color(0xFFC084FC);
 /// Es *best-effort*: si no hay portada o falla la descarga/análisis, se
 /// mantiene el acento por defecto (lila) sin romper nada.
 class ThemeController extends ChangeNotifier {
-  ThemeController(this._player) {
+  ThemeController(this._player, {this.paletteCache}) {
     // Leer la pista ya publicada (p. ej. sesión restaurada): los streams
     // broadcast no re-emiten lo pasado, así que el acento se aplica aquí.
     _onTrackChanged(_player.currentTrackValue);
@@ -25,6 +26,12 @@ class ThemeController extends ChangeNotifier {
   }
 
   final PlayerService _player;
+
+  /// Caché persistido en disco de colores por artwork: evita re-descargar
+  /// la portada entre sesiones solo para re-extraer la paleta. Opcional y
+  /// best-effort (si no está, se descarga igual).
+  final PaletteCacheStore? paletteCache;
+
   StreamSubscription<Track?>? _sub;
 
   /// Caché de color por URL de portada (varias pistas del mismo álbum
@@ -61,6 +68,20 @@ class ThemeController extends ChangeNotifier {
   }
 
   void _extract(int token, String url) {
+    // Caché compartido (playlist/sesiones anteriores): el color ya extraído
+    // por el detalle de una playlist se aplica aquí sin re-descargar.
+    final stored = paletteCache?.get(url);
+    if (stored != null) {
+      _paletteCache[url] = stored;
+      _setAccent(stored);
+      return;
+    }
+    // Alguien (otra vista o nosotros) ya intentó esta portada y falló en
+    // esta sesión: no volver a descargarla (se mantiene el acento actual).
+    if (paletteCache?.isFailed(url) ?? false) {
+      _paletteCache[url] = null;
+      return;
+    }
     // containsKey: también se cachea el fallo (null) para no re-descargar
     // la misma portada fallida cada vez que suena la pista.
     if (_paletteCache.containsKey(url)) {
@@ -91,6 +112,13 @@ class ThemeController extends ChangeNotifier {
     }
     // Guardar aunque sea null para no reintentar la misma portada fallida.
     _paletteCache[url] = color;
+    if (color != null) {
+      // Persistir en disco solo los éxitos (los fallos se reintentan luego).
+      paletteCache?.put(url, color);
+    } else {
+      // Compartir el fallo con el resto de la app en esta sesión.
+      paletteCache?.markFailed(url);
+    }
     if (token == _token) _setAccent(color);
   }
 

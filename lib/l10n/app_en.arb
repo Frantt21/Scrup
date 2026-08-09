@@ -169,5 +169,12 @@
   "cacheCleared": "Cache cleared",
   "cantClearCache": "Could not clear the cache",
   "about": "About",
-  "version": "Version"
+  "version": "Version",
+
+  "discordPresence": "Discord Presence",
+  "discordPresenceHint": "Show what you're listening to on your Discord profile",
+  "discordEnabled": "Enable presence",
+  "discordClientId": "Application ID",
+  "discordClientIdHint": "Create an app at discord.com/developers and paste its Application ID here",
+  "discordRequiresClientId": "You need to create an app in the Discord Developer Portal for the presence to show"
 }

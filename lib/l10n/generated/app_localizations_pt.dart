@@ -339,6 +339,27 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get version => 'Versão';
+
+  @override
+  String get discordPresence => 'Presença do Discord';
+
+  @override
+  String get discordPresenceHint =>
+      'Mostra no seu perfil do Discord a música que você está a ouvir';
+
+  @override
+  String get discordEnabled => 'Ativar presença';
+
+  @override
+  String get discordClientId => 'ID da aplicação';
+
+  @override
+  String get discordClientIdHint =>
+      'Crie uma app em discord.com/developers e cole aqui o ID da aplicação';
+
+  @override
+  String get discordRequiresClientId =>
+      'Precisa de criar uma app no Portal de Desenvolvedores do Discord para a presença aparecer';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -676,4 +697,25 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get version => 'Versão';
+
+  @override
+  String get discordPresence => 'Presença do Discord';
+
+  @override
+  String get discordPresenceHint =>
+      'Mostra no seu perfil do Discord a música que você está ouvindo';
+
+  @override
+  String get discordEnabled => 'Ativar presença';
+
+  @override
+  String get discordClientId => 'ID do aplicativo';
+
+  @override
+  String get discordClientIdHint =>
+      'Crie um app em discord.com/developers e cole aqui o ID do aplicativo';
+
+  @override
+  String get discordRequiresClientId =>
+      'Você precisa criar um app no Portal de Desenvolvedores do Discord para a presença aparecer';
 }

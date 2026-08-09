@@ -106,5 +106,12 @@
   "cacheCleared": "캐시 지워짐",
   "cantClearCache": "캐시를 지울 수 없습니다",
   "about": "정보",
-  "version": "버전"
+  "version": "버전",
+
+  "discordPresence": "Discord 상태 표시",
+  "discordPresenceHint": "Discord 프로필에 재생 중인 곡을 표시합니다",
+  "discordEnabled": "상태 표시 활성화",
+  "discordClientId": "애플리케이션 ID",
+  "discordClientIdHint": "discord.com/developers에서 앱을 만들고 Application ID를 여기에 붙여넣으세요",
+  "discordRequiresClientId": "상태를 표시하려면 Discord Developer Portal에서 앱을 만들어야 합니다"
 }

@@ -14,7 +14,7 @@ import 'views/settings_view.dart';
 import 'widgets/custom_title_bar.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/playlists_sidebar.dart';
-import 'widgets/scrup_snackbar.dart';
+import 'widgets/scrup_toasts.dart';
 
 /// Contenedor principal de la app: title bar personalizado, contenedor
 /// lateral con las playlists (glass), el inicio con búsqueda + recientes y
@@ -54,9 +54,9 @@ class _AppShellState extends State<AppShell> {
     _errorSub = context.read<PlayerService>().errors.listen((message) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
-      showScrupSnackBar(
-        ScaffoldMessenger.of(context),
+      showScrupToast(
         l10n.playbackErrorWithDetails(message),
+        kind: ScrupToastKind.error,
       );
     });
   }
@@ -218,6 +218,9 @@ class _AppShellState extends State<AppShell> {
                           child: const PlayerBar(),
                         ),
                       ),
+                      // Notificaciones superiores (reemplazan al SnackBar de
+                      // Flutter): flotan sobre el contenido bajo la title bar.
+                      const ScrupToastHost(),
                     ],
                   ),
                 ),

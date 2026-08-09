@@ -336,4 +336,24 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get version => '버전';
+
+  @override
+  String get discordPresence => 'Discord 상태 표시';
+
+  @override
+  String get discordPresenceHint => 'Discord 프로필에 재생 중인 곡을 표시합니다';
+
+  @override
+  String get discordEnabled => '상태 표시 활성화';
+
+  @override
+  String get discordClientId => '애플리케이션 ID';
+
+  @override
+  String get discordClientIdHint =>
+      'discord.com/developers에서 앱을 만들고 Application ID를 여기에 붙여넣으세요';
+
+  @override
+  String get discordRequiresClientId =>
+      '상태를 표시하려면 Discord Developer Portal에서 앱을 만들어야 합니다';
 }

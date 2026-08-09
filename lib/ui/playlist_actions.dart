@@ -4,12 +4,11 @@ import 'package:provider/provider.dart';
 import '../core/track.dart';
 import '../data/database.dart';
 import '../l10n/generated/app_localizations.dart';
-import 'widgets/scrup_snackbar.dart';
+import 'widgets/scrup_toasts.dart';
 
 /// Muestra el selector de playlist y añade [track] a la elegida (o a una
 /// recién creada). Compartido entre el buscador, las recientes, etc.
 Future<void> showAddToPlaylistSheet(BuildContext context, Track track) async {
-  final messenger = ScaffoldMessenger.of(context);
   final l10n = AppLocalizations.of(context);
   final db = context.read<AppDatabase>();
   final playlists = await db.watchPlaylists().first;
@@ -55,7 +54,7 @@ Future<void> showAddToPlaylistSheet(BuildContext context, Track track) async {
   );
   if (selected == null || !context.mounted) return;
   await db.addToPlaylist(selected, track);
-  showScrupSnackBar(messenger, l10n.addedToPlaylist);
+  showScrupToast(l10n.addedToPlaylist, kind: ScrupToastKind.success);
 }
 
 /// Crea una playlist y la selecciona en el bottom sheet actual.

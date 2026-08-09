@@ -106,5 +106,12 @@
   "cacheCleared": "Cache limpo",
   "cantClearCache": "Não foi possível limpar o cache",
   "about": "Sobre",
-  "version": "Versão"
+  "version": "Versão",
+
+  "discordPresence": "Presença do Discord",
+  "discordPresenceHint": "Mostra no seu perfil do Discord a música que você está ouvindo",
+  "discordEnabled": "Ativar presença",
+  "discordClientId": "ID do aplicativo",
+  "discordClientIdHint": "Crie um app em discord.com/developers e cole aqui o ID do aplicativo",
+  "discordRequiresClientId": "Você precisa criar um app no Portal de Desenvolvedores do Discord para a presença aparecer"
 }

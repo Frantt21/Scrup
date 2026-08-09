@@ -344,4 +344,25 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get version => 'Версия';
+
+  @override
+  String get discordPresence => 'Присутствие в Discord';
+
+  @override
+  String get discordPresenceHint =>
+      'Показывает в вашем профиле Discord песню, которую вы слушаете';
+
+  @override
+  String get discordEnabled => 'Включить присутствие';
+
+  @override
+  String get discordClientId => 'ID приложения';
+
+  @override
+  String get discordClientIdHint =>
+      'Создайте приложение на discord.com/developers и вставьте сюда его Application ID';
+
+  @override
+  String get discordRequiresClientId =>
+      'Нужно создать приложение на портале разработчиков Discord, чтобы присутствие отображалось';
 }

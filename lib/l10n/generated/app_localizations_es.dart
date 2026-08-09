@@ -340,4 +340,25 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get version => 'Versión';
+
+  @override
+  String get discordPresence => 'Presencia de Discord';
+
+  @override
+  String get discordPresenceHint =>
+      'Muestra en tu perfil de Discord la canción que estás escuchando';
+
+  @override
+  String get discordEnabled => 'Activar presencia';
+
+  @override
+  String get discordClientId => 'Id de aplicación';
+
+  @override
+  String get discordClientIdHint =>
+      'Crea una aplicación en discord.com/developers y pega aquí su Application ID';
+
+  @override
+  String get discordRequiresClientId =>
+      'Necesitas crear una aplicación en Discord Developer Portal para que la presencia aparezca';
 }

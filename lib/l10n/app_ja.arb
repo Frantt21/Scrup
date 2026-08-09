@@ -106,5 +106,12 @@
   "cacheCleared": "キャッシュをクリアしました",
   "cantClearCache": "キャッシュをクリアできませんでした",
   "about": "情報",
-  "version": "バージョン"
+  "version": "バージョン",
+
+  "discordPresence": "Discord プレゼンス",
+  "discordPresenceHint": "Discordプロフィールに再生中の曲を表示します",
+  "discordEnabled": "プレゼンスを有効にする",
+  "discordClientId": "アプリケーションID",
+  "discordClientIdHint": "discord.com/developers でアプリを作成し、Application ID をここに貼り付けます",
+  "discordRequiresClientId": "プレゼンスを表示するには Discord Developer Portal でアプリを作成する必要があります"
 }

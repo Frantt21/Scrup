@@ -91,6 +91,9 @@ class PlayerService {
   /// puntuales de widgets construidos tarde.
   Duration? get durationValue => _lastDuration;
 
+  /// Última posición reportada por el medio, para lecturas puntuales.
+  Duration get positionValue => _lastPosition;
+
   /// Id de la pista que se está preparando (descargando al caché o abriendo
   /// el medio), o `null` cuando no hay ninguna. Es un [ValueNotifier] para
   /// que un widget construido *después* de empezar la preparación también
@@ -108,6 +111,12 @@ class PlayerService {
   /// Modo radio activo: al agotar la cola, busca del mismo artista.
   /// Activo por defecto (recomendación automática al terminar una canción).
   final ValueNotifier<bool> radio = ValueNotifier<bool>(true);
+
+  /// Id de la playlist cuya cola se está reproduciendo (o `null` cuando la
+  /// reproducción no viene de una playlist: pista suelta, radio, etc.).
+  /// Lo usan el sidebar y el detalle para marcar SOLO la playlist que se
+  /// está reproduciendo de verdad (no todas las que contienen la pista).
+  final ValueNotifier<int?> activePlaylistId = ValueNotifier<int?>(null);
 
   /// Volumen de reproducción normalizado (0.0–1.0), expuesto a la UI.
   /// media_kit trabaja en 0–100; aquí se mantiene la escala de la UI.
@@ -183,6 +192,8 @@ class PlayerService {
   /// Vacía la cola. Devuelve `false` si una pista más nueva la reemplazó
   /// durante la resolución (carrera).
   Future<bool> playTrack(Track track) async {
+    // Una pista suelta no pertenece a ninguna playlist activa.
+    activePlaylistId.value = null;
     _queue.clear();
     _queueIndex = -1;
     _prematureRetries.clear();
@@ -195,6 +206,8 @@ class PlayerService {
   /// se resuelve, la pista no se restaura.
   Future<bool> restoreLastTrack(Track track) async {
     final token = ++_playToken;
+    // La sesión restaurada no trae contexto de playlist.
+    activePlaylistId.value = null;
     _queue.clear();
     _queueIndex = -1;
     _prematureRetries.clear();
@@ -226,8 +239,17 @@ class PlayerService {
   }
 
   /// Reproduce una lista de pistas como cola, empezando por [startIndex].
-  Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {
+  ///
+  /// [playlistId] identifica la playlist de la que viene la cola (si viene
+  /// de una): se expone en [activePlaylistId] para que el sidebar y el
+  /// detalle marquen solo esa playlist como "en reproducción".
+  Future<void> playQueue(
+    List<Track> tracks, {
+    int startIndex = 0,
+    int? playlistId,
+  }) async {
     if (tracks.isEmpty) return;
+    activePlaylistId.value = playlistId;
     _queue
       ..clear()
       ..addAll(tracks);
@@ -593,6 +615,7 @@ class PlayerService {
     repeatMode.dispose();
     shuffle.dispose();
     radio.dispose();
+    activePlaylistId.dispose();
     volume.dispose();
   }
 }

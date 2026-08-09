@@ -10,9 +10,11 @@ import 'package:provider/provider.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/playlist_cover_store.dart';
+import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
 import 'cover_image.dart';
-import 'scrup_snackbar.dart';
+import 'now_playing_bars.dart';
+import 'scrup_toasts.dart';
 
 /// Ancho fijo del contenedor lateral de playlists.
 const double kSidebarWidth = 250;
@@ -45,8 +47,16 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   late final Stream<Map<int, int>> _countsStream;
   StreamSubscription<List<Playlist>>? _playlistsSub;
   StreamSubscription<Map<int, int>>? _countsSub;
+  StreamSubscription<bool>? _playingSub;
   List<Playlist> _playlists = const [];
   Map<int, int> _counts = const {};
+
+  /// Id de la playlist que se está reproduciendo de verdad (la de la cola
+  /// activa). El ecualizador solo aparece en ELLA, no en todas las que
+  /// contienen la pista actual.
+  int? _activePlaylistId;
+  bool _playing = false;
+  late final PlayerService _player;
 
   /// `true` = cuadrícula (grid de 2 columnas); `false` = lista.
   bool _gridMode = false;
@@ -70,6 +80,21 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
       if (!mounted) return;
       setState(() => _counts = counts);
     });
+    // Indicador de "en reproducción": solo la playlist cuya cola es la
+    // activa (sin consultas por canción).
+    _player = context.read<PlayerService>();
+    _activePlaylistId = _player.activePlaylistId.value;
+    _playing = _player.isPlaying;
+    _player.activePlaylistId.addListener(_onActivePlaylistChanged);
+    _playingSub = _player.playing.listen((p) {
+      if (!mounted) return;
+      setState(() => _playing = p);
+    });
+  }
+
+  void _onActivePlaylistChanged() {
+    if (!mounted) return;
+    setState(() => _activePlaylistId = _player.activePlaylistId.value);
   }
 
   /// Restaura el modo guardado (lista/cuadrícula) de la última sesión.
@@ -93,11 +118,12 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   void dispose() {
     _playlistsSub?.cancel();
     _countsSub?.cancel();
+    _playingSub?.cancel();
+    _player.activePlaylistId.removeListener(_onActivePlaylistChanged);
     super.dispose();
   }
 
   Future<void> _createPlaylist() async {
-    final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context);
     final db = context.read<AppDatabase>();
     final data =
@@ -112,7 +138,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
       id = await db.createPlaylist(name);
     } catch (_) {
       if (!mounted) return;
-      showScrupSnackBar(messenger, l10n.cantCreatePlaylist);
+      showScrupToast(l10n.cantCreatePlaylist, kind: ScrupToastKind.error);
       return;
     }
     // Descripción y portada: best-effort (si la portada falla, la playlist
@@ -132,7 +158,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
         // Silencioso: la playlist se crea igual sin portada.
       }
     }
-    showScrupSnackBar(messenger, l10n.playlistCreated(name));
+    showScrupToast(l10n.playlistCreated(name), kind: ScrupToastKind.success);
     // Abrir la recién creada directamente.
     if (!mounted) return;
     final playlist = await db.getPlaylist(id);
@@ -142,7 +168,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   }
 
   Future<void> _deletePlaylist(Playlist playlist) async {
-    final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context);
     final db = context.read<AppDatabase>();
     // Favoritos es una playlist especial: nunca se borra.
@@ -184,7 +209,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
       widget.onSelectPlaylist(null);
     }
     if (!mounted) return;
-    showScrupSnackBar(messenger, l10n.playlistDeleted);
+    showScrupToast(l10n.playlistDeleted);
   }
 
   @override
@@ -288,6 +313,9 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
             onDelete: () => _deletePlaylist(playlist),
             // Favoritos: diseño especial con corazón y sin borrar.
             showDelete: !playlist.isFavorites,
+            // Indicador: solo en la playlist que se está reproduciendo.
+            nowPlaying: _activePlaylistId == playlist.id,
+            isPlaying: _playing,
           ),
         const SizedBox(height: 4),
         _CreatePlaylistTile(onTap: _createPlaylist),
@@ -320,6 +348,9 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
           onDelete: () => _deletePlaylist(playlist),
           // Favoritos: diseño especial con corazón y sin borrar.
           showDelete: !playlist.isFavorites,
+          // Indicador: solo en la playlist que se está reproduciendo.
+          nowPlaying: _activePlaylistId == playlist.id,
+          isPlaying: _playing,
         );
       },
     );
@@ -447,6 +478,12 @@ class _PlaylistRow extends StatefulWidget {
   /// `false` en Favoritos: no se muestra el botón de borrar.
   final bool showDelete;
 
+  /// Una canción de esta playlist está en el reproductor.
+  final bool nowPlaying;
+
+  /// Si la canción en reproducción está sonando (para animar el indicador).
+  final bool isPlaying;
+
   const _PlaylistRow({
     required this.playlist,
     required this.count,
@@ -454,6 +491,8 @@ class _PlaylistRow extends StatefulWidget {
     required this.onTap,
     required this.onDelete,
     this.showDelete = true,
+    this.nowPlaying = false,
+    this.isPlaying = false,
   });
 
   @override
@@ -490,18 +529,29 @@ class _PlaylistRowState extends State<_PlaylistRow> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        playlist.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: widget.selected
-                              ? theme.colorScheme.primary
-                              : (playlist.isFavorites
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              playlist.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: widget.selected
                                     ? theme.colorScheme.primary
-                                    : theme.colorScheme.onSurface),
-                        ),
+                                    : (playlist.isFavorites
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.onSurface),
+                              ),
+                            ),
+                          ),
+                          // Indicador: una canción de esta playlist suena
+                          if (widget.nowPlaying) ...[
+                            const SizedBox(width: 6),
+                            NowPlayingBars(active: widget.isPlaying, size: 11),
+                          ],
+                        ],
                       ),
                       Text(
                         AppLocalizations.of(context).songCount(widget.count),
@@ -607,6 +657,12 @@ class _PlaylistGridCell extends StatefulWidget {
   /// `false` en Favoritos: no se muestra el botón de borrar.
   final bool showDelete;
 
+  /// Una canción de esta playlist está en el reproductor.
+  final bool nowPlaying;
+
+  /// Si la canción en reproducción está sonando (para animar el indicador).
+  final bool isPlaying;
+
   const _PlaylistGridCell({
     required this.playlist,
     required this.count,
@@ -614,6 +670,8 @@ class _PlaylistGridCell extends StatefulWidget {
     required this.onTap,
     required this.onDelete,
     this.showDelete = true,
+    this.nowPlaying = false,
+    this.isPlaying = false,
   });
 
   @override
@@ -727,6 +785,14 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                           ),
                         ),
                       ),
+                    ),
+                  // Indicador limpio: solo el ecualizador (la sombra del
+                  // widget lo hace legible sobre la portada)
+                  if (widget.nowPlaying)
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: NowPlayingBars(active: widget.isPlaying, size: 10),
                     ),
                 ],
               ),

@@ -12,6 +12,8 @@ import 'data/database.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'services/audio_cache_service.dart';
 import 'services/deezer_service.dart';
+import 'services/discord/discord_presence_service.dart';
+import 'services/palette_cache_store.dart';
 import 'services/player_service.dart';
 import 'services/scrup_audio_handler.dart';
 import 'services/settings_store.dart';
@@ -90,6 +92,13 @@ Future<void> main() async {
     await database.ensureFavoritesPlaylist();
   } catch (_) {}
 
+  // Caché de colores de artworks en disco (best-effort): evita re-descargar
+  // miniaturas entre sesiones solo para re-extraer la paleta.
+  final paletteCache = await PaletteCacheStore.load();
+  // Persistir los últimos colores extraídos al cerrar la ventana: el debounce
+  // del PaletteCacheStore podría no haber disparado aún su escritura.
+  windowManager.addListener(_FlushPaletteOnClose(paletteCache));
+
   // Instancia única de preferencias: se comparte entre los providers y la
   // carga del idioma inicial (restaurado entre sesiones).
   final settings = SettingsStore();
@@ -105,6 +114,7 @@ Future<void> main() async {
       settings: settings,
       initialLocale: initialLocale,
       audioHandler: audioHandler,
+      paletteCache: paletteCache,
     ),
   );
 }
@@ -143,12 +153,17 @@ class ScrupApp extends StatelessWidget {
   /// Puente con los controles multimedia nativos del OS.
   final ScrupAudioHandler audioHandler;
 
+  /// Caché de colores de artworks persistido en disco (compartido por el
+  /// reproductor y el detalle de playlists).
+  final PaletteCacheStore paletteCache;
+
   const ScrupApp({
     super.key,
     required this.database,
     required this.settings,
     required this.initialLocale,
     required this.audioHandler,
+    required this.paletteCache,
   });
 
   @override
@@ -163,6 +178,7 @@ class ScrupApp extends StatelessWidget {
         ),
         Provider<DeezerService>(create: (_) => DeezerService()),
         Provider<SettingsStore>(create: (_) => settings),
+        Provider<PaletteCacheStore>(create: (_) => paletteCache),
         Provider<ScrupAudioHandler>(create: (_) => audioHandler),
         Provider<PlayerService>(
           // Inyecta la resolución de fuente (cache-first con yt-dlp), la
@@ -235,7 +251,25 @@ class ScrupApp extends StatelessWidget {
         // ChangeNotifierProvider (Provider rechaza subtipos de Listenable).
         // ChangeNotifierProvider libera el notifier automáticamente.
         ChangeNotifierProvider<ThemeController>(
-          create: (context) => ThemeController(context.read<PlayerService>()),
+          create: (context) => ThemeController(
+            context.read<PlayerService>(),
+            paletteCache: context.read<PaletteCacheStore>(),
+          ),
+        ),
+        // Presencia de Discord (Rich Presence): se conecta al IPC local de
+        // Discord y publica la canción en reproducción. Se crea con el
+        // reproductor ya listo (su provider viene antes) y arranca en
+        // función de la configuración guardada.
+        Provider<DiscordPresenceService>(
+          create: (context) {
+            final service = DiscordPresenceService(
+              player: context.read<PlayerService>(),
+              settings: context.read<SettingsStore>(),
+            );
+            unawaited(service.start());
+            return service;
+          },
+          dispose: (_, service) => service.dispose(),
         ),
         // Idioma de la interfaz: al cambiar, el MaterialApp se reconstruye
         // con el nuevo locale (y se persiste entre sesiones).
@@ -355,6 +389,19 @@ class ScrupApp extends StatelessWidget {
         waitDuration: const Duration(milliseconds: 350),
       ),
     );
+  }
+}
+
+/// Persiste el caché de colores cuando la ventana se cierra: el debounce del
+/// [PaletteCacheStore] podría no haber escrito aún la última extracción.
+class _FlushPaletteOnClose extends WindowListener {
+  _FlushPaletteOnClose(this.store);
+
+  final PaletteCacheStore store;
+
+  @override
+  void onWindowClose() {
+    unawaited(store.flush());
   }
 }
 

@@ -6,10 +6,11 @@ import 'package:provider/provider.dart';
 
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/audio_cache_service.dart';
+import '../../services/discord/discord_presence_service.dart';
 import '../../services/settings_store.dart';
 import '../locale_controller.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
-import '../widgets/scrup_snackbar.dart';
+import '../widgets/scrup_toasts.dart';
 
 /// Pantalla de configuración: contenedor flotante tipo glass (como el
 /// detalle de playlist) con tres secciones: idioma (i18n, persistido entre
@@ -24,6 +25,10 @@ class SettingsView extends StatefulWidget {
 class _SettingsViewState extends State<SettingsView> {
   CacheStats? _stats;
   bool _clearing = false;
+
+  /// Estado de la presencia de Discord (cargado desde el store al abrir).
+  bool _discordEnabled = false;
+  final _clientIdController = TextEditingController();
 
   /// Idiomas soportados: el nombre se muestra en el propio idioma (cada
   /// usuario lo reconoce aunque aún no lea la interfaz).
@@ -45,6 +50,29 @@ class _SettingsViewState extends State<SettingsView> {
   void initState() {
     super.initState();
     _refreshStats();
+    _loadDiscordPrefs();
+  }
+
+  /// Carga el toggle y el id de Discord guardados (best-effort).
+  Future<void> _loadDiscordPrefs() async {
+    try {
+      final store = context.read<SettingsStore>();
+      final enabled = await store.loadDiscordEnabled();
+      final clientId = await store.loadDiscordClientId();
+      if (!mounted) return;
+      setState(() => _discordEnabled = enabled);
+      if (clientId != null && clientId.isNotEmpty) {
+        _clientIdController.text = clientId;
+      }
+    } catch (_) {
+      // La configuración nunca debe romper la vista.
+    }
+  }
+
+  @override
+  void dispose() {
+    _clientIdController.dispose();
+    super.dispose();
   }
 
   Future<void> _refreshStats() async {
@@ -55,7 +83,6 @@ class _SettingsViewState extends State<SettingsView> {
 
   Future<void> _clearCache() async {
     final l10n = AppLocalizations.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -82,12 +109,12 @@ class _SettingsViewState extends State<SettingsView> {
     try {
       await context.read<AudioCacheService>().clear();
       if (!mounted) return;
-      showScrupSnackBar(messenger, l10n.cacheCleared);
+      showScrupToast(l10n.cacheCleared, kind: ScrupToastKind.success);
     } catch (_) {
       // En Windows, el reproductor puede tener un archivo en uso y el borrado
       // fallar a mitad: se avisa pero no se rompe nada.
       if (!mounted) return;
-      showScrupSnackBar(messenger, l10n.cantClearCache);
+      showScrupToast(l10n.cantClearCache, kind: ScrupToastKind.error);
     } finally {
       if (mounted) setState(() => _clearing = false);
     }
@@ -166,6 +193,8 @@ class _SettingsViewState extends State<SettingsView> {
                   ),
                   const SizedBox(height: 20),
                   _buildLanguageSection(theme),
+                  const SizedBox(height: 16),
+                  _buildDiscordSection(theme),
                   const SizedBox(height: 16),
                   _buildCacheSection(theme),
                   const SizedBox(height: 16),
@@ -295,6 +324,71 @@ class _SettingsViewState extends State<SettingsView> {
       if (option.locale == locale) return option.label;
     }
     return locale.toString();
+  }
+
+  /// Discord: activa la presencia de Rich Presence (requiere el id de una
+  /// aplicación creada en Discord Developer Portal) y campo para el id.
+  Widget _buildDiscordSection(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
+    final service = context.read<DiscordPresenceService>();
+
+    return _SectionCard(
+      icon: Icons.headphones_rounded,
+      title: l10n.discordPresence,
+      caption: l10n.discordPresenceHint,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            // Mismo ancho del selector de idioma (240): compacto y con las
+            // mismas esquinas redondeadas que las tarjetas de sección.
+            title: SizedBox(
+              width: 240,
+              child: Text(
+                l10n.discordEnabled,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+            value: _discordEnabled,
+            onChanged: (value) async {
+              setState(() => _discordEnabled = value);
+              await service.setEnabled(value);
+              if (value) {
+                showScrupToast(
+                  l10n.discordRequiresClientId,
+                  kind: ScrupToastKind.info,
+                );
+              }
+            },
+          ),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _clientIdController,
+            decoration: InputDecoration(
+              labelText: l10n.discordClientId,
+              hintText: l10n.discordClientIdHint,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              isDense: true,
+            ),
+            onSubmitted: (value) async {
+              await service.setClientId(value);
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.discordRequiresClientId,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Caché: tamaño usado (del límite) + nº de archivos + vaciar.

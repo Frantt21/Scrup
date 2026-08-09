@@ -6,9 +6,11 @@ import 'package:provider/provider.dart';
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/player_service.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
 import '../widgets/context_menu_item.dart';
+import '../widgets/now_playing_bars.dart';
 import '../widgets/player_bar.dart' show kPlayerOverlayInset;
 
 /// Pantalla de inicio: barra de búsqueda arriba y las reproducciones
@@ -29,8 +31,14 @@ class HomeView extends StatefulWidget {
 class _HomeViewState extends State<HomeView> {
   late final Stream<List<Track>> _recentStream;
   StreamSubscription<List<Track>>? _sub;
+  StreamSubscription<Track?>? _trackSub;
+  StreamSubscription<bool>? _playingSub;
   List<Track> _recent = const [];
   bool _loaded = false;
+
+  /// Pista en reproducción (para el indicador de "en reproducción").
+  Track? _currentTrack;
+  bool _playing = false;
 
   /// Tamaño fijo de las tarjetas (~200px); las columnas se deducen del ancho.
   static const _cardExtent = 200.0;
@@ -47,11 +55,25 @@ class _HomeViewState extends State<HomeView> {
         _loaded = true;
       });
     });
+    // Indicador de "en reproducción" en las tarjetas
+    final player = context.read<PlayerService>();
+    _currentTrack = player.currentTrackValue;
+    _playing = player.isPlaying;
+    _trackSub = player.currentTrack.listen((t) {
+      if (!mounted) return;
+      setState(() => _currentTrack = t);
+    });
+    _playingSub = player.playing.listen((p) {
+      if (!mounted) return;
+      setState(() => _playing = p);
+    });
   }
 
   @override
   void dispose() {
     _sub?.cancel();
+    _trackSub?.cancel();
+    _playingSub?.cancel();
     super.dispose();
   }
 
@@ -140,6 +162,8 @@ class _HomeViewState extends State<HomeView> {
                     return _RecentCard(
                       track: track,
                       onPlay: () => playTrack(context, track),
+                      isCurrent: track.id == _currentTrack?.id,
+                      isPlaying: _playing,
                     );
                   }, childCount: visible),
                 ),
@@ -157,8 +181,15 @@ class _HomeViewState extends State<HomeView> {
 class _RecentCard extends StatefulWidget {
   final Track track;
   final VoidCallback onPlay;
+  final bool isCurrent;
+  final bool isPlaying;
 
-  const _RecentCard({required this.track, required this.onPlay});
+  const _RecentCard({
+    required this.track,
+    required this.onPlay,
+    this.isCurrent = false,
+    this.isPlaying = false,
+  });
 
   @override
   State<_RecentCard> createState() => _RecentCardState();
@@ -291,6 +322,14 @@ class _RecentCardState extends State<_RecentCard> {
                           color: theme.colorScheme.primary,
                         ),
                       ),
+                    ),
+                  // Indicador limpio: solo el ecualizador (la sombra del
+                  // widget lo hace legible sobre el artwork)
+                  if (widget.isCurrent)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: NowPlayingBars(active: widget.isPlaying, size: 13),
                     ),
                 ],
               ),

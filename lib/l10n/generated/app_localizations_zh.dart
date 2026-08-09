@@ -335,4 +335,23 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get version => '版本';
+
+  @override
+  String get discordPresence => 'Discord 状态';
+
+  @override
+  String get discordPresenceHint => '在您的 Discord 个人资料中显示正在播放的歌曲';
+
+  @override
+  String get discordEnabled => '启用状态显示';
+
+  @override
+  String get discordClientId => '应用程序 ID';
+
+  @override
+  String get discordClientIdHint =>
+      '在 discord.com/developers 创建应用，并将 Application ID 粘贴到这里';
+
+  @override
+  String get discordRequiresClientId => '需要先在 Discord 开发者门户创建应用，状态才能显示';
 }

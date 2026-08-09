@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/player_service.dart';
 import '../../services/ytdlp_service.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
@@ -39,6 +40,12 @@ class _SearchViewState extends State<SearchView> {
   bool _hasSearched = false;
   final List<String> _recentSearches = ['Daft Punk', 'Lo-fi', 'Radiohead'];
 
+  /// Pista en reproducción (para el indicador de "en reproducción").
+  Track? _currentTrack;
+  bool _playing = false;
+  StreamSubscription<Track?>? _trackSub;
+  StreamSubscription<bool>? _playingSub;
+
   /// Contador para descartar respuestas de búsquedas obsoletas.
   int _searchToken = 0;
 
@@ -47,6 +54,18 @@ class _SearchViewState extends State<SearchView> {
     super.initState();
     // Búsqueda lanzada desde la pantalla de inicio
     widget.searchRequest?.addListener(_onExternalSearch);
+    // Indicador de "en reproducción" en las filas de resultados
+    final player = context.read<PlayerService>();
+    _currentTrack = player.currentTrackValue;
+    _playing = player.isPlaying;
+    _trackSub = player.currentTrack.listen((t) {
+      if (!mounted) return;
+      setState(() => _currentTrack = t);
+    });
+    _playingSub = player.playing.listen((p) {
+      if (!mounted) return;
+      setState(() => _playing = p);
+    });
   }
 
   void _onExternalSearch() {
@@ -89,6 +108,8 @@ class _SearchViewState extends State<SearchView> {
   @override
   void dispose() {
     widget.searchRequest?.removeListener(_onExternalSearch);
+    _trackSub?.cancel();
+    _playingSub?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -244,6 +265,8 @@ class _SearchViewState extends State<SearchView> {
           track: track,
           onPlay: () => playTrack(context, track),
           onAddToPlaylist: () => showAddToPlaylistSheet(context, track),
+          isCurrent: track.id == _currentTrack?.id,
+          isPlaying: _playing,
         );
       },
     );

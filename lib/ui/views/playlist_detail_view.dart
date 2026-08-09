@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' show ImageFilter;
 
 import 'package:file_selector/file_selector.dart';
@@ -12,14 +13,16 @@ import 'package:provider/provider.dart';
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/palette_cache_store.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/player_service.dart';
 import '../playback.dart';
 import '../theme_controller.dart';
 import '../widgets/context_menu_item.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/now_playing_bars.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
-import '../widgets/scrup_snackbar.dart';
+import '../widgets/scrup_toasts.dart';
 import '../widgets/track_tile.dart';
 
 /// Detalle de una playlist como CONTENEDOR FLOTANTE tipo glass (márgenes,
@@ -51,10 +54,27 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   late final Stream<Playlist?> _playlistStream;
   StreamSubscription<List<Track>>? _tracksSub;
   StreamSubscription<Playlist?>? _playlistSub;
+  StreamSubscription<Track?>? _trackSub;
+  StreamSubscription<bool>? _playingSub;
   List<Track> _tracks = const [];
+
+  /// Pista en reproducción (para el indicador de "en reproducción" en las
+  /// filas).
+  Track? _currentTrack;
+  bool _playing = false;
+
+  /// Playlist cuya cola se está reproduciendo (de [PlayerService.activePlaylistId]).
+  /// El ecualizador del hero SOLO aparece si es ESTA playlist la que se está
+  /// reproduciendo, no si la pista actual solo pertenece a ella.
+  int? _activePlaylistId;
+  late final PlayerService _player;
 
   /// Playlist en vivo (portada/descripción/nombre pueden cambiar aquí).
   Playlist? _playlist;
+
+  /// Caché de colores persistido en disco (lo comparten el reproductor y
+  /// otras vistas): consultarlo evita re-descargar miniaturas entre sesiones.
+  late final PaletteCacheStore _store;
 
   /// Color de la portada (para el degradado del hero, el tinte del cristal y
   /// como `primary` del detalle: botones y elementos usan el color de la
@@ -66,6 +86,17 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   /// Caché de color extraído por portada, compartida entre instancias del
   /// detalle: evita re-descargar/re-analizar la misma portada en la sesión.
   static final Map<String, Color?> _paletteCache = {};
+
+  /// Caché de color por portada de CANCIÓN, compartida entre instancias del
+  /// detalle (y entre playlists): cada fila se tiñe con el color del artwork
+  /// de SU propia canción. Se usa `ThemeController.pickAccent` para elegirlo.
+  static final Map<String, Color?> _trackPaletteCache = {};
+
+  /// Portadas de canción cuya extracción de color está en curso (evita
+  /// lanzar dos descargas iguales para la misma miniatura). Estático como el
+  /// caché: si otra instancia del detalle ya la está descargando, no se
+  /// duplica el trabajo.
+  static final Set<String> _pendingTrackColors = {};
 
   /// Hover sobre la portada (muestra las acciones de edición).
   bool _coverHovered = false;
@@ -88,6 +119,21 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       if (!mounted) return;
       setState(() => _tracks = tracks);
     });
+    _store = context.read<PaletteCacheStore>();
+    // Indicador de "en reproducción": la pista actual y si está sonando.
+    _player = context.read<PlayerService>();
+    _currentTrack = _player.currentTrackValue;
+    _playing = _player.isPlaying;
+    _activePlaylistId = _player.activePlaylistId.value;
+    _player.activePlaylistId.addListener(_onActivePlaylistChanged);
+    _trackSub = _player.currentTrack.listen((t) {
+      if (!mounted) return;
+      setState(() => _currentTrack = t);
+    });
+    _playingSub = _player.playing.listen((p) {
+      if (!mounted) return;
+      setState(() => _playing = p);
+    });
     _maybeExtractAmbient(widget.playlist.coverUrl);
   }
 
@@ -95,7 +141,82 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   void dispose() {
     _tracksSub?.cancel();
     _playlistSub?.cancel();
+    _trackSub?.cancel();
+    _playingSub?.cancel();
+    _player.activePlaylistId.removeListener(_onActivePlaylistChanged);
     super.dispose();
+  }
+
+  void _onActivePlaylistChanged() {
+    if (!mounted) return;
+    setState(() => _activePlaylistId = _player.activePlaylistId.value);
+  }
+
+  /// Color del artwork de una canción, pidiendo su extracción si aún no está
+  /// cacheado. Lazy: solo las filas visibles (las que construye el ListView)
+  /// disparan la extracción, así el coste queda acotado a las ~20 visibles;
+  /// al llegar el color, un setState tiñe su fila. Devuelve `null` mientras
+  /// se extrae o si falla (la fila queda con los colores estándar).
+  Color? _trackColorFor(Track track) {
+    final url = track.thumbnailUrl;
+    if (url == null) return null;
+    if (_trackPaletteCache.containsKey(url)) return _trackPaletteCache[url];
+    // Caché persistido de una sesión anterior: usarlo sin descargar.
+    final stored = _store.get(url);
+    if (stored != null) {
+      _trackPaletteCache[url] = stored;
+      return stored;
+    }
+    // Ya se intentó (aquí o en el reproductor) y falló en esta sesión.
+    if (_store.isFailed(url)) {
+      _trackPaletteCache[url] = null;
+      return null;
+    }
+    if (_pendingTrackColors.add(url)) {
+      unawaited(_loadTrackColor(url));
+    }
+    return null;
+  }
+
+  Future<void> _loadTrackColor(String url) async {
+    Color? color;
+    try {
+      final bytes =
+          (await http
+                  .get(
+                    Uri.parse(url),
+                    headers: const {'User-Agent': 'Scrup/0.1 (music player)'},
+                  )
+                  .timeout(const Duration(seconds: 8)))
+              .bodyBytes;
+      color = await _extractColorFromBytes(bytes);
+    } catch (_) {
+      color = null;
+    }
+    _pendingTrackColors.remove(url);
+    // Guardar aunque sea null: no reintentar miniaturas fallidas (en esta
+    // sesión); solo los éxitos se persisten en disco.
+    _trackPaletteCache[url] = color;
+    if (color != null) {
+      _store.put(url, color);
+    } else {
+      _store.markFailed(url);
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// Extrae el color de acento de unos bytes de imagen (misma paleta y
+  /// selección que el reproductor). `null` si no se pudo analizar.
+  Future<Color?> _extractColorFromBytes(Uint8List bytes) async {
+    try {
+      final palette = await PaletteGenerator.fromImageProvider(
+        MemoryImage(bytes),
+        maximumColorCount: 16,
+      );
+      return ThemeController.pickAccent(palette);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Extrae el color de la portada solo cuando cambia (evita re-analizar en
@@ -105,6 +226,19 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     _ambientFor = coverUrl;
     if (_paletteCache.containsKey(coverUrl)) {
       setState(() => _ambientColor = _paletteCache[coverUrl]);
+      return;
+    }
+    // Caché persistido de una sesión anterior: usarlo sin descargar.
+    final stored = _store.get(coverUrl);
+    if (stored != null) {
+      _paletteCache[coverUrl] = stored;
+      setState(() => _ambientColor = stored);
+      return;
+    }
+    // Ya se intentó (aquí o en el reproductor) y falló en esta sesión.
+    if (_store.isFailed(coverUrl)) {
+      _paletteCache[coverUrl] = null;
+      setState(() => _ambientColor = null);
       return;
     }
     if (_ambientColor != null) {
@@ -126,23 +260,31 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                     )
                     .timeout(const Duration(seconds: 10)))
                 .bodyBytes;
-      final palette = await PaletteGenerator.fromImageProvider(
-        MemoryImage(bytes),
-        maximumColorCount: 16,
-      );
-      color = ThemeController.pickAccent(palette);
+      color = await _extractColorFromBytes(bytes);
     } catch (_) {
       color = null;
     }
     _paletteCache[source] = color;
+    if (color != null) {
+      // Persistir solo los éxitos (los fallos se reintentan en otra sesión).
+      _store.put(source, color);
+    } else {
+      _store.markFailed(source);
+    }
     if (!mounted || token != _ambientToken) return;
     setState(() => _ambientColor = color);
   }
 
   Future<void> _playAll() async {
     if (_tracks.isEmpty) return;
-    await playQueue(context, _tracks);
+    await playQueue(context, _tracks, playlistId: widget.playlist.id);
   }
+
+  /// `true` si ESTA playlist es la que se está reproduciendo (su cola es la
+  /// activa): el ecualizador del hero solo aparece aquí, no en otras
+  /// playlists que contengan la pista actual.
+  bool get _isPlayingThisPlaylist =>
+      _activePlaylistId != null && _activePlaylistId == widget.playlist.id;
 
   /// Reproduce toda la playlist en modo aleatorio: activa el shuffle del
   /// reproductor (el auto-advance seguirá en aleatorio) y arranca la cola.
@@ -150,7 +292,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     if (_tracks.isEmpty) return;
     final player = context.read<PlayerService>();
     if (!player.shuffle.value) player.toggleShuffle();
-    await playQueue(context, _tracks);
+    await playQueue(context, _tracks, playlistId: widget.playlist.id);
   }
 
   Future<void> _removeTrack(Track track) async {
@@ -181,21 +323,47 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
           value: 'play',
           icon: Icons.play_arrow_rounded,
           label: l10n.play,
+          // Iconos con el color del artwork DE LA CANCIÓN (el menú del
+          // Overlay no hereda el Theme local, hay que pasarlo explícito);
+          // si aún no se extrajo, fallback al color de la playlist.
+          color: _menuTrackColor(track) ?? _ambientColor,
         ),
         ContextMenuItem(
           value: 'remove',
           icon: Icons.remove_circle_outline,
           label: l10n.removeFromPlaylist,
+          color: _menuTrackColor(track) ?? _ambientColor,
         ),
       ],
     );
     if (!mounted) return;
     switch (action) {
       case 'play':
-        await playTrack(context, track);
+        // Reproducir desde aquí con la cola = la playlist (lo mismo que un
+        // clic en la fila).
+        final start = _tracks.indexWhere((t) => t.id == track.id);
+        await playQueue(
+          context,
+          _tracks,
+          startIndex: start < 0 ? 0 : start,
+          playlistId: widget.playlist.id,
+        );
       case 'remove':
         await _removeTrack(track);
     }
+  }
+
+  /// Color del artwork de una canción para el menú contextual: mira el
+  /// caché de memoria y el persistido (sin disparar una extracción nueva —
+  /// el menú es transitorio).
+  Color? _menuTrackColor(Track track) {
+    final url = track.thumbnailUrl;
+    if (url == null) return null;
+    final cached = _trackPaletteCache[url];
+    if (cached != null) return cached;
+    final stored = _store.get(url);
+    if (stored != null) _trackPaletteCache[url] = stored;
+    return stored;
   }
 
   // ------------------------------------------------------------ edición
@@ -221,7 +389,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         );
     if (result == null || !mounted) return;
 
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final name = result.name.trim();
       if (name.isNotEmpty && name != playlist.name) {
@@ -257,14 +424,14 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       }
 
       if (!mounted) return;
-      showScrupSnackBar(messenger, l10n.playlistUpdated);
+      showScrupToast(l10n.playlistUpdated, kind: ScrupToastKind.success);
       final updated = await db.getPlaylist(playlist.id);
       if (mounted && updated != null) {
         widget.onUpdated?.call(updated);
       }
     } catch (_) {
       if (!mounted) return;
-      showScrupSnackBar(messenger, l10n.cantSaveChanges);
+      showScrupToast(l10n.cantSaveChanges, kind: ScrupToastKind.error);
     }
   }
 
@@ -338,6 +505,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         : baseTheme;
     final playlist = _playlist ?? widget.playlist;
     final count = _tracks.length;
+    final currentId = _currentTrack?.id;
 
     return Theme(
       data: theme,
@@ -476,6 +644,17 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                                 .onSurfaceVariant,
                                           ),
                                     ),
+                                    // Indicador limpio: solo el ecualizador,
+                                    // y únicamente si esta playlist es la
+                                    // que se está reproduciendo
+                                    if (_isPlayingThisPlaylist)
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 4),
+                                        child: NowPlayingBars(
+                                          active: _playing,
+                                          size: 14,
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ],
@@ -493,8 +672,14 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                   Icon(
                                     Icons.music_off,
                                     size: 64,
-                                    color: theme.colorScheme.onSurfaceVariant
-                                        .withValues(alpha: 0.4),
+                                    // Icono tintado con el artwork de la
+                                    // playlist (si ya se extrajo)
+                                    color:
+                                        (playlistColor ??
+                                                theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant)
+                                            .withValues(alpha: 0.5),
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
@@ -531,7 +716,32 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                   ),
                                   child: TrackTile(
                                     track: track,
-                                    onPlay: () => playTrack(context, track),
+                                    // La cola es LA PLAYLIST: al tocar una
+                                    // canción, el siguiente/anterior (y el
+                                    // auto-advance) recorren la playlist,
+                                    // no caen en radio. El índice se
+                                    // recalcula al tocar (por si la lista
+                                    // cambió desde el build).
+                                    onPlay: () {
+                                      final start = _tracks.indexWhere(
+                                        (t) => t.id == track.id,
+                                      );
+                                      playQueue(
+                                        context,
+                                        _tracks,
+                                        startIndex: start < 0 ? 0 : start,
+                                        playlistId: widget.playlist.id,
+                                      );
+                                    },
+                                    isCurrent: track.id == currentId,
+                                    isPlaying: _playing,
+                                    // Texto e iconos con el color del
+                                    // artwork de SU canción (extraído de
+                                    // forma perezosa por fila); mientras se
+                                    // extrae, fallback al color de la
+                                    // playlist para que no haya saltos
+                                    accentColor:
+                                        _trackColorFor(track) ?? playlistColor,
                                   ),
                                 );
                               },

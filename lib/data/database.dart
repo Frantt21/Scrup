@@ -267,9 +267,9 @@ class AppDatabase extends _$AppDatabase {
 
   /// Devuelve el id de la playlist de Favoritos, creándola si no existe.
   Future<int> ensureFavoritesPlaylist() async {
-    final existing =
-        await (select(playlists)..where((p) => p.isFavorites.equals(true)))
-            .getSingleOrNull();
+    final existing = await (select(
+      playlists,
+    )..where((p) => p.isFavorites.equals(true))).getSingleOrNull();
     if (existing != null) return existing.id;
     return into(playlists).insert(
       PlaylistsCompanion.insert(
@@ -283,8 +283,7 @@ class AppDatabase extends _$AppDatabase {
   Stream<bool> watchTrackInPlaylist(int playlistId, String trackId) {
     final query = select(playlistTracks)
       ..where(
-        (pt) =>
-            pt.playlistId.equals(playlistId) & pt.trackId.equals(trackId),
+        (pt) => pt.playlistId.equals(playlistId) & pt.trackId.equals(trackId),
       );
     return query.watch().map((rows) => rows.isNotEmpty);
   }
