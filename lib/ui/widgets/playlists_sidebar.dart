@@ -143,6 +143,8 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   Future<void> _deletePlaylist(Playlist playlist) async {
     final messenger = ScaffoldMessenger.of(context);
     final db = context.read<AppDatabase>();
+    // Favoritos es una playlist especial: nunca se borra.
+    if (playlist.isFavorites) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -193,7 +195,10 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
 
     return Container(
       width: kSidebarWidth,
-      margin: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+      // Margen derecho 16 = mismo hueco que el padding del player (16): la
+      // separación entre el sidebar y el contenido queda idéntica a la del
+      // lado derecho (contenido → borde de la ventana).
+      margin: const EdgeInsets.fromLTRB(12, 12, 16, 12),
       // Sombra exterior (fuera del clip para que no se recorte)
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
@@ -277,6 +282,8 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
             selected: playlist.id == widget.openPlaylistId,
             onTap: () => widget.onSelectPlaylist(playlist),
             onDelete: () => _deletePlaylist(playlist),
+            // Favoritos: diseño especial con corazón y sin borrar.
+            showDelete: !playlist.isFavorites,
           ),
         const SizedBox(height: 4),
         _CreatePlaylistTile(onTap: _createPlaylist),
@@ -307,6 +314,8 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
           selected: playlist.id == widget.openPlaylistId,
           onTap: () => widget.onSelectPlaylist(playlist),
           onDelete: () => _deletePlaylist(playlist),
+          // Favoritos: diseño especial con corazón y sin borrar.
+          showDelete: !playlist.isFavorites,
         );
       },
     );
@@ -431,12 +440,16 @@ class _PlaylistRow extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
+  /// `false` en Favoritos: no se muestra el botón de borrar.
+  final bool showDelete;
+
   const _PlaylistRow({
     required this.playlist,
     required this.count,
     required this.selected,
     required this.onTap,
     required this.onDelete,
+    this.showDelete = true,
   });
 
   @override
@@ -481,7 +494,9 @@ class _PlaylistRowState extends State<_PlaylistRow> {
                           fontWeight: FontWeight.w600,
                           color: widget.selected
                               ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface,
+                              : (playlist.isFavorites
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurface),
                         ),
                       ),
                       Text(
@@ -496,20 +511,21 @@ class _PlaylistRowState extends State<_PlaylistRow> {
                     ],
                   ),
                 ),
-                // Espacio reservado para el borrar: evita que el nombre
-                // \"salte\" de ancho cuando aparece el botón en hover.
-                SizedBox(
-                  width: 32,
-                  child: _hovered
-                      ? IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 18),
-                          visualDensity: VisualDensity.compact,
-                          tooltip: 'Eliminar',
-                          color: theme.colorScheme.onSurfaceVariant,
-                          onPressed: widget.onDelete,
-                        )
-                      : null,
-                ),
+                // Espacio reservado para el borrar (oculto en Favoritos):
+                // evita que el nombre \"salte\" de ancho en hover.
+                if (widget.showDelete)
+                  SizedBox(
+                    width: 32,
+                    child: _hovered
+                        ? IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Eliminar',
+                            color: theme.colorScheme.onSurfaceVariant,
+                            onPressed: widget.onDelete,
+                          )
+                        : null,
+                  ),
               ],
             ),
           ),
@@ -519,6 +535,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
   }
 
   Widget _thumb(ThemeData theme) {
+    final favorites = widget.playlist.isFavorites;
     return ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: SizedBox(
@@ -527,26 +544,50 @@ class _PlaylistRowState extends State<_PlaylistRow> {
         child: CoverImage(
           source: widget.playlist.coverUrl,
           cacheWidth: 120,
-          fallback: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  theme.colorScheme.surfaceContainerHigh,
-                  theme.colorScheme.surfaceContainer,
-                ],
-              ),
-            ),
-            child: Icon(
-              Icons.queue_music,
-              size: 18,
-              color: theme.colorScheme.primary.withValues(alpha: 0.5),
-            ),
-          ),
+          fallback: favorites
+              // Favoritos: miniatura especial con corazón y degradado cálido.
+              ? _favoritesFallback(theme)
+              : Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        theme.colorScheme.surfaceContainerHigh,
+                        theme.colorScheme.surfaceContainer,
+                      ],
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.queue_music,
+                    size: 18,
+                    color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                  ),
+                ),
         ),
       ),
+    );
+  }
+
+  /// Placeholder de Favoritos: degradado cálido con corazón, distinto del
+  /// por defecto.
+  Widget _favoritesFallback(ThemeData theme) {
+    final primary = theme.colorScheme.primary;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            primary.withValues(alpha: 0.45),
+            primary.withValues(alpha: 0.15),
+            theme.colorScheme.surfaceContainer,
+          ],
+        ),
+      ),
+      child: Icon(Icons.favorite, size: 18, color: primary),
     );
   }
 }
@@ -560,12 +601,16 @@ class _PlaylistGridCell extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
+  /// `false` en Favoritos: no se muestra el botón de borrar.
+  final bool showDelete;
+
   const _PlaylistGridCell({
     required this.playlist,
     required this.count,
     required this.selected,
     required this.onTap,
     required this.onDelete,
+    this.showDelete = true,
   });
 
   @override
@@ -574,6 +619,26 @@ class _PlaylistGridCell extends StatefulWidget {
 
 class _PlaylistGridCellState extends State<_PlaylistGridCell> {
   bool _hovered = false;
+
+  /// Placeholder de Favoritos: degradado cálido con corazón grande.
+  Widget _favoritesFallback(ThemeData theme) {
+    final primary = theme.colorScheme.primary;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            primary.withValues(alpha: 0.50),
+            primary.withValues(alpha: 0.18),
+            theme.colorScheme.surfaceContainer,
+          ],
+        ),
+      ),
+      child: Icon(Icons.favorite, size: 32, color: primary),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -598,26 +663,30 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                     child: CoverImage(
                       source: playlist.coverUrl,
                       cacheWidth: 200,
-                      fallback: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              theme.colorScheme.surfaceContainerHigh,
-                              theme.colorScheme.surfaceContainer,
-                            ],
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.queue_music,
-                          size: 28,
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.45,
-                          ),
-                        ),
-                      ),
+                      fallback: playlist.isFavorites
+                          // Favoritos: portada especial con corazón y
+                          // degradado cálido (no el por defecto).
+                          ? _favoritesFallback(theme)
+                          : Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    theme.colorScheme.surfaceContainerHigh,
+                                    theme.colorScheme.surfaceContainer,
+                                  ],
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.queue_music,
+                                size: 28,
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.45,
+                                ),
+                              ),
+                            ),
                     ),
                   ),
                   // Resaltado: borde si está seleccionada o en hover
@@ -635,7 +704,7 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                         ),
                       ),
                     ),
-                  if (_hovered)
+                  if (_hovered && widget.showDelete)
                     Positioned(
                       top: 4,
                       right: 4,
@@ -668,7 +737,9 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                 fontWeight: FontWeight.w600,
                 color: widget.selected
                     ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface,
+                    : (playlist.isFavorites
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface),
               ),
             ),
             Text(

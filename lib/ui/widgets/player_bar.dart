@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
+import '../../data/database.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/player_service.dart';
+import '../playlist_actions.dart';
 import '../theme_controller.dart';
 
 /// Espacio vertical que ocupa el player flotante en la parte inferior de la
@@ -38,12 +40,21 @@ class _PlayerBarState extends State<PlayerBar> {
   /// del dedo en la UI (slider y tiempo).
   double? _dragValue;
 
+  /// Id de la playlist de Favoritos (para el botón de corazón).
+  int _favoritesId = -1;
+
+  /// `true` mientras la pista actual esté en Favoritos (stream reactivo).
+  bool _isFavorite = false;
+
+  StreamSubscription<bool>? _favSub;
+
   final List<StreamSubscription> _subs = [];
 
   @override
   void initState() {
     super.initState();
     final player = context.read<PlayerService>();
+    final db = context.read<AppDatabase>();
     // Valores iniciales: si la sesión se restauró antes de que este widget
     // se construyera (los streams broadcast no re-emiten lo pasado), leer la
     // pista/duración actuales evita la pantalla "Sin reproducción".
@@ -56,6 +67,7 @@ class _PlayerBarState extends State<PlayerBar> {
           _track = t;
           _dragValue = null;
         });
+        _refreshFavoriteState();
       }),
       player.position.listen((p) {
         if (!mounted) return;
@@ -74,10 +86,88 @@ class _PlayerBarState extends State<PlayerBar> {
         setState(() => _buffering = b);
       }),
     ]);
+    // Estado de favorito reactivo: observar la playlist de Favoritos.
+    unawaited(_setupFavorites(db));
+  }
+
+  /// Resuelve el id de Favoritos y observa si la pista actual está dentro.
+  Future<void> _setupFavorites(AppDatabase db) async {
+    final id = await db.ensureFavoritesPlaylist();
+    if (!mounted) return;
+    _favoritesId = id;
+    final track = _track;
+    if (track == null) return;
+    _favSub = db.watchTrackInPlaylist(id, track.id).listen((inside) {
+      if (!mounted) return;
+      setState(() => _isFavorite = inside);
+    });
+  }
+
+  /// Re-suscribe la observación de Favoritos cuando cambia la pista. El
+  /// corazón se resetea ANTES de re-suscribir para no mostrar el estado de la
+  /// pista anterior durante un instante (parpadeo).
+  void _refreshFavoriteState() {
+    if (_favoritesId < 0) return;
+    final track = _track;
+    final db = context.read<AppDatabase>();
+    _favSub?.cancel();
+    if (!mounted) return;
+    setState(() => _isFavorite = false);
+    if (track == null) return;
+    _favSub = db.watchTrackInPlaylist(_favoritesId, track.id).listen((inside) {
+      if (!mounted) return;
+      setState(() => _isFavorite = inside);
+    });
+  }
+
+  /// Menú contextual (clic derecho) sobre el player: añadir la pista actual
+  /// a una playlist.
+  Future<void> _showContextMenu(Offset position) async {
+    final track = _track;
+    if (track == null) return;
+    final action = await showMenu<String>(
+      context: context,
+      // Anclaje correcto: recta de tamaño cero en la posición del cursor.
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: 'add',
+          child: Row(
+            children: [
+              Icon(Icons.playlist_add),
+              SizedBox(width: 10),
+              Text('Añadir a playlist'),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (!mounted || action == null) return;
+    if (action == 'add') {
+      await showAddToPlaylistSheet(context, track);
+    }
+  }
+
+  /// Añade o quita la pista actual de la playlist de Favoritos.
+  Future<void> _toggleFavorite() async {
+    final track = _track;
+    if (track == null) return;
+    final db = context.read<AppDatabase>();
+    if (_isFavorite) {
+      await db.removeFromPlaylist(_favoritesId, track.id);
+    } else {
+      await db.addToPlaylist(_favoritesId, track);
+    }
   }
 
   @override
   void dispose() {
+    _favSub?.cancel();
     for (final s in _subs) {
       s.cancel();
     }
@@ -114,150 +204,156 @@ class _PlayerBarState extends State<PlayerBar> {
       alpha: 0.55,
     );
 
-    return Container(
-      // Sombra exterior (fuera del clip para que no se recorte)
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.45),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: BackdropFilter(
-          // Cristal: difumina el contenido que pasa por detrás
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              // Translúcido + tinte sutil del artwork, desvaneciéndose a la
-              // derecha. Sin borde: el cristal se funde con el fondo.
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  themeController.accentColor?.withValues(alpha: 0.20) ?? base,
-                  base,
-                ],
-              ),
+    return GestureDetector(
+      onSecondaryTapUp: (details) => _showContextMenu(details.globalPosition),
+      child: Container(
+        // Sombra exterior (fuera del clip para que no se recorte)
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.45),
+              blurRadius: 28,
+              offset: const Offset(0, 12),
             ),
-            child: Material(
-              // Material transparente para que los ripples de los botones se
-              // dibujen sobre el cristal
-              color: Colors.transparent,
-              child: SafeArea(
-                top: false,
-                child: SizedBox(
-                  height: 64,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: Row(
-                      children: [
-                        // Izquierda: información de la canción
-                        Expanded(child: _buildTrackInfo(theme, cache, player)),
-                        const SizedBox(width: 12),
-                        // Centro: controles y, debajo, la barra de progreso
-                        // (con tiempos), entre la info y el volumen.
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _buildControls(theme, player, hasTrack),
-                              SizedBox(
-                                height: 22,
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 38,
-                                      child: Text(
-                                        _fmt(
-                                          hasTrack
-                                              ? shownPosition
-                                              : Duration.zero,
-                                        ),
-                                        style: theme.textTheme.labelSmall
-                                            ?.copyWith(
-                                              color: theme
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
-                                              fontFeatures: const [
-                                                FontFeature.tabularFigures(),
-                                              ],
-                                            ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: SliderTheme(
-                                        data: SliderTheme.of(context).copyWith(
-                                          trackHeight: 3,
-                                          // Sin dot: el pulgar es invisible;
-                                          // se arrastra/toca la línea.
-                                          thumbShape:
-                                              const RoundSliderThumbShape(
-                                                enabledThumbRadius: 0,
-                                              ),
-                                          overlayShape:
-                                              const RoundSliderOverlayShape(
-                                                overlayRadius: 0,
-                                              ),
-                                          showValueIndicator:
-                                              ShowValueIndicator.never,
-                                          activeTrackColor:
-                                              theme.colorScheme.primary,
-                                        ),
-                                        child: Slider(
-                                          value: shownProgress,
-                                          onChanged: hasTrack
-                                              ? (v) => setState(
-                                                  () => _dragValue = v,
-                                                )
-                                              : null,
-                                          onChangeEnd: hasTrack
-                                              ? (v) {
-                                                  final target = Duration(
-                                                    milliseconds:
-                                                        (v * total.inMilliseconds)
-                                                            .round(),
-                                                  );
-                                                  player.seek(target);
-                                                  setState(
-                                                    () => _dragValue = null,
-                                                  );
-                                                }
-                                              : null,
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: 38,
-                                      child: Text(
-                                        _fmt(total),
-                                        textAlign: TextAlign.right,
-                                        style: theme.textTheme.labelSmall
-                                            ?.copyWith(
-                                              color: theme
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
-                                              fontFeatures: const [
-                                                FontFeature.tabularFigures(),
-                                              ],
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: BackdropFilter(
+            // Cristal: difumina el contenido que pasa por detrás
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                // Translúcido + tinte sutil del artwork, desvaneciéndose a la
+                // derecha. Sin borde: el cristal se funde con el fondo.
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    themeController.accentColor?.withValues(alpha: 0.20) ??
+                        base,
+                    base,
+                  ],
+                ),
+              ),
+              child: Material(
+                // Material transparente para que los ripples de los botones se
+                // dibujen sobre el cristal
+                color: Colors.transparent,
+                child: SafeArea(
+                  top: false,
+                  child: SizedBox(
+                    height: 64,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Row(
+                        children: [
+                          // Izquierda: información de la canción
+                          Expanded(
+                            child: _buildTrackInfo(theme, cache, player),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Derecha: volumen
-                        Expanded(child: _buildVolume(context, theme, player)),
-                      ],
+                          const SizedBox(width: 12),
+                          // Centro: controles y, debajo, la barra de progreso
+                          // (con tiempos), entre la info y el volumen.
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildControls(theme, player, hasTrack),
+                                SizedBox(
+                                  height: 22,
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 38,
+                                        child: Text(
+                                          _fmt(
+                                            hasTrack
+                                                ? shownPosition
+                                                : Duration.zero,
+                                          ),
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                                fontFeatures: const [
+                                                  FontFeature.tabularFigures(),
+                                                ],
+                                              ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: SliderTheme(
+                                          data: SliderTheme.of(context).copyWith(
+                                            trackHeight: 3,
+                                            // Sin dot: el pulgar es invisible;
+                                            // se arrastra/toca la línea.
+                                            thumbShape:
+                                                const RoundSliderThumbShape(
+                                                  enabledThumbRadius: 0,
+                                                ),
+                                            overlayShape:
+                                                const RoundSliderOverlayShape(
+                                                  overlayRadius: 0,
+                                                ),
+                                            showValueIndicator:
+                                                ShowValueIndicator.never,
+                                            activeTrackColor:
+                                                theme.colorScheme.primary,
+                                          ),
+                                          child: Slider(
+                                            value: shownProgress,
+                                            onChanged: hasTrack
+                                                ? (v) => setState(
+                                                    () => _dragValue = v,
+                                                  )
+                                                : null,
+                                            onChangeEnd: hasTrack
+                                                ? (v) {
+                                                    final target = Duration(
+                                                      milliseconds:
+                                                          (v * total.inMilliseconds)
+                                                              .round(),
+                                                    );
+                                                    player.seek(target);
+                                                    setState(
+                                                      () => _dragValue = null,
+                                                    );
+                                                  }
+                                                : null,
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(
+                                        width: 38,
+                                        child: Text(
+                                          _fmt(total),
+                                          textAlign: TextAlign.right,
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                                fontFeatures: const [
+                                                  FontFeature.tabularFigures(),
+                                                ],
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Derecha: volumen
+                          Expanded(child: _buildVolume(context, theme, player)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -374,11 +470,15 @@ class _PlayerBarState extends State<PlayerBar> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Shuffle
+            // Shuffle (mismo lenguaje visual que el play: relleno lila
+            // cuando está activo)
             ValueListenableBuilder<bool>(
               valueListenable: player.shuffle,
               builder: (context, on, _) => IconButton(
-                icon: Icon(Icons.shuffle, size: iconSize),
+                icon: Icon(
+                  on ? Icons.shuffle_on : Icons.shuffle,
+                  size: on ? 26 : iconSize,
+                ),
                 constraints: btnConstraints,
                 padding: EdgeInsets.zero,
                 color: on ? primary : muted,
@@ -470,6 +570,21 @@ class _PlayerBarState extends State<PlayerBar> {
                 tooltip: on ? 'Radio: activa' : 'Radio: inactiva',
                 onPressed: player.toggleRadio,
               ),
+            ),
+            // Favorito: añade/quita la pista actual de la playlist de
+            // Favoritos. Corazón lleno en lila cuando está guardada.
+            IconButton(
+              icon: Icon(
+                _isFavorite ? Icons.favorite : Icons.favorite_border,
+                size: iconSize,
+              ),
+              constraints: btnConstraints,
+              padding: EdgeInsets.zero,
+              color: _isFavorite ? primary : muted,
+              tooltip: _isFavorite
+                  ? 'Quitar de favoritos'
+                  : 'Añadir a favoritos',
+              onPressed: _track == null ? null : _toggleFavorite,
             ),
           ],
         );
