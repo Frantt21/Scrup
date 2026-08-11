@@ -94,6 +94,7 @@
 
   "noPlaylistsYet": "Você ainda não tem playlists. Crie uma nova.",
   "addedToPlaylist": "Adicionada à playlist",
+  "alreadyInPlaylist": "Já está nesta playlist",
   "playlistNamePrompt": "Nome da playlist",
   "cantPlay": "Não foi possível reproduzir: {error}",
 

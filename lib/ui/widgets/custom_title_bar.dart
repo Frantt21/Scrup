@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../l10n/generated/app_localizations.dart';
+import 'app_logo.dart';
 
 /// Barra de título personalizada: área de arrastre + acciones opcionales
 /// ([leading] a la izquierda, [trailing] antes de los controles de ventana)
@@ -75,6 +76,14 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
       child: Row(
         children: [
           const SizedBox(width: 8),
+          // Logo del app a la izquierda: envuelto en DragToMoveArea para que
+          // la ventana también se pueda arrastrar desde él.
+          DragToMoveArea(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: const AppLogo(),
+            ),
+          ),
           if (widget.leading != null) ...[
             widget.leading!,
             const SizedBox(width: 8),

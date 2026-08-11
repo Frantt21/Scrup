@@ -171,7 +171,7 @@ class _PlayerBarState extends State<PlayerBar> {
     );
     if (!mounted || action == null) return;
     if (action == 'add') {
-      await showAddToPlaylistSheet(context, track);
+      await showAddToPlaylistDialog(context, track);
     }
   }
 

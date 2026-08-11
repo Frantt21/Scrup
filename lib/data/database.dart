@@ -279,6 +279,15 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// Ids de las playlists que ya contienen [trackId]: el modal de "añadir a
+  /// playlist" marca con un check las que ya la tienen.
+  Future<Set<int>> playlistIdsContainingTrack(String trackId) async {
+    final rows = await (select(
+      playlistTracks,
+    )..where((pt) => pt.trackId.equals(trackId))).get();
+    return rows.map((r) => r.playlistId).toSet();
+  }
+
   /// `true` mientras la pista esté en la playlist (stream reactivo).
   Stream<bool> watchTrackInPlaylist(int playlistId, String trackId) {
     final query = select(playlistTracks)

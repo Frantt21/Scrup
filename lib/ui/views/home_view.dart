@@ -223,7 +223,7 @@ class _RecentCardState extends State<_RecentCard> {
     );
     if (!mounted || action == null) return;
     if (action == 'add') {
-      await showAddToPlaylistSheet(context, widget.track);
+      await showAddToPlaylistDialog(context, widget.track);
     }
   }
 

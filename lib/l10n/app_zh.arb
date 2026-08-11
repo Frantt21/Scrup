@@ -94,6 +94,7 @@
 
   "noPlaylistsYet": "还没有播放列表。请创建一个新的。",
   "addedToPlaylist": "已添加到播放列表",
+  "alreadyInPlaylist": "已在此播放列表中",
   "playlistNamePrompt": "播放列表名称",
   "cantPlay": "无法播放：{error}",
 

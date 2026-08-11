@@ -625,6 +625,12 @@ abstract class AppLocalizations {
   /// **'Añadida a la playlist'**
   String get addedToPlaylist;
 
+  /// No description provided for @alreadyInPlaylist.
+  ///
+  /// In es, this message translates to:
+  /// **'Ya está en esta playlist'**
+  String get alreadyInPlaylist;
+
   /// No description provided for @playlistNamePrompt.
   ///
   /// In es, this message translates to:

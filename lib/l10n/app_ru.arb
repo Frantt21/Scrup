@@ -94,6 +94,7 @@
 
   "noPlaylistsYet": "У вас ещё нет плейлистов. Создайте новый.",
   "addedToPlaylist": "Добавлено в плейлист",
+  "alreadyInPlaylist": "Уже в этом плейлисте",
   "playlistNamePrompt": "Название плейлиста",
   "cantPlay": "Не удалось воспроизвести: {error}",
 

@@ -141,6 +141,7 @@
 
   "noPlaylistsYet": "No tienes playlists todavía. Crea una nueva.",
   "addedToPlaylist": "Añadida a la playlist",
+  "alreadyInPlaylist": "Ya está en esta playlist",
   "playlistNamePrompt": "Nombre de la playlist",
   "cantPlay": "No se pudo reproducir: {error}",
   "@cantPlay": {

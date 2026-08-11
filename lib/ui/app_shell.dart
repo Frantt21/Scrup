@@ -11,6 +11,7 @@ import 'views/home_view.dart';
 import 'views/playlist_detail_view.dart';
 import 'views/search_view.dart';
 import 'views/settings_view.dart';
+import 'widgets/app_logo.dart';
 import 'widgets/custom_title_bar.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/playlists_sidebar.dart';
@@ -227,9 +228,8 @@ class _AppShellState extends State<AppShell> {
                           ),
                         ),
                       ),
-                      // Notificaciones superiores (reemplazan al SnackBar de
-                      // Flutter): flotan sobre el contenido bajo la title bar.
-                      const ScrupToastHost(),
+                      // El host de toasts vive en el builder del MaterialApp
+                      // (main.dart) para flotar por encima de los diálogos.
                     ],
                   ),
                 ),
@@ -267,6 +267,8 @@ class _SimpleTopBar extends StatelessWidget {
       padding: const EdgeInsets.only(left: 8, right: 4),
       child: Row(
         children: [
+          // Logo del app (mismo look que en la CustomTitleBar de Windows).
+          const Padding(padding: EdgeInsets.only(right: 10), child: AppLogo()),
           if (leading != null) ...[leading!, const SizedBox(width: 8)],
           Expanded(
             child: Text(

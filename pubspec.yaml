@@ -38,6 +38,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Assets de la app (logo, imágenes empaquetadas): el usuario reemplaza
+  # assets/app-logo.png por su logo real.
+  assets:
+    - assets/
   # Genera las localizaciones (AppLocalizations) automáticamente al compilar
   # desde lib/l10n/*.arb (ver l10n.yaml).
   generate: true

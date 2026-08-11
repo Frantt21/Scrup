@@ -290,6 +290,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get addedToPlaylist => '플레이리스트에 추가됨';
 
   @override
+  String get alreadyInPlaylist => '이미 이 플레이리스트에 있습니다';
+
+  @override
   String get playlistNamePrompt => '플레이리스트 이름';
 
   @override

@@ -292,6 +292,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get addedToPlaylist => 'Adicionada à playlist';
 
   @override
+  String get alreadyInPlaylist => 'Já está nesta playlist';
+
+  @override
   String get playlistNamePrompt => 'Nome da playlist';
 
   @override
@@ -650,6 +653,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get addedToPlaylist => 'Adicionada à playlist';
+
+  @override
+  String get alreadyInPlaylist => 'Já está nesta playlist';
 
   @override
   String get playlistNamePrompt => 'Nome da playlist';

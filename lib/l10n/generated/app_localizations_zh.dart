@@ -290,6 +290,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get addedToPlaylist => '已添加到播放列表';
 
   @override
+  String get alreadyInPlaylist => '已在此播放列表中';
+
+  @override
   String get playlistNamePrompt => '播放列表名称';
 
   @override

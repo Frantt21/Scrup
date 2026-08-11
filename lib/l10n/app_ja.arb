@@ -94,6 +94,7 @@
 
   "noPlaylistsYet": "プレイリストはまだありません。新しいものを作成してください。",
   "addedToPlaylist": "プレイリストに追加しました",
+  "alreadyInPlaylist": "このプレイリストにすでにあります",
   "playlistNamePrompt": "プレイリスト名",
   "cantPlay": "再生できません: {error}",
 

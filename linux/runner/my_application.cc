@@ -58,6 +58,30 @@ static void my_application_activate(GApplication* application) {
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);
 
+  // Icono de la ventana: se carga desde los assets de Flutter (app-logo.png)
+  // y se reduce a 256px para que la carga sea ligera. Best-effort: si el
+  // archivo no existe, el gestor de ventanas usa su icono por defecto.
+  // El pragma evita que un warning de deprecación rompa el build con -Werror.
+  const gchar* assets_path = fl_dart_project_get_assets_path(project);
+  if (assets_path != nullptr) {
+    g_autofree gchar* icon_path =
+        g_build_filename(assets_path, "assets", "app-logo.png", nullptr);
+    g_autoptr(GError) icon_error = nullptr;
+    g_autoptr(GdkPixbuf) icon_full =
+        gdk_pixbuf_new_from_file(icon_path, &icon_error);
+    if (icon_full != nullptr) {
+      GdkPixbuf* icon = gdk_pixbuf_scale_simple(icon_full, 256, 256,
+                                                GDK_INTERP_BILINEAR);
+      if (icon != nullptr) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        gtk_window_set_icon(window, icon);
+#pragma GCC diagnostic pop
+        g_object_unref(icon);
+      }
+    }
+  }
+
   FlView* view = fl_view_new(project);
   GdkRGBA background_color;
   // Background defaults to black, override it here if necessary, e.g. #00000000

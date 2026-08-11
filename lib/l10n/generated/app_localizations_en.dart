@@ -292,6 +292,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addedToPlaylist => 'Added to playlist';
 
   @override
+  String get alreadyInPlaylist => 'Already in this playlist';
+
+  @override
   String get playlistNamePrompt => 'Playlist name';
 
   @override

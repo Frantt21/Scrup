@@ -264,7 +264,7 @@ class _SearchViewState extends State<SearchView> {
         return TrackTile(
           track: track,
           onPlay: () => playTrack(context, track),
-          onAddToPlaylist: () => showAddToPlaylistSheet(context, track),
+          onAddToPlaylist: () => showAddToPlaylistDialog(context, track),
           isCurrent: track.id == _currentTrack?.id,
           isPlaying: _playing,
         );

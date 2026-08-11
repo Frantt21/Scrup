@@ -290,6 +290,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get addedToPlaylist => 'プレイリストに追加しました';
 
   @override
+  String get alreadyInPlaylist => 'このプレイリストにすでにあります';
+
+  @override
   String get playlistNamePrompt => 'プレイリスト名';
 
   @override

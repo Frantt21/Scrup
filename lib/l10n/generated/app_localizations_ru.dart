@@ -295,6 +295,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get addedToPlaylist => 'Добавлено в плейлист';
 
   @override
+  String get alreadyInPlaylist => 'Уже в этом плейлисте';
+
+  @override
   String get playlistNamePrompt => 'Название плейлиста';
 
   @override
