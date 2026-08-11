@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart' hide Track;
 
+import '../core/queue_shuffle.dart';
 import '../core/track.dart';
 
 /// Modo de repetición del reproductor.
@@ -156,6 +157,13 @@ class PlayerService {
   final List<Track> _queue = [];
   int _queueIndex = -1;
 
+  /// Orden original de la cola (antes de barajarla al activar shuffle),
+  /// para restaurarlo al desactivarlo (como Spotify). Null cuando no hay
+  /// nada que restaurar. Se guarda al activar shuffle o al reproducir una
+  /// cola con shuffle activo; se limpia al vaciar la cola (playTrack /
+  /// restoreLastTrack) y tras restaurarlo.
+  List<Track>? _originalQueue;
+
   /// Cola expuesta a la UI (panel de cola). [ValueNotifier] con lista
   /// inmutable: la UI la lee puntualmente y reacciona a los cambios.
   final ValueNotifier<List<Track>> queue = ValueNotifier<List<Track>>(const []);
@@ -215,6 +223,7 @@ class PlayerService {
     activePlaylistId.value = null;
     _queue.clear();
     _queueIndex = -1;
+    _originalQueue = null;
     _prematureRetries.clear();
     _notifyQueueChanged();
     return _openAndPlay(track);
@@ -230,6 +239,7 @@ class PlayerService {
     activePlaylistId.value = null;
     _queue.clear();
     _queueIndex = -1;
+    _originalQueue = null;
     _prematureRetries.clear();
     _notifyQueueChanged();
     _clearPlaybackState();
@@ -275,8 +285,20 @@ class PlayerService {
       ..clear()
       ..addAll(tracks);
     _prematureRetries.clear();
+    var playIndex = startIndex;
+    if (shuffle.value) {
+      // Guardar el orden original (el de la playlist) para restaurarlo al
+      // desactivar shuffle (como Spotify).
+      _originalQueue = List.of(_queue);
+      if (_queue.length > 1) {
+        // Con shuffle la cola se genera aleatoria: la pista elegida queda
+        // PRIMERO y el resto se baraja detrás. El reproductor obedece el
+        // orden de la cola (secuencial), no salta al azar.
+        playIndex = promoteThenShuffle(_queue, playIndex, _random);
+      }
+    }
     _notifyQueueChanged();
-    await _playAt(startIndex);
+    await _playAt(playIndex);
   }
 
   /// Reproduce la pista de la cola en [index] SIN tocar la cola (salto
@@ -359,8 +381,55 @@ class PlayerService {
     };
   }
 
-  /// Activa/desactiva el modo aleatorio.
-  void toggleShuffle() => shuffle.value = !shuffle.value;
+  /// Activa/desactiva el modo aleatorio. Al ACTIVARLO se baraja la cola una
+  /// sola vez (guardando el orden original para poder restaurarlo) y el
+  /// reproductor pasa a seguir el ORDEN de la cola (secuencial), que ya es
+  /// aleatorio. Al DESACTIVARLO se restaura el orden original de la cola
+  /// (como Spotify), manteniendo la pista actual sonando en su posición
+  /// original.
+  void toggleShuffle() {
+    shuffle.value = !shuffle.value;
+    if (shuffle.value) {
+      _applyShuffleToQueue();
+    } else {
+      _restoreQueueOrder();
+    }
+  }
+
+  /// Baraja la cola manteniendo la pista actual: sigue sonando, solo cambia
+  /// su posición dentro de la cola. La búsqueda es por identidad de
+  /// instancia, no por id: con pistas duplicadas se conserva la exacta que
+  /// suena (ver [shuffleKeepingCurrent]). Guarda el orden previo para
+  /// restaurarlo al desactivar shuffle.
+  void _applyShuffleToQueue() {
+    if (_queue.length <= 1) return;
+    _originalQueue = List.of(_queue);
+    final current = _queueIndex >= 0 && _queueIndex < _queue.length
+        ? _queue[_queueIndex]
+        : null;
+    _queueIndex = shuffleKeepingCurrent(_queue, current, _random);
+    _notifyQueueChanged();
+  }
+
+  /// Restaura el orden original de la cola al desactivar shuffle: las pistas
+  /// guardadas en [_originalQueue] vuelven a su orden previo y las añadidas
+  /// mientras shuffle estuvo activo (p. ej. radio) se conservan al final, en
+  /// su orden relativo actual. La pista en reproducción no se interrumpe:
+  /// solo se actualiza su índice dentro de la cola restaurada.
+  void _restoreQueueOrder() {
+    final saved = _originalQueue;
+    _originalQueue = null;
+    if (saved == null || saved.isEmpty) return;
+    final current = _queueIndex >= 0 && _queueIndex < _queue.length
+        ? _queue[_queueIndex]
+        : null;
+    final (restored, index) = restoreQueueOrder(_queue, saved, current);
+    _queue
+      ..clear()
+      ..addAll(restored);
+    _queueIndex = index;
+    _notifyQueueChanged();
+  }
 
   /// Activa/desactiva el modo radio.
   void toggleRadio() => radio.value = !radio.value;
@@ -447,14 +516,12 @@ class PlayerService {
   static const int _preloadAhead = 2;
 
   /// Pide al caché precargar las siguientes pistas de la cola (recursos
-  /// limitados). Con shuffle activo NO se precarga: la siguiente pista es
-  /// impredecible y descargar candidatos aleatorios desperdiciaría ancho de
-  /// banda y caché (cada uno cuesta una extracción de yt-dlp de ~3-4s).
+  /// limitados). El reproductor sigue SIEMPRE el orden de la cola —con
+  /// shuffle, la cola ya está barajada—, así que precargar las
+  /// [_preloadAhead] siguientes es siempre acertado.
   void _schedulePreloads() {
     final fn = preload;
     if (fn == null || _queueIndex < 0 || _queue.isEmpty) return;
-    // Shuffle: el siguiente es aleatorio; no vale la pena especular.
-    if (shuffle.value) return;
     final targets = <Track>[];
     for (var i = 1; i <= _preloadAhead; i++) {
       final idx = _queueIndex + i;
@@ -479,20 +546,10 @@ class PlayerService {
     }
   }
 
-  /// Índice siguiente respetando el modo aleatorio.
-  int _nextIndex() {
-    if (!shuffle.value || _queue.length <= 1) {
-      return _queueIndex + 1;
-    }
-    // Elegir un índice distinto al actual
-    var idx = _random.nextInt(_queue.length);
-    var guard = 0;
-    while (idx == _queueIndex && guard < 10) {
-      idx = _random.nextInt(_queue.length);
-      guard++;
-    }
-    return idx;
-  }
+  /// Índice siguiente: SIEMPRE secuencial. La aleatoriedad vive en el ORDEN
+  /// de la cola (barajada al activar shuffle), no en el reproductor: el
+  /// player obedece la cola, la cola no obedece al player.
+  int _nextIndex() => _queueIndex + 1;
 
   /// Modo radio: busca canciones del mismo artista y las encola.
   Future<void> _playRadio(Track base) async {
@@ -503,6 +560,9 @@ class PlayerService {
       final known = _queue.map((t) => t.id).toSet()..add(base.id);
       final fresh = tracks.where((t) => !known.contains(t.id)).toList();
       if (fresh.isEmpty) return;
+      // Con shuffle, las recomendaciones de radio también se barajan al
+      // encolarse: el reproductor sigue el orden de la cola.
+      if (shuffle.value) fresh.shuffle(_random);
       _queue.addAll(fresh);
       _notifyQueueChanged();
       await _playAt(_queue.length - fresh.length);
