@@ -88,8 +88,10 @@ class ActiveToast {
 }
 
 /// Host de las notificaciones: columna centrada en la PARTE SUPERIOR del
-/// área de contenido (bajo la title bar). Se monta sobre el Stack principal
-/// del AppShell; cuando no hay toasts no ocupa nada ni bloquea clics.
+/// app, justo bajo la barra superior (CustomTitleBar/_SimpleTopBar). Se monta
+/// en el `builder` del MaterialApp (sobre el navigator raíz) para que los
+/// toasts floten por encima de los diálogos/modales; cuando no hay toasts no
+/// ocupa nada ni bloquea clics.
 class ScrupToastHost extends StatelessWidget {
   const ScrupToastHost({super.key});
 
@@ -100,8 +102,10 @@ class ScrupToastHost extends StatelessWidget {
       builder: (context, _) {
         final toasts = ScrupToastController.instance.toasts;
         if (toasts.isEmpty) return const SizedBox.shrink();
+        // top = 40 (barra superior del app) + 12 (margen): las notificaciones
+        // quedan justo bajo la CustomTitleBar/_SimpleTopBar.
         return Positioned(
-          top: 12,
+          top: 52,
           left: 0,
           right: 0,
           child: Center(

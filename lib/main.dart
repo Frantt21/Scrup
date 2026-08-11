@@ -21,6 +21,7 @@ import 'services/ytdlp_service.dart';
 import 'ui/app_shell.dart';
 import 'ui/locale_controller.dart';
 import 'ui/theme_controller.dart';
+import 'ui/widgets/scrup_toasts.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -291,6 +292,15 @@ class ScrupApp extends StatelessWidget {
             themeAnimationDuration: const Duration(milliseconds: 700),
             themeAnimationCurve: Curves.easeInOut,
             theme: _buildTheme(themeController.accentColor),
+            // El host de toasts vive AQUÍ (sobre el navigator raíz), no dentro
+            // del AppShell: así las notificaciones flotan por encima de los
+            // diálogos/modales (p. ej. el de "añadir a playlist").
+            builder: (context, child) => Stack(
+              children: [
+                child ?? const SizedBox.shrink(),
+                const ScrupToastHost(),
+              ],
+            ),
             home: const AppShell(),
           ),
         ),
