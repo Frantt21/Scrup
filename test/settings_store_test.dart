@@ -105,4 +105,24 @@ void main() {
     await store.saveQueue([]);
     expect(await store.loadQueue(), isEmpty);
   });
+
+  test(
+    'guarda y restaura el punto de reanudación (pista + segundos)',
+    () async {
+      final store = SettingsStore();
+      expect(await store.loadResumePosition(), isNull);
+
+      await store.saveResumePosition(152, 'v123');
+      final resume = await store.loadResumePosition();
+      expect(resume, isNotNull);
+      expect(resume!.trackId, 'v123');
+      expect(resume.seconds, 152);
+
+      // Sobrescribir con otra pista/posición
+      await store.saveResumePosition(0, 'v456');
+      final next = await store.loadResumePosition();
+      expect(next!.trackId, 'v456');
+      expect(next.seconds, 0);
+    },
+  );
 }

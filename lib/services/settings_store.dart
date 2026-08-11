@@ -1,12 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Guarda preferencias simples de la sesión en disco (shared_preferences)
 /// para restaurarlas al arrancar: volumen, modo shuffle y modo de repetición
 /// del reproductor, la cola completa (orden, orden pre-shuffle, índice y
-/// playlist activa), la última pista reproducida como respaldo, modo del
-/// sidebar, idioma, estado del panel de cola, animación del player y
-/// presencia de Discord.
+/// playlist activa), el punto de reanudación (pista + segundos), la última
+/// pista reproducida como respaldo, modo del sidebar, idioma, estado del
+/// panel de cola, animación del player y presencia de Discord.
 class SettingsStore {
   static const _volumeKey = 'player.volume';
   static const _lastTrackKey = 'player.last_track_id';
@@ -21,6 +23,7 @@ class SettingsStore {
   static const _originalQueueKey = 'player.queue_original_ids';
   static const _queueIndexKey = 'player.queue_index';
   static const _activePlaylistIdKey = 'player.active_playlist_id';
+  static const _resumeKey = 'player.resume';
 
   /// Preferencia en memoria de la animación del player: un [ValueNotifier]
   /// para que el PlayerBar reaccione al instante al alternarla desde
@@ -198,5 +201,33 @@ class SettingsStore {
   Future<int?> loadActivePlaylistId() async {
     final prefs = await _instance;
     return prefs.getInt(_activePlaylistIdKey);
+  }
+
+  /// Guarda el punto de reanudación: el id de la pista y su posición en
+  /// segundos, en UN SOLO write (JSON). Así una posición nunca se restaura
+  /// en una pista distinta aunque el guardado vaya con retraso (p. ej. el
+  /// debounce de posición) respecto al cambio de pista.
+  Future<void> saveResumePosition(int seconds, String trackId) async {
+    final prefs = await _instance;
+    await prefs.setString(
+      _resumeKey,
+      jsonEncode({'trackId': trackId, 'seconds': seconds}),
+    );
+  }
+
+  /// `null` si nunca se guardó o el dato guardado es ilegible (se ignora).
+  Future<({String trackId, int seconds})?> loadResumePosition() async {
+    final prefs = await _instance;
+    final raw = prefs.getString(_resumeKey);
+    if (raw == null) return null;
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return (
+        trackId: map['trackId'] as String,
+        seconds: map['seconds'] as int,
+      );
+    } catch (_) {
+      return null; // Dato corrupto → se ignora.
+    }
   }
 }

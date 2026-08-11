@@ -59,6 +59,16 @@ Future<void> main() async {
   // XFWM y otros — dibuja la suya, y ocultarla es poco fiable y propenso a
   // fugas de listeners en algunos WMs).
   await windowManager.ensureInitialized();
+  // El app controla el cierre de la ventana (X, Alt+F4, cierre del OS): se
+  // intercepta para forzar el guardado pendiente (cola + colores) y solo
+  // entonces destruir la ventana (ver _AppCloseHandler). Si la plataforma no
+  // soporta setPreventClose, el cierre sigue el flujo nativo y el flush al
+  // cerrar queda best-effort como antes.
+  try {
+    await windowManager.setPreventClose(true);
+  } catch (_) {
+    // Best-effort: sin preventClose no se puede garantizar el volcado.
+  }
   final windowOptions = WindowOptions(
     size: const Size(1280, 800),
     minimumSize: const Size(1220, 700),
@@ -97,11 +107,10 @@ Future<void> main() async {
   } catch (_) {}
 
   // Caché de colores de artworks en disco (best-effort): evita re-descargar
-  // miniaturas entre sesiones solo para re-extraer la paleta.
+  // miniaturas entre sesiones solo para re-extraer la paleta. El flush al
+  // cerrar lo hace el mismo _AppCloseHandler que la cola (registrado al
+  // crear el PlayerService).
   final paletteCache = await PaletteCacheStore.load();
-  // Persistir los últimos colores extraídos al cerrar la ventana: el debounce
-  // del PaletteCacheStore podría no haber disparado aún su escritura.
-  windowManager.addListener(_FlushPaletteOnClose(paletteCache));
 
   // Instancia única de preferencias: se comparte entre los providers y la
   // carga del idioma inicial (restaurado entre sesiones).
@@ -164,6 +173,13 @@ Future<void> _restoreSession(
     if (volume != null) {
       await player.setVolume(volume.clamp(0.0, 1.0));
     }
+    // Punto de reanudación (pista + segundos). La posición guardada solo
+    // aplica si la pista restaurada es la misma que se estaba reproduciendo
+    // al guardarla (validación por id): con un retraso de guardado nunca se
+    // reanuda una pista distinta en los segundos de otra.
+    final resume = await settings.loadResumePosition();
+    int positionFor(String trackId) =>
+        resume != null && resume.trackId == trackId ? resume.seconds : 0;
     // Restaurar la cola completa guardada (orden + posición + playlist
     // activa) para reanudar la sesión donde quedó. Las pistas que ya no
     // estén en la base (caché evictado, radio no registrada) se omiten; si
@@ -176,14 +192,18 @@ Future<void> _restoreSession(
         if (t != null) tracks.add(t);
       }
       if (tracks.isNotEmpty) {
-        final index = await settings.loadQueueIndex();
+        final index = (await settings.loadQueueIndex() ?? 0).clamp(
+          0,
+          tracks.length - 1,
+        );
         final playlistId = await settings.loadActivePlaylistId();
         final original = await settings.loadOriginalQueue();
         await player.restoreQueue(
           tracks,
-          startIndex: index ?? 0,
+          startIndex: index,
           playlistId: playlistId,
           originalTrackIds: original,
+          positionSeconds: positionFor(tracks[index].id),
         );
         return;
       }
@@ -192,7 +212,10 @@ Future<void> _restoreSession(
     if (lastId == null) return;
     final track = await db.getCachedTrack(lastId);
     if (track != null) {
-      await player.restoreLastTrack(track);
+      await player.restoreLastTrack(
+        track,
+        positionSeconds: positionFor(track.id),
+      );
     }
   } catch (_) {
     // La restauración nunca debe impedir el arranque.
@@ -329,12 +352,50 @@ class ScrupApp extends StatelessWidget {
                 () => settings.saveVolume(player.volume.value),
               );
             });
+            // Persistir el punto de reanudación (pista + segundos) con
+            // debounce: el stream de posición emite decenas de ticks por
+            // segundo; se guarda cada 10s mientras hay reproducción. El id de
+            // la pista se lee EN el momento de escribir, para que la pareja
+            // siempre sea consistente (la escritura exacta al cerrar la hace
+            // _AppCloseHandler).
+            Timer? positionDebounce;
+            player.position.listen((_) {
+              if (player.positionValue <= Duration.zero) return;
+              positionDebounce?.cancel();
+              positionDebounce = Timer(const Duration(seconds: 10), () {
+                final t = player.currentTrackValue;
+                if (t == null) return;
+                settings.saveResumePosition(
+                  player.positionValue.inSeconds,
+                  t.id,
+                );
+              });
+            });
             // Restaurar la sesión anterior (volumen + última pista, pausada).
             unawaited(_restoreSession(player, settings, db));
-            // Al cerrar la ventana, forzar el guardado de la cola: el
-            // debounce de onQueueChanged podría no haber escrito aún la
-            // última instantánea (p. ej. un cambio <300ms antes de cerrar).
-            windowManager.addListener(_FlushQueueOnClose(player, settings));
+            // Al cerrar la ventana, el app controla el cierre (setPreventClose
+            // en main): se fuerza el guardado pendiente de la cola (el debounce
+            // de onQueueChanged podría no haber escrito la última instantánea)
+            // y del caché de colores, y solo entonces se destruye la ventana:
+            // el volcado llega a disco antes de que el proceso salga. El caché
+            // se captura aquí (síncrono) para no usar el context en el async.
+            final palette = context.read<PaletteCacheStore>();
+            windowManager.addListener(
+              _AppCloseHandler(() async {
+                // La instantánea se captura SÍNCRONA al correr el flush (el
+                // player aún está vivo); la escritura es best-effort.
+                await _writeQueueSnapshot(settings, player.queueSnapshot);
+                // Punto de reanudación EXACTO: pista + segundos juntos.
+                final current = player.currentTrackValue;
+                if (current != null) {
+                  await settings.saveResumePosition(
+                    player.positionValue.inSeconds,
+                    current.id,
+                  );
+                }
+                await palette.flush();
+              }),
+            );
             return player;
           },
           dispose: (_, player) async {
@@ -499,34 +560,40 @@ class ScrupApp extends StatelessWidget {
   }
 }
 
-/// Persiste el caché de colores cuando la ventana se cierra: el debounce del
-/// [PaletteCacheStore] podría no haber escrito aún la última extracción.
-class _FlushPaletteOnClose extends WindowListener {
-  _FlushPaletteOnClose(this.store);
+/// Controla el cierre de la ventana junto a `setPreventClose(true)` (ver
+/// main): al pedir cerrar, ejecuta [flush] —el guardado pendiente de la cola
+/// y del caché de colores— y SOLO entonces destruye la ventana, garantizando
+/// que el volcado llegue a disco antes de que el proceso salga. Best-effort:
+/// si la persistencia falla, igual se cierra; y nunca cierra dos veces.
+class _AppCloseHandler extends WindowListener {
+  _AppCloseHandler(this.flush);
 
-  final PaletteCacheStore store;
+  final Future<void> Function() flush;
+
+  bool _closing = false;
 
   @override
   void onWindowClose() {
-    unawaited(store.flush());
+    if (_closing) return;
+    _closing = true;
+    unawaited(_closeAfterFlush());
   }
-}
 
-/// Fuerza el guardado de la cola al cerrar la ventana: el debounce de
-/// `onQueueChanged` podría no haber escrito la última instantánea (p. ej. un
-/// cambio <300ms antes de cerrar). La instantánea se captura de forma
-/// SÍNCRONA en el callback —el player aún está vivo— y la escritura
-/// asíncrona continúa con los datos ya capturados, sin depender de que el
-/// teardown llegue a correr el dispose del provider.
-class _FlushQueueOnClose extends WindowListener {
-  _FlushQueueOnClose(this.player, this.settings);
-
-  final PlayerService player;
-  final SettingsStore settings;
-
-  @override
-  void onWindowClose() {
-    unawaited(_writeQueueSnapshot(settings, player.queueSnapshot));
+  Future<void> _closeAfterFlush() async {
+    try {
+      // Tope de seguridad: si la persistencia se quedara colgada, no dejar
+      // la ventana abierta para siempre (el guard _closing bloquearía los
+      // siguientes intentos de cierre).
+      await flush().timeout(const Duration(seconds: 3), onTimeout: () {});
+    } catch (_) {
+      // Nunca impedir el cierre por un fallo de persistencia.
+    } finally {
+      try {
+        await windowManager.destroy();
+      } catch (_) {
+        // Ya cerrada o plataforma que no lo soporta: el cierre nativo sigue.
+      }
+    }
   }
 }
 

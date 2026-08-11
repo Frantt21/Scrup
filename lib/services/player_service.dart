@@ -298,9 +298,10 @@ class PlayerService {
 
   /// Restaura la última pista reproducida al arrancar: carga el medio
   /// (pausado, sin historial ni enriquecimiento) y la publica en la UI para
-  /// que el usuario pueda continuar con play. Best-effort: si la fuente no
-  /// se resuelve, la pista no se restaura.
-  Future<bool> restoreLastTrack(Track track) async {
+  /// que el usuario pueda continuar con play. Si [positionSeconds] > 0, se
+  /// reanuda en ese punto exacto. Best-effort: si la fuente no se resuelve,
+  /// la pista no se restaura.
+  Future<bool> restoreLastTrack(Track track, {int positionSeconds = 0}) async {
     final token = ++_playToken;
     // La sesión restaurada no trae contexto de playlist.
     activePlaylistId.value = null;
@@ -311,7 +312,7 @@ class PlayerService {
     _notifyQueueChanged();
     _clearPlaybackState();
     preparingTrackId.value = track.id;
-    return _openPaused(track, token);
+    return _openPaused(track, token, positionSeconds: positionSeconds);
   }
 
   /// Restaura una cola guardada al arrancar: carga el medio de la pista en
@@ -326,6 +327,7 @@ class PlayerService {
     int startIndex = 0,
     int? playlistId,
     List<String>? originalTrackIds,
+    int positionSeconds = 0,
   }) async {
     if (tracks.isEmpty) return false;
     final token = ++_playToken;
@@ -353,13 +355,19 @@ class PlayerService {
     final track = _queue[startIndex];
     _clearPlaybackState();
     preparingTrackId.value = track.id;
-    return _openPaused(track, token);
+    return _openPaused(track, token, positionSeconds: positionSeconds);
   }
 
   /// Abre un medio PAUSADO (restauración de sesión): sin reproducir, sin
-  /// registrar historial ni enriquecer. Devuelve `false` si una pista más
-  /// nueva reemplazó a esta durante la resolución.
-  Future<bool> _openPaused(Track track, int token) async {
+  /// registrar historial ni enriquecer. Si [positionSeconds] > 0, se reanuda
+  /// en ese punto (un fallo de seek no impide la restauración: la pista
+  /// queda desde el inicio). Devuelve `false` si una pista más nueva
+  /// reemplazó a esta durante la resolución.
+  Future<bool> _openPaused(
+    Track track,
+    int token, {
+    int positionSeconds = 0,
+  }) async {
     try {
       await _player.pause();
       final src = await resolveSource(track);
@@ -373,6 +381,15 @@ class PlayerService {
       // restaurada empezaría a sonar sola al arrancar la app.
       await _player.open(Media(_mediaUri(src)), play: false);
       if (token != _playToken) return false;
+      // Reanudar en el punto exacto guardado (libmpv acota al límite si la
+      // duración de la pista es menor).
+      if (positionSeconds > 0) {
+        try {
+          await _player.seek(Duration(seconds: positionSeconds));
+        } catch (_) {
+          // Silencioso: un fallo de seek deja la pista desde el inicio.
+        }
+      }
       // Queda pausada y lista; no se reproduce ni se registra historial.
       _publishTrack(track);
       return true;
