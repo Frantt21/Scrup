@@ -83,21 +83,43 @@ static void my_application_activate(GApplication* application) {
   }
 
   FlView* view = fl_view_new(project);
+
+  // Fondo del view TRANSPARENTE para poder redondear las esquinas inferiores
+  // de la ventana desde Flutter (ClipRRect en main.dart): donde la app no
+  // pinta, se ve el escritorio a través de la ventana. Solo cuando el
+  // escritorio compone (Wayland siempre; X11 con compositor activo): sin
+  // compositor el alpha se ignora y un fondo transparente dejaría basura,
+  // así que se mantiene negro opaco (esquinas cuadradas, como siempre).
+  // El fondo de la VENTANA también se hace transparente, o el tema de GTK
+  // pintaría un rectángulo opaco detrás del view en las esquinas recortadas.
+  GdkScreen* wscreen = gdk_screen_get_default();
+  gboolean composited =
+      wscreen != nullptr && gdk_screen_is_composited(wscreen);
   GdkRGBA background_color;
-  // Background defaults to black, override it here if necessary, e.g. #00000000
-  // for transparent.
-  gdk_rgba_parse(&background_color, "#000000");
+  gdk_rgba_parse(&background_color, composited ? "#00000000" : "#000000");
   fl_view_set_background_color(view, &background_color);
-  gtk_widget_show(GTK_WIDGET(view));
+  if (composited) {
+    GdkRGBA transparent;
+    gdk_rgba_parse(&transparent, "#00000000");
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    gtk_widget_override_background_color(GTK_WIDGET(window),
+                                         GTK_STATE_FLAG_NORMAL, &transparent);
+#pragma GCC diagnostic pop
+  }
+
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
+  // Registrar los plugins ANTES de mostrar el view (patrón recomendado para
+  // ventanas transparentes): los plugins se enganchan a la ventana antes de
+  // que se pinte el primer frame.
+  fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+  gtk_widget_show(GTK_WIDGET(view));
 
   // Show the window when Flutter renders.
   // Requires the view to be realized so we can start rendering.
   g_signal_connect_swapped(view, "first-frame", G_CALLBACK(first_frame_cb),
                            self);
   gtk_widget_realize(GTK_WIDGET(view));
-
-  fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

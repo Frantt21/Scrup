@@ -59,6 +59,15 @@ class _PlayerBarState extends State<PlayerBar> {
   bool _playing = false;
   bool _buffering = false;
 
+  /// Intervalo mínimo entre repintados de la posición (throttle): el stream
+  /// de posición de media_kit emite decenas de ticks por segundo durante la
+  /// reproducción, y cada setState repinta todo el cristal del player
+  /// (incluido el blur) — es lo que dispara el consumo de CPU/GPU aunque la
+  /// animación esté desactivada. Con ~150ms el progreso se ve fluido y el
+  /// coste baja a casi cero (y al pausar, el stream se detiene: 0%).
+  static const Duration _positionRefreshInterval = Duration(milliseconds: 150);
+  DateTime _lastPositionFrame = DateTime.fromMillisecondsSinceEpoch(0);
+
   /// Posición del slider durante el arrastre: mientras se arrastra NO se
   /// hace seek (el seek real ocurre al soltar), solo se muestra la posición
   /// del dedo en la UI (slider y tiempo).
@@ -95,7 +104,15 @@ class _PlayerBarState extends State<PlayerBar> {
       }),
       player.position.listen((p) {
         if (!mounted) return;
-        setState(() => _position = p);
+        // Throttle del repintado: el valor interno se actualiza en cada tick
+        // (barato), pero la UI solo se reconstruye si pasó el intervalo
+        // mínimo (o la posición volvió a cero, p. ej. al cambiar de pista).
+        final now = DateTime.now();
+        if (p == Duration.zero ||
+            now.difference(_lastPositionFrame) >= _positionRefreshInterval) {
+          _lastPositionFrame = now;
+          setState(() => _position = p);
+        }
       }),
       player.duration.listen((d) {
         if (!mounted) return;

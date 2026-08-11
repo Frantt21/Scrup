@@ -352,24 +352,27 @@ class ScrupApp extends StatelessWidget {
                 () => settings.saveVolume(player.volume.value),
               );
             });
-            // Persistir el punto de reanudación (pista + segundos) con
-            // debounce: el stream de posición emite decenas de ticks por
-            // segundo; se guarda cada 10s mientras hay reproducción. El id de
-            // la pista se lee EN el momento de escribir, para que la pareja
-            // siempre sea consistente (la escritura exacta al cerrar la hace
-            // _AppCloseHandler).
-            Timer? positionDebounce;
+            // Persistir el punto de reanudación (pista + segundos) como mucho
+            // cada 10s mientras hay reproducción (el guardado exacto al
+            // cerrar lo hace _AppCloseHandler). Throttle por tiempo en vez de
+            // un Timer por tick: el stream de posición emite decenas de ticks
+            // por segundo y recrear un Timer en cada uno es trabajo inútil
+            // (contribuye al consumo de CPU en reproducción). El id de la
+            // pista se lee EN el momento de escribir, para que la pareja
+            // siempre sea consistente.
+            DateTime? lastResumeSave;
             player.position.listen((_) {
               if (player.positionValue <= Duration.zero) return;
-              positionDebounce?.cancel();
-              positionDebounce = Timer(const Duration(seconds: 10), () {
-                final t = player.currentTrackValue;
-                if (t == null) return;
-                settings.saveResumePosition(
-                  player.positionValue.inSeconds,
-                  t.id,
-                );
-              });
+              final now = DateTime.now();
+              if (lastResumeSave != null &&
+                  now.difference(lastResumeSave!) <
+                      const Duration(seconds: 10)) {
+                return;
+              }
+              lastResumeSave = now;
+              final t = player.currentTrackValue;
+              if (t == null) return;
+              settings.saveResumePosition(player.positionValue.inSeconds, t.id);
             });
             // Restaurar la sesión anterior (volumen + última pista, pausada).
             unawaited(_restoreSession(player, settings, db));
@@ -453,12 +456,23 @@ class ScrupApp extends StatelessWidget {
             // El host de toasts vive AQUÍ (sobre el navigator raíz), no dentro
             // del AppShell: así las notificaciones flotan por encima de los
             // diálogos/modales (p. ej. el de "añadir a playlist").
-            builder: (context, child) => Stack(
-              children: [
-                child ?? const SizedBox.shrink(),
-                const ScrupToastHost(),
-              ],
-            ),
+            builder: (context, child) {
+              final app = Stack(
+                children: [
+                  child ?? const SizedBox.shrink(),
+                  const ScrupToastHost(),
+                ],
+              );
+              // En Linux la ventana es transparente (ver my_application.cc) y
+              // aquí se recortan las esquinas inferiores redondeadas para que
+              // combine con el escritorio redondeado (GNOME/KDE); maximizada
+              // no se recorta. Windows/macOS no se tocan: ventana opaca, y en
+              // macOS el propio sistema redondea la ventana.
+              if (Platform.isLinux) {
+                return _LinuxRoundedCorners(child: app);
+              }
+              return app;
+            },
             home: const AppShell(),
           ),
         ),
@@ -595,6 +609,94 @@ class _AppCloseHandler extends WindowListener {
       }
     }
   }
+}
+
+/// En Linux, redondea las esquinas inferiores de la ventana (estilo
+/// GNOME/Handy). La ventana es TRANSPARENTE (ver my_application.cc: view y
+/// fondo de la ventana con alpha cuando el escritorio compone), así que aquí
+/// solo se recorta el contenido a las esquinas redondeadas y el escritorio se
+/// ve a través de ellas. Cuando la ventana está maximizada NO se recorta: el
+/// contenido llega al borde de la pantalla (como hace el propio escritorio
+/// con las ventanas maximizadas). En el resto de plataformas no se usa: en
+/// Windows la ventana es opaca y cuadrada, y en macOS el sistema redondea la
+/// ventana nativamente.
+class _LinuxRoundedCorners extends StatefulWidget {
+  const _LinuxRoundedCorners({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_LinuxRoundedCorners> createState() => _LinuxRoundedCornersState();
+}
+
+class _LinuxRoundedCornersState extends State<_LinuxRoundedCorners> {
+  /// Radio de las esquinas, acorde a las ventanas redondeadas de GNOME/KDE.
+  static const double _radius = 12;
+
+  /// La app arranca maximizada; se corrige con [windowManager.isMaximized] en
+  /// el primer frame y con los eventos de maximizar/desmaximizar.
+  bool _maximized = true;
+
+  _LinuxMaximizeListener? _listener;
+
+  @override
+  void initState() {
+    super.initState();
+    _listener = _LinuxMaximizeListener((maximized) {
+      if (mounted && maximized != _maximized) {
+        setState(() => _maximized = maximized);
+      }
+    });
+    windowManager.addListener(_listener!);
+    // Sincronizar el estado real: algunos gestores ignoran el maximize del
+    // arranque (best-effort) y la ventana puede arrancar en modo ventana.
+    unawaited(_syncMaximized());
+  }
+
+  Future<void> _syncMaximized() async {
+    try {
+      final maximized = await windowManager.isMaximized();
+      if (mounted && maximized != _maximized) {
+        setState(() => _maximized = maximized);
+      }
+    } catch (_) {
+      // Best-effort: sin el estado real se mantiene la ventana sin recortar.
+    }
+  }
+
+  @override
+  void dispose() {
+    final listener = _listener;
+    if (listener != null) windowManager.removeListener(listener);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_maximized) return widget.child;
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(
+        bottom: Radius.circular(_radius),
+      ),
+      // antiAlias: esquinas suaves sobre el escritorio (sin dientes).
+      clipBehavior: Clip.antiAlias,
+      child: widget.child,
+    );
+  }
+}
+
+/// Escucha los cambios de maximizado de la ventana (Linux) para recortar o no
+/// las esquinas redondeadas.
+class _LinuxMaximizeListener extends WindowListener {
+  _LinuxMaximizeListener(this.onChanged);
+
+  final ValueChanged<bool> onChanged;
+
+  @override
+  void onWindowMaximize() => onChanged(true);
+
+  @override
+  void onWindowUnmaximize() => onChanged(false);
 }
 
 /// Persiste la instantánea de la cola (orden, orden pre-shuffle, índice y
