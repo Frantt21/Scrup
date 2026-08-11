@@ -62,4 +62,47 @@ void main() {
     await store.saveShuffleEnabled(false);
     expect(await store.loadShuffleEnabled(), isFalse);
   });
+
+  test('guarda y restaura el modo de repetición', () async {
+    final store = SettingsStore();
+    expect(await store.loadRepeatMode(), isNull);
+
+    await store.saveRepeatMode('all');
+    expect(await store.loadRepeatMode(), 'all');
+
+    await store.saveRepeatMode('one');
+    expect(await store.loadRepeatMode(), 'one');
+
+    await store.saveRepeatMode('off');
+    expect(await store.loadRepeatMode(), 'off');
+  });
+
+  test('guarda y restaura la cola (orden, índice y playlist activa)', () async {
+    final store = SettingsStore();
+    expect(await store.loadQueue(), isNull);
+    expect(await store.loadOriginalQueue(), isNull);
+    expect(await store.loadQueueIndex(), isNull);
+    expect(await store.loadActivePlaylistId(), isNull);
+
+    await store.saveQueue(['v1', 'v2', 'v3']);
+    await store.saveOriginalQueue(['v1', 'v2', 'v3']);
+    await store.saveQueueIndex(1);
+    await store.saveActivePlaylistId(7);
+    expect(await store.loadQueue(), ['v1', 'v2', 'v3']);
+    expect(await store.loadOriginalQueue(), ['v1', 'v2', 'v3']);
+    expect(await store.loadQueueIndex(), 1);
+    expect(await store.loadActivePlaylistId(), 7);
+
+    // Limpiar las claves opcionales pasando null
+    await store.saveOriginalQueue(null);
+    await store.saveActivePlaylistId(null);
+    expect(await store.loadOriginalQueue(), isNull);
+    expect(await store.loadActivePlaylistId(), isNull);
+
+    // Sobrescribir la cola y vaciarla
+    await store.saveQueue(['v9']);
+    expect(await store.loadQueue(), ['v9']);
+    await store.saveQueue([]);
+    expect(await store.loadQueue(), isEmpty);
+  });
 }

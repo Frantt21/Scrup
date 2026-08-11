@@ -3,11 +3,14 @@ import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
-import 'package:media_kit/media_kit.dart';
+// `hide Track`: media_kit exporta su propio modelo `Track`, que chocaría
+// con el `Track` del dominio (core/track.dart) aquí en main.
+import 'package:media_kit/media_kit.dart' hide Track;
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'core/binaries.dart';
+import 'core/track.dart';
 import 'data/database.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'services/audio_cache_service.dart';
@@ -124,6 +127,16 @@ Future<void> main() async {
     final saved = await settings.loadShuffleEnabled();
     if (saved != null) initialShuffleEnabled = saved;
   } catch (_) {}
+  // Modo de repetición guardado (por defecto: off). Se aplica de forma
+  // SÍNCRONA al crear el PlayerService, igual que el shuffle (si un valor
+  // inválido quedó guardado, se cae al default con `?? LoopMode.off`).
+  var initialRepeatMode = LoopMode.off;
+  try {
+    final saved = await settings.loadRepeatMode();
+    if (saved != null) {
+      initialRepeatMode = LoopMode.values.asNameMap()[saved] ?? LoopMode.off;
+    }
+  } catch (_) {}
 
   runApp(
     ScrupApp(
@@ -131,6 +144,7 @@ Future<void> main() async {
       settings: settings,
       initialLocale: initialLocale,
       initialShuffleEnabled: initialShuffleEnabled,
+      initialRepeatMode: initialRepeatMode,
       audioHandler: audioHandler,
       paletteCache: paletteCache,
     ),
@@ -149,6 +163,30 @@ Future<void> _restoreSession(
     final volume = await settings.loadVolume();
     if (volume != null) {
       await player.setVolume(volume.clamp(0.0, 1.0));
+    }
+    // Restaurar la cola completa guardada (orden + posición + playlist
+    // activa) para reanudar la sesión donde quedó. Las pistas que ya no
+    // estén en la base (caché evictado, radio no registrada) se omiten; si
+    // ninguna sobrevive, se cae al respaldo de la última pista.
+    final savedQueue = await settings.loadQueue();
+    if (savedQueue != null && savedQueue.isNotEmpty) {
+      final tracks = <Track>[];
+      for (final id in savedQueue) {
+        final t = await db.getCachedTrack(id);
+        if (t != null) tracks.add(t);
+      }
+      if (tracks.isNotEmpty) {
+        final index = await settings.loadQueueIndex();
+        final playlistId = await settings.loadActivePlaylistId();
+        final original = await settings.loadOriginalQueue();
+        await player.restoreQueue(
+          tracks,
+          startIndex: index ?? 0,
+          playlistId: playlistId,
+          originalTrackIds: original,
+        );
+        return;
+      }
     }
     final lastId = await settings.loadLastTrackId();
     if (lastId == null) return;
@@ -172,6 +210,9 @@ class ScrupApp extends StatelessWidget {
   /// Se aplica al crear el reproductor, antes de que la UI pueda tocarlo.
   final bool initialShuffleEnabled;
 
+  /// Modo de repetición guardado en la última sesión (por defecto: off).
+  final LoopMode initialRepeatMode;
+
   /// Puente con los controles multimedia nativos del OS.
   final ScrupAudioHandler audioHandler;
 
@@ -185,6 +226,7 @@ class ScrupApp extends StatelessWidget {
     required this.settings,
     required this.initialLocale,
     required this.initialShuffleEnabled,
+    required this.initialRepeatMode,
     required this.audioHandler,
     required this.paletteCache,
   });
@@ -212,6 +254,9 @@ class ScrupApp extends StatelessWidget {
             final deezer = context.read<DeezerService>();
             final db = context.read<AppDatabase>();
             final settings = context.read<SettingsStore>();
+            // Debounce de la persistencia de la cola (ver onQueueChanged):
+            // se cancela y reprograma en cada cambio de la cola.
+            Timer? queueDebounce;
             final player = PlayerService(
               // Cache-first con reproducción progresiva: si la pista no
               // está cacheada, se empieza a reproducir en cuanto hay datos
@@ -246,11 +291,26 @@ class ScrupApp extends StatelessWidget {
               // Persistir el modo shuffle (activo/desactivado) entre sesiones
               onShuffleChanged: (enabled) =>
                   settings.saveShuffleEnabled(enabled),
+              // Persistir el modo de repetición (off/all/one) entre sesiones
+              onRepeatChanged: (mode) => settings.saveRepeatMode(mode.name),
+              // Persistir la cola completa (orden, orden pre-shuffle, índice
+              // y playlist activa) para reanudarla al abrir. Con debounce
+              // (mismo patrón que el volumen): los cambios de pista se
+              // suceden con poca separación, y al reprogramar el timer solo
+              // se persiste la ÚLTIMA instantánea, siempre consistente.
+              onQueueChanged: (snapshot) async {
+                queueDebounce?.cancel();
+                queueDebounce = Timer(
+                  const Duration(milliseconds: 300),
+                  () => unawaited(_writeQueueSnapshot(settings, snapshot)),
+                );
+              },
             );
-            // Aplicar el modo shuffle guardado en la última sesión de forma
-            // síncrona (sin toggleShuffle: no baraja cola inexistente ni
+            // Aplicar los modos guardados de la última sesión de forma
+            // síncrona (sin toggle: no baraja cola inexistente ni
             // re-persiste).
             player.shuffle.value = initialShuffleEnabled;
+            player.repeatMode.value = initialRepeatMode;
             // Controles nativos del OS: sincronizar metadatos/estado y
             // reenviar comandos (play/pausa/siguiente/anterior/seek).
             context.read<ScrupAudioHandler>().attach(player);
@@ -271,6 +331,10 @@ class ScrupApp extends StatelessWidget {
             });
             // Restaurar la sesión anterior (volumen + última pista, pausada).
             unawaited(_restoreSession(player, settings, db));
+            // Al cerrar la ventana, forzar el guardado de la cola: el
+            // debounce de onQueueChanged podría no haber escrito aún la
+            // última instantánea (p. ej. un cambio <300ms antes de cerrar).
+            windowManager.addListener(_FlushQueueOnClose(player, settings));
             return player;
           },
           dispose: (_, player) async {
@@ -445,6 +509,41 @@ class _FlushPaletteOnClose extends WindowListener {
   @override
   void onWindowClose() {
     unawaited(store.flush());
+  }
+}
+
+/// Fuerza el guardado de la cola al cerrar la ventana: el debounce de
+/// `onQueueChanged` podría no haber escrito la última instantánea (p. ej. un
+/// cambio <300ms antes de cerrar). La instantánea se captura de forma
+/// SÍNCRONA en el callback —el player aún está vivo— y la escritura
+/// asíncrona continúa con los datos ya capturados, sin depender de que el
+/// teardown llegue a correr el dispose del provider.
+class _FlushQueueOnClose extends WindowListener {
+  _FlushQueueOnClose(this.player, this.settings);
+
+  final PlayerService player;
+  final SettingsStore settings;
+
+  @override
+  void onWindowClose() {
+    unawaited(_writeQueueSnapshot(settings, player.queueSnapshot));
+  }
+}
+
+/// Persiste la instantánea de la cola (orden, orden pre-shuffle, índice y
+/// playlist activa). Compartida por el debounce de `onQueueChanged` y el
+/// flush al cerrar la ventana. Best-effort: nunca lanza.
+Future<void> _writeQueueSnapshot(
+  SettingsStore settings,
+  QueuePersistenceSnapshot snapshot,
+) async {
+  try {
+    await settings.saveQueue(snapshot.trackIds);
+    await settings.saveOriginalQueue(snapshot.originalTrackIds);
+    await settings.saveQueueIndex(snapshot.index);
+    await settings.saveActivePlaylistId(snapshot.playlistId);
+  } catch (_) {
+    // Silencioso: un fallo de persistencia al cerrar no debe romper nada.
   }
 }
 

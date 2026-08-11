@@ -32,6 +32,23 @@ class PlayableSource {
   const PlayableSource(this.uri, {this.isLocal = false});
 }
 
+/// Instantánea de la cola para persistirla entre sesiones: los ids en el
+/// ORDEN actual, el orden ORIGINAL (pre-shuffle, si lo hay), el índice de la
+/// pista actual y la playlist activa (si la reproducción viene de una).
+class QueuePersistenceSnapshot {
+  final List<String> trackIds;
+  final List<String>? originalTrackIds;
+  final int index;
+  final int? playlistId;
+
+  const QueuePersistenceSnapshot({
+    required this.trackIds,
+    this.originalTrackIds,
+    required this.index,
+    this.playlistId,
+  });
+}
+
 /// Envoltura de media_kit (libmpv) para reproducción de audio.
 ///
 /// Gestiona una **cola de reproducción** con:
@@ -78,6 +95,16 @@ class PlayerService {
   /// persistirlo entre sesiones. Opcional y *best-effort*: un fallo de
   /// escritura no debe romper el toggle.
   final Future<void> Function(bool enabled)? onShuffleChanged;
+
+  /// Notifica cada cambio del modo de repetición (off/all/one) para
+  /// persistirlo entre sesiones. Opcional y *best-effort*.
+  final Future<void> Function(LoopMode mode)? onRepeatChanged;
+
+  /// Notifica cada cambio de la cola (orden, índice y playlist activa) para
+  /// persistirla entre sesiones. Opcional y *best-effort*: un fallo de
+  /// escritura no debe romper la reproducción.
+  final Future<void> Function(QueuePersistenceSnapshot snapshot)?
+  onQueueChanged;
 
   final _positionController = StreamController<Duration>.broadcast();
   final _durationController = StreamController<Duration?>.broadcast();
@@ -176,10 +203,42 @@ class PlayerService {
   /// Índice de la pista actual dentro de la cola (o -1).
   final ValueNotifier<int> queueIndex = ValueNotifier<int>(-1);
 
-  /// Publica el estado de la cola a la UI.
+  /// Publica el estado de la cola a la UI y persiste la instantánea
+  /// (best-effort) para reanudarla en la próxima sesión.
   void _notifyQueueChanged() {
     queue.value = List.unmodifiable(_queue);
     queueIndex.value = _queueIndex;
+    final cb = onQueueChanged;
+    if (cb != null) unawaited(_notifyQueuePersist(cb, _queueSnapshot()));
+  }
+
+  /// Construye la instantánea actual de la cola (orden, orden pre-shuffle,
+  /// índice y playlist activa) para persistirla.
+  QueuePersistenceSnapshot _queueSnapshot() {
+    return QueuePersistenceSnapshot(
+      trackIds: _queue.map((t) => t.id).toList(),
+      originalTrackIds: _originalQueue?.map((t) => t.id).toList(),
+      index: _queueIndex,
+      playlistId: activePlaylistId.value,
+    );
+  }
+
+  /// Instantánea ACTUAL de la cola. Se usa para persistirla en el momento en
+  /// que se necesita (p. ej. al cerrar la ventana, para no perder el último
+  /// cambio pendiente del debounce).
+  QueuePersistenceSnapshot get queueSnapshot => _queueSnapshot();
+
+  /// Persiste la instantánea de la cola de forma segura: nunca lanza (un
+  /// fallo de escritura es secundario a la reproducción).
+  Future<void> _notifyQueuePersist(
+    Future<void> Function(QueuePersistenceSnapshot) cb,
+    QueuePersistenceSnapshot snapshot,
+  ) async {
+    try {
+      await cb(snapshot);
+    } catch (_) {
+      // Silencioso: la persistencia de la cola es secundaria.
+    }
   }
 
   /// Volumen previo antes de silenciar, para restaurarlo al desmutear.
@@ -193,6 +252,8 @@ class PlayerService {
     this.onPlayed,
     this.onEnriched,
     this.onShuffleChanged,
+    this.onRepeatChanged,
+    this.onQueueChanged,
   }) {
     _player.stream.position.listen((p) {
       _lastPosition = p;
@@ -250,6 +311,55 @@ class PlayerService {
     _notifyQueueChanged();
     _clearPlaybackState();
     preparingTrackId.value = track.id;
+    return _openPaused(track, token);
+  }
+
+  /// Restaura una cola guardada al arrancar: carga el medio de la pista en
+  /// [startIndex] (pausado, sin historial ni enriquecimiento) y publica la
+  /// cola completa en la UI para que el usuario pueda reanudar desde donde
+  /// quedó. Si [shuffle] sigue activo y se guardó [originalTrackIds], se
+  /// restaura también el orden pre-shuffle: al desactivarlo, la cola volverá
+  /// al orden de la sesión anterior en vez de quedarse barajada. Best-effort:
+  /// si la fuente no se resuelve, la pista no se restaura.
+  Future<bool> restoreQueue(
+    List<Track> tracks, {
+    int startIndex = 0,
+    int? playlistId,
+    List<String>? originalTrackIds,
+  }) async {
+    if (tracks.isEmpty) return false;
+    final token = ++_playToken;
+    startIndex = startIndex.clamp(0, tracks.length - 1);
+    activePlaylistId.value = playlistId;
+    _queue
+      ..clear()
+      ..addAll(tracks);
+    _queueIndex = startIndex;
+    // Restaurar el orden pre-shuffle (solo si el shuffle sigue activo y se
+    // guardó un orden con más de una pista).
+    if (originalTrackIds != null && shuffle.value) {
+      final byId = {for (final t in _queue) t.id: t};
+      final originalTracks = <Track>[];
+      for (final id in originalTrackIds) {
+        final t = byId[id];
+        if (t != null) originalTracks.add(t);
+      }
+      _originalQueue = originalTracks.length > 1 ? originalTracks : null;
+    } else {
+      _originalQueue = null;
+    }
+    _prematureRetries.clear();
+    _notifyQueueChanged();
+    final track = _queue[startIndex];
+    _clearPlaybackState();
+    preparingTrackId.value = track.id;
+    return _openPaused(track, token);
+  }
+
+  /// Abre un medio PAUSADO (restauración de sesión): sin reproducir, sin
+  /// registrar historial ni enriquecer. Devuelve `false` si una pista más
+  /// nueva reemplazó a esta durante la resolución.
+  Future<bool> _openPaused(Track track, int token) async {
     try {
       await _player.pause();
       final src = await resolveSource(track);
@@ -378,13 +488,28 @@ class PlayerService {
 
   Future<void> stop() => _player.stop();
 
-  /// Cicla el modo de repetición: off → all → one → off.
+  /// Cicla el modo de repetición: off → all → one → off. Persiste la
+  /// preferencia entre sesiones (best-effort).
   void toggleRepeat() {
     repeatMode.value = switch (repeatMode.value) {
       LoopMode.off => LoopMode.all,
       LoopMode.all => LoopMode.one,
       LoopMode.one => LoopMode.off,
     };
+    // Persistir el modo para la próxima sesión (best-effort).
+    unawaited(_notifyRepeatChanged(repeatMode.value));
+  }
+
+  /// Notifica el cambio de modo de repetición de forma segura: nunca lanza
+  /// (un fallo de persistencia es secundario al toggle).
+  Future<void> _notifyRepeatChanged(LoopMode mode) async {
+    final cb = onRepeatChanged;
+    if (cb == null) return;
+    try {
+      await cb(mode);
+    } catch (_) {
+      // Silencioso: la persistencia no debe romper el toggle.
+    }
   }
 
   /// Activa/desactiva el modo aleatorio. Al ACTIVARLO se baraja la cola una
