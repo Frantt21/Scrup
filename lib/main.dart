@@ -114,12 +114,23 @@ Future<void> main() async {
   try {
     await settings.loadPlayerAnimationEnabled();
   } catch (_) {}
+  // Modo shuffle guardado (por defecto: desactivado). Se aplica de forma
+  // SÍNCRONA al crear el PlayerService (no vía _restoreSession, que es
+  // asíncrono y podría pisar un toggle del usuario en los primeros
+  // instantes). Al arrancar no hay cola que barajar: el modo solo afecta a
+  // la siguiente cola que se reproduzca.
+  var initialShuffleEnabled = false;
+  try {
+    final saved = await settings.loadShuffleEnabled();
+    if (saved != null) initialShuffleEnabled = saved;
+  } catch (_) {}
 
   runApp(
     ScrupApp(
       database: database,
       settings: settings,
       initialLocale: initialLocale,
+      initialShuffleEnabled: initialShuffleEnabled,
       audioHandler: audioHandler,
       paletteCache: paletteCache,
     ),
@@ -157,6 +168,10 @@ class ScrupApp extends StatelessWidget {
   /// Idioma inicial: el guardado en la última sesión (o español).
   final Locale initialLocale;
 
+  /// Modo shuffle guardado en la última sesión (por defecto: desactivado).
+  /// Se aplica al crear el reproductor, antes de que la UI pueda tocarlo.
+  final bool initialShuffleEnabled;
+
   /// Puente con los controles multimedia nativos del OS.
   final ScrupAudioHandler audioHandler;
 
@@ -169,6 +184,7 @@ class ScrupApp extends StatelessWidget {
     required this.database,
     required this.settings,
     required this.initialLocale,
+    required this.initialShuffleEnabled,
     required this.audioHandler,
     required this.paletteCache,
   });
@@ -227,7 +243,14 @@ class ScrupApp extends StatelessWidget {
               // Historial: registra cada pista que realmente empieza a sonar
               // (manual, auto-advance o radio)
               onPlayed: (track) async => db.recordPlay(track),
+              // Persistir el modo shuffle (activo/desactivado) entre sesiones
+              onShuffleChanged: (enabled) =>
+                  settings.saveShuffleEnabled(enabled),
             );
+            // Aplicar el modo shuffle guardado en la última sesión de forma
+            // síncrona (sin toggleShuffle: no baraja cola inexistente ni
+            // re-persiste).
+            player.shuffle.value = initialShuffleEnabled;
             // Controles nativos del OS: sincronizar metadatos/estado y
             // reenviar comandos (play/pausa/siguiente/anterior/seek).
             context.read<ScrupAudioHandler>().attach(player);

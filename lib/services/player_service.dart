@@ -74,6 +74,11 @@ class PlayerService {
   /// sin bloquear el arranque de la reproducción.
   final Future<void> Function(Track track)? onEnriched;
 
+  /// Notifica cada cambio del modo shuffle (activo/desactivado) para
+  /// persistirlo entre sesiones. Opcional y *best-effort*: un fallo de
+  /// escritura no debe romper el toggle.
+  final Future<void> Function(bool enabled)? onShuffleChanged;
+
   final _positionController = StreamController<Duration>.broadcast();
   final _durationController = StreamController<Duration?>.broadcast();
   final _playingController = StreamController<bool>.broadcast();
@@ -187,6 +192,7 @@ class PlayerService {
     this.preload,
     this.onPlayed,
     this.onEnriched,
+    this.onShuffleChanged,
   }) {
     _player.stream.position.listen((p) {
       _lastPosition = p;
@@ -386,13 +392,27 @@ class PlayerService {
   /// reproductor pasa a seguir el ORDEN de la cola (secuencial), que ya es
   /// aleatorio. Al DESACTIVARLO se restaura el orden original de la cola
   /// (como Spotify), manteniendo la pista actual sonando en su posición
-  /// original.
+  /// original. Persiste la preferencia entre sesiones (best-effort).
   void toggleShuffle() {
     shuffle.value = !shuffle.value;
     if (shuffle.value) {
       _applyShuffleToQueue();
     } else {
       _restoreQueueOrder();
+    }
+    // Persistir el modo para la próxima sesión (best-effort).
+    unawaited(_notifyShuffleChanged(shuffle.value));
+  }
+
+  /// Notifica el cambio de shuffle de forma segura: nunca lanza (un fallo de
+  /// persistencia es secundario al toggle).
+  Future<void> _notifyShuffleChanged(bool enabled) async {
+    final cb = onShuffleChanged;
+    if (cb == null) return;
+    try {
+      await cb(enabled);
+    } catch (_) {
+      // Silencioso: la persistencia no debe romper el toggle.
     }
   }
 
@@ -419,7 +439,9 @@ class PlayerService {
   void _restoreQueueOrder() {
     final saved = _originalQueue;
     _originalQueue = null;
-    if (saved == null || saved.isEmpty) return;
+    // El snapshot nunca se guarda vacío (playQueue retorna antes con una
+    // lista vacía y _applyShuffleToQueue hace early-return con ≤1 pistas).
+    if (saved == null) return;
     final current = _queueIndex >= 0 && _queueIndex < _queue.length
         ? _queue[_queueIndex]
         : null;

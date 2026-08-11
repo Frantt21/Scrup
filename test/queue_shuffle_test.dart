@@ -157,7 +157,13 @@ void main() {
         final shuffled = [original[1], original[0]];
         final before = List.of(shuffled);
 
-        final (restored, index) = restoreQueueOrder(shuffled, original, null);
+        // Argumento de tipo explícito: con `null` como current, Dart
+        // inferiría T = Track? y `restored` quedaría nullable.
+        final (restored, index) = restoreQueueOrder<Track>(
+          shuffled,
+          original,
+          null,
+        );
 
         expect(index, -1);
         expect(restored.map((t) => t.id).toList(), ['a', 'b']);

@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Guarda preferencias simples de la sesión en disco (shared_preferences):
-/// el volumen del reproductor y la última pista que se estaba reproduciendo,
-/// para restaurarlas al arrancar.
+/// Guarda preferencias simples de la sesión en disco (shared_preferences)
+/// para restaurarlas al arrancar: volumen y modo shuffle del reproductor,
+/// última pista reproducida, modo del sidebar, idioma, estado del panel de
+/// cola, animación del player y presencia de Discord.
 class SettingsStore {
   static const _volumeKey = 'player.volume';
   static const _lastTrackKey = 'player.last_track_id';
@@ -12,6 +13,7 @@ class SettingsStore {
   static const _discordEnabledKey = 'discord.enabled';
   static const _queueOpenKey = 'ui.queue_open';
   static const _playerAnimationKey = 'player.animation_enabled';
+  static const _shuffleEnabledKey = 'player.shuffle_enabled';
 
   /// Preferencia en memoria de la animación del player: un [ValueNotifier]
   /// para que el PlayerBar reaccione al instante al alternarla desde
@@ -107,5 +109,18 @@ class SettingsStore {
     final value = saved ?? true;
     playerAnimationEnabled.value = value;
     return value;
+  }
+
+  /// Guarda el modo shuffle activo/desactivado para restaurarlo entre
+  /// sesiones.
+  Future<void> saveShuffleEnabled(bool enabled) async {
+    final prefs = await _instance;
+    await prefs.setBool(_shuffleEnabledKey, enabled);
+  }
+
+  /// `null` si el usuario nunca cambió el modo (por defecto: desactivado).
+  Future<bool?> loadShuffleEnabled() async {
+    final prefs = await _instance;
+    return prefs.getBool(_shuffleEnabledKey);
   }
 }

@@ -51,4 +51,15 @@ void main() {
     await store.saveLocale('es');
     expect(await store.loadLocale(), 'es');
   });
+
+  test('guarda y restaura el modo shuffle', () async {
+    final store = SettingsStore();
+    expect(await store.loadShuffleEnabled(), isNull);
+
+    await store.saveShuffleEnabled(true);
+    expect(await store.loadShuffleEnabled(), isTrue);
+
+    await store.saveShuffleEnabled(false);
+    expect(await store.loadShuffleEnabled(), isFalse);
+  });
 }
