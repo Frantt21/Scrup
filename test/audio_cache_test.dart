@@ -153,6 +153,46 @@ void main() {
     },
   );
 
+  test('preload cachea en segundo plano y deduplica peticiones', () async {
+    final f1 = cache.preload('abc123');
+    final f2 = cache.preload('abc123');
+    // Dar tiempo a que la descarga arranque (varios awaits internos).
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(ytdlp.startCalls, 1, reason: 'ambas comparten la misma descarga');
+
+    ytdlp.finishPending();
+    await Future.wait([f1, f2]);
+    // preload espera a que la descarga termine en disco (no solo arranque).
+    expect(await cache.cachedPath('abc123'), isNotNull);
+  });
+
+  test('preload limita la concurrencia a maxConcurrentPreloads', () async {
+    final f1 = cache.preload('v1');
+    final f2 = cache.preload('v2');
+    final f3 = cache.preload('v3');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    // v1 y v2 ocupan los slots; v3 espera.
+    expect(ytdlp.startCalls, 2);
+
+    ytdlp.finishPending(); // v1 y v2 terminan → liberan slots
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(ytdlp.startCalls, 3, reason: 'v3 arranca al liberarse un slot');
+
+    ytdlp.finishPending(); // v3 termina
+    await Future.wait([f1, f2, f3]);
+    expect(await cache.cachedPath('v1'), isNotNull);
+    expect(await cache.cachedPath('v2'), isNotNull);
+    expect(await cache.cachedPath('v3'), isNotNull);
+  });
+
+  test('preload best-effort: una descarga fallida no lanza', () async {
+    ytdlp.failNext = true;
+    await cache.preload('abc123');
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    // El .part fallido se limpia y no queda nada raro en el caché.
+    expect(await cache.cachedPath('abc123'), isNull);
+  });
+
   test('el progreso se notifica durante la descarga', () async {
     final seen = <double?>[];
     cache.progress.addListener(() => seen.add(cache.progress.value));

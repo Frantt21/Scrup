@@ -298,6 +298,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get alreadyInPlaylist => 'Уже в этом плейлисте';
 
   @override
+  String get playerAnimation => 'Анимация плеера';
+
+  @override
+  String get playerAnimationHint =>
+      'Анимированный двухтоновый градиент в плеере';
+
+  @override
+  String get playerAnimationEnabled => 'Использовать анимацию';
+
+  @override
   String get playlistNamePrompt => 'Название плейлиста';
 
   @override

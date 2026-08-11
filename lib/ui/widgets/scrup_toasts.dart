@@ -179,21 +179,13 @@ class ToastCard extends StatelessWidget {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
               child: DecoratedBox(
+                // Plano: sin degradado ni borde, un único color sólido
+                // translúcido (el acento queda solo en el icono).
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      theme.colorScheme.surfaceContainerHighest.withValues(
-                        alpha: 0.92,
-                      ),
-                      theme.colorScheme.surfaceContainer.withValues(
-                        alpha: 0.92,
-                      ),
-                    ],
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.95,
                   ),
-                  border: Border.all(color: accent.withValues(alpha: 0.45)),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(

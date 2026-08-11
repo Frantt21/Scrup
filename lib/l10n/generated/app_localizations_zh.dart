@@ -293,6 +293,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get alreadyInPlaylist => '已在此播放列表中';
 
   @override
+  String get playerAnimation => '播放器动画';
+
+  @override
+  String get playerAnimationHint => '播放器中的双色调渐变动画';
+
+  @override
+  String get playerAnimationEnabled => '使用动画';
+
+  @override
   String get playlistNamePrompt => '播放列表名称';
 
   @override

@@ -10,6 +10,7 @@ import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/player_service.dart';
+import '../../services/settings_store.dart';
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
 import '../widgets/context_menu_item.dart';
@@ -208,6 +209,7 @@ class _PlayerBarState extends State<PlayerBar> {
     final theme = Theme.of(context);
     final player = context.read<PlayerService>();
     final cache = context.read<AudioCacheService>();
+    final settings = context.read<SettingsStore>();
     final themeController = context.watch<ThemeController>();
     final hasTrack = _track != null;
     final total = _duration ?? Duration.zero;
@@ -254,12 +256,37 @@ class _PlayerBarState extends State<PlayerBar> {
                 // cuando no hay reproducción. Positioned.fill: llena el Stack
                 // sin forzar la altura del contenido (que la fija el Material,
                 // 64px).
+                //
+                // La animación se puede desactivar desde Configuración: el
+                // ValueNotifier del SettingsStore reacciona al instante y se
+                // muestra un degradado estático (congelado en el centro).
                 Positioned.fill(
-                  child: _AnimatedPlayerGradient(
-                    toneA:
-                        themeController.accentColor?.withValues(alpha: 0.25) ??
-                        theme.colorScheme.primary.withValues(alpha: 0.25),
-                    toneB: base,
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: settings.playerAnimationEnabled,
+                    builder: (context, animated, _) {
+                      final accent =
+                          themeController.accentColor?.withValues(
+                            alpha: 0.25,
+                          ) ??
+                          theme.colorScheme.primary.withValues(alpha: 0.25);
+                      if (animated) {
+                        return _AnimatedPlayerGradient(
+                          toneA: accent,
+                          toneB: base,
+                        );
+                      }
+                      // Estático: mismo degradado pero sin movimiento.
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [base, accent, base],
+                            stops: const [0.0, 0.5, 1.0],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 Material(

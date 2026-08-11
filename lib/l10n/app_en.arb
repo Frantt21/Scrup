@@ -142,6 +142,9 @@
   "noPlaylistsYet": "You don't have any playlists yet. Create a new one.",
   "addedToPlaylist": "Added to playlist",
   "alreadyInPlaylist": "Already in this playlist",
+  "playerAnimation": "Player animation",
+  "playerAnimationHint": "Animated two-tone gradient in the player",
+  "playerAnimationEnabled": "Use animation",
   "playlistNamePrompt": "Playlist name",
   "cantPlay": "Could not play: {error}",
   "@cantPlay": {

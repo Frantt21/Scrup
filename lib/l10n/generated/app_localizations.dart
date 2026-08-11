@@ -631,6 +631,24 @@ abstract class AppLocalizations {
   /// **'Ya está en esta playlist'**
   String get alreadyInPlaylist;
 
+  /// No description provided for @playerAnimation.
+  ///
+  /// In es, this message translates to:
+  /// **'Animación del reproductor'**
+  String get playerAnimation;
+
+  /// No description provided for @playerAnimationHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Degradado animado de dos tonos en el player'**
+  String get playerAnimationHint;
+
+  /// No description provided for @playerAnimationEnabled.
+  ///
+  /// In es, this message translates to:
+  /// **'Usar animación'**
+  String get playerAnimationEnabled;
+
   /// No description provided for @playlistNamePrompt.
   ///
   /// In es, this message translates to:

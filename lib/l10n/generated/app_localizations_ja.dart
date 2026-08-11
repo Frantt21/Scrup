@@ -293,6 +293,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get alreadyInPlaylist => 'このプレイリストにすでにあります';
 
   @override
+  String get playerAnimation => 'プレイヤーのアニメーション';
+
+  @override
+  String get playerAnimationHint => 'プレイヤーの2トーングラデーションのアニメーション';
+
+  @override
+  String get playerAnimationEnabled => 'アニメーションを使用';
+
+  @override
   String get playlistNamePrompt => 'プレイリスト名';
 
   @override

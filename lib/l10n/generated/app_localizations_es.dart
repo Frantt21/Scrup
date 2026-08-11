@@ -295,6 +295,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get alreadyInPlaylist => 'Ya está en esta playlist';
 
   @override
+  String get playerAnimation => 'Animación del reproductor';
+
+  @override
+  String get playerAnimationHint =>
+      'Degradado animado de dos tonos en el player';
+
+  @override
+  String get playerAnimationEnabled => 'Usar animación';
+
+  @override
   String get playlistNamePrompt => 'Nombre de la playlist';
 
   @override

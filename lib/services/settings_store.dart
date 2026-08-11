@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Guarda preferencias simples de la sesión en disco (shared_preferences):
@@ -9,6 +10,13 @@ class SettingsStore {
   static const _sidebarGridKey = 'ui.sidebar_grid_mode';
   static const _localeKey = 'app.locale';
   static const _discordEnabledKey = 'discord.enabled';
+  static const _queueOpenKey = 'ui.queue_open';
+  static const _playerAnimationKey = 'player.animation_enabled';
+
+  /// Preferencia en memoria de la animación del player: un [ValueNotifier]
+  /// para que el PlayerBar reaccione al instante al alternarla desde
+  /// Configuración (el valor también se persiste entre sesiones).
+  final ValueNotifier<bool> playerAnimationEnabled = ValueNotifier(true);
 
   SharedPreferences? _prefs;
 
@@ -69,5 +77,35 @@ class SettingsStore {
   Future<bool> loadDiscordEnabled() async {
     final prefs = await _instance;
     return prefs.getBool(_discordEnabledKey) ?? false;
+  }
+
+  /// Estado abierto/cerrado del panel de la cola (para restaurarlo al
+  /// arrancar). `null` si el usuario nunca lo tocó (por defecto: cerrado).
+  Future<void> saveQueueOpen(bool open) async {
+    final prefs = await _instance;
+    await prefs.setBool(_queueOpenKey, open);
+  }
+
+  Future<bool?> loadQueueOpen() async {
+    final prefs = await _instance;
+    return prefs.getBool(_queueOpenKey);
+  }
+
+  /// Activa/desactiva la animación del player: actualiza el [ValueNotifier]
+  /// (reacción inmediata en el reproductor) y persiste en disco.
+  Future<void> setPlayerAnimationEnabled(bool enabled) async {
+    playerAnimationEnabled.value = enabled;
+    final prefs = await _instance;
+    await prefs.setBool(_playerAnimationKey, enabled);
+  }
+
+  /// Carga la preferencia de animación (por defecto: activa) y la refleja en
+  /// el [ValueNotifier] para el resto del app.
+  Future<bool> loadPlayerAnimationEnabled() async {
+    final prefs = await _instance;
+    final saved = prefs.getBool(_playerAnimationKey);
+    final value = saved ?? true;
+    playerAnimationEnabled.value = value;
+    return value;
   }
 }

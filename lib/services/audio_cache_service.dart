@@ -81,6 +81,18 @@ class AudioCacheService {
   /// compartan la misma descarga en vez de arrancar dos procesos.
   final Map<String, Completer<StreamingDownload>> _inflight = {};
 
+  /// Máximo de descargas de PRECARGA simultáneas. La de la pista en
+  /// reproducción no cuenta: va por su propio carril, y además las precargas
+  /// le ceden el ancho de banda esperando a que termine.
+  static const int maxConcurrentPreloads = 2;
+
+  /// Precargas en curso (recursos limitados: nunca más de
+  /// [maxConcurrentPreloads] procesos yt-dlp de fondo a la vez).
+  int _activePreloads = 0;
+
+  /// Esperas por un slot de precarga (FIFO).
+  final List<Completer<void>> _preloadWaiters = [];
+
   Directory? _dir;
 
   /// Directorio raíz del caché (creándolo si no existe).
@@ -163,24 +175,105 @@ class AudioCacheService {
     return StreamingSource(path);
   }
 
+  /// Precarga una pista al caché en segundo plano (para que el salto de
+  /// canción sea instantáneo), con RECURSOS LIMITADOS:
+  /// - como mucho [maxConcurrentPreloads] precargas a la vez (semáforo),
+  /// - no compite por ancho de banda con la descarga de la pista que se está
+  ///   reproduciendo (espera a que termine),
+  /// - dedupe con [_inflight]: si la pista ya se está descargando (precarga o
+  ///   reproducción), se reutiliza;
+  /// - best-effort: si falla (sin red, 403…), se ignora sin propagar.
+  Future<void> preload(String videoId, {String? title}) async {
+    try {
+      if (await cachedPath(videoId) != null) return;
+      // Ceder el ancho de banda: mientras se descargue la pista en
+      // reproducción (downloadingId activo), esperar antes de precargar.
+      while (downloadingId.value != null) {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+      await _acquirePreloadSlot();
+      try {
+        // Re-chequear dentro del slot: entre la primera comprobación y aquí
+        // otra petición pudo cachear la pista.
+        if (await cachedPath(videoId) != null) return;
+        // Volver a ceder el ancho de banda justo antes de arrancar: la
+        // reproducción pudo empezar tras la primera espera (carrera de
+        // arranque — best-effort, pero se minimiza).
+        while (downloadingId.value != null) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+        }
+        var completer = _inflight[videoId];
+        if (completer == null) {
+          completer = Completer<StreamingDownload>();
+          _inflight[videoId] = completer;
+          unawaited(
+            _startDownload(videoId, completer, title: title, background: true),
+          );
+        }
+        try {
+          final download = await completer.future;
+          // Mantener el slot hasta que la descarga termine en disco: así el
+          // semáforo acota procesos yt-dlp reales, no solo el arranque.
+          await download.finalPath;
+        } catch (_) {
+          // Fallo de descarga: _trackDownload limpia el .part incompleto;
+          // aquí solo se libera el slot (finally).
+        }
+      } finally {
+        _releasePreloadSlot();
+      }
+    } catch (_) {
+      // Best-effort: una precarga fallida nunca debe propagarse.
+    }
+  }
+
+  /// Reserva un slot de precarga (espera si ya hay [maxConcurrentPreloads]
+  /// activas).
+  Future<void> _acquirePreloadSlot() async {
+    if (_activePreloads < maxConcurrentPreloads) {
+      _activePreloads++;
+      return;
+    }
+    final waiter = Completer<void>();
+    _preloadWaiters.add(waiter);
+    await waiter.future;
+  }
+
+  /// Libera un slot de precarga: despierta al siguiente esperando (FIFO) o
+  /// decrementa el contador.
+  void _releasePreloadSlot() {
+    if (_preloadWaiters.isNotEmpty) {
+      _preloadWaiters.removeAt(0).complete();
+    } else {
+      _activePreloads--;
+    }
+  }
+
   /// Arranca la descarga en streaming en segundo plano y completa
   /// [completer] cuando yt-dlp devuelve el [StreamingDownload]. Si el
   /// arranque falla, completa con error y libera el slot (para permitir
   /// reintentos).
+  ///
+  /// Con [background] (precarga) NO se tocan los notifiers de progreso de la
+  /// UI ([downloadingId]/[progress]): esos reflejan solo la descarga de la
+  /// pista que se está preparando/reproduciendo.
   Future<void> _startDownload(
     String videoId,
     Completer<StreamingDownload> completer, {
     String? title,
+    bool background = false,
   }) async {
     try {
       final dir = await cacheDir();
-      downloadingId.value = videoId;
-      progress.value = null;
+      if (!background) {
+        downloadingId.value = videoId;
+        progress.value = null;
+      }
       final download = await ytdlp.startStreaming(
         videoId,
         outputDir: dir.path,
         title: title,
-        onProgress: (pct) => progress.value = pct,
+        onProgress: background ? null : (pct) => progress.value = pct,
       );
       // La limpieza (LRU al terminar, borrado del `.part` si falla y
       // liberación del slot) la hace [_trackDownload] cuando la descarga
@@ -188,7 +281,7 @@ class AudioCacheService {
       _trackDownload(download, videoId, completer);
       if (!completer.isCompleted) completer.complete(download);
     } catch (e) {
-      if (downloadingId.value == videoId) {
+      if (!background && downloadingId.value == videoId) {
         downloadingId.value = null;
         progress.value = null;
       }

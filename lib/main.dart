@@ -108,6 +108,12 @@ Future<void> main() async {
     final saved = await settings.loadLocale();
     if (saved != null) initialLocale = parseStoredLocale(saved);
   } catch (_) {}
+  // Cargar la preferencia de animación del player ANTES de runApp: el
+  // ValueNotifier queda con el valor guardado desde el primer frame (si solo
+  // lo cargara Configuración, el player animaría hasta abrirla).
+  try {
+    await settings.loadPlayerAnimationEnabled();
+  } catch (_) {}
 
   runApp(
     ScrupApp(
@@ -208,6 +214,10 @@ class ScrupApp extends StatelessWidget {
                     : track.title;
                 return ytdlp.search(query, limit: 10);
               },
+              // Precarga de la cola: cachea las siguientes pistas en segundo
+              // plano (recursos limitados por el caché) para que el salto de
+              // canción sea instantáneo.
+              preload: (track) => cache.preload(track.id, title: track.title),
               // Metadatos: Deezer aporta título/álbum/portada limpios
               enrich: (track) async =>
                   deezer.apply(track, await deezer.enrich(track)),

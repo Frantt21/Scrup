@@ -50,6 +50,11 @@ class PlayerService {
   /// inyectado en [main].
   final Future<PlayableSource> Function(Track track) resolveSource;
 
+  /// Precarga una pista al caché en segundo plano (recursos limitados): las
+  /// siguientes de la cola se descargan mientras suena la actual, para que el
+  /// salto de canción sea instantáneo. Opcional y *best-effort*.
+  final Future<void> Function(Track track)? preload;
+
   /// Busca canciones similares (mismo artista/género) para el modo radio.
   /// Opcional: si es null, el modo radio se desactiva automáticamente.
   final Future<List<Track>> Function(Track track)? recommend;
@@ -171,6 +176,7 @@ class PlayerService {
     required this.resolveSource,
     this.recommend,
     this.enrich,
+    this.preload,
     this.onPlayed,
     this.onEnriched,
   }) {
@@ -436,6 +442,43 @@ class PlayerService {
     }
   }
 
+  /// Número de pistas siguientes de la cola que se precargan (concurrencia
+  /// limitada por el caché: [AudioCacheService.maxConcurrentPreloads]).
+  static const int _preloadAhead = 2;
+
+  /// Pide al caché precargar las siguientes pistas de la cola (recursos
+  /// limitados). Con shuffle activo NO se precarga: la siguiente pista es
+  /// impredecible y descargar candidatos aleatorios desperdiciaría ancho de
+  /// banda y caché (cada uno cuesta una extracción de yt-dlp de ~3-4s).
+  void _schedulePreloads() {
+    final fn = preload;
+    if (fn == null || _queueIndex < 0 || _queue.isEmpty) return;
+    // Shuffle: el siguiente es aleatorio; no vale la pena especular.
+    if (shuffle.value) return;
+    final targets = <Track>[];
+    for (var i = 1; i <= _preloadAhead; i++) {
+      final idx = _queueIndex + i;
+      if (idx >= _queue.length) break;
+      targets.add(_queue[idx]);
+    }
+    for (final t in targets) {
+      unawaited(_preloadTrack(fn, t));
+    }
+  }
+
+  /// Precarga una pista de forma segura: nunca lanza ni molesta al usuario
+  /// (una precarga fallida — sin red, 403… — se ignora).
+  Future<void> _preloadTrack(
+    Future<void> Function(Track) fn,
+    Track track,
+  ) async {
+    try {
+      await fn(track);
+    } catch (_) {
+      // Best-effort: la precarga es una optimización, no un requisito.
+    }
+  }
+
   /// Índice siguiente respetando el modo aleatorio.
   int _nextIndex() {
     if (!shuffle.value || _queue.length <= 1) {
@@ -504,6 +547,9 @@ class PlayerService {
       _publishTrack(track);
       unawaited(_notifyPlayed(track));
       unawaited(_enrichThenApply(track, enrichFuture, token));
+      // La pista ya suena: precargar las siguientes de la cola en segundo
+      // plano (best-effort) para que el próximo salto sea instantáneo.
+      _schedulePreloads();
       return true;
     } catch (e) {
       _errorController.add('No se pudo reproducir "${track.title}": $e');

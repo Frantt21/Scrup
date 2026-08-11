@@ -293,6 +293,15 @@ class AppLocalizationsKo extends AppLocalizations {
   String get alreadyInPlaylist => '이미 이 플레이리스트에 있습니다';
 
   @override
+  String get playerAnimation => '플레이어 애니메이션';
+
+  @override
+  String get playerAnimationHint => '플레이어의 2톤 그라데이션 애니메이션';
+
+  @override
+  String get playerAnimationEnabled => '애니메이션 사용';
+
+  @override
   String get playlistNamePrompt => '플레이리스트 이름';
 
   @override

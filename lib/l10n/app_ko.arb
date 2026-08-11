@@ -95,6 +95,9 @@
   "noPlaylistsYet": "아직 플레이리스트가 없습니다. 새로 만드세요.",
   "addedToPlaylist": "플레이리스트에 추가됨",
   "alreadyInPlaylist": "이미 이 플레이리스트에 있습니다",
+  "playerAnimation": "플레이어 애니메이션",
+  "playerAnimationHint": "플레이어의 2톤 그라데이션 애니메이션",
+  "playerAnimationEnabled": "애니메이션 사용",
   "playlistNamePrompt": "플레이리스트 이름",
   "cantPlay": "재생할 수 없습니다: {error}",
 

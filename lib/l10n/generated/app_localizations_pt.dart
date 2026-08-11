@@ -295,6 +295,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get alreadyInPlaylist => 'Já está nesta playlist';
 
   @override
+  String get playerAnimation => 'Animação do player';
+
+  @override
+  String get playerAnimationHint => 'Gradiente animado de dois tons no player';
+
+  @override
+  String get playerAnimationEnabled => 'Usar animação';
+
+  @override
   String get playlistNamePrompt => 'Nome da playlist';
 
   @override
@@ -656,6 +665,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get alreadyInPlaylist => 'Já está nesta playlist';
+
+  @override
+  String get playerAnimation => 'Animação do player';
+
+  @override
+  String get playerAnimationHint => 'Gradiente animado de dois tons no player';
+
+  @override
+  String get playerAnimationEnabled => 'Usar animação';
 
   @override
   String get playlistNamePrompt => 'Nome da playlist';

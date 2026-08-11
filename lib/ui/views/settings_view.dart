@@ -29,6 +29,9 @@ class _SettingsViewState extends State<SettingsView> {
   /// Estado de la presencia de Discord (cargado desde el store al abrir).
   bool _discordEnabled = false;
 
+  /// Animación del player activa (cargada desde el store al abrir).
+  bool _playerAnimationEnabled = true;
+
   /// Idiomas soportados: el nombre se muestra en el propio idioma (cada
   /// usuario lo reconoce aunque aún no lea la interfaz).
   ///
@@ -50,6 +53,20 @@ class _SettingsViewState extends State<SettingsView> {
     super.initState();
     _refreshStats();
     _loadDiscordPrefs();
+    _loadPlayerPrefs();
+  }
+
+  /// Carga la preferencia de animación del player (best-effort).
+  Future<void> _loadPlayerPrefs() async {
+    try {
+      final enabled = await context
+          .read<SettingsStore>()
+          .loadPlayerAnimationEnabled();
+      if (!mounted) return;
+      setState(() => _playerAnimationEnabled = enabled);
+    } catch (_) {
+      // La configuración nunca debe romper la vista.
+    }
   }
 
   /// Carga el toggle de Discord guardado (best-effort).
@@ -183,6 +200,8 @@ class _SettingsViewState extends State<SettingsView> {
                   _buildLanguageSection(theme),
                   const SizedBox(height: 16),
                   _buildDiscordSection(theme),
+                  const SizedBox(height: 16),
+                  _buildPlayerSection(theme),
                   const SizedBox(height: 16),
                   _buildCacheSection(theme),
                   const SizedBox(height: 16),
@@ -343,6 +362,40 @@ class _SettingsViewState extends State<SettingsView> {
         onChanged: (value) async {
           setState(() => _discordEnabled = value);
           await service.setEnabled(value);
+        },
+      ),
+    );
+  }
+
+  /// Reproductor: alterna la animación del degradado de dos tonos del player
+  /// (el ValueNotifier del store hace que el reproductor reaccione al
+  /// instante, sin recargar).
+  Widget _buildPlayerSection(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
+    final settings = context.read<SettingsStore>();
+
+    return _SectionCard(
+      icon: Icons.animation_outlined,
+      title: l10n.playerAnimation,
+      caption: l10n.playerAnimationHint,
+      child: SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        // Fondo transparente explícito: el ListTile por defecto advierte que
+        // sus ink splashes pueden ser invisibles sobre el cristal.
+        tileColor: Colors.transparent,
+        title: SizedBox(
+          width: 240,
+          child: Text(
+            l10n.playerAnimationEnabled,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+        ),
+        value: _playerAnimationEnabled,
+        onChanged: (value) async {
+          setState(() => _playerAnimationEnabled = value);
+          await settings.setPlayerAnimationEnabled(value);
         },
       ),
     );

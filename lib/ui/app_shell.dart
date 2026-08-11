@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../data/database.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
+import '../services/settings_store.dart';
 import 'views/home_view.dart';
 import 'views/playlist_detail_view.dart';
 import 'views/search_view.dart';
@@ -53,6 +54,10 @@ class _AppShellState extends State<AppShell> {
   /// derecha empujando el contenido).
   bool _queueOpen = false;
 
+  /// El usuario ya alternó la cola: evita que la carga asíncrona de la
+  /// preferencia sobrescriba su elección (carrera de arranque).
+  bool _queueUserToggled = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +70,20 @@ class _AppShellState extends State<AppShell> {
         kind: ScrupToastKind.error,
       );
     });
+    // Restaurar el estado de la cola (abierta/cerrada) de la última sesión.
+    unawaited(_loadQueuePref());
+  }
+
+  /// Restaura el panel de la cola al estado en que quedó la última sesión
+  /// (best-effort: si falla, arranca cerrado).
+  Future<void> _loadQueuePref() async {
+    try {
+      final saved = await context.read<SettingsStore>().loadQueueOpen();
+      if (!mounted || saved == null || _queueUserToggled) return;
+      setState(() => _queueOpen = saved);
+    } catch (_) {
+      // La preferencia nunca debe impedir el arranque.
+    }
   }
 
   @override
@@ -223,8 +242,17 @@ class _AppShellState extends State<AppShell> {
                           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                           child: PlayerBar(
                             queueOpen: _queueOpen,
-                            onToggleQueue: () =>
-                                setState(() => _queueOpen = !_queueOpen),
+                            onToggleQueue: () {
+                              _queueUserToggled = true;
+                              final next = !_queueOpen;
+                              setState(() => _queueOpen = next);
+                              // Recordar la última elección entre sesiones.
+                              unawaited(
+                                context.read<SettingsStore>().saveQueueOpen(
+                                  next,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),

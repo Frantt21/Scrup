@@ -295,6 +295,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alreadyInPlaylist => 'Already in this playlist';
 
   @override
+  String get playerAnimation => 'Player animation';
+
+  @override
+  String get playerAnimationHint => 'Animated two-tone gradient in the player';
+
+  @override
+  String get playerAnimationEnabled => 'Use animation';
+
+  @override
   String get playlistNamePrompt => 'Playlist name';
 
   @override

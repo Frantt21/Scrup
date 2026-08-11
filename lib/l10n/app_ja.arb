@@ -95,6 +95,9 @@
   "noPlaylistsYet": "プレイリストはまだありません。新しいものを作成してください。",
   "addedToPlaylist": "プレイリストに追加しました",
   "alreadyInPlaylist": "このプレイリストにすでにあります",
+  "playerAnimation": "プレイヤーのアニメーション",
+  "playerAnimationHint": "プレイヤーの2トーングラデーションのアニメーション",
+  "playerAnimationEnabled": "アニメーションを使用",
   "playlistNamePrompt": "プレイリスト名",
   "cantPlay": "再生できません: {error}",
 

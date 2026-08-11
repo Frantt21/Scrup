@@ -95,6 +95,9 @@
   "noPlaylistsYet": "还没有播放列表。请创建一个新的。",
   "addedToPlaylist": "已添加到播放列表",
   "alreadyInPlaylist": "已在此播放列表中",
+  "playerAnimation": "播放器动画",
+  "playerAnimationHint": "播放器中的双色调渐变动画",
+  "playerAnimationEnabled": "使用动画",
   "playlistNamePrompt": "播放列表名称",
   "cantPlay": "无法播放：{error}",
 

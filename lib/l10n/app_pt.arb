@@ -95,6 +95,9 @@
   "noPlaylistsYet": "Você ainda não tem playlists. Crie uma nova.",
   "addedToPlaylist": "Adicionada à playlist",
   "alreadyInPlaylist": "Já está nesta playlist",
+  "playerAnimation": "Animação do player",
+  "playerAnimationHint": "Gradiente animado de dois tons no player",
+  "playerAnimationEnabled": "Usar animação",
   "playlistNamePrompt": "Nome da playlist",
   "cantPlay": "Não foi possível reproduzir: {error}",
 
