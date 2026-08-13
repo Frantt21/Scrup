@@ -338,25 +338,57 @@ class _SettingsViewState extends State<SettingsView> {
       icon: Icons.headphones_rounded,
       title: l10n.discordPresence,
       caption: l10n.discordPresenceHint,
-      child: SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        // Fondo transparente explícito: el ListTile por defecto advierte que
-        // sus ink splashes pueden ser invisibles sobre el cristal.
-        tileColor: Colors.transparent,
-        title: SizedBox(
-          width: 240,
-          child: Text(
-            l10n.discordEnabled,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurface,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            tileColor: Colors.transparent,
+            title: SizedBox(
+              width: 240,
+              child: Text(
+                l10n.discordEnabled,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+            value: _discordEnabled,
+            onChanged: (value) async {
+              setState(() => _discordEnabled = value);
+              await service.setEnabled(value);
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8, left: 16),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: service.connected,
+              builder: (context, connected, _) => Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: connected
+                          ? theme.colorScheme.tertiary
+                          : theme.colorScheme.surfaceContainerHighest,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    connected ? 'Conectado' : 'Desconectado',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: connected
+                          ? theme.colorScheme.tertiary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        value: _discordEnabled,
-        onChanged: (value) async {
-          setState(() => _discordEnabled = value);
-          await service.setEnabled(value);
-        },
+        ],
       ),
     );
   }

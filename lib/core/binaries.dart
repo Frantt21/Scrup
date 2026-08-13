@@ -286,9 +286,12 @@ class Binaries {
       return false;
     }
 
+    // Re-buscar los binarios después de descargarlos (ahora existen).
     _ytdlpPath = null;
     _ffmpegPath = null;
     _denoPath = null;
+    ytdlpPath; // Fuerza la búsqueda para cachearla
+    ffmpegPath; // Fuerza la búsqueda para cachearla
     return true;
   }
 
@@ -306,12 +309,19 @@ class Binaries {
         return exeDir;
       }
     } catch (_) {}
-    // Desarrollo: relativo al CWD del proyecto
-    final dev = p.join(Directory.current.path, 'bin', _platformDir);
-    if (File(p.join(dev, 'yt-dlp$_exeExt')).existsSync()) {
-      return dev;
+    // Desarrollo desde projectRoot (más confiable que CWD).
+    final root = projectRoot;
+    if (root != null) {
+      final dev = p.join(root, 'bin', _platformDir);
+      if (File(p.join(dev, 'yt-dlp$_exeExt')).existsSync()) {
+        return dev;
+      }
     }
-    // Desarrollo desde otros CWDs: prueba sobre el árbol de archivos fuente
+    // Desarrollo: relativo al CWD del proyecto (fallback).
+    final cwdDev = p.join(Directory.current.path, 'bin', _platformDir);
+    if (File(p.join(cwdDev, 'yt-dlp$_exeExt')).existsSync()) {
+      return cwdDev;
+    }
     return null;
   }
 

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, ValueNotifier;
 
 import '../../core/track.dart';
 import '../player_service.dart';
@@ -56,6 +56,7 @@ class DiscordPresenceService {
   static const _reconnectInterval = Duration(minutes: 3);
 
   final _events = StreamController<DiscordIpcEvent>.broadcast();
+  final _connectionStatus = ValueNotifier<bool>(false);
 
   DiscordIpcTransport? _transport;
   StreamSubscription<DiscordIpcEvent>? _transportSub;
@@ -79,6 +80,7 @@ class DiscordPresenceService {
   Track? get currentTrack => _track;
 
   Stream<DiscordIpcEvent> get events => _events.stream;
+  ValueNotifier<bool> get connected => _connectionStatus;
 
   /// Carga la configuración guardada, arranca el transporte si está
   /// activado y se suscribe a los cambios del reproductor.
@@ -132,6 +134,7 @@ class DiscordPresenceService {
   Future<void> _stopTransport() async {
     _stopTimers();
     _connected = false;
+    _connectionStatus.value = false;
     await _transportSub?.cancel();
     _transportSub = null;
     final t = _transport;
@@ -153,6 +156,7 @@ class DiscordPresenceService {
     switch (event) {
       case DiscordIpcConnected():
         _connected = true;
+        _connectionStatus.value = true;
         _startTimers();
         debugPrint('[discord] conectado, publicando presencia…');
         _publishPresence();
@@ -165,6 +169,7 @@ class DiscordPresenceService {
         });
       case DiscordIpcDisconnected():
         _connected = false;
+        _connectionStatus.value = false;
         _stopTimers();
       case DiscordIpcMessage(:final opcode, :final payload):
         if (opcode == DiscordOpcode.ping) {
@@ -272,6 +277,7 @@ class DiscordPresenceService {
     _positionSub = null;
     await _stopTransport();
     await _events.close();
+    _connectionStatus.dispose();
   }
 }
 
