@@ -11,7 +11,7 @@ import '../playback.dart';
 import '../playlist_actions.dart';
 import '../widgets/context_menu_item.dart';
 import '../widgets/now_playing_bars.dart';
-import '../widgets/player_bar.dart' show kPlayerOverlayInset;
+import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 
 /// Pantalla de inicio: barra de búsqueda arriba y las reproducciones
 /// recientes en un grid 1:1 de SOLO DOS FILAS (las columnas se acomodan al
@@ -97,78 +97,106 @@ class _HomeViewState extends State<HomeView> {
             .clamp(1, 10);
         final visible = _recent.length.clamp(0, cols * _rows);
 
-        return CustomScrollView(
-          slivers: [
-            // Barra de búsqueda (sin título ni subtítulo)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-                child: TextField(
-                  onSubmitted: _submitSearch,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: l10n.searchHint,
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(28),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
+        return Container(
+          margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 28,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+                    theme.colorScheme.surfaceContainer.withValues(alpha: 0.45),
+                  ],
                 ),
+              ),
+              child: CustomScrollView(
+                slivers: [
+                  // Barra de búsqueda (sin título ni subtítulo)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                      child: TextField(
+                        onSubmitted: _submitSearch,
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: l10n.searchHint,
+                          prefixIcon: const Icon(Icons.search),
+                          filled: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(28),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (!_loaded)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 48),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    ),
+                  if (_loaded)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                        child: _recent.isEmpty
+                            ? _EmptyHint(theme: theme)
+                            : Text(
+                                l10n.recentTitle,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                      ),
+                    ),
+                  if (_loaded && _recent.isNotEmpty)
+                    SliverPadding(
+                      // El player flotante cubre la parte inferior: dejar espacio
+                      // para que la última fila del grid quede accesible.
+                      padding: const EdgeInsets.fromLTRB(
+                        16,
+                        0,
+                        16,
+                        kPlayerOverlayInset,
+                      ),
+                      sliver: SliverGrid(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: cols,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 1,
+                        ),
+                        delegate: SliverChildBuilderDelegate((context, i) {
+                          final track = _recent[i];
+                          return _RecentCard(
+                            track: track,
+                            onPlay: () => playTrack(context, track),
+                            isCurrent: track.id == _currentTrack?.id,
+                            isPlaying: _playing,
+                          );
+                        }, childCount: visible),
+                      ),
+                    ),
+                ],
               ),
             ),
-            if (!_loaded)
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 48),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              ),
-            if (_loaded)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-                  child: _recent.isEmpty
-                      ? _EmptyHint(theme: theme)
-                      : Text(
-                          l10n.recentTitle,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                ),
-              ),
-            if (_loaded && _recent.isNotEmpty)
-              SliverPadding(
-                // El player flotante cubre la parte inferior: dejar espacio
-                // para que la última fila del grid quede accesible.
-                padding: const EdgeInsets.fromLTRB(
-                  16,
-                  0,
-                  16,
-                  kPlayerOverlayInset,
-                ),
-                sliver: SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: cols,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1,
-                  ),
-                  delegate: SliverChildBuilderDelegate((context, i) {
-                    final track = _recent[i];
-                    return _RecentCard(
-                      track: track,
-                      onPlay: () => playTrack(context, track),
-                      isCurrent: track.id == _currentTrack?.id,
-                      isPlaying: _playing,
-                    );
-                  }, childCount: visible),
-                ),
-              ),
-          ],
+          ),
         );
       },
     );

@@ -59,6 +59,16 @@ class _AppShellState extends State<AppShell> {
   /// preferencia sobrescriba su elección (carrera de arranque).
   bool _queueUserToggled = false;
 
+  void _onBinaryDownloadStatus() {
+    final status = Binaries.downloadStatus.value;
+    if (status == null || !mounted) return;
+    showScrupToast(
+      status.label,
+      kind: ScrupToastKind.info,
+      duration: const Duration(seconds: 2),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -76,12 +86,21 @@ class _AppShellState extends State<AppShell> {
       final ff = Binaries.ffmpegPath;
       if (yt == null || ff == null) {
         if (!mounted) return;
+        final initial = 'Descargando binarios de audio… Esto puede tardar unos segundos.';
         showScrupToast(
-          'Descargando binarios de audio… Esto puede tardar unos segundos.',
+          initial,
           kind: ScrupToastKind.info,
           duration: const Duration(seconds: 6),
         );
+
+        Binaries.downloadStatus.addListener(_onBinaryDownloadStatus);
+
         final ok = await Binaries.ensureSidecarsPresent();
+        if (mounted) {
+          Binaries.downloadStatus.removeListener(_onBinaryDownloadStatus);
+          Binaries.downloadStatus.value = null;
+        }
+
         if (!mounted) return;
         if (!ok) {
           final ytAfter = Binaries.ytdlpPath;
@@ -115,6 +134,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _errorSub?.cancel();
+    Binaries.downloadStatus.removeListener(_onBinaryDownloadStatus);
     _searchRequest.dispose();
     super.dispose();
   }

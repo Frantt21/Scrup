@@ -508,6 +508,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     return Theme(
       data: theme,
       child: Container(
+        constraints: const BoxConstraints.expand(),
         // Margen flotante + sombra exterior (fuera del clip). Top 12 =
         // alineado con el sidebar; bottom = kPlayerClearance para que el
         // contenedor termine POR ENCIMA del player con el MISMO hueco (12)

@@ -276,8 +276,10 @@ class _WinPipe {
           0,
           nullptr,
         );
-        // INVALID_HANDLE_VALUE es -1 (0xFFFFFFFFFFFFFFFF)
-        if (handle.address != 0xFFFFFFFFFFFFFFFF) {
+        // INVALID_HANDLE_VALUE en Win32 es -1, aunque en algunas plataformas
+        // el puntero puede llegar también como 0xFFFFFFFFFFFFFFFF.
+        final invalid = handle.address == -1 || handle.address == 0xFFFFFFFFFFFFFFFF;
+        if (!invalid) {
           return _WinPipe._(handle.address);
         }
       } finally {

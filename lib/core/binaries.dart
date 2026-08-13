@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -10,8 +11,25 @@ import 'package:path/path.dart' as p;
 /// 1. Variables de entorno `SCRUP_YTDLP_PATH` / `SCRUP_FFMPEG_PATH` (override).
 /// 2. Directorio junto al ejecutable (modo empaquetado).
 /// 3. `bin/<plataforma>/` relativo al directorio de trabajo (desarrollo).
+class BinaryDownloadStatus {
+  const BinaryDownloadStatus({
+    required this.name,
+    required this.percent,
+    required this.speed,
+  });
+
+  final String name;
+  final double percent;
+  final String speed;
+
+  String get label => '$name ${percent.toStringAsFixed(0)}% • $speed';
+}
+
 class Binaries {
   Binaries._();
+
+  static final ValueNotifier<BinaryDownloadStatus?> downloadStatus =
+      ValueNotifier<BinaryDownloadStatus?>(null);
 
   static String get _platformDir {
     if (Platform.isWindows) return 'windows';
@@ -102,13 +120,56 @@ class Binaries {
     } catch (_) {}
   }
 
+  static BinaryDownloadStatus? _parseDownloadStatus(String line, String name) {
+    final percentMatch = RegExp(r'(\d{1,3})\s*%').firstMatch(line);
+    final speedMatch = RegExp(
+      r'(\d+(?:\.\d+)?\s*(?:[KMG]i?B|B)/s)',
+    ).firstMatch(line);
+    if (percentMatch == null && speedMatch == null) return null;
+    final double percent = percentMatch != null
+        ? (double.tryParse(percentMatch.group(1)!) ?? 0.0)
+        : 0.0;
+    final String speed =
+        speedMatch != null ? speedMatch.group(1)!.trim() : '0 KB/s';
+    return BinaryDownloadStatus(name: name, percent: percent, speed: speed);
+  }
+
+  static Future<ProcessResult> _runDownloadWithProgress(
+    String executable,
+    List<String> arguments, {
+    required String label,
+  }) async {
+    final process = await Process.start(executable, arguments, environment: Platform.environment);
+    final content = StringBuffer();
+    final progressLines = process.stderr.transform(utf8.decoder).transform(const LineSplitter());
+
+    await for (final line in progressLines) {
+      content.writeln(line);
+      final status = _parseDownloadStatus(line, label);
+      if (status != null) {
+        downloadStatus.value = status;
+      }
+    }
+
+    final stdout = await process.stdout.transform(utf8.decoder).join();
+    final stderr = content.toString();
+    final exitCode = await process.exitCode;
+    return ProcessResult(0, exitCode, stdout, stderr);
+  }
+
   static Future<bool> _downloadYtDlp(String dir) async {
     final target = p.join(dir, 'yt-dlp$_exeExt');
     final url = _platformUrlYtDlp();
     if (url == null) return false;
     final cmd = _downloadCommand(url, target);
     if (cmd == null) return false;
-    final res = await _runSystemDownloadAsync(cmd);
+
+    final exe = Platform.isWindows ? 'powershell' : 'sh';
+    final args = Platform.isWindows
+        ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', cmd]
+        : ['-lc', cmd];
+
+    final res = await _runDownloadWithProgress(exe, args, label: 'yt-dlp');
     if (res.exitCode != 0) {
       debugPrint('[Scrup] yt-dlp download failed: ${res.stderr}');
       return false;
@@ -141,7 +202,7 @@ class Binaries {
         '-Command',
         'Expand-Archive -LiteralPath "${zip.replaceAll('/', '\\')}" -DestinationPath "${ffmpegDir.replaceAll('/', '\\')}" -Force',
       ];
-      final extract = await Process.run(unzip, extractArgs, environment: Platform.environment);
+      final extract = await _runDownloadWithProgress(unzip, extractArgs, label: 'ffmpeg');
       if (extract.exitCode != 0) {
         debugPrint('[Scrup] ffmpeg unzip failed: ${extract.stderr}');
         return false;
@@ -172,10 +233,10 @@ class Binaries {
       }
       final tar = _which('tar');
       if (tar == null) return false;
-      final extract = await Process.run(
+      final extract = await _runDownloadWithProgress(
         tar,
         ['-xJf', tarPath, '-C', ffmpegDir, '--strip-components=1', '--wildcards', '*/ffmpeg', '*/ffprobe'],
-        environment: Platform.environment,
+        label: 'ffmpeg',
       );
       if (extract.exitCode != 0) {
         debugPrint('[Scrup] ffmpeg tar extract failed: ${extract.stderr}');

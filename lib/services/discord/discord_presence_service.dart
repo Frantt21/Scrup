@@ -222,32 +222,24 @@ class DiscordPresenceService {
       return;
     }
 
+    final title = track.title.isNotEmpty ? track.title : 'Unknown';
+    final state = track.artist.isNotEmpty ? track.artist : 'Scrup';
+
     // Timestamp de inicio (segundos Unix): si está sonando, el cronómetro
     // de Discord arranca en `now - recorrido` para reflejar la posición.
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final start = now - _position.inSeconds;
 
-    debugPrint('[discord] SET_ACTIVITY: ${track.title} — ${track.artist}');
+    debugPrint('[discord] SET_ACTIVITY: $title — $state');
     transport.send(DiscordOpcode.frame, {
       'cmd': 'SET_ACTIVITY',
       'args': {
         'pid': pid,
         'activity': {
           'type': 2, // Listening
-          'details': _details(track),
-          'state': track.artist.isNotEmpty ? track.artist : 'Scrup',
+          'details': title,
+          'state': state,
           'timestamps': {'start': start},
-          // SIN assets custom: Discord NO acepta URLs remotas en
-          // `large_image`/`small_image` (solo claves de assets subidos al
-          // Developer Portal) — un asset inválido rechaza TODO el frame.
-          // Sin assets, la actividad usa el ícono por defecto de la
-          // aplicación de Scrup y siempre renderiza.
-          'buttons': [
-            {
-              'label': 'Escuchar en YouTube',
-              'url': 'https://www.youtube.com/watch?v=${track.id}',
-            },
-          ],
         },
       },
       'nonce': _nonce(),
