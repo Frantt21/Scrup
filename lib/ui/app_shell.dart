@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/binaries.dart';
 import '../data/database.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
@@ -69,6 +70,31 @@ class _AppShellState extends State<AppShell> {
         l10n.playbackErrorWithDetails(message),
         kind: ScrupToastKind.error,
       );
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final yt = Binaries.ytdlpPath;
+      final ff = Binaries.ffmpegPath;
+      if (yt == null || ff == null) {
+        if (!mounted) return;
+        showScrupToast(
+          'Descargando binarios de audio… Esto puede tardar unos segundos.',
+          kind: ScrupToastKind.info,
+          duration: const Duration(seconds: 6),
+        );
+        final ok = await Binaries.ensureSidecarsPresent();
+        if (!mounted) return;
+        if (!ok) {
+          final ytAfter = Binaries.ytdlpPath;
+          final ffAfter = Binaries.ffmpegPath;
+          if (ytAfter == null || ffAfter == null) {
+            showScrupToast(
+              'Faltan binarios de audio: ${[if (ytAfter == null) 'yt-dlp', if (ffAfter == null) 'ffmpeg'].join(', ')}. Ejecuta la descarga o instala curl/PowerShell.',
+              kind: ScrupToastKind.error,
+              duration: const Duration(seconds: 8),
+            );
+          }
+        }
+      }
     });
     // Restaurar el estado de la cola (abierta/cerrada) de la última sesión.
     unawaited(_loadQueuePref());

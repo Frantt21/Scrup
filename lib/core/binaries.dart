@@ -22,6 +22,215 @@ class Binaries {
 
   static String get _exeExt => Platform.isWindows ? '.exe' : '';
 
+  static String? get projectRoot {
+    final candidates = <String>{
+      Directory.current.path,
+      p.dirname(Platform.resolvedExecutable),
+    };
+    for (final candidate in candidates) {
+      final script = p.join(candidate, 'tool', 'fetch_binaries.sh');
+      if (File(script).existsSync()) return candidate;
+    }
+    final parent = p.dirname(Directory.current.path);
+    final fallback = p.join(parent, 'Scrup');
+    final script = p.join(fallback, 'tool', 'fetch_binaries.sh');
+    if (File(script).existsSync()) return fallback;
+    return null;
+  }
+
+  static String? _platformUrlYtDlp() {
+    const base = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download';
+    final win = '$base/yt-dlp.exe';
+    if (Platform.isWindows) return win;
+    return '$base/yt-dlp';
+  }
+
+  static String? _platformUrlFfmpeg() {
+    if (Platform.isWindows) {
+      return 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip';
+    }
+    if (Platform.isLinux) {
+      return 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz';
+    }
+    if (Platform.isMacOS) {
+      final version = '7.1';
+      return 'https://evermeet.cx/ffmpeg/getrelease/ffmpeg/$version';
+    }
+    return null;
+  }
+
+  static String? _downloadCommand(String url, String outputPath) {
+    final curl = _which('curl');
+    if (curl != null) {
+      return '$curl -L --fail --output "$outputPath" "$url"';
+    }
+    if (Platform.isWindows) {
+      final powershell = _which('powershell');
+      if (powershell != null) {
+        final escaped = outputPath.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+        final escapedUrl = url.replaceAll('"', '\\"');
+        return '$powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri \"$escapedUrl\" -OutFile \"$escaped\""';
+      }
+    }
+    return null;
+  }
+
+  static bool _runSystemDownload(String command) {
+    try {
+      final res = Process.runSync(
+        Platform.isWindows ? 'powershell' : 'sh',
+        Platform.isWindows
+            ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command]
+            : ['-lc', command],
+        environment: Platform.environment,
+      );
+      if (res.exitCode != 0) {
+        debugPrint('[Scrup] system download failed: ${res.stderr}');
+        return false;
+      }
+      return true;
+    } catch (err) {
+      debugPrint('[Scrup] system download exception: $err');
+      return false;
+    }
+  }
+
+  static void _ensureExecutable(String path) {
+    if (Platform.isWindows) return;
+    try {
+      Process.runSync('chmod', ['+x', path], environment: Platform.environment);
+    } catch (_) {}
+  }
+
+  static Future<bool> _downloadYtDlp(String dir) async {
+    final target = p.join(dir, 'yt-dlp$_exeExt');
+    final url = _platformUrlYtDlp();
+    if (url == null) return false;
+    final cmd = _downloadCommand(url, target);
+    if (cmd == null) return false;
+    final res = await _runSystemDownloadAsync(cmd);
+    if (res.exitCode != 0) {
+      debugPrint('[Scrup] yt-dlp download failed: ${res.stderr}');
+      return false;
+    }
+    _ensureExecutable(target);
+    return File(target).existsSync();
+  }
+
+  static Future<bool> _downloadFfmpeg(String dir) async {
+    final url = _platformUrlFfmpeg();
+    if (url == null) return false;
+    final ffmpegDir = p.join(dir, 'ffmpeg');
+    await Directory(ffmpegDir).create(recursive: true);
+
+    if (Platform.isWindows) {
+      final zip = p.join(dir, 'ffmpeg-release-essentials.zip');
+      final cmd = _downloadCommand(url, zip);
+      if (cmd == null) return false;
+      final res = await _runSystemDownloadAsync(cmd);
+      if (res.exitCode != 0) {
+        debugPrint('[Scrup] ffmpeg download failed: ${res.stderr}');
+        return false;
+      }
+      final unzip = _which('powershell') ?? _which('tar');
+      if (unzip == null) return false;
+      final extractArgs = [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        'Expand-Archive -LiteralPath "${zip.replaceAll('/', '\\')}" -DestinationPath "${ffmpegDir.replaceAll('/', '\\')}" -Force',
+      ];
+      final extract = await Process.run(unzip, extractArgs, environment: Platform.environment);
+      if (extract.exitCode != 0) {
+        debugPrint('[Scrup] ffmpeg unzip failed: ${extract.stderr}');
+        return false;
+      }
+      try {
+        final zipFile = File(zip);
+        if (zipFile.existsSync()) {
+          await zipFile.delete();
+        }
+      } catch (_) {}
+      final ffmpegExe = p.join(ffmpegDir, 'ffmpeg.exe');
+      if (File(ffmpegExe).existsSync()) return true;
+      final nested = Directory(ffmpegDir).listSync(recursive: true);
+      for (final entry in nested) {
+        if (entry is File && p.basename(entry.path) == 'ffmpeg.exe') return true;
+      }
+      return false;
+    }
+
+    if (Platform.isLinux || Platform.isMacOS) {
+      final tarPath = p.join(dir, 'ffmpeg-static.tar');
+      final cmd = _downloadCommand(url, tarPath);
+      if (cmd == null) return false;
+      final res = await _runSystemDownloadAsync(cmd);
+      if (res.exitCode != 0) {
+        debugPrint('[Scrup] ffmpeg download failed: ${res.stderr}');
+        return false;
+      }
+      final tar = _which('tar');
+      if (tar == null) return false;
+      final extract = await Process.run(
+        tar,
+        ['-xJf', tarPath, '-C', ffmpegDir, '--strip-components=1', '--wildcards', '*/ffmpeg', '*/ffprobe'],
+        environment: Platform.environment,
+      );
+      if (extract.exitCode != 0) {
+        debugPrint('[Scrup] ffmpeg tar extract failed: ${extract.stderr}');
+        return false;
+      }
+      try {
+        final tarFile = File(tarPath);
+        if (tarFile.existsSync()) {
+          await tarFile.delete();
+        }
+      } catch (_) {}
+      final ffmpeg = p.join(ffmpegDir, 'ffmpeg');
+      final ffprobe = p.join(ffmpegDir, 'ffprobe');
+      if (File(ffmpeg).existsSync() && File(ffprobe).existsSync()) return true;
+      return false;
+    }
+
+    return false;
+  }
+
+  static Future<ProcessResult> _runSystemDownloadAsync(String command) async {
+    try {
+      return await Process.run(
+        Platform.isWindows ? 'powershell' : 'sh',
+        Platform.isWindows
+            ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command]
+            : ['-lc', command],
+        environment: Platform.environment,
+      );
+    } catch (err) {
+      debugPrint('[Scrup] system download exception: $err');
+      return ProcessResult(0, 1, '', '$err');
+    }
+  }
+
+  static Future<bool> ensureSidecarsPresent() async {
+    if (_ytdlpPath != null && _ffmpegPath != null) return true;
+
+    final root = projectRoot ?? Directory.current.path;
+    final binDir = p.join(root, 'bin', _platformDir);
+    await Directory(binDir).create(recursive: true);
+
+    final downloadedYtDlp = await _downloadYtDlp(binDir);
+    final downloadedFfmpeg = await _downloadFfmpeg(binDir);
+    if (!downloadedYtDlp && !downloadedFfmpeg) {
+      debugPrint('[Scrup] Auto-fetch sidecars skipped: no native download path available.');
+      return false;
+    }
+
+    _ytdlpPath = null;
+    _ffmpegPath = null;
+    _denoPath = null;
+    return true;
+  }
+
   /// Directorio donde buscaremos los binarios, si existe.
   static String? _searchDir() {
     final env = Platform.environment;
@@ -64,7 +273,6 @@ class Binaries {
         return _ytdlpPath;
       }
     }
-    // Fallback: buscar en PATH
     final inPath = _which('yt-dlp');
     if (inPath != null) {
       _ytdlpPath = inPath;
