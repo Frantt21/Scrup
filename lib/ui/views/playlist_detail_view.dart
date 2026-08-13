@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui' show ImageFilter;
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -527,228 +525,219 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
-          child: BackdropFilter(
-            // Cristal: difumina lo que pase por detrás
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                // Cristal: la MISMA base oscura translúcida que el sidebar
-                // (mismos dos tonos y alphas), pero en el detalle se le añade
-                // un matiz sutil del color de la portada de la playlist
-                // (solo aquí; el sidebar se queda neutro).
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    if (playlistColor != null)
-                      // Tinte SOLO del tono: se mezclan los colores opacos
-                      // (sin alpha) y luego se aplica el mismo alpha 0.55 del
-                      // sidebar, para que la translucidez coincida exactamente
-                      // (Color.lerp también interpolaría el canal alfa y el
-                      // detalle quedaría más opaco que el sidebar).
-                      Color.lerp(
-                        theme.colorScheme.surfaceContainerHighest,
-                        playlistColor,
-                        0.30,
-                      )!.withValues(alpha: 0.55)
-                    else
-                      theme.colorScheme.surfaceContainerHighest.withValues(
-                        alpha: 0.55,
-                      ),
-                    theme.colorScheme.surfaceContainer.withValues(alpha: 0.55),
-                  ],
-                ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              // Plano: la MISMA base oscura que el sidebar (mismos dos tonos
+              // y alphas, en degradado VERTICAL), pero en el detalle se le
+              // añade un matiz sutil del color de la portada de la playlist
+              // (solo aquí; el sidebar se queda neutro).
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  if (playlistColor != null)
+                    // Tinte SOLO del tono: se mezclan los colores opacos
+                    // (sin alpha) y luego se aplican los mismos alphas del
+                    // sidebar, para que la translucidez coincida exactamente
+                    // (Color.lerp también interpolaría el canal alfa y el
+                    // detalle quedaría más opaco que el sidebar).
+                    Color.lerp(
+                      theme.colorScheme.surfaceContainerHighest,
+                      playlistColor,
+                      0.30,
+                    )!.withValues(alpha: 0.72)
+                  else
+                    theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.72,
+                    ),
+                  theme.colorScheme.surfaceContainer.withValues(alpha: 0.45),
+                ],
               ),
-              child: Material(
-                color: Colors.transparent,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Hero de presentación (cristal limpio, sin ambiente de
-                    // color de la portada)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 24, 20),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          // Portada grande (hover muestra acciones de
-                          // edición)
-                          _heroCover(theme, playlist.coverUrl),
-                          const SizedBox(width: 24),
-                          // Título + descripción + acciones
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  playlist.name,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.displaySmall?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.05,
-                                  ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Hero de presentación (cristal limpio, sin ambiente de
+                  // color de la portada)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 24, 20),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        // Portada grande (hover muestra acciones de
+                        // edición)
+                        _heroCover(theme, playlist.coverUrl),
+                        const SizedBox(width: 24),
+                        // Título + descripción + acciones
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                playlist.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.displaySmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.05,
                                 ),
-                                if (playlist.description != null) ...[
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    playlist.description!,
-                                    maxLines: 4,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant
-                                          .withValues(alpha: 0.9),
-                                    ),
+                              ),
+                              if (playlist.description != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  playlist.description!,
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant
+                                        .withValues(alpha: 0.9),
                                   ),
-                                ],
-                                const SizedBox(height: 16),
-                                // Reproducir + shuffle + conteo/duración
-                                Wrap(
-                                  spacing: 10,
-                                  runSpacing: 8,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    FilledButton.icon(
-                                      onPressed: count == 0 ? null : _playAll,
-                                      icon: const Icon(
-                                        Icons.play_arrow_rounded,
-                                      ),
-                                      label: Text(l10n.play),
-                                    ),
-                                    FilledButton.icon(
-                                      onPressed: count == 0
-                                          ? null
-                                          : _playShuffled,
-                                      // Mismo diseño que el botón de play,
-                                      // pero con fondo blanco y el texto/icono
-                                      // en el color acento de la playlist.
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor: Colors.white,
-                                        foregroundColor:
-                                            theme.colorScheme.primary,
-                                      ),
-                                      // Label corto: solo "Aleatorio"; el
-                                      // texto largo anterior agrandaba el
-                                      // botón respecto al de play.
-                                      icon: const Icon(Icons.shuffle),
-                                      label: Text(l10n.shuffle),
-                                    ),
-                                    Text(
-                                      _countAndDuration,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                    ),
-                                    // Indicador limpio: solo el ecualizador,
-                                    // y únicamente si esta playlist es la
-                                    // que se está reproduciendo
-                                    if (_isPlayingThisPlaylist)
-                                      Padding(
-                                        padding: const EdgeInsets.only(left: 4),
-                                        child: NowPlayingBars(
-                                          active: _playing,
-                                          size: 14,
-                                        ),
-                                      ),
-                                  ],
                                 ),
                               ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: _tracks.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
+                              const SizedBox(height: 16),
+                              // Reproducir + shuffle + conteo/duración
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
-                                  Icon(
-                                    Icons.music_off,
-                                    size: 64,
-                                    // Icono tintado con el artwork de la
-                                    // playlist (si ya se extrajo)
-                                    color:
-                                        (playlistColor ??
-                                                theme
-                                                    .colorScheme
-                                                    .onSurfaceVariant)
-                                            .withValues(alpha: 0.5),
+                                  FilledButton.icon(
+                                    onPressed: count == 0 ? null : _playAll,
+                                    icon: const Icon(Icons.play_arrow_rounded),
+                                    label: Text(l10n.play),
                                   ),
-                                  const SizedBox(height: 12),
+                                  FilledButton.icon(
+                                    onPressed: count == 0
+                                        ? null
+                                        : _playShuffled,
+                                    // Mismo diseño que el botón de play,
+                                    // pero con fondo blanco y el texto/icono
+                                    // en el color acento de la playlist.
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor:
+                                          theme.colorScheme.primary,
+                                    ),
+                                    // Label corto: solo "Aleatorio"; el
+                                    // texto largo anterior agrandaba el
+                                    // botón respecto al de play.
+                                    icon: const Icon(Icons.shuffle),
+                                    label: Text(l10n.shuffle),
+                                  ),
                                   Text(
-                                    l10n.emptyPlaylist,
-                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                    _countAndDuration,
+                                    style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    l10n.emptyPlaylistHint,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant
-                                          .withValues(alpha: 0.7),
+                                  // Indicador limpio: solo el ecualizador,
+                                  // y únicamente si esta playlist es la
+                                  // que se está reproduciendo
+                                  if (_isPlayingThisPlaylist)
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: NowPlayingBars(
+                                        active: _playing,
+                                        size: 14,
+                                      ),
                                     ),
-                                  ),
                                 ],
                               ),
-                            )
-                          : ListView.separated(
-                              // El contenedor ya termina por encima del
-                              // player (margen inferior), así que aquí solo
-                              // hace falta un respiro pequeño.
-                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                              itemCount: _tracks.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 4),
-                              itemBuilder: (context, i) {
-                                final track = _tracks[i];
-                                return GestureDetector(
-                                  onSecondaryTapUp: (details) => _showTrackMenu(
-                                    track,
-                                    details.globalPosition,
-                                  ),
-                                  child: TrackTile(
-                                    track: track,
-                                    // La cola es LA PLAYLIST: al tocar una
-                                    // canción, el siguiente/anterior (y el
-                                    // auto-advance) recorren la playlist,
-                                    // no caen en radio. El índice se
-                                    // recalcula al tocar (por si la lista
-                                    // cambió desde el build).
-                                    onPlay: () {
-                                      final start = _tracks.indexWhere(
-                                        (t) => t.id == track.id,
-                                      );
-                                      playQueue(
-                                        context,
-                                        _tracks,
-                                        startIndex: start < 0 ? 0 : start,
-                                        playlistId: widget.playlist.id,
-                                      );
-                                    },
-                                    isCurrent: track.id == currentId,
-                                    isPlaying: _playing,
-                                    // Texto e iconos con el color del
-                                    // artwork de SU canción (extraído de
-                                    // forma perezosa por fila); mientras se
-                                    // extrae, fallback al color de la
-                                    // playlist para que no haya saltos
-                                    accentColor:
-                                        _trackColorFor(track) ?? playlistColor,
-                                  ),
-                                );
-                              },
-                            ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  Expanded(
+                    child: _tracks.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.music_off,
+                                  size: 64,
+                                  // Icono tintado con el artwork de la
+                                  // playlist (si ya se extrajo)
+                                  color:
+                                      (playlistColor ??
+                                              theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant)
+                                          .withValues(alpha: 0.5),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  l10n.emptyPlaylist,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  l10n.emptyPlaylistHint,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant
+                                        .withValues(alpha: 0.7),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            // El contenedor ya termina por encima del
+                            // player (margen inferior), así que aquí solo
+                            // hace falta un respiro pequeño.
+                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                            itemCount: _tracks.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 4),
+                            itemBuilder: (context, i) {
+                              final track = _tracks[i];
+                              return GestureDetector(
+                                onSecondaryTapUp: (details) => _showTrackMenu(
+                                  track,
+                                  details.globalPosition,
+                                ),
+                                child: TrackTile(
+                                  track: track,
+                                  // La cola es LA PLAYLIST: al tocar una
+                                  // canción, el siguiente/anterior (y el
+                                  // auto-advance) recorren la playlist,
+                                  // no caen en radio. El índice se
+                                  // recalcula al tocar (por si la lista
+                                  // cambió desde el build).
+                                  onPlay: () {
+                                    final start = _tracks.indexWhere(
+                                      (t) => t.id == track.id,
+                                    );
+                                    playQueue(
+                                      context,
+                                      _tracks,
+                                      startIndex: start < 0 ? 0 : start,
+                                      playlistId: widget.playlist.id,
+                                    );
+                                  },
+                                  isCurrent: track.id == currentId,
+                                  isPlaying: _playing,
+                                  // Texto e iconos con el color del
+                                  // artwork de SU canción (extraído de
+                                  // forma perezosa por fila); mientras se
+                                  // extrae, fallback al color de la
+                                  // playlist para que no haya saltos
+                                  accentColor:
+                                      _trackColorFor(track) ?? playlistColor,
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
             ),
           ),

@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show ImageFilter;
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -238,58 +236,56 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
-        child: BackdropFilter(
-          // Cristal: difumina lo que pase por detrás
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              // Cristal limpio: dos tonos oscuros translúcidos, sin el tinte
-              // del artwork (UI más neutro y limpio).
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  theme.colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.55,
-                  ),
-                  theme.colorScheme.surfaceContainer.withValues(alpha: 0.55),
-                ],
-              ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            // Plano: dos tonos oscuros en degradado VERTICAL (sin blur), con
+            // contraste suave (más claro arriba, más oscuro abajo). El
+            // degradado da el toque de profundidad; el acento colorido queda
+            // solo para el player.
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.72,
+                ),
+                theme.colorScheme.surfaceContainer.withValues(alpha: 0.45),
+              ],
             ),
-            child: Material(
-              // Transparente para que los ripples se dibujen sobre el cristal
-              color: Colors.transparent,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Cabecera: título + toggle lista/cuadrícula
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            l10n.playlistsTitle,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+          ),
+          child: Material(
+            // Transparente para que los ripples se dibujen sobre el cristal
+            color: Colors.transparent,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Cabecera: título + toggle lista/cuadrícula
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.playlistsTitle,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        // Toggle lista/cuadrícula: chip compacto con los dos
-                        // modos siempre visibles; el activo se resalta en lila.
-                        _ViewToggle(
-                          gridMode: _gridMode,
-                          onChanged: _toggleGridMode,
-                        ),
-                      ],
-                    ),
+                      ),
+                      // Toggle lista/cuadrícula: chip compacto con los dos
+                      // modos siempre visibles; el activo se resalta en lila.
+                      _ViewToggle(
+                        gridMode: _gridMode,
+                        onChanged: _toggleGridMode,
+                      ),
+                    ],
                   ),
-                  Expanded(
-                    child: _gridMode ? _buildGrid(theme) : _buildList(theme),
-                  ),
-                ],
-              ),
+                ),
+                Expanded(
+                  child: _gridMode ? _buildGrid(theme) : _buildList(theme),
+                ),
+              ],
             ),
           ),
         ),

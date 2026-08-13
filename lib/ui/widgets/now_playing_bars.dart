@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../services/settings_store.dart';
 
 /// Ecualizador animado: indica que una pista se está reproduciendo (barras
 /// en movimiento) o está pausada (barras bajas y quietas).
@@ -52,10 +55,33 @@ class _NowPlayingBarsState extends State<NowPlayingBars> {
   /// Fase 0..1 del ciclo, que se avanza con cada tick del timer.
   double _t = 0;
 
+  /// Ajuste "Usar animación": con él desactivado las barras quedan estáticas
+  /// (siguen marcando la pista actual en altura media, sin movimiento) para
+  /// no producir frames durante la reproducción.
+  ValueNotifier<bool>? _animSetting;
+
   @override
   void initState() {
     super.initState();
-    if (widget.active) _start();
+    _animSetting = context.read<SettingsStore>().playerAnimationEnabled;
+    _animSetting?.addListener(_onSettingChanged);
+    _sync();
+  }
+
+  void _onSettingChanged() {
+    if (mounted) _sync();
+  }
+
+  /// Arranca o para la animación según el estado del widget ([widget.active])
+  /// y el ajuste de animación.
+  void _sync() {
+    final animEnabled = _animSetting?.value ?? true;
+    if (widget.active && animEnabled) {
+      _start();
+    } else {
+      _stop();
+      _t = 0;
+    }
   }
 
   void _start() {
@@ -75,16 +101,12 @@ class _NowPlayingBarsState extends State<NowPlayingBars> {
   @override
   void didUpdateWidget(covariant NowPlayingBars oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.active && _timer == null) {
-      _start();
-    } else if (!widget.active && _timer != null) {
-      _stop();
-      _t = 0;
-    }
+    _sync();
   }
 
   @override
   void dispose() {
+    _animSetting?.removeListener(_onSettingChanged);
     _stop();
     super.dispose();
   }

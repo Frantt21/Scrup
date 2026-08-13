@@ -96,7 +96,7 @@
   "addedToPlaylist": "Добавлено в плейлист",
   "alreadyInPlaylist": "Уже в этом плейлисте",
   "playerAnimation": "Анимация плеера",
-  "playerAnimationHint": "Анимированный двухтоновый градиент в плеере",
+  "playerAnimationHint": "Анимированный градиент в плеере и индикатор воспроизведения",
   "playerAnimationEnabled": "Использовать анимацию",
   "playlistNamePrompt": "Название плейлиста",
   "cantPlay": "Не удалось воспроизвести: {error}",

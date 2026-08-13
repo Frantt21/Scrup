@@ -96,7 +96,7 @@
   "addedToPlaylist": "Adicionada à playlist",
   "alreadyInPlaylist": "Já está nesta playlist",
   "playerAnimation": "Animação do player",
-  "playerAnimationHint": "Gradiente animado de dois tons no player",
+  "playerAnimationHint": "Gradiente animado no player e as barras em reprodução",
   "playerAnimationEnabled": "Usar animação",
   "playlistNamePrompt": "Nome da playlist",
   "cantPlay": "Não foi possível reproduzir: {error}",

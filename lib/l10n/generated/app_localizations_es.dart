@@ -299,7 +299,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get playerAnimationHint =>
-      'Degradado animado de dos tonos en el player';
+      'Degradado animado en el player y las barras en reproducción';
 
   @override
   String get playerAnimationEnabled => 'Usar animación';

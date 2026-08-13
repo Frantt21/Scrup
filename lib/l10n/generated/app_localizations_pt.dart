@@ -298,7 +298,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get playerAnimation => 'Animação do player';
 
   @override
-  String get playerAnimationHint => 'Gradiente animado de dois tons no player';
+  String get playerAnimationHint =>
+      'Gradiente animado no player e as barras em reprodução';
 
   @override
   String get playerAnimationEnabled => 'Usar animação';
@@ -670,7 +671,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get playerAnimation => 'Animação do player';
 
   @override
-  String get playerAnimationHint => 'Gradiente animado de dois tons no player';
+  String get playerAnimationHint =>
+      'Gradiente animado no player e as barras em reprodução';
 
   @override
   String get playerAnimationEnabled => 'Usar animação';

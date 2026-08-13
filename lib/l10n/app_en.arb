@@ -143,7 +143,7 @@
   "addedToPlaylist": "Added to playlist",
   "alreadyInPlaylist": "Already in this playlist",
   "playerAnimation": "Player animation",
-  "playerAnimationHint": "Animated two-tone gradient in the player",
+  "playerAnimationHint": "Animated gradient in the player and the now-playing bars",
   "playerAnimationEnabled": "Use animation",
   "playlistNamePrompt": "Playlist name",
   "cantPlay": "Could not play: {error}",

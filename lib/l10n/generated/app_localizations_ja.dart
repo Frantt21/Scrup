@@ -296,7 +296,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get playerAnimation => 'プレイヤーのアニメーション';
 
   @override
-  String get playerAnimationHint => 'プレイヤーの2トーングラデーションのアニメーション';
+  String get playerAnimationHint => 'プレイヤーのグラデーションと再生中バーのアニメーション';
 
   @override
   String get playerAnimationEnabled => 'アニメーションを使用';

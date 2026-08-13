@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' as ui show Gradient, ImageFilter;
-
+import 'dart:ui' as ui show Gradient;
 import 'package:flutter/foundation.dart' show ValueListenable;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -63,11 +61,12 @@ class _PlayerBarState extends State<PlayerBar> {
 
   /// Intervalo mínimo entre repintados de la posición (throttle): el stream
   /// de posición de media_kit emite decenas de ticks por segundo durante la
-  /// reproducción, y cada setState repinta todo el cristal del player
-  /// (incluido el blur) — es lo que dispara el consumo de CPU/GPU aunque la
-  /// animación esté desactivada. Con ~150ms el progreso se ve fluido y el
-  /// coste baja a casi cero (y al pausar, el stream se detiene: 0%).
-  static const Duration _positionRefreshInterval = Duration(milliseconds: 150);
+  /// reproducción, y cada repintado compone la ventana (contribuye al
+  /// consumo de GPU aunque la animación esté desactivada). Con ~250ms (4
+  /// repintados/s) la barra de progreso se ve fluida y el coste es mínimo
+  /// (y al pausar, el stream se detiene: 0%). El throttle del origen está en
+  /// PlayerService; este es el guarda local del widget.
+  static const Duration _positionRefreshInterval = Duration(milliseconds: 250);
   DateTime _lastPositionFrame = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Posición del slider durante el arrastre: mientras se arrastra NO se
@@ -263,35 +262,25 @@ class _PlayerBarState extends State<PlayerBar> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
-          // El cristal (blur), el degradado y el contenido interactivo viven
-          // en capas separadas. El BackdropFilter solo envuelve una capa base
-          // translúcida ESTÁTICA (el tinte del vidrio), de modo que el blur
-          // únicamente se re-evalúa cuando cambia el contenido de DETRÁS
-          // (scroll, cambio de vista) — y por eso al pausar bajaba a 0%: el
-          // stream de posición se detiene y no hay repintados. Antes, cada
-          // repintado de la barra de progreso (varias veces por segundo) y
-          // cada frame del degradado re-evaluaban el blur sobre el fondo:
-          // era la causa principal del consumo de GPU al reproducir.
+          // El fondo del player y el contenido interactivo viven en capas
+          // separadas: una base plana (el tinte del artwork) y, encima, el
+          // degradado animado del acento. Sin blur: los paneles son planos y
+          // reproducir no produce frames extra (el degradado solo repinta a
+          // baja frecuencia, y la barra de progreso con cada tick de
+          // posición). Positioned.fill: llena el Stack sin forzar la altura
+          // del contenido (que la fija el Material, 64px).
           child: Stack(
             children: [
-              // Capa del cristal: difumina el contenido que pasa por detrás.
-              // El hijo es estático (nunca se repinta), así que el blur no se
-              // re-evalúa por los repintados de la barra.
+              // Base plana del player: el tinte del artwork (sin blur).
               Positioned.fill(
-                child: BackdropFilter(
-                  // Cristal: difumina el contenido que pasa por detrás
-                  filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                  child: DecoratedBox(decoration: BoxDecoration(color: base)),
-                ),
+                child: DecoratedBox(decoration: BoxDecoration(color: base)),
               ),
-              // Degradado (barrido del acento del artwork) ENCIMA del
-              // cristal, fuera del blur: se repinta sin re-evaluar el blur.
-              // El barrido usa extremos transparentes (el tinte base lo pone
-              // la capa del cristal). La animación se puede desactivar desde
-              // Configuración: el ValueNotifier del SettingsStore reacciona
-              // al instante y se muestra un degradado estático (congelado en
-              // el centro). Positioned.fill: llena el Stack sin forzar la
-              // altura del contenido (que la fija el Material, 64px).
+              // Degradado (barrido del acento del artwork) ENCIMA de la
+              // base, se repinta sin tocar nada más. El barrido usa extremos
+              // transparentes (el tinte base lo pone la capa inferior). La
+              // animación se puede desactivar desde Configuración: el
+              // ValueNotifier del SettingsStore reacciona al instante y se
+              // muestra un degradado estático (congelado en el centro).
               Positioned.fill(
                 child: ValueListenableBuilder<bool>(
                   valueListenable: settings.playerAnimationEnabled,
@@ -779,16 +768,16 @@ class _AnimatedPlayerGradient extends StatefulWidget {
 }
 
 class _AnimatedPlayerGradientState extends State<_AnimatedPlayerGradient> {
-  /// Frecuencia del barrido: ~7fps. El degradado se mueve MUY despacio
-  /// (ciclo de 10s): el pico del barrido avanza ~2% del ancho por frame, así
-  /// que 7 frames por segundo se ven idénticos a 60.
+  /// Frecuencia del barrido: ~4fps. El degradado se mueve MUY despacio
+  /// (ciclo de 10s): el pico avanza un par de % del ancho por frame, así que
+  /// 4 frames por segundo se ven idénticos a 60.
   ///
   /// No se usa [AnimationController] a propósito: un Ticker activo obliga al
   /// engine a producir un frame en cada vsync (60fps) aunque la escena no
   /// cambie visiblemente — era la principal fuente del consumo de CPU/GPU
   /// durante la reproducción (cada frame además re-evalúa el blur del
-  /// cristal). Un [Timer] solo repinta al avanzar: 15 frames/s.
-  static const Duration _frameInterval = Duration(milliseconds: 150);
+  /// cristal). Un [Timer] solo repinta al avanzar.
+  static const Duration _frameInterval = Duration(milliseconds: 250);
 
   /// Duración de un ciclo completo del barrido (10s, como antes).
   static const int _cycleMillis = 10000;

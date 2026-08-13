@@ -296,7 +296,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get playerAnimation => '播放器动画';
 
   @override
-  String get playerAnimationHint => '播放器中的双色调渐变动画';
+  String get playerAnimationHint => '播放器渐变和播放中指示条的动画';
 
   @override
   String get playerAnimationEnabled => '使用动画';

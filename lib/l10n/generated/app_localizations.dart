@@ -640,7 +640,7 @@ abstract class AppLocalizations {
   /// No description provided for @playerAnimationHint.
   ///
   /// In es, this message translates to:
-  /// **'Degradado animado de dos tonos en el player'**
+  /// **'Degradado animado en el player y las barras en reproducción'**
   String get playerAnimationHint;
 
   /// No description provided for @playerAnimationEnabled.

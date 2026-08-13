@@ -169,9 +169,11 @@ class PlayerService {
   /// origen): media_kit emite decenas de ticks por segundo al reproducir, y
   /// reenviarlos todos a cada suscriptor (barra del player, guardado de
   /// posición, controles del OS, Discord) multiplica el trabajo por tick y
-  /// contribuye al consumo de CPU en reproducción. La UI siempre lee el
-  /// valor fresco vía [positionValue]; el stream se usa para repintar.
-  static const _positionEmitInterval = Duration(milliseconds: 150);
+  /// contribuye al consumo de CPU/GPU en reproducción (cada repintado de la
+  /// barra compone la ventana). ~250ms (4 repintados/s) es suficiente para
+  /// una barra de progreso; la UI siempre lee el valor fresco vía
+  /// [positionValue] y el cero (cambio de pista) se emite al instante.
+  static const _positionEmitInterval = Duration(milliseconds: 250);
   DateTime? _lastPositionEmit;
 
   /// Momento en que se abrió el medio actual. media_kit emite un `completed`

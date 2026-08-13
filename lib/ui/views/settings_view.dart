@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -56,12 +54,11 @@ class _SettingsViewState extends State<SettingsView> {
     _loadPlayerPrefs();
   }
 
-  /// Carga la preferencia de animación del player (best-effort).
+  /// Carga las preferencias del reproductor (animación; best-effort).
   Future<void> _loadPlayerPrefs() async {
     try {
-      final enabled = await context
-          .read<SettingsStore>()
-          .loadPlayerAnimationEnabled();
+      final settings = context.read<SettingsStore>();
+      final enabled = await settings.loadPlayerAnimationEnabled();
       if (!mounted) return;
       setState(() => _playerAnimationEnabled = enabled);
     } catch (_) {
@@ -164,50 +161,47 @@ class _SettingsViewState extends State<SettingsView> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              // Cristal gris neutro: la MISMA receta del sidebar (dos tonos
-              // oscuros translúcidos al 55%), sin tinte del acento — el
-              // degradado con acento queda solo para el player.
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  theme.colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.55,
-                  ),
-                  theme.colorScheme.surfaceContainer.withValues(alpha: 0.55),
-                ],
-              ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            // Plano: la MISMA receta del sidebar (dos tonos oscuros en
+            // degradado VERTICAL con contraste suave), sin tinte del acento
+            // — el degradado con acento queda solo para el player.
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.72,
+                ),
+                theme.colorScheme.surfaceContainer.withValues(alpha: 0.45),
+              ],
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: ListView(
-                // El contenedor ya termina por encima del player (margen
-                // inferior), así que aquí solo hace falta un respiro pequeño.
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                children: [
-                  Text(
-                    AppLocalizations.of(context).settings,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: ListView(
+              // El contenedor ya termina por encima del player (margen
+              // inferior), así que aquí solo hace falta un respiro pequeño.
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+              children: [
+                Text(
+                  AppLocalizations.of(context).settings,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(height: 20),
-                  _buildLanguageSection(theme),
-                  const SizedBox(height: 16),
-                  _buildDiscordSection(theme),
-                  const SizedBox(height: 16),
-                  _buildPlayerSection(theme),
-                  const SizedBox(height: 16),
-                  _buildCacheSection(theme),
-                  const SizedBox(height: 16),
-                  _buildAboutSection(theme),
-                ],
-              ),
+                ),
+                const SizedBox(height: 20),
+                _buildLanguageSection(theme),
+                const SizedBox(height: 16),
+                _buildDiscordSection(theme),
+                const SizedBox(height: 16),
+                _buildPlayerSection(theme),
+                const SizedBox(height: 16),
+                _buildCacheSection(theme),
+                const SizedBox(height: 16),
+                _buildAboutSection(theme),
+              ],
             ),
           ),
         ),
@@ -378,25 +372,29 @@ class _SettingsViewState extends State<SettingsView> {
       icon: Icons.animation_outlined,
       title: l10n.playerAnimation,
       caption: l10n.playerAnimationHint,
-      child: SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        // Fondo transparente explícito: el ListTile por defecto advierte que
-        // sus ink splashes pueden ser invisibles sobre el cristal.
-        tileColor: Colors.transparent,
-        title: SizedBox(
-          width: 240,
-          child: Text(
-            l10n.playerAnimationEnabled,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurface,
+      child: Column(
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            // Fondo transparente explícito: el ListTile por defecto advierte
+            // que sus ink splashes pueden ser invisibles sobre el cristal.
+            tileColor: Colors.transparent,
+            title: SizedBox(
+              width: 240,
+              child: Text(
+                l10n.playerAnimationEnabled,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
             ),
+            value: _playerAnimationEnabled,
+            onChanged: (value) async {
+              setState(() => _playerAnimationEnabled = value);
+              await settings.setPlayerAnimationEnabled(value);
+            },
           ),
-        ),
-        value: _playerAnimationEnabled,
-        onChanged: (value) async {
-          setState(() => _playerAnimationEnabled = value);
-          await settings.setPlayerAnimationEnabled(value);
-        },
+        ],
       ),
     );
   }

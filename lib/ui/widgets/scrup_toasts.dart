@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 
 /// Tipo de notificación: cambia el icono y el tinte del borde/accento.
@@ -176,39 +174,36 @@ class ToastCard extends StatelessWidget {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(14),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: DecoratedBox(
-                // Plano: sin degradado ni borde, un único color sólido
-                // translúcido (el acento queda solo en el icono).
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: theme.colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.95,
-                  ),
+            child: DecoratedBox(
+              // Plano: sin degradado ni borde, un único color sólido (el
+              // acento queda solo en el icono).
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.95,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 11,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon, size: 20, color: accent),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Text(
-                          toast.message,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 11,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 20, color: accent),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        toast.message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),

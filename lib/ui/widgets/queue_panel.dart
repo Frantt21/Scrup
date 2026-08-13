@@ -1,8 +1,5 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/player_service.dart';
 import 'track_tile.dart';
@@ -94,125 +91,123 @@ class _QueueGlass extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              // Cristal limpio: los dos tonos oscuros translúcidos que usa el
-              // sidebar (sin tinte del artwork), para UI neutra y coherente.
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  theme.colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.55,
-                  ),
-                  theme.colorScheme.surfaceContainer.withValues(alpha: 0.55),
-                ],
-              ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            // Plano: los dos tonos oscuros del sidebar en degradado VERTICAL
+            // con contraste suave (más claro arriba, más oscuro abajo), para
+            // UI neutra y coherente.
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.72,
+                ),
+                theme.colorScheme.surfaceContainer.withValues(alpha: 0.45),
+              ],
             ),
-            child: StreamBuilder<bool>(
-              // El indicador "en reproducción" sigue el stream de play/pausa
-              // (no la posición). `initialData` evita un parpadeo al abrir.
-              stream: player.playing,
-              initialData: player.isPlaying,
-              builder: (context, playingSnap) {
-                final playing = playingSnap.data ?? false;
-                return AnimatedBuilder(
-                  animation: queueListenable,
-                  builder: (context, _) {
-                    final queue = player.queue.value;
-                    final index = player.queueIndex.value;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Cabecera: título + nº de canciones
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.queue_music,
-                                size: 18,
-                                color: theme.colorScheme.primary,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.queueTitle,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                  ),
+          ),
+          child: StreamBuilder<bool>(
+            // El indicador "en reproducción" sigue el stream de play/pausa
+            // (no la posición). `initialData` evita un parpadeo al abrir.
+            stream: player.playing,
+            initialData: player.isPlaying,
+            builder: (context, playingSnap) {
+              final playing = playingSnap.data ?? false;
+              return AnimatedBuilder(
+                animation: queueListenable,
+                builder: (context, _) {
+                  final queue = player.queue.value;
+                  final index = player.queueIndex.value;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Cabecera: título + nº de canciones
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.queue_music,
+                              size: 18,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                l10n.queueTitle,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              Text(
-                                l10n.songCount(queue.length),
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
+                            ),
+                            Text(
+                              l10n.songCount(queue.length),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
-                              // Shuffle: refleja el modo aleatorio con el que
-                              // el sistema elige la siguiente canción (lila
-                              // cuando está activo) y permite alternarlo sin
-                              // salir de la cola.
-                              IconButton(
-                                icon: Icon(
-                                  Icons.shuffle,
-                                  size: 17,
-                                  color: player.shuffle.value
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurfaceVariant,
-                                ),
-                                visualDensity: VisualDensity.compact,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 32,
-                                  height: 32,
-                                ),
-                                padding: EdgeInsets.zero,
-                                tooltip: player.shuffle.value
-                                    ? l10n.shuffleOn
-                                    : l10n.shuffle,
-                                onPressed: player.toggleShuffle,
+                            ),
+                            // Shuffle: refleja el modo aleatorio con el que
+                            // el sistema elige la siguiente canción (lila
+                            // cuando está activo) y permite alternarlo sin
+                            // salir de la cola.
+                            IconButton(
+                              icon: Icon(
+                                Icons.shuffle,
+                                size: 17,
+                                color: player.shuffle.value
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant,
                               ),
-                            ],
-                          ),
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints.tightFor(
+                                width: 32,
+                                height: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                              tooltip: player.shuffle.value
+                                  ? l10n.shuffleOn
+                                  : l10n.shuffle,
+                              onPressed: player.toggleShuffle,
+                            ),
+                          ],
                         ),
-                        Expanded(
-                          child: queue.isEmpty
-                              ? _EmptyQueue(theme: theme, l10n: l10n)
-                              : ListView.builder(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    10,
-                                    0,
-                                    10,
-                                    12,
-                                  ),
-                                  itemCount: queue.length,
-                                  itemBuilder: (context, i) {
-                                    final track = queue[i];
-                                    // El índice ES la identidad dentro de la
-                                    // cola (cada pista aparece una sola vez).
-                                    final isCurrent = i == index;
-                                    // Sin `trailing`: TrackTile ya dibuja su
-                                    // propio ecualizador (NowPlayingBars) junto
-                                    // a la duración cuando es la pista actual;
-                                    // añadir otro aquí lo duplicaba.
-                                    return TrackTile(
-                                      track: track,
-                                      isCurrent: isCurrent,
-                                      isPlaying: playing && isCurrent,
-                                      onPlay: () => player.playQueueAt(i),
-                                    );
-                                  },
+                      ),
+                      Expanded(
+                        child: queue.isEmpty
+                            ? _EmptyQueue(theme: theme, l10n: l10n)
+                            : ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(
+                                  10,
+                                  0,
+                                  10,
+                                  12,
                                 ),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
+                                itemCount: queue.length,
+                                itemBuilder: (context, i) {
+                                  final track = queue[i];
+                                  // El índice ES la identidad dentro de la
+                                  // cola (cada pista aparece una sola vez).
+                                  final isCurrent = i == index;
+                                  // Sin `trailing`: TrackTile ya dibuja su
+                                  // propio ecualizador (NowPlayingBars) junto
+                                  // a la duración cuando es la pista actual;
+                                  // añadir otro aquí lo duplicaba.
+                                  return TrackTile(
+                                    track: track,
+                                    isCurrent: isCurrent,
+                                    isPlaying: playing && isCurrent,
+                                    onPlay: () => player.playQueueAt(i),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
           ),
         ),
       ),

@@ -302,7 +302,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get playerAnimationHint =>
-      'Анимированный двухтоновый градиент в плеере';
+      'Анимированный градиент в плеере и индикатор воспроизведения';
 
   @override
   String get playerAnimationEnabled => 'Использовать анимацию';

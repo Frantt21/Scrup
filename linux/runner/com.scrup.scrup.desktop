@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Scrup
+GenericName=Music Player
+Comment=Reproductor de música
+# El script linux/install.sh genera la copia del usuario con la ruta real.
+Exec=scrup
+Icon=com.scrup.scrup
+Terminal=false
+Categories=AudioVideo;Audio;Music;Player;
+Keywords=music;player;audio;
+StartupWMClass=com.scrup.scrup

@@ -296,7 +296,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get playerAnimation => '플레이어 애니메이션';
 
   @override
-  String get playerAnimationHint => '플레이어의 2톤 그라데이션 애니메이션';
+  String get playerAnimationHint => '플레이어의 그라데이션과 재생 중 막대 애니메이션';
 
   @override
   String get playerAnimationEnabled => '애니메이션 사용';

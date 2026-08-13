@@ -298,7 +298,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get playerAnimation => 'Player animation';
 
   @override
-  String get playerAnimationHint => 'Animated two-tone gradient in the player';
+  String get playerAnimationHint =>
+      'Animated gradient in the player and the now-playing bars';
 
   @override
   String get playerAnimationEnabled => 'Use animation';
