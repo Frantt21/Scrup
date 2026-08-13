@@ -165,6 +165,15 @@ class PlayerService {
   Track? _currentTrack;
   Duration? _lastDuration;
 
+  /// Intervalo mínimo entre emisiones del stream de posición (throttle en el
+  /// origen): media_kit emite decenas de ticks por segundo al reproducir, y
+  /// reenviarlos todos a cada suscriptor (barra del player, guardado de
+  /// posición, controles del OS, Discord) multiplica el trabajo por tick y
+  /// contribuye al consumo de CPU en reproducción. La UI siempre lee el
+  /// valor fresco vía [positionValue]; el stream se usa para repintar.
+  static const _positionEmitInterval = Duration(milliseconds: 150);
+  DateTime? _lastPositionEmit;
+
   /// Momento en que se abrió el medio actual. media_kit emite un `completed`
   /// espurio al abrir o reemplazar un medio (el `stop` interno de `open`), y
   /// este timestamp permite distinguirlo de un fin de canción real.
@@ -257,7 +266,16 @@ class PlayerService {
   }) {
     _player.stream.position.listen((p) {
       _lastPosition = p;
-      _positionController.add(p);
+      // Throttle en el origen (ver _positionEmitInterval): los suscriptores
+      // reciben como mucho una emisión cada ~150ms. El cero (cambio de pista
+      // o reinicio) se emite al instante para que la UI se resetee ya.
+      final now = DateTime.now();
+      if (p == Duration.zero ||
+          _lastPositionEmit == null ||
+          now.difference(_lastPositionEmit!) >= _positionEmitInterval) {
+        _lastPositionEmit = now;
+        _positionController.add(p);
+      }
     });
     _player.stream.duration.listen((d) {
       _lastDuration = d;

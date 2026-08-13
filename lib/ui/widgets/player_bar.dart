@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui show Gradient, ImageFilter;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -254,182 +256,194 @@ class _PlayerBarState extends State<PlayerBar> {
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.45),
-              blurRadius: 28,
+              blurRadius: 20,
               offset: const Offset(0, 12),
             ),
           ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
-          child: BackdropFilter(
-            // Cristal: difumina el contenido que pasa por detrás
-            filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Stack(
-              children: [
-                // Degradado animado de dos tonos (oscuro translúcido + acento
-                // del artwork): un barrido sutil que se mueve ligeramente.
-                // Optimizado: solo repinta el canvas (CustomPainter con
-                // repaint), sin reconstruir el árbol por frame, y se pausa
-                // cuando no hay reproducción. Positioned.fill: llena el Stack
-                // sin forzar la altura del contenido (que la fija el Material,
-                // 64px).
-                //
-                // La animación se puede desactivar desde Configuración: el
-                // ValueNotifier del SettingsStore reacciona al instante y se
-                // muestra un degradado estático (congelado en el centro).
-                Positioned.fill(
-                  child: ValueListenableBuilder<bool>(
-                    valueListenable: settings.playerAnimationEnabled,
-                    builder: (context, animated, _) {
-                      final accent =
-                          themeController.accentColor?.withValues(
-                            alpha: 0.25,
-                          ) ??
-                          theme.colorScheme.primary.withValues(alpha: 0.25);
-                      if (animated) {
-                        return _AnimatedPlayerGradient(
-                          toneA: accent,
-                          toneB: base,
-                        );
-                      }
-                      // Estático: mismo degradado pero sin movimiento.
-                      return DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [base, accent, base],
-                            stops: const [0.0, 0.5, 1.0],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+          // El cristal (blur), el degradado y el contenido interactivo viven
+          // en capas separadas. El BackdropFilter solo envuelve una capa base
+          // translúcida ESTÁTICA (el tinte del vidrio), de modo que el blur
+          // únicamente se re-evalúa cuando cambia el contenido de DETRÁS
+          // (scroll, cambio de vista) — y por eso al pausar bajaba a 0%: el
+          // stream de posición se detiene y no hay repintados. Antes, cada
+          // repintado de la barra de progreso (varias veces por segundo) y
+          // cada frame del degradado re-evaluaban el blur sobre el fondo:
+          // era la causa principal del consumo de GPU al reproducir.
+          child: Stack(
+            children: [
+              // Capa del cristal: difumina el contenido que pasa por detrás.
+              // El hijo es estático (nunca se repinta), así que el blur no se
+              // re-evalúa por los repintados de la barra.
+              Positioned.fill(
+                child: BackdropFilter(
+                  // Cristal: difumina el contenido que pasa por detrás
+                  filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: DecoratedBox(decoration: BoxDecoration(color: base)),
                 ),
-                Material(
-                  // Material transparente para que los ripples de los botones se
-                  // dibujen sobre el cristal
-                  color: Colors.transparent,
-                  child: SafeArea(
-                    top: false,
-                    child: SizedBox(
-                      height: 64,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Row(
-                          children: [
-                            // Izquierda: información de la canción
-                            Expanded(
-                              child: _buildTrackInfo(theme, cache, player),
-                            ),
-                            const SizedBox(width: 12),
-                            // Centro: controles y, debajo, la barra de progreso
-                            // (con tiempos), entre la info y el volumen.
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  _buildControls(theme, player, hasTrack),
-                                  SizedBox(
-                                    height: 22,
-                                    child: Row(
-                                      children: [
-                                        SizedBox(
-                                          width: 38,
-                                          child: Text(
-                                            _fmt(
-                                              hasTrack
-                                                  ? shownPosition
-                                                  : Duration.zero,
-                                            ),
-                                            style: theme.textTheme.labelSmall
-                                                ?.copyWith(
-                                                  color: theme
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                  fontFeatures: const [
-                                                    FontFeature.tabularFigures(),
-                                                  ],
-                                                ),
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: SliderTheme(
-                                            data: SliderTheme.of(context).copyWith(
-                                              trackHeight: 3,
-                                              // Sin dot: el pulgar es invisible;
-                                              // se arrastra/toca la línea.
-                                              thumbShape:
-                                                  const RoundSliderThumbShape(
-                                                    enabledThumbRadius: 0,
-                                                  ),
-                                              overlayShape:
-                                                  const RoundSliderOverlayShape(
-                                                    overlayRadius: 0,
-                                                  ),
-                                              showValueIndicator:
-                                                  ShowValueIndicator.never,
-                                              activeTrackColor:
-                                                  theme.colorScheme.primary,
-                                            ),
-                                            child: Slider(
-                                              value: shownProgress,
-                                              onChanged: hasTrack
-                                                  ? (v) => setState(
-                                                      () => _dragValue = v,
-                                                    )
-                                                  : null,
-                                              onChangeEnd: hasTrack
-                                                  ? (v) {
-                                                      final target = Duration(
-                                                        milliseconds:
-                                                            (v * total.inMilliseconds)
-                                                                .round(),
-                                                      );
-                                                      player.seek(target);
-                                                      setState(
-                                                        () => _dragValue = null,
-                                                      );
-                                                    }
-                                                  : null,
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          width: 38,
-                                          child: Text(
-                                            _fmt(total),
-                                            textAlign: TextAlign.right,
-                                            style: theme.textTheme.labelSmall
-                                                ?.copyWith(
-                                                  color: theme
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                  fontFeatures: const [
-                                                    FontFeature.tabularFigures(),
-                                                  ],
-                                                ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // Derecha: botón de cola + volumen
-                            Expanded(
-                              child: _buildRight(context, theme, player),
-                            ),
+              ),
+              // Degradado (barrido del acento del artwork) ENCIMA del
+              // cristal, fuera del blur: se repinta sin re-evaluar el blur.
+              // El barrido usa extremos transparentes (el tinte base lo pone
+              // la capa del cristal). La animación se puede desactivar desde
+              // Configuración: el ValueNotifier del SettingsStore reacciona
+              // al instante y se muestra un degradado estático (congelado en
+              // el centro). Positioned.fill: llena el Stack sin forzar la
+              // altura del contenido (que la fija el Material, 64px).
+              Positioned.fill(
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: settings.playerAnimationEnabled,
+                  builder: (context, animated, _) {
+                    final accent =
+                        themeController.accentColor?.withValues(alpha: 0.25) ??
+                        theme.colorScheme.primary.withValues(alpha: 0.25);
+                    if (animated) {
+                      return _AnimatedPlayerGradient(
+                        toneA: accent,
+                        toneB: Colors.transparent,
+                      );
+                    }
+                    // Estático: mismo degradado pero sin movimiento.
+                    return DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.transparent,
+                            accent,
+                            Colors.transparent,
                           ],
+                          stops: const [0.0, 0.5, 1.0],
                         ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Material(
+                // Material transparente para que los ripples de los botones se
+                // dibujen sobre el cristal
+                color: Colors.transparent,
+                child: SafeArea(
+                  top: false,
+                  child: SizedBox(
+                    height: 64,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Row(
+                        children: [
+                          // Izquierda: información de la canción
+                          Expanded(
+                            child: _buildTrackInfo(theme, cache, player),
+                          ),
+                          const SizedBox(width: 12),
+                          // Centro: controles y, debajo, la barra de progreso
+                          // (con tiempos), entre la info y el volumen.
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildControls(theme, player, hasTrack),
+                                SizedBox(
+                                  height: 22,
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 38,
+                                        child: Text(
+                                          _fmt(
+                                            hasTrack
+                                                ? shownPosition
+                                                : Duration.zero,
+                                          ),
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                                fontFeatures: const [
+                                                  FontFeature.tabularFigures(),
+                                                ],
+                                              ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: SliderTheme(
+                                          data: SliderTheme.of(context).copyWith(
+                                            trackHeight: 3,
+                                            // Sin dot: el pulgar es invisible;
+                                            // se arrastra/toca la línea.
+                                            thumbShape:
+                                                const RoundSliderThumbShape(
+                                                  enabledThumbRadius: 0,
+                                                ),
+                                            overlayShape:
+                                                const RoundSliderOverlayShape(
+                                                  overlayRadius: 0,
+                                                ),
+                                            showValueIndicator:
+                                                ShowValueIndicator.never,
+                                            activeTrackColor:
+                                                theme.colorScheme.primary,
+                                          ),
+                                          child: Slider(
+                                            value: shownProgress,
+                                            onChanged: hasTrack
+                                                ? (v) => setState(
+                                                    () => _dragValue = v,
+                                                  )
+                                                : null,
+                                            onChangeEnd: hasTrack
+                                                ? (v) {
+                                                    final target = Duration(
+                                                      milliseconds:
+                                                          (v * total.inMilliseconds)
+                                                              .round(),
+                                                    );
+                                                    player.seek(target);
+                                                    setState(
+                                                      () => _dragValue = null,
+                                                    );
+                                                  }
+                                                : null,
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(
+                                        width: 38,
+                                        child: Text(
+                                          _fmt(total),
+                                          textAlign: TextAlign.right,
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                                fontFeatures: const [
+                                                  FontFeature.tabularFigures(),
+                                                ],
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Derecha: botón de cola + volumen
+                          Expanded(child: _buildRight(context, theme, player)),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -764,13 +778,26 @@ class _AnimatedPlayerGradient extends StatefulWidget {
       _AnimatedPlayerGradientState();
 }
 
-class _AnimatedPlayerGradientState extends State<_AnimatedPlayerGradient>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    // Periodo largo: el movimiento es lento y sutil.
-    duration: const Duration(seconds: 10),
-  );
+class _AnimatedPlayerGradientState extends State<_AnimatedPlayerGradient> {
+  /// Frecuencia del barrido: ~7fps. El degradado se mueve MUY despacio
+  /// (ciclo de 10s): el pico del barrido avanza ~2% del ancho por frame, así
+  /// que 7 frames por segundo se ven idénticos a 60.
+  ///
+  /// No se usa [AnimationController] a propósito: un Ticker activo obliga al
+  /// engine a producir un frame en cada vsync (60fps) aunque la escena no
+  /// cambie visiblemente — era la principal fuente del consumo de CPU/GPU
+  /// durante la reproducción (cada frame además re-evalúa el blur del
+  /// cristal). Un [Timer] solo repinta al avanzar: 15 frames/s.
+  static const Duration _frameInterval = Duration(milliseconds: 150);
+
+  /// Duración de un ciclo completo del barrido (10s, como antes).
+  static const int _cycleMillis = 10000;
+
+  Timer? _timer;
+
+  /// Fase 0..1 del barrido; el painter la lee vía `repaint` (solo repinta
+  /// cuando este notifier cambia).
+  final ValueNotifier<double> _frame = ValueNotifier<double>(0);
   StreamSubscription<bool>? _playingSub;
 
   @override
@@ -781,20 +808,31 @@ class _AnimatedPlayerGradientState extends State<_AnimatedPlayerGradient>
     final player = context.read<PlayerService>();
     _playingSub = player.playing.listen((playing) {
       if (playing) {
-        if (!_controller.isAnimating) _controller.repeat();
-      } else if (_controller.isAnimating) {
-        _controller.stop();
+        _start();
+      } else {
+        _stop();
       }
     });
-    if (player.isPlaying && !_controller.isAnimating) {
-      _controller.repeat();
-    }
+    if (player.isPlaying) _start();
+  }
+
+  void _start() {
+    _timer ??= Timer.periodic(_frameInterval, (_) {
+      _frame.value =
+          (_frame.value + _frameInterval.inMilliseconds / _cycleMillis) % 1.0;
+    });
+  }
+
+  void _stop() {
+    _timer?.cancel();
+    _timer = null;
   }
 
   @override
   void dispose() {
     _playingSub?.cancel();
-    _controller.dispose();
+    _stop();
+    _frame.dispose();
     super.dispose();
   }
 
@@ -804,7 +842,7 @@ class _AnimatedPlayerGradientState extends State<_AnimatedPlayerGradient>
       painter: _MovingGradientPainter(
         toneA: widget.toneA,
         toneB: widget.toneB,
-        animation: _controller,
+        animation: _frame,
       ),
     );
   }
@@ -815,7 +853,7 @@ class _AnimatedPlayerGradientState extends State<_AnimatedPlayerGradient>
 class _MovingGradientPainter extends CustomPainter {
   final Color toneA;
   final Color toneB;
-  final Animation<double> animation;
+  final ValueListenable<double> animation;
 
   _MovingGradientPainter({
     required this.toneA,

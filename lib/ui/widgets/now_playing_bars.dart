@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,13 @@ import 'package:flutter/material.dart';
 /// Solo anima cuando [active] es true: el resto de instancias (filas que no
 /// son la actual) quedan estáticas y sin coste de frames. El color por
 /// defecto es el acento del tema (lila, o el de la playlist en el detalle).
+///
+/// La animación NO usa un [AnimationController] a propósito: un Ticker
+/// activo obliga al engine a producir un frame en cada vsync (60fps) aunque
+/// la UI no cambie visiblemente — era una de las fuentes del consumo de
+/// CPU/GPU durante la reproducción. En su lugar se usa un [Timer] a ~10fps
+/// que solo repinta al avanzar (los timers no fuerzan frames por sí solos).
+/// El movimiento se ve igual (el ciclo dura 900ms).
 class NowPlayingBars extends StatefulWidget {
   /// `true` = animación en marcha (pista reproduciéndose); `false` = barras
   /// estáticas (pista pausada o estado inactivo).
@@ -31,34 +39,53 @@ class NowPlayingBars extends StatefulWidget {
   State<NowPlayingBars> createState() => _NowPlayingBarsState();
 }
 
-class _NowPlayingBarsState extends State<NowPlayingBars>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+class _NowPlayingBarsState extends State<NowPlayingBars> {
+  /// Frecuencia de la animación: ~10fps (suficiente para que las barras se
+  /// vean en movimiento con un ciclo de 900ms, sin producir 60 frames/s).
+  static const Duration _frameInterval = Duration(milliseconds: 100);
+
+  /// Duración de un ciclo completo de las barras (una onda por vuelta).
+  static const int _cycleMillis = 900;
+
+  Timer? _timer;
+
+  /// Fase 0..1 del ciclo, que se avanza con cada tick del timer.
+  double _t = 0;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-    if (widget.active) _controller.repeat();
+    if (widget.active) _start();
+  }
+
+  void _start() {
+    _timer ??= Timer.periodic(_frameInterval, (_) {
+      if (!mounted) return;
+      setState(() {
+        _t = (_t + _frameInterval.inMilliseconds / _cycleMillis) % 1.0;
+      });
+    });
+  }
+
+  void _stop() {
+    _timer?.cancel();
+    _timer = null;
   }
 
   @override
   void didUpdateWidget(covariant NowPlayingBars oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.active && !_controller.isAnimating) {
-      _controller.repeat();
-    } else if (!widget.active && _controller.isAnimating) {
-      _controller.stop();
-      _controller.value = 0;
+    if (widget.active && _timer == null) {
+      _start();
+    } else if (!widget.active && _timer != null) {
+      _stop();
+      _t = 0;
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _stop();
     super.dispose();
   }
 
@@ -69,26 +96,20 @@ class _NowPlayingBarsState extends State<NowPlayingBars>
     final barWidth = widget.size * 0.16;
     final gap = widget.size * 0.11;
 
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final t = _controller.value;
-        return SizedBox(
-          width: barWidth * 4 + gap * 4,
-          height: widget.size,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              for (var i = 0; i < 4; i++)
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: gap / 2),
-                  child: _bar(t, i, barWidth, color),
-                ),
-            ],
-          ),
-        );
-      },
+    return SizedBox(
+      width: barWidth * 4 + gap * 4,
+      height: widget.size,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          for (var i = 0; i < 4; i++)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: gap / 2),
+              child: _bar(_t, i, barWidth, color),
+            ),
+        ],
+      ),
     );
   }
 
