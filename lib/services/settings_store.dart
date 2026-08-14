@@ -25,10 +25,17 @@ class SettingsStore {
   static const _activePlaylistIdKey = 'player.active_playlist_id';
   static const _resumeKey = 'player.resume';
 
+  /// Clave compartida con forawn_mobile (el widget de lyrics la lee igual).
+  static const lyricsSweepKey = 'lyrics_sweep_enabled';
+
   /// Preferencia en memoria de la animación del player: un [ValueNotifier]
   /// para que el PlayerBar reaccione al instante al alternarla desde
   /// Configuración (el valor también se persiste entre sesiones).
   final ValueNotifier<bool> playerAnimationEnabled = ValueNotifier(true);
+
+  /// Preferencia en memoria del modo karaoke (sweep palabra por palabra) de
+  /// los lyrics: la lee el widget de lyrics al abrir/cambiar de canción.
+  final ValueNotifier<bool> lyricsSweepEnabled = ValueNotifier(false);
 
   SharedPreferences? _prefs;
 
@@ -118,6 +125,23 @@ class SettingsStore {
     final saved = prefs.getBool(_playerAnimationKey);
     final value = saved ?? true;
     playerAnimationEnabled.value = value;
+    return value;
+  }
+
+  /// Guarda el modo karaoke (sweep) de los lyrics y lo refleja en el
+  /// [ValueNotifier] para que el widget de lyrics reaccione al instante.
+  Future<void> setLyricsSweepEnabled(bool enabled) async {
+    lyricsSweepEnabled.value = enabled;
+    final prefs = await _instance;
+    await prefs.setBool(lyricsSweepKey, enabled);
+  }
+
+  /// Carga la preferencia del modo karaoke (por defecto: desactivado).
+  Future<bool> loadLyricsSweepEnabled() async {
+    final prefs = await _instance;
+    final saved = prefs.getBool(lyricsSweepKey);
+    final value = saved ?? false;
+    lyricsSweepEnabled.value = value;
     return value;
   }
 

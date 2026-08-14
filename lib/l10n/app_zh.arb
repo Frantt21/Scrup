@@ -118,5 +118,14 @@
   "metadataSearchDeezer": "在 Deezer 上搜索",
   "metadataNotFound": "未在 Deezer 上找到元数据",
   "metadataCoverError": "无法复制图片",
-  "metadataSearchHint": "Deezer 将使用此表单中的标题和艺术家进行搜索"
+  "metadataSearchHint": "Deezer 将使用此表单中的标题和艺术家进行搜索",
+  "lyrics": "歌词",
+  "lyricsTitle": "歌词",
+  "syncLyrics": "同步",
+  "refreshLyrics": "搜索歌词",
+  "lyricsNoTrack": "没有正在播放的歌曲",
+  "lyricsNotFound": "未找到歌词",
+  "lyricsNotFoundHint": "尝试在编辑元数据中修正艺术家或标题",
+  "karaokeSweep": "卡拉OK",
+  "karaokeSweepHint": "随歌曲逐词高亮歌词"
 }

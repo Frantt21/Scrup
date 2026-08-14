@@ -211,5 +211,14 @@
   "metadataSearchDeezer": "Search on Deezer",
   "metadataNotFound": "No metadata found on Deezer",
   "metadataCoverError": "Could not copy the image",
-  "metadataSearchHint": "Deezer will search using the title and artist from this form"
+  "metadataSearchHint": "Deezer will search using the title and artist from this form",
+  "lyrics": "Lyrics",
+  "lyricsTitle": "Lyrics",
+  "syncLyrics": "Sync",
+  "refreshLyrics": "Search lyrics",
+  "lyricsNoTrack": "Nothing playing",
+  "lyricsNotFound": "No lyrics found",
+  "lyricsNotFoundHint": "Try fixing the artist or title from Edit metadata",
+  "karaokeSweep": "Karaoke",
+  "karaokeSweepHint": "Highlights the lyrics word by word along the song"
 }

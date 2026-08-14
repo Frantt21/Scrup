@@ -16,6 +16,7 @@ import 'l10n/generated/app_localizations.dart';
 import 'services/audio_cache_service.dart';
 import 'services/deezer_service.dart';
 import 'services/discord/discord_presence_service.dart';
+import 'services/lyrics_service.dart';
 import 'services/palette_cache_store.dart';
 import 'services/player_service.dart';
 import 'services/scrup_audio_handler.dart';
@@ -265,6 +266,7 @@ class ScrupApp extends StatelessWidget {
               AudioCacheService(ytdlp: context.read<YtDlpService>()),
         ),
         Provider<DeezerService>(create: (_) => DeezerService()),
+        Provider<LyricsService>(create: (_) => LyricsService()),
         Provider<SettingsStore>(create: (_) => settings),
         Provider<PaletteCacheStore>(create: (_) => paletteCache),
         Provider<ScrupAudioHandler>(create: (_) => audioHandler),

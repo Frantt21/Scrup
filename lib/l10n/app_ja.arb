@@ -118,5 +118,14 @@
   "metadataSearchDeezer": "Deezerで検索",
   "metadataNotFound": "Deezerでメタデータが見つかりません",
   "metadataCoverError": "画像をコピーできませんでした",
-  "metadataSearchHint": "Deezerはこのフォームのタイトルとアーティストで検索します"
+  "metadataSearchHint": "Deezerはこのフォームのタイトルとアーティストで検索します",
+  "lyrics": "歌詞",
+  "lyricsTitle": "歌詞",
+  "syncLyrics": "同期",
+  "refreshLyrics": "歌詞を検索",
+  "lyricsNoTrack": "再生中の曲がありません",
+  "lyricsNotFound": "歌詞が見つかりません",
+  "lyricsNotFoundHint": "メタデータ編集でアーティストまたはタイトルを修正してみてください",
+  "karaokeSweep": "カラオケ",
+  "karaokeSweepHint": "曲に合わせて歌詞を単語ごとにハイライトします"
 }

@@ -406,4 +406,33 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get metadataSearchHint =>
       'Deezer will search using the title and artist from this form';
+
+  @override
+  String get lyrics => 'Lyrics';
+
+  @override
+  String get lyricsTitle => 'Lyrics';
+
+  @override
+  String get syncLyrics => 'Sync';
+
+  @override
+  String get refreshLyrics => 'Search lyrics';
+
+  @override
+  String get lyricsNoTrack => 'Nothing playing';
+
+  @override
+  String get lyricsNotFound => 'No lyrics found';
+
+  @override
+  String get lyricsNotFoundHint =>
+      'Try fixing the artist or title from Edit metadata';
+
+  @override
+  String get karaokeSweep => 'Karaoke';
+
+  @override
+  String get karaokeSweepHint =>
+      'Highlights the lyrics word by word along the song';
 }

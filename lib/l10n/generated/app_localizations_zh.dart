@@ -398,4 +398,31 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get metadataSearchHint => 'Deezer 将使用此表单中的标题和艺术家进行搜索';
+
+  @override
+  String get lyrics => '歌词';
+
+  @override
+  String get lyricsTitle => '歌词';
+
+  @override
+  String get syncLyrics => '同步';
+
+  @override
+  String get refreshLyrics => '搜索歌词';
+
+  @override
+  String get lyricsNoTrack => '没有正在播放的歌曲';
+
+  @override
+  String get lyricsNotFound => '未找到歌词';
+
+  @override
+  String get lyricsNotFoundHint => '尝试在编辑元数据中修正艺术家或标题';
+
+  @override
+  String get karaokeSweep => '卡拉OK';
+
+  @override
+  String get karaokeSweepHint => '随歌曲逐词高亮歌词';
 }

@@ -30,6 +30,9 @@ class _SettingsViewState extends State<SettingsView> {
   /// Animación del player activa (cargada desde el store al abrir).
   bool _playerAnimationEnabled = true;
 
+  /// Modo karaoke (sweep palabra por palabra) de los lyrics.
+  bool _lyricsSweepEnabled = false;
+
   /// Idiomas soportados: el nombre se muestra en el propio idioma (cada
   /// usuario lo reconoce aunque aún no lea la interfaz).
   ///
@@ -54,13 +57,17 @@ class _SettingsViewState extends State<SettingsView> {
     _loadPlayerPrefs();
   }
 
-  /// Carga las preferencias del reproductor (animación; best-effort).
+  /// Carga las preferencias del reproductor (animación + karaoke; best-effort).
   Future<void> _loadPlayerPrefs() async {
     try {
       final settings = context.read<SettingsStore>();
       final enabled = await settings.loadPlayerAnimationEnabled();
+      final sweep = await settings.loadLyricsSweepEnabled();
       if (!mounted) return;
-      setState(() => _playerAnimationEnabled = enabled);
+      setState(() {
+        _playerAnimationEnabled = enabled;
+        _lyricsSweepEnabled = sweep;
+      });
     } catch (_) {
       // La configuración nunca debe romper la vista.
     }
@@ -424,6 +431,30 @@ class _SettingsViewState extends State<SettingsView> {
             onChanged: (value) async {
               setState(() => _playerAnimationEnabled = value);
               await settings.setPlayerAnimationEnabled(value);
+            },
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            tileColor: Colors.transparent,
+            title: SizedBox(
+              width: 240,
+              child: Text(
+                l10n.karaokeSweep,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+            subtitle: Text(
+              l10n.karaokeSweepHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            value: _lyricsSweepEnabled,
+            onChanged: (value) async {
+              setState(() => _lyricsSweepEnabled = value);
+              await settings.setLyricsSweepEnabled(value);
             },
           ),
         ],

@@ -399,4 +399,31 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get metadataSearchHint => 'Deezerはこのフォームのタイトルとアーティストで検索します';
+
+  @override
+  String get lyrics => '歌詞';
+
+  @override
+  String get lyricsTitle => '歌詞';
+
+  @override
+  String get syncLyrics => '同期';
+
+  @override
+  String get refreshLyrics => '歌詞を検索';
+
+  @override
+  String get lyricsNoTrack => '再生中の曲がありません';
+
+  @override
+  String get lyricsNotFound => '歌詞が見つかりません';
+
+  @override
+  String get lyricsNotFoundHint => 'メタデータ編集でアーティストまたはタイトルを修正してみてください';
+
+  @override
+  String get karaokeSweep => 'カラオケ';
+
+  @override
+  String get karaokeSweepHint => '曲に合わせて歌詞を単語ごとにハイライトします';
 }

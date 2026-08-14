@@ -822,6 +822,60 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Deezer buscará con el título y artista de este formulario'**
   String get metadataSearchHint;
+
+  /// No description provided for @lyrics.
+  ///
+  /// In es, this message translates to:
+  /// **'Letras'**
+  String get lyrics;
+
+  /// No description provided for @lyricsTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Letras'**
+  String get lyricsTitle;
+
+  /// No description provided for @syncLyrics.
+  ///
+  /// In es, this message translates to:
+  /// **'Sincronizar'**
+  String get syncLyrics;
+
+  /// No description provided for @refreshLyrics.
+  ///
+  /// In es, this message translates to:
+  /// **'Buscar letras'**
+  String get refreshLyrics;
+
+  /// No description provided for @lyricsNoTrack.
+  ///
+  /// In es, this message translates to:
+  /// **'Sin reproducción'**
+  String get lyricsNoTrack;
+
+  /// No description provided for @lyricsNotFound.
+  ///
+  /// In es, this message translates to:
+  /// **'No se encontraron letras'**
+  String get lyricsNotFound;
+
+  /// No description provided for @lyricsNotFoundHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Prueba a corregir el artista o el título desde Editar metadatos'**
+  String get lyricsNotFoundHint;
+
+  /// No description provided for @karaokeSweep.
+  ///
+  /// In es, this message translates to:
+  /// **'Karaoke'**
+  String get karaokeSweep;
+
+  /// No description provided for @karaokeSweepHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Ilumina la letra palabra por palabra al ritmo de la canción'**
+  String get karaokeSweepHint;
 }
 
 class _AppLocalizationsDelegate

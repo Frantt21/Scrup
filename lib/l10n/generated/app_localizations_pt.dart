@@ -406,6 +406,35 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get metadataSearchHint =>
       'O Deezer pesquisará com o título e artista deste formulário';
+
+  @override
+  String get lyrics => 'Letra';
+
+  @override
+  String get lyricsTitle => 'Letra';
+
+  @override
+  String get syncLyrics => 'Sincronizar';
+
+  @override
+  String get refreshLyrics => 'Pesquisar letra';
+
+  @override
+  String get lyricsNoTrack => 'Sem reprodução';
+
+  @override
+  String get lyricsNotFound => 'Letra não encontrada';
+
+  @override
+  String get lyricsNotFoundHint =>
+      'Tente corrigir o artista ou o título em Editar metadados';
+
+  @override
+  String get karaokeSweep => 'Karaoke';
+
+  @override
+  String get karaokeSweepHint =>
+      'Realça a letra palavra a palavra ao ritmo da música';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -810,4 +839,33 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get metadataSearchHint =>
       'O Deezer pesquisará com o título e artista deste formulário';
+
+  @override
+  String get lyrics => 'Letra';
+
+  @override
+  String get lyricsTitle => 'Letra';
+
+  @override
+  String get syncLyrics => 'Sincronizar';
+
+  @override
+  String get refreshLyrics => 'Pesquisar letra';
+
+  @override
+  String get lyricsNoTrack => 'Sem reprodução';
+
+  @override
+  String get lyricsNotFound => 'Letra não encontrada';
+
+  @override
+  String get lyricsNotFoundHint =>
+      'Tente corrigir o artista ou o título em Editar metadados';
+
+  @override
+  String get karaokeSweep => 'Karaokê';
+
+  @override
+  String get karaokeSweepHint =>
+      'Realça a letra palavra a palavra ao ritmo da música';
 }

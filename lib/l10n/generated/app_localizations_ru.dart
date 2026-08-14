@@ -411,4 +411,33 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get metadataSearchHint =>
       'Deezer выполнит поиск по названию и исполнителю из этой формы';
+
+  @override
+  String get lyrics => 'Текст';
+
+  @override
+  String get lyricsTitle => 'Текст песни';
+
+  @override
+  String get syncLyrics => 'Синхр.';
+
+  @override
+  String get refreshLyrics => 'Найти текст';
+
+  @override
+  String get lyricsNoTrack => 'Ничего не играет';
+
+  @override
+  String get lyricsNotFound => 'Текст не найден';
+
+  @override
+  String get lyricsNotFoundHint =>
+      'Попробуйте исправить исполнителя или название в «Редактировать метаданные»';
+
+  @override
+  String get karaokeSweep => 'Караоке';
+
+  @override
+  String get karaokeSweepHint =>
+      'Подсвечивает текст слово за словом в такт песне';
 }

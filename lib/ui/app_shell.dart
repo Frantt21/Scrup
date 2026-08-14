@@ -10,6 +10,7 @@ import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
 import '../services/settings_store.dart';
 import 'views/home_view.dart';
+import 'views/lyrics_view.dart';
 import 'views/playlist_detail_view.dart';
 import 'views/search_view.dart';
 import 'views/settings_view.dart';
@@ -58,6 +59,10 @@ class _AppShellState extends State<AppShell> {
   /// El usuario ya alternó la cola: evita que la carga asíncrona de la
   /// preferencia sobrescriba su elección (carrera de arranque).
   bool _queueUserToggled = false;
+
+  /// `true` mientras la vista de lyrics esté abierta (se monta en el
+  /// IndexedStack como Inicio/Búsqueda).
+  bool _showLyrics = false;
 
   void _onBinaryDownloadStatus() {
     final status = Binaries.downloadStatus.value;
@@ -149,6 +154,23 @@ class _AppShellState extends State<AppShell> {
   /// Vuelve al inicio desde la SearchView.
   void _backToHome() {
     setState(() => _selectedIndex = 0);
+  }
+
+  /// Abre la vista de lyrics (cierra settings/playlist si estaban abiertas).
+  void _openLyrics() {
+    setState(() {
+      _showLyrics = true;
+      _showSettings = false;
+      _openPlaylist = null;
+    });
+  }
+
+  /// Cierra la vista de lyrics y vuelve al inicio.
+  void _closeLyrics() {
+    setState(() {
+      _showLyrics = false;
+      _selectedIndex = 0;
+    });
   }
 
   void _selectPlaylist(Playlist? playlist) {
@@ -252,9 +274,11 @@ class _AppShellState extends State<AppShell> {
                       // detalle de playlist vive en el IndexedStack para
                       // preservar el estado de Home/Buscar al volver.
                       IndexedStack(
-                        index: openPlaylist != null
-                            ? 2
-                            : (_showSettings ? 3 : _selectedIndex),
+                        index: _showLyrics
+                            ? 4
+                            : (openPlaylist != null
+                                  ? 2
+                                  : (_showSettings ? 3 : _selectedIndex)),
                         children: [
                           HomeView(onSearch: _submitSearch),
                           SearchView(
@@ -276,6 +300,7 @@ class _AppShellState extends State<AppShell> {
                           else
                             const SizedBox.shrink(),
                           SettingsView(key: ValueKey(_settingsOpenCount)),
+                          LyricsView(onBack: _closeLyrics),
                         ],
                       ),
                       // Player flotante tipo glass. El padding exterior es el
@@ -288,6 +313,10 @@ class _AppShellState extends State<AppShell> {
                           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                           child: PlayerBar(
                             queueOpen: _queueOpen,
+                            lyricsOpen: _showLyrics,
+                            onToggleLyrics: () => _showLyrics
+                                ? _closeLyrics()
+                                : _openLyrics(),
                             onToggleQueue: () {
                               _queueUserToggled = true;
                               final next = !_queueOpen;

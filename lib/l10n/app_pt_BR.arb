@@ -118,5 +118,14 @@
   "metadataSearchDeezer": "Pesquisar no Deezer",
   "metadataNotFound": "Metadados não encontrados no Deezer",
   "metadataCoverError": "Não foi possível copiar a imagem",
-  "metadataSearchHint": "O Deezer pesquisará com o título e artista deste formulário"
+  "metadataSearchHint": "O Deezer pesquisará com o título e artista deste formulário",
+  "lyrics": "Letra",
+  "lyricsTitle": "Letra",
+  "syncLyrics": "Sincronizar",
+  "refreshLyrics": "Pesquisar letra",
+  "lyricsNoTrack": "Sem reprodução",
+  "lyricsNotFound": "Letra não encontrada",
+  "lyricsNotFoundHint": "Tente corrigir o artista ou o título em Editar metadados",
+  "karaokeSweep": "Karaokê",
+  "karaokeSweepHint": "Realça a letra palavra a palavra ao ritmo da música"
 }

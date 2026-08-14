@@ -118,5 +118,14 @@
   "metadataSearchDeezer": "Deezer에서 검색",
   "metadataNotFound": "Deezer에서 메타데이터를 찾을 수 없습니다",
   "metadataCoverError": "이미지를 복사할 수 없습니다",
-  "metadataSearchHint": "Deezer는 이 양식의 제목과 아티스트로 검색합니다"
+  "metadataSearchHint": "Deezer는 이 양식의 제목과 아티스트로 검색합니다",
+  "lyrics": "가사",
+  "lyricsTitle": "가사",
+  "syncLyrics": "동기화",
+  "refreshLyrics": "가사 검색",
+  "lyricsNoTrack": "재생 중인 곡 없음",
+  "lyricsNotFound": "가사를 찾을 수 없습니다",
+  "lyricsNotFoundHint": "메타데이터 편집에서 아티스트 또는 제목을 수정해 보세요",
+  "karaokeSweep": "노래방",
+  "karaokeSweepHint": "노래에 맞춰 가사를 단어별로 강조합니다"
 }

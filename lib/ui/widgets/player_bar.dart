@@ -43,6 +43,13 @@ class PlayerBar extends StatefulWidget {
   /// `true` si el panel de la cola está abierto (el botón se resalta).
   final bool queueOpen;
 
+  /// `true` si la vista de lyrics está abierta (el botón se resalta).
+  final bool lyricsOpen;
+
+  /// Abre/cierra la vista de lyrics (lo gestiona el AppShell, que la monta
+  /// en el IndexedStack).
+  final VoidCallback onToggleLyrics;
+
   /// Abre/cierra el panel de la cola (lo gestiona el AppShell, que monta el
   /// panel en el Row para que empuje el contenido).
   final VoidCallback onToggleQueue;
@@ -50,6 +57,8 @@ class PlayerBar extends StatefulWidget {
   const PlayerBar({
     super.key,
     this.queueOpen = false,
+    this.lyricsOpen = false,
+    required this.onToggleLyrics,
     required this.onToggleQueue,
   });
 
@@ -701,6 +710,16 @@ class _PlayerBarState extends State<PlayerBar> {
       mainAxisAlignment: MainAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Lyrics: abre la vista de letras sincronizadas (resaltada en lila
+        // cuando está abierta).
+        IconButton(
+          icon: const Icon(Icons.lyrics_outlined, size: 20),
+          constraints: const BoxConstraints.tightFor(width: 34, height: 40),
+          padding: EdgeInsets.zero,
+          color: widget.lyricsOpen ? primary : muted,
+          tooltip: l10n.lyrics,
+          onPressed: widget.onToggleLyrics,
+        ),
         // Radio (mismo artista al terminar): resaltada en lila cuando está
         // activa.
         ValueListenableBuilder<bool>(

@@ -118,5 +118,14 @@
   "metadataSearchDeezer": "Искать на Deezer",
   "metadataNotFound": "Метаданные на Deezer не найдены",
   "metadataCoverError": "Не удалось скопировать изображение",
-  "metadataSearchHint": "Deezer выполнит поиск по названию и исполнителю из этой формы"
+  "metadataSearchHint": "Deezer выполнит поиск по названию и исполнителю из этой формы",
+  "lyrics": "Текст",
+  "lyricsTitle": "Текст песни",
+  "syncLyrics": "Синхр.",
+  "refreshLyrics": "Найти текст",
+  "lyricsNoTrack": "Ничего не играет",
+  "lyricsNotFound": "Текст не найден",
+  "lyricsNotFoundHint": "Попробуйте исправить исполнителя или название в «Редактировать метаданные»",
+  "karaokeSweep": "Караоке",
+  "karaokeSweepHint": "Подсвечивает текст слово за словом в такт песне"
 }

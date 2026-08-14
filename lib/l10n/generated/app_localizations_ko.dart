@@ -399,4 +399,31 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get metadataSearchHint => 'Deezer는 이 양식의 제목과 아티스트로 검색합니다';
+
+  @override
+  String get lyrics => '가사';
+
+  @override
+  String get lyricsTitle => '가사';
+
+  @override
+  String get syncLyrics => '동기화';
+
+  @override
+  String get refreshLyrics => '가사 검색';
+
+  @override
+  String get lyricsNoTrack => '재생 중인 곡 없음';
+
+  @override
+  String get lyricsNotFound => '가사를 찾을 수 없습니다';
+
+  @override
+  String get lyricsNotFoundHint => '메타데이터 편집에서 아티스트 또는 제목을 수정해 보세요';
+
+  @override
+  String get karaokeSweep => '노래방';
+
+  @override
+  String get karaokeSweepHint => '노래에 맞춰 가사를 단어별로 강조합니다';
 }
