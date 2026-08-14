@@ -54,12 +54,26 @@ Future<void> main() async {
   }
 
   // Ventana: abre SIEMPRE maximizada y, en modo ventana, el mínimo es
-  // 1220x700 y el tamaño por defecto 1280x800. La title bar personalizada
-  // (ocultando la nativa) solo se usa en Windows; en Linux y macOS se deja la
-  // nativa de la distro/OS (cada gestor de ventanas de Linux — Mutter/KWin/
-  // XFWM y otros — dibuja la suya, y ocultarla es poco fiable y propenso a
-  // fugas de listeners en algunos WMs).
+  // 1440x800 y el tamaño por defecto 1400x800. La title bar personalizada
+  // (CustomTitleBar en AppShell) se usa en las 3 plataformas:
+  //  - Windows/Linux: ventana sin marco (setAsFrameless en Linux; en Windows
+  //    titleBarStyle hidden) + botones de ventana propios (min/max/cerrar).
+  //  - macOS: barra nativa oculta (TitleBarStyle.hidden) conservando los
+  //    traffic lights nativos; la barra deja espacio para ellos y NO dibuja
+  //    botones propios.
   await windowManager.ensureInitialized();
+  if (Platform.isMacOS) {
+    // macOS: ocultar la title bar nativa pero MANTENER los traffic lights
+    // (rojo/amarillo/verde) que el sistema sigue dibujando y gestionando.
+    await windowManager.setTitleBarStyle(
+      TitleBarStyle.hidden,
+      windowButtonVisibility: true,
+    );
+  } else if (Platform.isLinux) {
+    // Linux: sin decoraciones del gestor de ventanas; la app dibuja su barra
+    // y sus botones. (En Windows se hace vía titleBarStyle.hidden abajo.)
+    await windowManager.setAsFrameless();
+  }
   // El app controla el cierre de la ventana (X, Alt+F4, cierre del OS): se
   // intercepta para forzar el guardado pendiente (cola + colores) y solo
   // entonces destruir la ventana (ver _AppCloseHandler). Si la plataforma no
@@ -71,22 +85,19 @@ Future<void> main() async {
     // Best-effort: sin preventClose no se puede garantizar el volcado.
   }
   final windowOptions = WindowOptions(
-    size: const Size(1280, 800),
-    minimumSize: const Size(1220, 700),
+    size: const Size(1400, 800),
+    minimumSize: const Size(1440, 800),
     center: true,
     title: 'Scrup',
-    // Ocultar la nativa solo en Windows (donde la personalizada la sustituye
-    // de forma fiable). En Linux/macOS, `normal`.
-    titleBarStyle: Platform.isWindows
+    // Ocultar la nativa en Windows y macOS (macOS ya lo dejó configurado
+    // arriba; aquí se mantiene para waitUntilReadyToShow). En Linux NO se
+    // pasa (null): setTitleBarStyle(normal) DESHARÍA el setAsFrameless()
+    // anterior reactivando la barra nativa del gestor de ventanas.
+    titleBarStyle: (Platform.isWindows || Platform.isMacOS)
         ? TitleBarStyle.hidden
-        : TitleBarStyle.normal,
+        : null,
   );
   windowManager.waitUntilReadyToShow(windowOptions, () async {
-    // Maximizar ANTES de mostrar (la ventana se crea oculta): se ve
-    // directamente maximizada sin parpadeo. En Windows es determinista y
-    // debe cumplirse siempre; en Linux/macOS es best-effort porque algunos
-    // gestores de Linux/Wayland ignoran el maximize antes de mapear la
-    // ventana, y nunca debe impedir el arranque.
     if (Platform.isWindows) {
       await windowManager.maximize();
     } else {
@@ -94,6 +105,7 @@ Future<void> main() async {
         await windowManager.maximize();
       } catch (_) {}
     }
+    await windowManager.setResizable(true);
     await windowManager.show();
     await windowManager.focus();
   });
@@ -465,11 +477,12 @@ class ScrupApp extends StatelessWidget {
                   const ScrupToastHost(),
                 ],
               );
-              // En Linux la ventana es transparente (ver my_application.cc) y
-              // aquí se recortan las esquinas inferiores redondeadas para que
-              // combine con el escritorio redondeado (GNOME/KDE); maximizada
-              // no se recorta. Windows/macOS no se tocan: ventana opaca, y en
-              // macOS el propio sistema redondea la ventana.
+              // En Linux la ventana es transparente y SIN marco (frameless,
+              // ver main y my_application.cc), así que aquí se recortan las
+              // CUATRO esquinas redondeadas para que combine con el escritorio
+              // redondeado (GNOME/KDE); maximizada no se recorta. Windows no
+              // se toca (ventana opaca y cuadrada), y macOS no se toca porque
+              // el propio sistema redondea la ventana.
               if (Platform.isLinux) {
                 return _LinuxRoundedCorners(child: app);
               }
@@ -613,15 +626,15 @@ class _AppCloseHandler extends WindowListener {
   }
 }
 
-/// En Linux, redondea las esquinas inferiores de la ventana (estilo
-/// GNOME/Handy). La ventana es TRANSPARENTE (ver my_application.cc: view y
-/// fondo de la ventana con alpha cuando el escritorio compone), así que aquí
-/// solo se recorta el contenido a las esquinas redondeadas y el escritorio se
-/// ve a través de ellas. Cuando la ventana está maximizada NO se recorta: el
-/// contenido llega al borde de la pantalla (como hace el propio escritorio
-/// con las ventanas maximizadas). En el resto de plataformas no se usa: en
-/// Windows la ventana es opaca y cuadrada, y en macOS el sistema redondea la
-/// ventana nativamente.
+/// En Linux, redondea las CUATRO esquinas de la ventana (estilo
+/// GNOME/Handy). La ventana es TRANSPARENTE y sin marco (ver main y
+/// my_application.cc: view y fondo de la ventana con alpha cuando el
+/// escritorio compone), así que aquí se recorta el contenido a las esquinas
+/// redondeadas y el escritorio se ve a través de ellas. Cuando la ventana
+/// está maximizada NO se recorta: el contenido llega al borde de la pantalla
+/// (como hace el propio escritorio con las ventanas maximizadas). En el resto
+/// de plataformas no se usa: en Windows la ventana es opaca y cuadrada, y en
+/// macOS el sistema redondea la ventana nativamente.
 class _LinuxRoundedCorners extends StatefulWidget {
   const _LinuxRoundedCorners({required this.child});
 
@@ -677,9 +690,9 @@ class _LinuxRoundedCornersState extends State<_LinuxRoundedCorners> {
   Widget build(BuildContext context) {
     if (_maximized) return widget.child;
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(
-        bottom: Radius.circular(_radius),
-      ),
+      // Las 4 esquinas: con la ventana frameless no hay barra nativa que
+      // cubra la parte superior, así que el redondeo se aplica completo.
+      borderRadius: BorderRadius.circular(_radius),
       // antiAlias: esquinas suaves sobre el escritorio (sin dientes).
       clipBehavior: Clip.antiAlias,
       child: widget.child,

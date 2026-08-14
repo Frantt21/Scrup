@@ -425,4 +425,40 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get karaokeSweepHint => '随歌曲逐词高亮歌词';
+
+  @override
+  String get done => '完成';
+
+  @override
+  String get karaokeSweepOn => '卡拉OK：开启';
+
+  @override
+  String get karaokeSweepOff => '卡拉OK：关闭';
+
+  @override
+  String get syncLyricsTitle => '歌词同步';
+
+  @override
+  String get syncCurrent => '当前';
+
+  @override
+  String get lyricsSearchNoResults => '未找到结果';
+
+  @override
+  String get lyricsSearchError => '搜索歌词时出错';
+
+  @override
+  String get lyricsSearchHint => '搜索歌词（标题 艺术家）';
+
+  @override
+  String get editLyrics => '编辑歌词';
+
+  @override
+  String get useLyrics => '使用歌词';
+
+  @override
+  String get editLyricsHint => '在此粘贴 LRC：每行 [mm:ss.xx] 文本';
+
+  @override
+  String get searchLyrics => '搜索歌词';
 }

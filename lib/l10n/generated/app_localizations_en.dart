@@ -435,4 +435,40 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get karaokeSweepHint =>
       'Highlights the lyrics word by word along the song';
+
+  @override
+  String get done => 'Done';
+
+  @override
+  String get karaokeSweepOn => 'Karaoke: on';
+
+  @override
+  String get karaokeSweepOff => 'Karaoke: off';
+
+  @override
+  String get syncLyricsTitle => 'Lyrics sync';
+
+  @override
+  String get syncCurrent => 'Current';
+
+  @override
+  String get lyricsSearchNoResults => 'No results found';
+
+  @override
+  String get lyricsSearchError => 'Error searching lyrics';
+
+  @override
+  String get lyricsSearchHint => 'Search lyrics (title artist)';
+
+  @override
+  String get editLyrics => 'Edit lyrics';
+
+  @override
+  String get useLyrics => 'Use lyrics';
+
+  @override
+  String get editLyricsHint => 'Paste LRC here: [mm:ss.xx] text per line';
+
+  @override
+  String get searchLyrics => 'Search lyrics';
 }

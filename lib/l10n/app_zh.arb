@@ -127,5 +127,17 @@
   "lyricsNotFound": "未找到歌词",
   "lyricsNotFoundHint": "尝试在编辑元数据中修正艺术家或标题",
   "karaokeSweep": "卡拉OK",
-  "karaokeSweepHint": "随歌曲逐词高亮歌词"
+  "karaokeSweepHint": "随歌曲逐词高亮歌词",
+  "done": "完成",
+  "karaokeSweepOn": "卡拉OK：开启",
+  "karaokeSweepOff": "卡拉OK：关闭",
+  "syncLyricsTitle": "歌词同步",
+  "syncCurrent": "当前",
+  "lyricsSearchNoResults": "未找到结果",
+  "lyricsSearchError": "搜索歌词时出错",
+  "lyricsSearchHint": "搜索歌词（标题 艺术家）",
+  "editLyrics": "编辑歌词",
+  "useLyrics": "使用歌词",
+  "editLyricsHint": "在此粘贴 LRC：每行 [mm:ss.xx] 文本",
+  "searchLyrics": "搜索歌词"
 }

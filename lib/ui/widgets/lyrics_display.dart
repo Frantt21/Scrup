@@ -49,6 +49,11 @@ class LyricsDisplay extends StatefulWidget {
   /// activa se aclara hacia blanco para el foco). `null` = blanco clásico.
   final Color? accentColor;
 
+  /// Modo karaoke (sweep palabra por palabra). Si se pasa, tiene prioridad
+  /// sobre la preferencia guardada (el toggle de la cabecera de la vista);
+  /// si es `null`, se lee la clave `lyrics_sweep_enabled` de las prefs.
+  final bool? sweepEnabled;
+
   const LyricsDisplay({
     super.key,
     required this.lyrics,
@@ -59,6 +64,7 @@ class LyricsDisplay extends StatefulWidget {
     this.lyricsOffset = Duration.zero,
     this.onTap,
     this.accentColor,
+    this.sweepEnabled,
   });
 
   @override
@@ -169,6 +175,13 @@ class _LyricsDisplayState extends State<LyricsDisplay>
   }
 
   Future<void> _loadSweepSetting() async {
+    // Si el padre pasa el valor (toggle reactivo), usarlo directamente.
+    if (widget.sweepEnabled != null) {
+      if (mounted && widget.sweepEnabled != _isSweepEnabled) {
+        setState(() => _isSweepEnabled = widget.sweepEnabled!);
+      }
+      return;
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final enabled = prefs.getBool('lyrics_sweep_enabled') ?? false;
@@ -276,6 +289,10 @@ class _LyricsDisplayState extends State<LyricsDisplay>
 
     // Si cambiaron las lyrics o el audio (nueva canción), recrear keys y
     // resetear scroll y waveform
+    // El toggle de karaoke puede cambiar sin cambiar de canción.
+    if (oldWidget.sweepEnabled != widget.sweepEnabled) {
+      _loadSweepSetting();
+    }
     if (oldWidget.lyrics != widget.lyrics ||
         oldWidget.audioPath != widget.audioPath) {
       _waveformData = [];

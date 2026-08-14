@@ -436,4 +436,40 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get karaokeSweepHint =>
       'Ilumina la letra palabra por palabra al ritmo de la canción';
+
+  @override
+  String get done => 'Listo';
+
+  @override
+  String get karaokeSweepOn => 'Karaoke: activo';
+
+  @override
+  String get karaokeSweepOff => 'Karaoke: inactivo';
+
+  @override
+  String get syncLyricsTitle => 'Sincronización de letras';
+
+  @override
+  String get syncCurrent => 'Actual';
+
+  @override
+  String get lyricsSearchNoResults => 'No se encontraron resultados';
+
+  @override
+  String get lyricsSearchError => 'Error al buscar letras';
+
+  @override
+  String get lyricsSearchHint => 'Buscar letras (título artista)';
+
+  @override
+  String get editLyrics => 'Editar letra';
+
+  @override
+  String get useLyrics => 'Usar letra';
+
+  @override
+  String get editLyricsHint => 'Pega el LRC aquí: [mm:ss.xx] texto por línea';
+
+  @override
+  String get searchLyrics => 'Buscar letras';
 }

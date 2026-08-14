@@ -435,6 +435,42 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get karaokeSweepHint =>
       'Realça a letra palavra a palavra ao ritmo da música';
+
+  @override
+  String get done => 'Concluído';
+
+  @override
+  String get karaokeSweepOn => 'Karaoke: ativo';
+
+  @override
+  String get karaokeSweepOff => 'Karaoke: inativo';
+
+  @override
+  String get syncLyricsTitle => 'Sincronização da letra';
+
+  @override
+  String get syncCurrent => 'Atual';
+
+  @override
+  String get lyricsSearchNoResults => 'Nenhum resultado encontrado';
+
+  @override
+  String get lyricsSearchError => 'Erro ao pesquisar a letra';
+
+  @override
+  String get lyricsSearchHint => 'Pesquisar letra (título artista)';
+
+  @override
+  String get editLyrics => 'Editar letra';
+
+  @override
+  String get useLyrics => 'Usar letra';
+
+  @override
+  String get editLyricsHint => 'Cole o LRC aqui: [mm:ss.xx] texto por linha';
+
+  @override
+  String get searchLyrics => 'Pesquisar letra';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -868,4 +904,40 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get karaokeSweepHint =>
       'Realça a letra palavra a palavra ao ritmo da música';
+
+  @override
+  String get done => 'Concluído';
+
+  @override
+  String get karaokeSweepOn => 'Karaokê: ativo';
+
+  @override
+  String get karaokeSweepOff => 'Karaokê: inativo';
+
+  @override
+  String get syncLyricsTitle => 'Sincronização da letra';
+
+  @override
+  String get syncCurrent => 'Atual';
+
+  @override
+  String get lyricsSearchNoResults => 'Nenhum resultado encontrado';
+
+  @override
+  String get lyricsSearchError => 'Erro ao pesquisar a letra';
+
+  @override
+  String get lyricsSearchHint => 'Pesquisar letra (título artista)';
+
+  @override
+  String get editLyrics => 'Editar letra';
+
+  @override
+  String get useLyrics => 'Usar letra';
+
+  @override
+  String get editLyricsHint => 'Cole o LRC aqui: [mm:ss.xx] texto por linha';
+
+  @override
+  String get searchLyrics => 'Pesquisar letra';
 }

@@ -426,4 +426,40 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get karaokeSweepHint => '曲に合わせて歌詞を単語ごとにハイライトします';
+
+  @override
+  String get done => '完了';
+
+  @override
+  String get karaokeSweepOn => 'カラオケ: オン';
+
+  @override
+  String get karaokeSweepOff => 'カラオケ: オフ';
+
+  @override
+  String get syncLyricsTitle => '歌詞の同期';
+
+  @override
+  String get syncCurrent => '現在';
+
+  @override
+  String get lyricsSearchNoResults => '結果が見つかりません';
+
+  @override
+  String get lyricsSearchError => '歌詞の検索中にエラー';
+
+  @override
+  String get lyricsSearchHint => '歌詞を検索 (タイトル アーティスト)';
+
+  @override
+  String get editLyrics => '歌詞を編集';
+
+  @override
+  String get useLyrics => '歌詞を使用';
+
+  @override
+  String get editLyricsHint => 'ここにLRCを貼り付け: 行ごとに [mm:ss.xx] テキスト';
+
+  @override
+  String get searchLyrics => '歌詞を検索';
 }

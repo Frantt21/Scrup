@@ -127,5 +127,17 @@
   "lyricsNotFound": "歌詞が見つかりません",
   "lyricsNotFoundHint": "メタデータ編集でアーティストまたはタイトルを修正してみてください",
   "karaokeSweep": "カラオケ",
-  "karaokeSweepHint": "曲に合わせて歌詞を単語ごとにハイライトします"
+  "karaokeSweepHint": "曲に合わせて歌詞を単語ごとにハイライトします",
+  "done": "完了",
+  "karaokeSweepOn": "カラオケ: オン",
+  "karaokeSweepOff": "カラオケ: オフ",
+  "syncLyricsTitle": "歌詞の同期",
+  "syncCurrent": "現在",
+  "lyricsSearchNoResults": "結果が見つかりません",
+  "lyricsSearchError": "歌詞の検索中にエラー",
+  "lyricsSearchHint": "歌詞を検索 (タイトル アーティスト)",
+  "editLyrics": "歌詞を編集",
+  "useLyrics": "歌詞を使用",
+  "editLyricsHint": "ここにLRCを貼り付け: 行ごとに [mm:ss.xx] テキスト",
+  "searchLyrics": "歌詞を検索"
 }

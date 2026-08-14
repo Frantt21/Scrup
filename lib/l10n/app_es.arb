@@ -220,5 +220,17 @@
   "lyricsNotFound": "No se encontraron letras",
   "lyricsNotFoundHint": "Prueba a corregir el artista o el título desde Editar metadatos",
   "karaokeSweep": "Karaoke",
-  "karaokeSweepHint": "Ilumina la letra palabra por palabra al ritmo de la canción"
+  "karaokeSweepHint": "Ilumina la letra palabra por palabra al ritmo de la canción",
+  "done": "Listo",
+  "karaokeSweepOn": "Karaoke: activo",
+  "karaokeSweepOff": "Karaoke: inactivo",
+  "syncLyricsTitle": "Sincronización de letras",
+  "syncCurrent": "Actual",
+  "lyricsSearchNoResults": "No se encontraron resultados",
+  "lyricsSearchError": "Error al buscar letras",
+  "lyricsSearchHint": "Buscar letras (título artista)",
+  "editLyrics": "Editar letra",
+  "useLyrics": "Usar letra",
+  "editLyricsHint": "Pega el LRC aquí: [mm:ss.xx] texto por línea",
+  "searchLyrics": "Buscar letras"
 }

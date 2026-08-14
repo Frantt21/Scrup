@@ -220,5 +220,17 @@
   "lyricsNotFound": "No lyrics found",
   "lyricsNotFoundHint": "Try fixing the artist or title from Edit metadata",
   "karaokeSweep": "Karaoke",
-  "karaokeSweepHint": "Highlights the lyrics word by word along the song"
+  "karaokeSweepHint": "Highlights the lyrics word by word along the song",
+  "done": "Done",
+  "karaokeSweepOn": "Karaoke: on",
+  "karaokeSweepOff": "Karaoke: off",
+  "syncLyricsTitle": "Lyrics sync",
+  "syncCurrent": "Current",
+  "lyricsSearchNoResults": "No results found",
+  "lyricsSearchError": "Error searching lyrics",
+  "lyricsSearchHint": "Search lyrics (title artist)",
+  "editLyrics": "Edit lyrics",
+  "useLyrics": "Use lyrics",
+  "editLyricsHint": "Paste LRC here: [mm:ss.xx] text per line",
+  "searchLyrics": "Search lyrics"
 }

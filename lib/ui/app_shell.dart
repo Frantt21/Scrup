@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -14,7 +13,6 @@ import 'views/lyrics_view.dart';
 import 'views/playlist_detail_view.dart';
 import 'views/search_view.dart';
 import 'views/settings_view.dart';
-import 'widgets/app_logo.dart';
 import 'widgets/custom_title_bar.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/playlists_sidebar.dart';
@@ -207,9 +205,9 @@ class _AppShellState extends State<AppShell> {
     final openPlaylist = _openPlaylist;
     // Barra superior: con una playlist o la configuración abiertas muestra el
     // botón de volver y su nombre; el engranaje de configuración vive a la
-    // derecha. Compartido entre la CustomTitleBar (solo Windows, donde
-    // sustituye a la nativa) y la barra simple de Linux/macOS (donde la
-    // title bar nativa de la distro/OS sigue visible con sus controles).
+    // derecha. Lo usa la CustomTitleBar en las 3 plataformas (la title bar
+    // personalizada sustituye a la nativa en todas; en macOS los botones de
+    // ventana los conserva el sistema, en Windows/Linux los dibuja la barra).
     final barTitle = _showSettings
         ? l10n.settings
         : (openPlaylist?.name ?? 'Scrup');
@@ -240,22 +238,11 @@ class _AppShellState extends State<AppShell> {
     return Scaffold(
       body: Column(
         children: [
-          if (Platform.isWindows)
-            CustomTitleBar(
-              title: barTitle,
-              leading: barLeading,
-              trailing: barTrailing,
-            )
-          else
-            // Linux/macOS: barra simple (sin área de arrastre ni botones de
-            // ventana; la title bar nativa sigue con sus controles). En Linux
-            // esto evita depender del gestor de ventanas (Mutter, KWin,
-            // XFWM…) para ocultar decoraciones.
-            _SimpleTopBar(
-              title: barTitle,
-              leading: barLeading,
-              trailing: barTrailing,
-            ),
+          CustomTitleBar(
+            title: barTitle,
+            leading: barLeading,
+            trailing: barTrailing,
+          ),
           Expanded(
             // El sidebar ocupa su propio espacio; el player flota SOLO sobre
             // el área de contenido (no cubre el sidebar).
@@ -350,42 +337,3 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-/// Barra superior para Linux y macOS: la title bar nativa de la distro/OS se
-/// conserva (con sus controles de ventana), así que aquí solo se replican las
-/// acciones de la CustomTitleBar (back + título + engranaje de configuración),
-/// sin área de arrastre ni botones de ventana.
-class _SimpleTopBar extends StatelessWidget {
-  final String title;
-  final Widget? leading;
-  final Widget? trailing;
-
-  const _SimpleTopBar({required this.title, this.leading, this.trailing});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      height: 40,
-      color: theme.colorScheme.surface,
-      padding: const EdgeInsets.only(left: 8, right: 4),
-      child: Row(
-        children: [
-          // Logo del app (mismo look que en la CustomTitleBar de Windows).
-          const Padding(padding: EdgeInsets.only(right: 10), child: AppLogo()),
-          if (leading != null) ...[leading!, const SizedBox(width: 8)],
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          ?trailing,
-        ],
-      ),
-    );
-  }
-}

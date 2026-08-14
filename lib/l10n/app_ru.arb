@@ -127,5 +127,17 @@
   "lyricsNotFound": "Текст не найден",
   "lyricsNotFoundHint": "Попробуйте исправить исполнителя или название в «Редактировать метаданные»",
   "karaokeSweep": "Караоке",
-  "karaokeSweepHint": "Подсвечивает текст слово за словом в такт песне"
+  "karaokeSweepHint": "Подсвечивает текст слово за словом в такт песне",
+  "done": "Готово",
+  "karaokeSweepOn": "Караоке: вкл",
+  "karaokeSweepOff": "Караоке: выкл",
+  "syncLyricsTitle": "Синхронизация текста",
+  "syncCurrent": "Текущая",
+  "lyricsSearchNoResults": "Результаты не найдены",
+  "lyricsSearchError": "Ошибка поиска текста",
+  "lyricsSearchHint": "Поиск текста (название исполнитель)",
+  "editLyrics": "Редактировать текст",
+  "useLyrics": "Использовать текст",
+  "editLyricsHint": "Вставьте LRC здесь: [мм:сс.сс] текст на строку",
+  "searchLyrics": "Найти текст"
 }

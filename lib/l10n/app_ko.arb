@@ -127,5 +127,17 @@
   "lyricsNotFound": "가사를 찾을 수 없습니다",
   "lyricsNotFoundHint": "메타데이터 편집에서 아티스트 또는 제목을 수정해 보세요",
   "karaokeSweep": "노래방",
-  "karaokeSweepHint": "노래에 맞춰 가사를 단어별로 강조합니다"
+  "karaokeSweepHint": "노래에 맞춰 가사를 단어별로 강조합니다",
+  "done": "완료",
+  "karaokeSweepOn": "노래방: 켜짐",
+  "karaokeSweepOff": "노래방: 꺼짐",
+  "syncLyricsTitle": "가사 동기화",
+  "syncCurrent": "현재",
+  "lyricsSearchNoResults": "결과를 찾을 수 없습니다",
+  "lyricsSearchError": "가사 검색 중 오류",
+  "lyricsSearchHint": "가사 검색 (제목 아티스트)",
+  "editLyrics": "가사 편집",
+  "useLyrics": "가사 사용",
+  "editLyricsHint": "여기에 LRC 붙여넣기: 줄마다 [mm:ss.xx] 텍스트",
+  "searchLyrics": "가사 검색"
 }

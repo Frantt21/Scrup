@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -7,6 +9,10 @@ import 'app_logo.dart';
 /// Barra de título personalizada: área de arrastre + acciones opcionales
 /// ([leading] a la izquierda, [trailing] antes de los controles de ventana)
 /// + botones de control (minimizar, maximizar/restaurar, cerrar).
+///
+/// En macOS los botones de ventana NO se dibujan: el sistema conserva los
+/// traffic lights nativos (setTitleBarStyle hidden + windowButtonVisibility
+/// en main) y la barra deja 78px a la izquierda para que no se solapen.
 class CustomTitleBar extends StatefulWidget {
   final Widget? leading;
   final String? title;
@@ -65,6 +71,13 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
 
   Future<void> _close() => windowManager.close();
 
+  /// true si la app dibuja sus propios botones de ventana (Windows/Linux).
+  /// En macOS los pone el sistema (traffic lights).
+  bool get _showWindowButtons => !Platform.isMacOS;
+
+  /// Espacio a la izquierda para los traffic lights nativos de macOS.
+  double get _macTrafficLightInset => Platform.isMacOS ? 78 : 0;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -75,6 +88,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
       color: theme.colorScheme.surface,
       child: Row(
         children: [
+          // Espacio para los traffic lights nativos en macOS
+          if (_macTrafficLightInset > 0)
+            SizedBox(width: _macTrafficLightInset),
           const SizedBox(width: 8),
           // Logo del app a la izquierda: envuelto en DragToMoveArea para que
           // la ventana también se pueda arrastrar desde él.
@@ -109,28 +125,31 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
           Expanded(child: DragToMoveArea(child: SizedBox.expand())),
           // Acción opcional (p. ej. configuración) antes de los controles
           if (widget.trailing != null) widget.trailing!,
-          // Controles de ventana
-          _WindowButton(
-            icon: Icons.remove,
-            tooltip: AppLocalizations.of(context).minimize,
-            onPressed: _minimize,
-            hoverColor: onSurface.withValues(alpha: 0.08),
-          ),
-          _WindowButton(
-            icon: _maximized ? Icons.filter_none : Icons.crop_square,
-            tooltip: _maximized
-                ? AppLocalizations.of(context).restore
-                : AppLocalizations.of(context).maximize,
-            onPressed: _toggleMaximize,
-            hoverColor: onSurface.withValues(alpha: 0.08),
-          ),
-          _WindowButton(
-            icon: Icons.close,
-            tooltip: AppLocalizations.of(context).close,
-            onPressed: _close,
-            hoverColor: const Color(0xFFE81123),
-            isClose: true,
-          ),
+          // Controles de ventana propios (Windows/Linux). En macOS los pone
+          // el sistema (traffic lights) y no se dibujan.
+          if (_showWindowButtons) ...[
+            _WindowButton(
+              icon: Icons.remove,
+              tooltip: AppLocalizations.of(context).minimize,
+              onPressed: _minimize,
+              hoverColor: onSurface.withValues(alpha: 0.08),
+            ),
+            _WindowButton(
+              icon: _maximized ? Icons.filter_none : Icons.crop_square,
+              tooltip: _maximized
+                  ? AppLocalizations.of(context).restore
+                  : AppLocalizations.of(context).maximize,
+              onPressed: _toggleMaximize,
+              hoverColor: onSurface.withValues(alpha: 0.08),
+            ),
+            _WindowButton(
+              icon: Icons.close,
+              tooltip: AppLocalizations.of(context).close,
+              onPressed: _close,
+              hoverColor: const Color(0xFFE81123),
+              isClose: true,
+            ),
+          ],
         ],
       ),
     );

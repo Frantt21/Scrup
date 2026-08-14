@@ -440,4 +440,40 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get karaokeSweepHint =>
       'Подсвечивает текст слово за словом в такт песне';
+
+  @override
+  String get done => 'Готово';
+
+  @override
+  String get karaokeSweepOn => 'Караоке: вкл';
+
+  @override
+  String get karaokeSweepOff => 'Караоке: выкл';
+
+  @override
+  String get syncLyricsTitle => 'Синхронизация текста';
+
+  @override
+  String get syncCurrent => 'Текущая';
+
+  @override
+  String get lyricsSearchNoResults => 'Результаты не найдены';
+
+  @override
+  String get lyricsSearchError => 'Ошибка поиска текста';
+
+  @override
+  String get lyricsSearchHint => 'Поиск текста (название исполнитель)';
+
+  @override
+  String get editLyrics => 'Редактировать текст';
+
+  @override
+  String get useLyrics => 'Использовать текст';
+
+  @override
+  String get editLyricsHint => 'Вставьте LRC здесь: [мм:сс.сс] текст на строку';
+
+  @override
+  String get searchLyrics => 'Найти текст';
 }

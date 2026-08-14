@@ -1,21 +1,25 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/lyrics_search_result.dart';
 import '../../core/track.dart';
 import '../../core/synced_lyrics.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/lyrics_service.dart';
 import '../../services/player_service.dart';
+import '../../services/settings_store.dart';
 import '../theme_controller.dart';
 import '../widgets/lyrics_display.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 
 /// Vista de letras sincronizadas: contenedor glass (igual que Inicio/Buscar)
 /// montado en el IndexedStack del AppShell. Muestra las lyrics de la pista
-/// en reproducción con auto-scroll, karaoke sweep y tap-to-seek.
+/// en reproducción con auto-scroll, karaoke sweep, tap-to-seek, búsqueda
+/// manual y sincronización manual (port de forawn_mobile).
 class LyricsView extends StatefulWidget {
   /// Vuelve a la vista anterior (home/búsqueda).
   final VoidCallback onBack;
@@ -37,9 +41,13 @@ class _LyricsViewState extends State<LyricsView> {
   final ValueNotifier<Duration> _position = ValueNotifier(Duration.zero);
   final ValueNotifier<Duration> _duration = ValueNotifier(Duration.zero);
 
-  /// Desfase de sincronización ajustado por el usuario (tap en una línea
-  /// respeta el offset; el sweep también).
+  /// Desfase de sincronización ajustado por el usuario (se resta a la
+  /// posición para el índice y el sweep; el tap-to-seek lo suma).
   Duration _lyricsOffset = Duration.zero;
+
+  /// Modo karaoke (sweep palabra por palabra): se refleja en el widget de
+  /// lyrics y se persiste vía el SettingsStore.
+  bool _sweepEnabled = false;
 
   StreamSubscription<Track?>? _trackSub;
   StreamSubscription<Duration>? _positionSub;
@@ -81,9 +89,24 @@ class _LyricsViewState extends State<LyricsView> {
       if (d != null) _duration.value = d;
     });
 
+    // Cargar la preferencia de karaoke (best-effort).
+    unawaited(_loadSweepPref());
+
     // Buscar las letras de la pista actual al abrir.
     final track = _track;
     if (track != null) _fetchLyrics(track);
+  }
+
+  Future<void> _loadSweepPref() async {
+    try {
+      final enabled = await context
+          .read<SettingsStore>()
+          .loadLyricsSweepEnabled();
+      if (!mounted) return;
+      setState(() => _sweepEnabled = enabled);
+    } catch (_) {
+      // Best-effort: sin preferencia se queda el default.
+    }
   }
 
   @override
@@ -121,6 +144,23 @@ class _LyricsViewState extends State<LyricsView> {
     }
   }
 
+  /// Aplica [lyrics] a la pista actual: se muestra al instante y se guarda
+  /// en la caché (disco) para las próximas veces.
+  Future<void> _applyLyrics(SyncedLyrics lyrics) async {
+    final track = _track;
+    if (track == null) return;
+    await context
+        .read<LyricsService>()
+        .saveManualLyrics(track.title, track.artist, lyrics.toLRC());
+    if (!mounted) return;
+    setState(() {
+      _lyrics = lyrics;
+      _lyricsOffset = Duration.zero;
+      _currentIndex.value =
+          lyrics.getCurrentLineIndex(_position.value - _lyricsOffset);
+    });
+  }
+
   /// Tap en una línea: seek a ese timestamp (respetando el offset).
   void _onLineTap(Duration timestamp) {
     final player = context.read<PlayerService>();
@@ -135,6 +175,65 @@ class _LyricsViewState extends State<LyricsView> {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Diálogo de búsqueda manual en LRCLIB (con resultados y edición).
+  Future<void> _showSearchDialog() async {
+    final track = _track;
+    if (track == null) return;
+    final result = await showDialog<LyricsSearchResult>(
+      context: context,
+      builder: (ctx) => _LyricsSearchDialog(
+        initialQuery: '${track.title} ${track.artist}',
+        accentColor: context.read<ThemeController>().accentColor,
+      ),
+    );
+    if (result == null || !mounted) return;
+    // El resultado puede traer LRC sincronizado o texto plano.
+    if (result.syncedLyrics.trim().isNotEmpty) {
+      await _applyLyrics(
+        SyncedLyrics.fromLRC(
+          songTitle: track.title,
+          artist: track.artist,
+          lrcContent: result.syncedLyrics,
+        ),
+      );
+    } else if (result.plainLyrics.trim().isNotEmpty) {
+      // Letra sin timestamps: se muestra como líneas (el highlight salta).
+      await _applyLyrics(
+        SyncedLyrics(
+          songTitle: track.title,
+          artist: track.artist,
+          lines: [
+            for (final l in result.plainLyrics.split('\n'))
+              if (l.trim().isNotEmpty)
+                LyricLine(timestamp: Duration.zero, text: l.trim()),
+          ],
+        ),
+      );
+    }
+  }
+
+  /// Diálogo de sincronización manual (offsets ±100/±500 ms, port de
+  /// forawn_mobile): muestra la línea actual/siguiente y ajusta el offset.
+  Future<void> _showSyncDialog() async {
+    final lyrics = _lyrics;
+    if (lyrics == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => _LyricsSyncDialog(
+        lyrics: lyrics,
+        positionNotifier: _position,
+        currentIndexNotifier: _currentIndex,
+        offset: _lyricsOffset,
+        accentColor: context.read<ThemeController>().accentColor,
+        onOffsetChanged: (offset) {
+          _lyricsOffset = offset;
+          _currentIndex.value =
+              lyrics.getCurrentLineIndex(_position.value - offset);
+        },
+      ),
+    );
   }
 
   @override
@@ -168,7 +267,7 @@ class _LyricsViewState extends State<LyricsView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 24, 8),
+                padding: const EdgeInsets.fromLTRB(12, 12, 16, 8),
                 child: Row(
                   children: [
                     IconButton(
@@ -198,12 +297,36 @@ class _LyricsViewState extends State<LyricsView> {
                         ],
                       ),
                     ),
-                    // Refrescar / re-buscar (p. ej. si el usuario guardó
-                    // lyrics manuales o corrigió la metadata).
+                    // Modo karaoke (sweep palabra por palabra).
                     IconButton(
-                      icon: const Icon(Icons.refresh),
-                      tooltip: l10n.refreshLyrics,
-                      onPressed: () => _fetchLyrics(_track),
+                      icon: Icon(
+                        Icons.graphic_eq,
+                        color: _sweepEnabled
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                      tooltip: _sweepEnabled
+                          ? l10n.karaokeSweepOn
+                          : l10n.karaokeSweepOff,
+                      onPressed: () async {
+                        final next = !_sweepEnabled;
+                        setState(() => _sweepEnabled = next);
+                        await context
+                            .read<SettingsStore>()
+                            .setLyricsSweepEnabled(next);
+                      },
+                    ),
+                    // Sincronización manual (ajuste de offset).
+                    IconButton(
+                      icon: const Icon(Icons.timer_outlined),
+                      tooltip: l10n.syncLyricsTitle,
+                      onPressed: _lyrics == null ? null : _showSyncDialog,
+                    ),
+                    // Búsqueda manual en LRCLIB.
+                    IconButton(
+                      icon: const Icon(Icons.search),
+                      tooltip: l10n.searchLyrics,
+                      onPressed: _track == null ? null : _showSearchDialog,
                     ),
                   ],
                 ),
@@ -264,6 +387,12 @@ class _LyricsViewState extends State<LyricsView> {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
+              const SizedBox(height: 16),
+              FilledButton.tonalIcon(
+                onPressed: _showSearchDialog,
+                icon: const Icon(Icons.search, size: 18),
+                label: Text(l10n.searchLyrics),
+              ),
             ],
           ),
         ),
@@ -282,8 +411,529 @@ class _LyricsViewState extends State<LyricsView> {
           lyricsOffset: _lyricsOffset,
           onTap: _onLineTap,
           accentColor: accent,
+          sweepEnabled: _sweepEnabled,
         );
       },
     );
+  }
+}
+
+/// Diálogo de sincronización manual: preview de la línea actual/siguiente y
+/// botones para desplazar el offset ±100/±500 ms (port de forawn_mobile).
+class _LyricsSyncDialog extends StatefulWidget {
+  final SyncedLyrics lyrics;
+  final ValueListenable<Duration> positionNotifier;
+  final ValueNotifier<int?> currentIndexNotifier;
+  final Duration offset;
+  final Color? accentColor;
+  final ValueChanged<Duration> onOffsetChanged;
+
+  const _LyricsSyncDialog({
+    required this.lyrics,
+    required this.positionNotifier,
+    required this.currentIndexNotifier,
+    required this.offset,
+    required this.accentColor,
+    required this.onOffsetChanged,
+  });
+
+  @override
+  State<_LyricsSyncDialog> createState() => _LyricsSyncDialogState();
+}
+
+class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
+  late Duration _offset;
+
+  @override
+  void initState() {
+    super.initState();
+    _offset = widget.offset;
+  }
+
+  void _adjust(int ms) {
+    setState(() => _offset += Duration(milliseconds: ms));
+    widget.onOffsetChanged(_offset);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final accent = widget.accentColor ?? theme.colorScheme.primary;
+    final lines = widget.lyrics.lines;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Container(
+        width: 420,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: theme.colorScheme.surfaceContainerHigh,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.45),
+              blurRadius: 32,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 8, 0),
+              child: Row(
+                children: [
+                  Icon(Icons.timer_outlined, color: accent, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.syncLyricsTitle,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Preview de la línea actual + siguiente (en vivo).
+                  ValueListenableBuilder<Duration>(
+                    valueListenable: widget.positionNotifier,
+                    builder: (context, position, _) {
+                      final idx = widget.lyrics.getCurrentLineIndex(
+                        position - _offset,
+                      );
+                      final current = (idx != null && idx < lines.length)
+                          ? lines[idx].text
+                          : '';
+                      final next = (idx != null && idx + 1 < lines.length)
+                          ? lines[idx + 1].text
+                          : '';
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              current.isEmpty ? '...' : current,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (next.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                next,
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Offset actual.
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '${l10n.syncCurrent}: ',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Text(
+                        '${_offset.inMilliseconds}ms',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: accent,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Botones ±100/±500 ms.
+                  Row(
+                    children: [
+                      _syncButton(theme, '-500', -500, accent),
+                      _syncButton(theme, '-100', -100, accent),
+                      _syncButton(theme, '+100', 100, accent),
+                      _syncButton(theme, '+500', 500, accent),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(l10n.done),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _syncButton(ThemeData theme, String label, int ms, Color accent) {
+    final isNegative = ms < 0;
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: FilledButton.tonal(
+          style: FilledButton.styleFrom(
+            backgroundColor: (isNegative ? Colors.red : Colors.green)
+                .withValues(alpha: 0.15),
+            foregroundColor: isNegative
+                ? Colors.redAccent
+                : Colors.greenAccent,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          onPressed: () => _adjust(ms),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Diálogo de búsqueda manual en LRCLIB: campo de búsqueda, resultados y
+/// acciones por resultado (usar / editar la letra con sus timestamps).
+class _LyricsSearchDialog extends StatefulWidget {
+  final String initialQuery;
+  final Color? accentColor;
+
+  const _LyricsSearchDialog({
+    required this.initialQuery,
+    this.accentColor,
+  });
+
+  @override
+  State<_LyricsSearchDialog> createState() => _LyricsSearchDialogState();
+}
+
+class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
+  late final TextEditingController _controller;
+  bool _searching = false;
+  List<LyricsSearchResult> _results = const [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialQuery);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _performSearch(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return;
+    setState(() {
+      _searching = true;
+      _error = null;
+      _results = const [];
+    });
+    try {
+      final res = await context.read<LyricsService>().searchLyrics(q);
+      if (!mounted) return;
+      setState(() {
+        _results = res;
+        _searching = false;
+        _error = res.isEmpty
+            ? AppLocalizations.of(context).lyricsSearchNoResults
+            : null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _searching = false;
+        _error = AppLocalizations.of(context).lyricsSearchError;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Container(
+        width: 520,
+        constraints: const BoxConstraints(maxHeight: 560),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: theme.colorScheme.surfaceContainerHigh,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.45),
+              blurRadius: 32,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 8, 0),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.lyrics_outlined,
+                    color: theme.colorScheme.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.searchLyrics,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              child: TextField(
+                controller: _controller,
+                onSubmitted: _performSearch,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: l10n.lyricsSearchHint,
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: _searching
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : null,
+                  filled: true,
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            Flexible(
+              child: _buildResults(theme, l10n),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResults(ThemeData theme, AppLocalizations l10n) {
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Text(
+            _error!,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+    if (_results.isEmpty) {
+      return const SizedBox(
+        height: 120,
+        child: Center(child: Text('')),
+      );
+    }
+    return ListView.separated(
+      shrinkWrap: true,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      itemCount: _results.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 6),
+      itemBuilder: (context, i) {
+        final r = _results[i];
+        return Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            dense: true,
+            leading: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.lyrics_outlined,
+                size: 20,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            title: Text(
+              r.trackName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              r.artistName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Editar la letra (texto con sus timestamps) antes de usar.
+                IconButton(
+                  icon: const Icon(Icons.edit, size: 18),
+                  tooltip: l10n.editLyrics,
+                  onPressed: () => _openEditor(r),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.check, size: 18),
+                  tooltip: l10n.useLyrics,
+                  onPressed: () => Navigator.pop(context, r),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Abre el editor de la letra: un campo multilínea con el LRC (texto +
+  /// timestamps) editable. Al guardar, se devuelve el resultado modificado.
+  void _openEditor(LyricsSearchResult result) {
+    final controller = TextEditingController(
+      text: result.syncedLyrics.trim().isNotEmpty
+          ? result.syncedLyrics
+          : _plainToLrc(result.plainLyrics),
+    );
+    showDialog<LyricsSearchResult>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final l10n = AppLocalizations.of(ctx);
+        return AlertDialog(
+          backgroundColor: theme.colorScheme.surfaceContainerHigh,
+          title: Text(l10n.editLyrics),
+          content: SizedBox(
+            width: 480,
+            height: 320,
+            child: TextField(
+              controller: controller,
+              maxLines: null,
+              expands: true,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontFamily: 'monospace',
+                fontSize: 13,
+              ),
+              decoration: InputDecoration(
+                hintText: l10n.editLyricsHint,
+                filled: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () {
+                final raw = controller.text.trim();
+                if (raw.isEmpty) return;
+                Navigator.pop(
+                  ctx,
+                  LyricsSearchResult(
+                    id: result.id,
+                    trackName: result.trackName,
+                    artistName: result.artistName,
+                    albumName: result.albumName,
+                    duration: result.duration,
+                    synced: true,
+                    plainLyrics: '',
+                    syncedLyrics: raw,
+                  ),
+                );
+              },
+              child: Text(l10n.save),
+            ),
+          ],
+        );
+      },
+    ).then((edited) {
+      if (edited != null && mounted) {
+        Navigator.pop(context, edited);
+      }
+    });
+  }
+
+  /// Convierte texto plano a LRC básico (cada línea con timestamp 0).
+  String _plainToLrc(String plain) {
+    return plain
+        .split('\n')
+        .where((l) => l.trim().isNotEmpty)
+        .map((l) => '[00:00.00] ${l.trim()}')
+        .join('\n');
   }
 }

@@ -876,6 +876,78 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Ilumina la letra palabra por palabra al ritmo de la canción'**
   String get karaokeSweepHint;
+
+  /// No description provided for @done.
+  ///
+  /// In es, this message translates to:
+  /// **'Listo'**
+  String get done;
+
+  /// No description provided for @karaokeSweepOn.
+  ///
+  /// In es, this message translates to:
+  /// **'Karaoke: activo'**
+  String get karaokeSweepOn;
+
+  /// No description provided for @karaokeSweepOff.
+  ///
+  /// In es, this message translates to:
+  /// **'Karaoke: inactivo'**
+  String get karaokeSweepOff;
+
+  /// No description provided for @syncLyricsTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Sincronización de letras'**
+  String get syncLyricsTitle;
+
+  /// No description provided for @syncCurrent.
+  ///
+  /// In es, this message translates to:
+  /// **'Actual'**
+  String get syncCurrent;
+
+  /// No description provided for @lyricsSearchNoResults.
+  ///
+  /// In es, this message translates to:
+  /// **'No se encontraron resultados'**
+  String get lyricsSearchNoResults;
+
+  /// No description provided for @lyricsSearchError.
+  ///
+  /// In es, this message translates to:
+  /// **'Error al buscar letras'**
+  String get lyricsSearchError;
+
+  /// No description provided for @lyricsSearchHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Buscar letras (título artista)'**
+  String get lyricsSearchHint;
+
+  /// No description provided for @editLyrics.
+  ///
+  /// In es, this message translates to:
+  /// **'Editar letra'**
+  String get editLyrics;
+
+  /// No description provided for @useLyrics.
+  ///
+  /// In es, this message translates to:
+  /// **'Usar letra'**
+  String get useLyrics;
+
+  /// No description provided for @editLyricsHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Pega el LRC aquí: [mm:ss.xx] texto por línea'**
+  String get editLyricsHint;
+
+  /// No description provided for @searchLyrics.
+  ///
+  /// In es, this message translates to:
+  /// **'Buscar letras'**
+  String get searchLyrics;
 }
 
 class _AppLocalizationsDelegate

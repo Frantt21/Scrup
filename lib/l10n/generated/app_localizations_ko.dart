@@ -426,4 +426,40 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get karaokeSweepHint => '노래에 맞춰 가사를 단어별로 강조합니다';
+
+  @override
+  String get done => '완료';
+
+  @override
+  String get karaokeSweepOn => '노래방: 켜짐';
+
+  @override
+  String get karaokeSweepOff => '노래방: 꺼짐';
+
+  @override
+  String get syncLyricsTitle => '가사 동기화';
+
+  @override
+  String get syncCurrent => '현재';
+
+  @override
+  String get lyricsSearchNoResults => '결과를 찾을 수 없습니다';
+
+  @override
+  String get lyricsSearchError => '가사 검색 중 오류';
+
+  @override
+  String get lyricsSearchHint => '가사 검색 (제목 아티스트)';
+
+  @override
+  String get editLyrics => '가사 편집';
+
+  @override
+  String get useLyrics => '가사 사용';
+
+  @override
+  String get editLyricsHint => '여기에 LRC 붙여넣기: 줄마다 [mm:ss.xx] 텍스트';
+
+  @override
+  String get searchLyrics => '가사 검색';
 }
