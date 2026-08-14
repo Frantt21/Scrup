@@ -1,39 +1,41 @@
 {
   "@@locale": "en",
   "appTitle": "Scrup",
-
   "settings": "Settings",
   "backToPlaylists": "Back to playlists",
   "playbackErrorWithDetails": "Playback error: {details}",
   "@playbackErrorWithDetails": {
     "placeholders": {
-      "details": { "type": "String" }
+      "details": {
+        "type": "String"
+      }
     }
   },
-
   "searchHint": "Search songs on YouTube…",
   "recentTitle": "Recent",
   "addToPlaylist": "Add to playlist",
   "recentEmptyTitle": "Nothing played yet",
   "recentEmptyHint": "Use the search above to get started",
-
   "backToHome": "Back to home",
   "searchTitle": "Search",
   "searchStartHint": "Search for a song to start playing it",
   "searchNoResults": "No results. Try another search.",
-
   "cantCreatePlaylist": "Could not create the playlist",
   "playlistCreated": "Playlist \"{name}\" created",
   "@playlistCreated": {
     "placeholders": {
-      "name": { "type": "String" }
+      "name": {
+        "type": "String"
+      }
     }
   },
   "deletePlaylistTitle": "Delete playlist",
   "confirmDeletePlaylist": "Delete \"{name}\"?",
   "@confirmDeletePlaylist": {
     "placeholders": {
-      "name": { "type": "String" }
+      "name": {
+        "type": "String"
+      }
     }
   },
   "cancel": "Cancel",
@@ -47,7 +49,9 @@
   "songCount": "{count, plural, =1{1 song} other{{count} songs}}",
   "@songCount": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "newPlaylist": "New playlist",
@@ -63,7 +67,6 @@
   "removeImage": "Remove image",
   "images": "Images",
   "create": "Create",
-
   "play": "Play",
   "playShuffled": "Play shuffled",
   "emptyPlaylist": "Empty playlist",
@@ -77,27 +80,39 @@
   "durationMinutes": "{m} min",
   "@durationMinutes": {
     "placeholders": {
-      "m": { "type": "int" }
+      "m": {
+        "type": "int"
+      }
     }
   },
   "durationHours": "{h} h",
   "@durationHours": {
     "placeholders": {
-      "h": { "type": "int" }
+      "h": {
+        "type": "int"
+      }
     }
   },
   "durationHoursMinutes": "{h} h {m} min",
   "@durationHoursMinutes": {
     "placeholders": {
-      "h": { "type": "int" },
-      "m": { "type": "int" }
+      "h": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      }
     }
   },
   "playlistMeta": "{songs} · {duration}",
   "@playlistMeta": {
     "placeholders": {
-      "songs": { "type": "String" },
-      "duration": { "type": "String" }
+      "songs": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
     }
   },
   "coverFromTrack": "Cover from a song",
@@ -105,12 +120,13 @@
   "currentCover": "Current cover",
   "removeCover": "Remove cover",
   "save": "Save",
-
   "nothingPlaying": "Nothing playing",
   "downloadingPercent": "Downloading… {percent}%",
   "@downloadingPercent": {
     "placeholders": {
-      "percent": { "type": "int" }
+      "percent": {
+        "type": "int"
+      }
     }
   },
   "preparing": "Preparing…",
@@ -133,12 +149,10 @@
   "queueTitle": "Play queue",
   "queueEmpty": "The queue is empty",
   "queueEmptyHint": "Play a playlist or a song to see it here",
-
   "minimize": "Minimize",
   "restore": "Restore",
   "maximize": "Maximize",
   "close": "Close",
-
   "noPlaylistsYet": "You don't have any playlists yet. Create a new one.",
   "addedToPlaylist": "Added to playlist",
   "alreadyInPlaylist": "Already in this playlist",
@@ -149,10 +163,11 @@
   "cantPlay": "Could not play: {error}",
   "@cantPlay": {
     "placeholders": {
-      "error": { "type": "String" }
+      "error": {
+        "type": "String"
+      }
     }
   },
-
   "language": "Language",
   "languageHint": "The interface language is saved between sessions",
   "cache": "Cache",
@@ -160,14 +175,20 @@
   "cacheUsed": "{used} of {limit}",
   "@cacheUsed": {
     "placeholders": {
-      "used": { "type": "String" },
-      "limit": { "type": "String" }
+      "used": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
     }
   },
   "cacheFiles": "{count, plural, =1{1 file} other{{count} files}}",
   "@cacheFiles": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "refresh": "Refresh",
@@ -178,8 +199,17 @@
   "cantClearCache": "Could not clear the cache",
   "about": "About",
   "version": "Version",
-
   "discordPresence": "Discord Presence",
   "discordPresenceHint": "Show what you're listening to on your Discord profile",
-  "discordEnabled": "Enable presence"
+  "discordEnabled": "Enable presence",
+  "editMetadata": "Edit metadata",
+  "metadataTitle": "Title",
+  "metadataArtist": "Artist",
+  "metadataAlbum": "Album",
+  "metadataCoverUrl": "Cover URL",
+  "metadataSaved": "Metadata updated",
+  "metadataSearchDeezer": "Search on Deezer",
+  "metadataNotFound": "No metadata found on Deezer",
+  "metadataCoverError": "Could not copy the image",
+  "metadataSearchHint": "Deezer will search using the title and artist from this form"
 }

@@ -1,22 +1,18 @@
 {
   "@@locale": "ja",
   "appTitle": "Scrup",
-
   "settings": "設定",
   "backToPlaylists": "プレイリストに戻る",
   "playbackErrorWithDetails": "再生エラー: {details}",
-
   "searchHint": "YouTubeで曲を検索…",
   "recentTitle": "最近再生した曲",
   "addToPlaylist": "プレイリストに追加",
   "recentEmptyTitle": "まだ何も再生していません",
   "recentEmptyHint": "上の検索を使って始めましょう",
-
   "backToHome": "ホームに戻る",
   "searchTitle": "検索",
   "searchStartHint": "曲を検索して再生を開始",
   "searchNoResults": "結果がありません。別の検索をお試しください。",
-
   "cantCreatePlaylist": "プレイリストを作成できませんでした",
   "playlistCreated": "プレイリスト「{name}」を作成しました",
   "deletePlaylistTitle": "プレイリストを削除",
@@ -43,7 +39,6 @@
   "removeImage": "画像を削除",
   "images": "画像",
   "create": "作成",
-
   "play": "再生",
   "playShuffled": "シャッフル再生",
   "emptyPlaylist": "空のプレイリスト",
@@ -63,7 +58,6 @@
   "currentCover": "現在のカバー",
   "removeCover": "カバーを削除",
   "save": "保存",
-
   "nothingPlaying": "再生中はありません",
   "downloadingPercent": "ダウンロード中… {percent}%",
   "preparing": "準備中…",
@@ -86,12 +80,10 @@
   "queueTitle": "再生キュー",
   "queueEmpty": "キューは空です",
   "queueEmptyHint": "プレイリストや曲を再生するとここに表示されます",
-
   "minimize": "最小化",
   "restore": "元に戻す",
   "maximize": "最大化",
   "close": "閉じる",
-
   "noPlaylistsYet": "プレイリストはまだありません。新しいものを作成してください。",
   "addedToPlaylist": "プレイリストに追加しました",
   "alreadyInPlaylist": "このプレイリストにすでにあります",
@@ -100,7 +92,6 @@
   "playerAnimationEnabled": "アニメーションを使用",
   "playlistNamePrompt": "プレイリスト名",
   "cantPlay": "再生できません: {error}",
-
   "language": "言語",
   "languageHint": "インターフェース言語はセッション間で保存されます",
   "cache": "キャッシュ",
@@ -115,8 +106,17 @@
   "cantClearCache": "キャッシュをクリアできませんでした",
   "about": "情報",
   "version": "バージョン",
-
   "discordPresence": "Discord プレゼンス",
   "discordPresenceHint": "Discordプロフィールに再生中の曲を表示します",
-  "discordEnabled": "プレゼンスを有効にする"
+  "discordEnabled": "プレゼンスを有効にする",
+  "editMetadata": "メタデータを編集",
+  "metadataTitle": "タイトル",
+  "metadataArtist": "アーティスト",
+  "metadataAlbum": "アルバム",
+  "metadataCoverUrl": "カバーURL",
+  "metadataSaved": "メタデータを更新しました",
+  "metadataSearchDeezer": "Deezerで検索",
+  "metadataNotFound": "Deezerでメタデータが見つかりません",
+  "metadataCoverError": "画像をコピーできませんでした",
+  "metadataSearchHint": "Deezerはこのフォームのタイトルとアーティストで検索します"
 }

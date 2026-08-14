@@ -369,4 +369,34 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get discordEnabled => '상태 표시 활성화';
+
+  @override
+  String get editMetadata => '메타데이터 편집';
+
+  @override
+  String get metadataTitle => '제목';
+
+  @override
+  String get metadataArtist => '아티스트';
+
+  @override
+  String get metadataAlbum => '앨범';
+
+  @override
+  String get metadataCoverUrl => '커버 URL';
+
+  @override
+  String get metadataSaved => '메타데이터가 업데이트되었습니다';
+
+  @override
+  String get metadataSearchDeezer => 'Deezer에서 검색';
+
+  @override
+  String get metadataNotFound => 'Deezer에서 메타데이터를 찾을 수 없습니다';
+
+  @override
+  String get metadataCoverError => '이미지를 복사할 수 없습니다';
+
+  @override
+  String get metadataSearchHint => 'Deezer는 이 양식의 제목과 아티스트로 검색합니다';
 }

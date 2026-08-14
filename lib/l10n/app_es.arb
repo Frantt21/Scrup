@@ -1,39 +1,41 @@
 {
   "@@locale": "es",
   "appTitle": "Scrup",
-
   "settings": "Configuración",
   "backToPlaylists": "Volver a playlists",
   "playbackErrorWithDetails": "Error de reproducción: {details}",
   "@playbackErrorWithDetails": {
     "placeholders": {
-      "details": { "type": "String" }
+      "details": {
+        "type": "String"
+      }
     }
   },
-
   "searchHint": "Buscar canciones en YouTube…",
   "recentTitle": "Recientes",
   "addToPlaylist": "Añadir a playlist",
   "recentEmptyTitle": "Aún no has reproducido nada",
   "recentEmptyHint": "Usa la búsqueda de arriba para empezar",
-
   "backToHome": "Volver al inicio",
   "searchTitle": "Buscar",
   "searchStartHint": "Busca una canción para empezar a reproducirla",
   "searchNoResults": "Sin resultados. Prueba otra búsqueda.",
-
   "cantCreatePlaylist": "No se pudo crear la playlist",
   "playlistCreated": "Playlist \"{name}\" creada",
   "@playlistCreated": {
     "placeholders": {
-      "name": { "type": "String" }
+      "name": {
+        "type": "String"
+      }
     }
   },
   "deletePlaylistTitle": "Eliminar playlist",
   "confirmDeletePlaylist": "¿Eliminar \"{name}\"?",
   "@confirmDeletePlaylist": {
     "placeholders": {
-      "name": { "type": "String" }
+      "name": {
+        "type": "String"
+      }
     }
   },
   "cancel": "Cancelar",
@@ -47,7 +49,9 @@
   "songCount": "{count, plural, =1{1 canción} other{{count} canciones}}",
   "@songCount": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "newPlaylist": "Nueva playlist",
@@ -63,7 +67,6 @@
   "removeImage": "Quitar imagen",
   "images": "Imágenes",
   "create": "Crear",
-
   "play": "Reproducir",
   "playShuffled": "Reproducir en aleatorio",
   "emptyPlaylist": "Playlist vacía",
@@ -77,27 +80,39 @@
   "durationMinutes": "{m} min",
   "@durationMinutes": {
     "placeholders": {
-      "m": { "type": "int" }
+      "m": {
+        "type": "int"
+      }
     }
   },
   "durationHours": "{h} h",
   "@durationHours": {
     "placeholders": {
-      "h": { "type": "int" }
+      "h": {
+        "type": "int"
+      }
     }
   },
   "durationHoursMinutes": "{h} h {m} min",
   "@durationHoursMinutes": {
     "placeholders": {
-      "h": { "type": "int" },
-      "m": { "type": "int" }
+      "h": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      }
     }
   },
   "playlistMeta": "{songs} · {duration}",
   "@playlistMeta": {
     "placeholders": {
-      "songs": { "type": "String" },
-      "duration": { "type": "String" }
+      "songs": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
     }
   },
   "coverFromTrack": "Portada desde una canción",
@@ -105,12 +120,13 @@
   "currentCover": "Portada actual",
   "removeCover": "Quitar portada",
   "save": "Guardar",
-
   "nothingPlaying": "Sin reproducción",
   "downloadingPercent": "Descargando… {percent}%",
   "@downloadingPercent": {
     "placeholders": {
-      "percent": { "type": "int" }
+      "percent": {
+        "type": "int"
+      }
     }
   },
   "preparing": "Preparando…",
@@ -133,12 +149,10 @@
   "queueTitle": "Cola de reproducción",
   "queueEmpty": "La cola está vacía",
   "queueEmptyHint": "Reproduce una playlist o una canción para verla aquí",
-
   "minimize": "Minimizar",
   "restore": "Restaurar",
   "maximize": "Maximizar",
   "close": "Cerrar",
-
   "noPlaylistsYet": "No tienes playlists todavía. Crea una nueva.",
   "addedToPlaylist": "Añadida a la playlist",
   "alreadyInPlaylist": "Ya está en esta playlist",
@@ -149,10 +163,11 @@
   "cantPlay": "No se pudo reproducir: {error}",
   "@cantPlay": {
     "placeholders": {
-      "error": { "type": "String" }
+      "error": {
+        "type": "String"
+      }
     }
   },
-
   "language": "Idioma",
   "languageHint": "El idioma de la interfaz se guarda entre sesiones",
   "cache": "Caché",
@@ -160,14 +175,20 @@
   "cacheUsed": "{used} de {limit}",
   "@cacheUsed": {
     "placeholders": {
-      "used": { "type": "String" },
-      "limit": { "type": "String" }
+      "used": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
     }
   },
   "cacheFiles": "{count, plural, =1{1 archivo} other{{count} archivos}}",
   "@cacheFiles": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "refresh": "Actualizar",
@@ -178,8 +199,17 @@
   "cantClearCache": "No se pudo vaciar el caché",
   "about": "Acerca de",
   "version": "Versión",
-
   "discordPresence": "Presencia de Discord",
   "discordPresenceHint": "Muestra en tu perfil de Discord la canción que estás escuchando",
-  "discordEnabled": "Activar presencia"
+  "discordEnabled": "Activar presencia",
+  "editMetadata": "Editar metadatos",
+  "metadataTitle": "Título",
+  "metadataArtist": "Artista",
+  "metadataAlbum": "Álbum",
+  "metadataCoverUrl": "URL de la portada",
+  "metadataSaved": "Metadatos actualizados",
+  "metadataSearchDeezer": "Buscar en Deezer",
+  "metadataNotFound": "No se encontró metadata en Deezer",
+  "metadataCoverError": "No se pudo copiar la imagen",
+  "metadataSearchHint": "Deezer buscará con el título y artista de este formulario"
 }

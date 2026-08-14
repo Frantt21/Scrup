@@ -10,6 +10,7 @@ import '../../services/player_service.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
 import '../widgets/context_menu_item.dart';
+import '../widgets/cover_image.dart';
 import '../widgets/now_playing_bars.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 
@@ -369,24 +370,14 @@ class _RecentCardState extends State<_RecentCard> {
   }
 
   Widget _artwork(ThemeData theme) {
-    final url = widget.track.thumbnailUrl;
-    if (url == null) {
-      return Container(
-        color: theme.colorScheme.surfaceContainerHigh,
-        child: Icon(
-          Icons.music_note,
-          size: 40,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-    }
-    return Image.network(
-      url,
+    // Decodificar a un tamaño moderado: el grid muestra miniaturas de
+    // ~200px, no hace falta la resolución completa. CoverImage soporta URLs
+    // de red y rutas locales (portadas elegidas por el usuario).
+    return CoverImage(
+      source: widget.track.thumbnailUrl,
       fit: BoxFit.cover,
-      // Decodificar a un tamaño moderado: el grid muestra miniaturas de
-      // ~200px, no hace falta la resolución completa.
       cacheWidth: 500,
-      errorBuilder: (_, _, _) => Container(
+      fallback: Container(
         color: theme.colorScheme.surfaceContainerHigh,
         child: Icon(
           Icons.music_note,

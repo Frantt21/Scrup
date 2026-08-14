@@ -375,6 +375,37 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get discordEnabled => 'Ativar presença';
+
+  @override
+  String get editMetadata => 'Editar metadados';
+
+  @override
+  String get metadataTitle => 'Título';
+
+  @override
+  String get metadataArtist => 'Artista';
+
+  @override
+  String get metadataAlbum => 'Álbum';
+
+  @override
+  String get metadataCoverUrl => 'URL da capa';
+
+  @override
+  String get metadataSaved => 'Metadados atualizados';
+
+  @override
+  String get metadataSearchDeezer => 'Pesquisar no Deezer';
+
+  @override
+  String get metadataNotFound => 'Metadados não encontrados no Deezer';
+
+  @override
+  String get metadataCoverError => 'Não foi possível copiar a imagem';
+
+  @override
+  String get metadataSearchHint =>
+      'O Deezer pesquisará com o título e artista deste formulário';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -748,4 +779,35 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get discordEnabled => 'Ativar presença';
+
+  @override
+  String get editMetadata => 'Editar metadados';
+
+  @override
+  String get metadataTitle => 'Título';
+
+  @override
+  String get metadataArtist => 'Artista';
+
+  @override
+  String get metadataAlbum => 'Álbum';
+
+  @override
+  String get metadataCoverUrl => 'URL da capa';
+
+  @override
+  String get metadataSaved => 'Metadados atualizados';
+
+  @override
+  String get metadataSearchDeezer => 'Pesquisar no Deezer';
+
+  @override
+  String get metadataNotFound => 'Metadados não encontrados no Deezer';
+
+  @override
+  String get metadataCoverError => 'Não foi possível copiar a imagem';
+
+  @override
+  String get metadataSearchHint =>
+      'O Deezer pesquisará com o título e artista deste formulário';
 }

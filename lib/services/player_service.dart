@@ -876,6 +876,37 @@ class PlayerService {
     _trackController.add(track);
   }
 
+  /// Actualiza los metadatos de la pista actual (edición manual del usuario):
+  /// reemplaza la pista en la cola si está, la publica en la UI y persiste
+  /// los cambios en la base (recientes/playlists con el artwork/álbum
+  /// nuevos). No toca la reproducción: la fuente y la posición siguen
+  /// intactas.
+  Future<void> updateCurrentMetadata(Track updated) async {
+    final i = _queue.indexWhere((t) => t.id == updated.id);
+    final isCurrent = _currentTrack?.id == updated.id;
+    // Si la pista no está ni en la cola ni en reproducción, no hay nada que
+    // actualizar: descartar para no persistir una pista "fantasma".
+    if (i < 0 && !isCurrent) return;
+    // Actualizar la cola si la pista está en ella (mismo id).
+    if (i >= 0) {
+      _queue[i] = updated;
+      _notifyQueueChanged();
+    }
+    // Publicar en la UI si es la pista en reproducción.
+    if (isCurrent) {
+      _publishTrack(updated);
+    }
+    // Persistir (mismo camino que el enriquecimiento de Deezer).
+    final cb = onEnriched;
+    if (cb != null) {
+      try {
+        await cb(updated);
+      } catch (_) {
+        // Silencioso: la persistencia de metadatos es secundaria.
+      }
+    }
+  }
+
   /// Aplica el enriquecimiento de Deezer en segundo plano: cuando llega,
   /// actualiza la UI y la persistencia (recientes con el artwork/álbum de
   /// Deezer). Nunca bloquea la reproducción ni toca nada si la pista ya

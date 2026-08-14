@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/deezer_service.dart';
 import '../../services/player_service.dart';
 import '../../services/ytdlp_service.dart';
 import '../playback.dart';
@@ -91,7 +92,19 @@ class _SearchViewState extends State<SearchView> {
     try {
       final tracks = await context.read<YtDlpService>().search(q);
       if (!mounted || token != _searchToken) return; // búsqueda obsoleta
-      setState(() => _results = tracks);
+      // Mostrar ya los resultados de YouTube (rápido, sin spinner) y, en
+      // segundo plano, enriquecerlos con la metadata de Deezer (título/
+      // artista/álbum/portada limpios): cuando llega, la lista se reemplaza
+      // en su lugar sin bloquear la interacción.
+      setState(() {
+        _results = tracks;
+        _searching = false;
+      });
+      final enriched = await context
+          .read<DeezerService>()
+          .enrichAll(tracks);
+      if (!mounted || token != _searchToken) return;
+      setState(() => _results = enriched);
     } catch (e) {
       if (!mounted || token != _searchToken) return;
       setState(() {

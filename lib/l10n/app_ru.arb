@@ -1,22 +1,18 @@
 {
   "@@locale": "ru",
   "appTitle": "Scrup",
-
   "settings": "Настройки",
   "backToPlaylists": "Вернуться к плейлистам",
   "playbackErrorWithDetails": "Ошибка воспроизведения: {details}",
-
   "searchHint": "Искать песни на YouTube…",
   "recentTitle": "Недавние",
   "addToPlaylist": "Добавить в плейлист",
   "recentEmptyTitle": "Вы ещё ничего не воспроизводили",
   "recentEmptyHint": "Используйте поиск выше, чтобы начать",
-
   "backToHome": "Вернуться на главную",
   "searchTitle": "Поиск",
   "searchStartHint": "Найдите песню, чтобы начать её воспроизведение",
   "searchNoResults": "Ничего не найдено. Попробуйте другой запрос.",
-
   "cantCreatePlaylist": "Не удалось создать плейлист",
   "playlistCreated": "Плейлист \"{name}\" создан",
   "deletePlaylistTitle": "Удалить плейлист",
@@ -43,7 +39,6 @@
   "removeImage": "Убрать изображение",
   "images": "Изображения",
   "create": "Создать",
-
   "play": "Воспроизвести",
   "playShuffled": "Воспроизвести вперемешку",
   "emptyPlaylist": "Пустой плейлист",
@@ -63,7 +58,6 @@
   "currentCover": "Текущая обложка",
   "removeCover": "Убрать обложку",
   "save": "Сохранить",
-
   "nothingPlaying": "Ничего не играет",
   "downloadingPercent": "Загрузка… {percent}%",
   "preparing": "Подготовка…",
@@ -86,12 +80,10 @@
   "queueTitle": "Очередь воспроизведения",
   "queueEmpty": "Очередь пуста",
   "queueEmptyHint": "Воспроизведите плейлист или песню, чтобы увидеть её здесь",
-
   "minimize": "Свернуть",
   "restore": "Восстановить",
   "maximize": "Развернуть",
   "close": "Закрыть",
-
   "noPlaylistsYet": "У вас ещё нет плейлистов. Создайте новый.",
   "addedToPlaylist": "Добавлено в плейлист",
   "alreadyInPlaylist": "Уже в этом плейлисте",
@@ -100,7 +92,6 @@
   "playerAnimationEnabled": "Использовать анимацию",
   "playlistNamePrompt": "Название плейлиста",
   "cantPlay": "Не удалось воспроизвести: {error}",
-
   "language": "Язык",
   "languageHint": "Язык интерфейса сохраняется между сеансами",
   "cache": "Кэш",
@@ -115,8 +106,17 @@
   "cantClearCache": "Не удалось очистить кэш",
   "about": "О программе",
   "version": "Версия",
-
   "discordPresence": "Присутствие в Discord",
   "discordPresenceHint": "Показывает в вашем профиле Discord песню, которую вы слушаете",
-  "discordEnabled": "Включить присутствие"
+  "discordEnabled": "Включить присутствие",
+  "editMetadata": "Редактировать метаданные",
+  "metadataTitle": "Название",
+  "metadataArtist": "Исполнитель",
+  "metadataAlbum": "Альбом",
+  "metadataCoverUrl": "URL обложки",
+  "metadataSaved": "Метаданные обновлены",
+  "metadataSearchDeezer": "Искать на Deezer",
+  "metadataNotFound": "Метаданные на Deezer не найдены",
+  "metadataCoverError": "Не удалось скопировать изображение",
+  "metadataSearchHint": "Deezer выполнит поиск по названию и исполнителю из этой формы"
 }

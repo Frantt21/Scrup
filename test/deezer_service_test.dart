@@ -179,6 +179,84 @@ void main() {
       expect(result!.title, 'Música');
     });
 
+    test('enrichAll enriquece la lista y conserva las sin coincidencia',
+        () async {
+      var calls = 0;
+      final client = MockClient((_) async {
+        calls++;
+        return _deezerResponse([_dzTrack()]);
+      });
+      final service = DeezerService(client: client);
+
+      final results = await service.enrichAll([
+        Track(
+          id: 'yt10',
+          title: 'One More Time (Official Video)',
+          artist: 'Daft Punk',
+        ),
+        Track(id: 'yt11', title: 'Mi Canción Rara', artist: 'Artista X'),
+        Track(
+          id: 'yt12',
+          title: 'One More Time',
+          artist: 'Daft Punk',
+        ),
+      ]);
+
+      expect(results, hasLength(3));
+      // Los que coinciden con Deezer quedan enriquecidos (mismo videoId).
+      expect(results[0].id, 'yt10');
+      expect(results[0].title, 'One More Time');
+      expect(results[0].album, 'Discovery');
+      // El que no coincide conserva la metadata original.
+      expect(results[1].id, 'yt11');
+      expect(results[1].title, 'Mi Canción Rara');
+      expect(results[2].id, 'yt12');
+      expect(results[2].title, 'One More Time');
+      // Un request por video sin caché (cada track consulta su query).
+      expect(calls, 3);
+    });
+
+    test('searchManual busca con datos escritos aunque el video ya esté '
+        'cacheado como null', () async {
+      var calls = 0;
+      final client = MockClient((_) async {
+        calls++;
+        return _deezerResponse([_dzTrack()]);
+      });
+      final service = DeezerService(client: client);
+
+      // El enriquecimiento automático de un video sin match cachea null.
+      final original = Track(
+        id: 'yt20',
+        title: 'Título Raro',
+        artist: 'Artista Desconocido',
+      );
+      expect(await service.enrich(original), isNull);
+      expect(calls, 1);
+
+      // La búsqueda manual con el título/artista corregidos SÍ consulta la
+      // API (no repite el null cacheado) y devuelve la metadata.
+      final result = await service.searchManual('One More Time', 'Daft Punk');
+      expect(result, isNotNull);
+      expect(result!.title, 'One More Time');
+      expect(result.artist, 'Daft Punk');
+      expect(calls, 2);
+    });
+
+    test('enrichAll con lista vacía no llama a la API', () async {
+      var called = false;
+      final client = MockClient((_) async {
+        called = true;
+        return _deezerResponse([_dzTrack()]);
+      });
+      final service = DeezerService(client: client);
+
+      final results = await service.enrichAll(const []);
+
+      expect(results, isEmpty);
+      expect(called, isFalse);
+    });
+
     test('devuelve null si no hay artista ni título', () async {
       var called = false;
       final client = MockClient((_) async {

@@ -1,22 +1,18 @@
 {
   "@@locale": "zh",
   "appTitle": "Scrup",
-
   "settings": "设置",
   "backToPlaylists": "返回播放列表",
   "playbackErrorWithDetails": "播放错误：{details}",
-
   "searchHint": "在 YouTube 上搜索歌曲…",
   "recentTitle": "最近播放",
   "addToPlaylist": "添加到播放列表",
   "recentEmptyTitle": "还没有播放任何内容",
   "recentEmptyHint": "使用上方搜索开始吧",
-
   "backToHome": "返回首页",
   "searchTitle": "搜索",
   "searchStartHint": "搜索歌曲开始播放",
   "searchNoResults": "没有结果。请尝试其他搜索。",
-
   "cantCreatePlaylist": "无法创建播放列表",
   "playlistCreated": "播放列表“{name}”已创建",
   "deletePlaylistTitle": "删除播放列表",
@@ -43,7 +39,6 @@
   "removeImage": "移除图片",
   "images": "图片",
   "create": "创建",
-
   "play": "播放",
   "playShuffled": "随机播放",
   "emptyPlaylist": "空播放列表",
@@ -63,7 +58,6 @@
   "currentCover": "当前封面",
   "removeCover": "移除封面",
   "save": "保存",
-
   "nothingPlaying": "没有正在播放",
   "downloadingPercent": "下载中… {percent}%",
   "preparing": "准备中…",
@@ -86,12 +80,10 @@
   "queueTitle": "播放队列",
   "queueEmpty": "队列为空",
   "queueEmptyHint": "播放播放列表或歌曲后会显示在这里",
-
   "minimize": "最小化",
   "restore": "还原",
   "maximize": "最大化",
   "close": "关闭",
-
   "noPlaylistsYet": "还没有播放列表。请创建一个新的。",
   "addedToPlaylist": "已添加到播放列表",
   "alreadyInPlaylist": "已在此播放列表中",
@@ -100,7 +92,6 @@
   "playerAnimationEnabled": "使用动画",
   "playlistNamePrompt": "播放列表名称",
   "cantPlay": "无法播放：{error}",
-
   "language": "语言",
   "languageHint": "界面语言会在会话之间保存",
   "cache": "缓存",
@@ -115,8 +106,17 @@
   "cantClearCache": "无法清除缓存",
   "about": "关于",
   "version": "版本",
-
   "discordPresence": "Discord 状态",
   "discordPresenceHint": "在您的 Discord 个人资料中显示正在播放的歌曲",
-  "discordEnabled": "启用状态显示"
+  "discordEnabled": "启用状态显示",
+  "editMetadata": "编辑元数据",
+  "metadataTitle": "标题",
+  "metadataArtist": "艺术家",
+  "metadataAlbum": "专辑",
+  "metadataCoverUrl": "封面 URL",
+  "metadataSaved": "元数据已更新",
+  "metadataSearchDeezer": "在 Deezer 上搜索",
+  "metadataNotFound": "未在 Deezer 上找到元数据",
+  "metadataCoverError": "无法复制图片",
+  "metadataSearchHint": "Deezer 将使用此表单中的标题和艺术家进行搜索"
 }

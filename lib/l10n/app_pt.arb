@@ -1,22 +1,18 @@
 {
   "@@locale": "pt",
   "appTitle": "Scrup",
-
   "settings": "Configurações",
   "backToPlaylists": "Voltar às playlists",
   "playbackErrorWithDetails": "Erro de reprodução: {details}",
-
   "searchHint": "Buscar músicas no YouTube…",
   "recentTitle": "Recentes",
   "addToPlaylist": "Adicionar à playlist",
   "recentEmptyTitle": "Você ainda não reproduziu nada",
   "recentEmptyHint": "Use a busca acima para começar",
-
   "backToHome": "Voltar ao início",
   "searchTitle": "Buscar",
   "searchStartHint": "Busque uma música para começar a reproduzi-la",
   "searchNoResults": "Sem resultados. Tente outra busca.",
-
   "cantCreatePlaylist": "Não foi possível criar a playlist",
   "playlistCreated": "Playlist \"{name}\" criada",
   "deletePlaylistTitle": "Excluir playlist",
@@ -43,7 +39,6 @@
   "removeImage": "Remover imagem",
   "images": "Imagens",
   "create": "Criar",
-
   "play": "Reproduzir",
   "playShuffled": "Reproduzir embaralhado",
   "emptyPlaylist": "Playlist vazia",
@@ -63,7 +58,6 @@
   "currentCover": "Capa atual",
   "removeCover": "Remover capa",
   "save": "Salvar",
-
   "nothingPlaying": "Nada em reprodução",
   "downloadingPercent": "Baixando… {percent}%",
   "preparing": "Preparando…",
@@ -86,12 +80,10 @@
   "queueTitle": "Fila de reprodução",
   "queueEmpty": "A fila está vazia",
   "queueEmptyHint": "Reproduza uma playlist ou música para vê-la aqui",
-
   "minimize": "Minimizar",
   "restore": "Restaurar",
   "maximize": "Maximizar",
   "close": "Fechar",
-
   "noPlaylistsYet": "Você ainda não tem playlists. Crie uma nova.",
   "addedToPlaylist": "Adicionada à playlist",
   "alreadyInPlaylist": "Já está nesta playlist",
@@ -100,7 +92,6 @@
   "playerAnimationEnabled": "Usar animação",
   "playlistNamePrompt": "Nome da playlist",
   "cantPlay": "Não foi possível reproduzir: {error}",
-
   "language": "Idioma",
   "languageHint": "O idioma da interface é salvo entre sessões",
   "cache": "Cache",
@@ -115,8 +106,17 @@
   "cantClearCache": "Não foi possível limpar o cache",
   "about": "Sobre",
   "version": "Versão",
-
   "discordPresence": "Presença do Discord",
   "discordPresenceHint": "Mostra no seu perfil do Discord a música que você está a ouvir",
-  "discordEnabled": "Ativar presença"
+  "discordEnabled": "Ativar presença",
+  "editMetadata": "Editar metadados",
+  "metadataTitle": "Título",
+  "metadataArtist": "Artista",
+  "metadataAlbum": "Álbum",
+  "metadataCoverUrl": "URL da capa",
+  "metadataSaved": "Metadados atualizados",
+  "metadataSearchDeezer": "Pesquisar no Deezer",
+  "metadataNotFound": "Metadados não encontrados no Deezer",
+  "metadataCoverError": "Não foi possível copiar a imagem",
+  "metadataSearchHint": "O Deezer pesquisará com o título e artista deste formulário"
 }

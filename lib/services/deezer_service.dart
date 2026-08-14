@@ -47,6 +47,51 @@ class DeezerService {
     }
   }
 
+  /// Busca en Deezer con un título y artista ESCRITOS A MANO (editor de
+  /// metadatos), SIN pasar por la caché por videoId: si el usuario corrige
+  /// el artista/título, la búsqueda debe consultar la API de nuevo, no
+  /// repetir el resultado (o el `null`) que ya quedó cacheado para ese
+  /// video. Devuelve la metadata candidata, o `null` sin coincidencia
+  /// fiable.
+  Future<Track?> searchManual(String title, String artist) async {
+    final probe = Track(id: '__manual__', title: title, artist: artist);
+    return _searchAndPick(probe);
+  }
+
+  /// Enriquece una lista de pistas en paralelo (con límite de concurrencia
+  /// para no saturar la API) y devuelve las pistas ya fusionadas con la
+  /// metadata de Deezer cuando hay coincidencia fiable, o la original en
+  /// caso contrario. Reutiliza la caché por videoId, así que reproducir
+  /// después no repite peticiones.
+  Future<List<Track>> enrichAll(
+    List<Track> tracks, {
+    int concurrency = 4,
+  }) async {
+    if (tracks.isEmpty) return tracks;
+
+    final enriched = List<Track?>.filled(tracks.length, null);
+    var next = 0;
+
+    Future<void> worker() async {
+      while (true) {
+        final i = next++;
+        if (i >= tracks.length) return;
+        final original = tracks[i];
+        final deezer = await enrich(original);
+        enriched[i] =
+            deezer == null ? original : apply(original, deezer) ?? original;
+      }
+    }
+
+    await Future.wait(
+      List.generate(
+        concurrency.clamp(1, tracks.length),
+        (_) => worker(),
+      ),
+    );
+    return enriched.whereType<Track>().toList();
+  }
+
   Future<Track?> _searchAndPick(Track track) async {
     final query = [
       track.artist,

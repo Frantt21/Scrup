@@ -368,4 +368,34 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get discordEnabled => '启用状态显示';
+
+  @override
+  String get editMetadata => '编辑元数据';
+
+  @override
+  String get metadataTitle => '标题';
+
+  @override
+  String get metadataArtist => '艺术家';
+
+  @override
+  String get metadataAlbum => '专辑';
+
+  @override
+  String get metadataCoverUrl => '封面 URL';
+
+  @override
+  String get metadataSaved => '元数据已更新';
+
+  @override
+  String get metadataSearchDeezer => '在 Deezer 上搜索';
+
+  @override
+  String get metadataNotFound => '未在 Deezer 上找到元数据';
+
+  @override
+  String get metadataCoverError => '无法复制图片';
+
+  @override
+  String get metadataSearchHint => 'Deezer 将使用此表单中的标题和艺术家进行搜索';
 }

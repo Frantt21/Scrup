@@ -369,4 +369,34 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get discordEnabled => 'プレゼンスを有効にする';
+
+  @override
+  String get editMetadata => 'メタデータを編集';
+
+  @override
+  String get metadataTitle => 'タイトル';
+
+  @override
+  String get metadataArtist => 'アーティスト';
+
+  @override
+  String get metadataAlbum => 'アルバム';
+
+  @override
+  String get metadataCoverUrl => 'カバーURL';
+
+  @override
+  String get metadataSaved => 'メタデータを更新しました';
+
+  @override
+  String get metadataSearchDeezer => 'Deezerで検索';
+
+  @override
+  String get metadataNotFound => 'Deezerでメタデータが見つかりません';
+
+  @override
+  String get metadataCoverError => '画像をコピーできませんでした';
+
+  @override
+  String get metadataSearchHint => 'Deezerはこのフォームのタイトルとアーティストで検索します';
 }

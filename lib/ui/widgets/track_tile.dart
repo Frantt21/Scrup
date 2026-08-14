@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
+import 'cover_image.dart';
 import 'now_playing_bars.dart';
 
 /// Fila de una pista (resultados, recientes, playlists).
@@ -86,14 +87,11 @@ class TrackTile extends StatelessWidget {
               child: SizedBox(
                 width: 56,
                 height: 56,
-                child: track.thumbnailUrl != null
-                    ? Image.network(
-                        track.thumbnailUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            _thumbnailFallback(theme, tint: tint),
-                      )
-                    : _thumbnailFallback(theme, tint: tint),
+                child: CoverImage(
+                  source: track.thumbnailUrl,
+                  fit: BoxFit.cover,
+                  fallback: _thumbnailFallback(theme, tint: tint),
+                ),
               ),
             ),
             const SizedBox(width: 12),

@@ -762,6 +762,66 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Activar presencia'**
   String get discordEnabled;
+
+  /// No description provided for @editMetadata.
+  ///
+  /// In es, this message translates to:
+  /// **'Editar metadatos'**
+  String get editMetadata;
+
+  /// No description provided for @metadataTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Título'**
+  String get metadataTitle;
+
+  /// No description provided for @metadataArtist.
+  ///
+  /// In es, this message translates to:
+  /// **'Artista'**
+  String get metadataArtist;
+
+  /// No description provided for @metadataAlbum.
+  ///
+  /// In es, this message translates to:
+  /// **'Álbum'**
+  String get metadataAlbum;
+
+  /// No description provided for @metadataCoverUrl.
+  ///
+  /// In es, this message translates to:
+  /// **'URL de la portada'**
+  String get metadataCoverUrl;
+
+  /// No description provided for @metadataSaved.
+  ///
+  /// In es, this message translates to:
+  /// **'Metadatos actualizados'**
+  String get metadataSaved;
+
+  /// No description provided for @metadataSearchDeezer.
+  ///
+  /// In es, this message translates to:
+  /// **'Buscar en Deezer'**
+  String get metadataSearchDeezer;
+
+  /// No description provided for @metadataNotFound.
+  ///
+  /// In es, this message translates to:
+  /// **'No se encontró metadata en Deezer'**
+  String get metadataNotFound;
+
+  /// No description provided for @metadataCoverError.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudo copiar la imagen'**
+  String get metadataCoverError;
+
+  /// No description provided for @metadataSearchHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Deezer buscará con el título y artista de este formulario'**
+  String get metadataSearchHint;
 }
 
 class _AppLocalizationsDelegate

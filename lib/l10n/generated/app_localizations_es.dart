@@ -376,4 +376,35 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get discordEnabled => 'Activar presencia';
+
+  @override
+  String get editMetadata => 'Editar metadatos';
+
+  @override
+  String get metadataTitle => 'Título';
+
+  @override
+  String get metadataArtist => 'Artista';
+
+  @override
+  String get metadataAlbum => 'Álbum';
+
+  @override
+  String get metadataCoverUrl => 'URL de la portada';
+
+  @override
+  String get metadataSaved => 'Metadatos actualizados';
+
+  @override
+  String get metadataSearchDeezer => 'Buscar en Deezer';
+
+  @override
+  String get metadataNotFound => 'No se encontró metadata en Deezer';
+
+  @override
+  String get metadataCoverError => 'No se pudo copiar la imagen';
+
+  @override
+  String get metadataSearchHint =>
+      'Deezer buscará con el título y artista de este formulario';
 }

@@ -23,3 +23,25 @@ Future<String> copyPlaylistCoverToAppDir(
   }
   return dest;
 }
+
+/// Copia una imagen elegida por el usuario al directorio de portadas de
+/// pistas de la app (`track_covers/`) y devuelve la ruta de destino.
+///
+/// Igual que [copyPlaylistCoverToAppDir]: se copia (no se referencia) para
+/// que la portada sobreviva aunque el archivo original se mueva o borre, y
+/// el nombre se deriva del id de la pista para que sea estable entre
+/// sesiones (la metadata editada persiste en la DB con esta ruta local).
+Future<String> copyTrackCoverToAppDir(
+  String trackId,
+  String sourcePath,
+) async {
+  final base = await getApplicationSupportDirectory();
+  final coversDir = Directory(p.join(base.path, 'track_covers'));
+  await coversDir.create(recursive: true);
+  final ext = p.extension(sourcePath);
+  final dest = p.join(coversDir.path, 'track_$trackId$ext');
+  if (!p.equals(sourcePath, dest)) {
+    await File(sourcePath).copy(dest);
+  }
+  return dest;
+}
