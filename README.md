@@ -1,4 +1,4 @@
-# Scrup 🎵
+# Scrup
 
 Reproductor de música desde YouTube con **caché local y reproducción
 progresiva**: descarga cada pista con `yt-dlp` y la reproduce desde archivo
@@ -17,11 +17,18 @@ Plataformas objetivo: **Windows, Linux y macOS** (una sola base de código Flutt
 - **Inicio**: reproducciones recientes (desde SQLite) en el arranque.
 - **Búsqueda**: busca canciones en YouTube y las reproduce al instante.
 - **Playlists**: crea, elimina y añade canciones; reproduce toda la playlist
-  como cola con auto-advance al terminar cada pista.
-- **Title bar personalizado** (solo Windows): área de arrastre y botones de
-  minimizar/maximizar/cerrar. En Linux y macOS se usa la title bar nativa de
-  la distro/OS (cada gestor de ventanas dibuja la suya), con una barra
-  superior ligera para volver/configuración.
+  como cola con auto-advance al terminar cada pista. Incluye portada
+  personalizada (imagen local o artwork de sus canciones) y descripción
+  editable.
+- **Favoritos**: playlist especial que no se puede borrar, con acceso rápido
+  al corazón desde el reproductor.
+- **Panel de cola**: lista deslizable desde la derecha para ver, reordenar y
+  saltar entre canciones; su estado (abierto/cerrado) se restaura entre
+  sesiones.
+- **Modo radio**: al agotarse la cola, busca más canciones del mismo
+  artista/género y sigue sonando (activo por defecto).
+- **Title bar personalizada**: en las tres plataformas (Windows y Linux sin
+  marco, macOS con los traffic lights nativos conservados).
 - **Caché local de audio**: evicción LRU por tamaño (2 GiB por defecto),
   descargas con progreso y deduplicación de descargas concurrentes.
 - **Reproducción progresiva**: al reproducir por primera vez, arranca el
@@ -29,35 +36,65 @@ Plataformas objetivo: **Windows, Linux y macOS** (una sola base de código Flutt
   completa) y la descarga sigue en segundo plano hasta cachearse.
 - **Metadatos vía Deezer**: al reproducir, se enriquece la pista con título/
   artista/álbum/portada limpios de la API pública de Deezer (best-effort,
-  sin clave).
+  sin clave). También permite editar los metadatos a mano y re-buscar en
+  Deezer o elegir una portada local.
+- **Letras sincronizadas (LRCLIB)**: auto-scroll, modo karaoke palabra por
+  palabra, tap-to-seek, búsqueda manual y ajuste de sincronización.
+- **Controles multimedia nativos del OS**: SMTC en Windows, Now Playing en
+  macOS y MPRIS en Linux (vía `audio_service` y sus paquetes compañeros).
+- **Discord Rich Presence**: publica la canción en reproducción (título,
+  artista, álbum, portada y cronómetro) a través del IPC local de Discord,
+  sin librerías nativas (solo Dart + FFI del OS).
 - **Tema dinámico**: el color de acento de la app se adapta al artwork de la
   pista en reproducción (paleta extraída con `palette_generator`).
+- **Internacionalización**: interfaz en español, inglés, portugués
+  (Brasil y Portugal), ruso, japonés, coreano y chino; el idioma se
+  persiste entre sesiones.
+- **Persistencia de sesión**: se restauran al arrancar el volumen, la cola
+  completa (orden, índice y playlist activa), el punto de reanudación, los
+  modos de shuffle/repetición y varias preferencias de UI.
 
 ## Arquitectura
 
 ```
-┌──────────────────────────────────────────────────┐
-│  UI Flutter (title bar, navegación, player bar)  │
-├──────────────────────────────────────────────────┤
-│  yt-dlp → busca y descarga audio (progreso)      │  (subproceso + parseo JSON)
-│  AudioCacheService → caché local con límite LRU  │  (2 GiB, evicción por mtime)
-│  media_kit (libmpv) → reproduce archivo local    │
-│  PlayerService → cola, repeat, shuffle, radio    │
-│  drift (SQLite) → historial, playlists           │
-│  Binarios sidecar → yt-dlp + ffmpeg por OS       │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  UI Flutter (title bar, navegación, player bar, lyrics)  │
+├──────────────────────────────────────────────────────────┤
+│  yt-dlp → busca y descarga audio (progreso)              │  (subproceso + parseo JSON)
+│  AudioCacheService → caché local con límite LRU          │  (2 GiB, evicción por mtime)
+│  media_kit (libmpv) → reproduce archivo local            │
+│  PlayerService → cola, repeat, shuffle, radio            │
+│  LyricsService → letras sincronizadas (LRCLIB)           │
+│  DeezerService → enriquecimiento de metadatos            │
+│  DiscordPresenceService → Rich Presence (IPC + FFI)      │
+│  ScrupAudioHandler → SMTC / Now Playing / MPRIS         │
+│  drift (SQLite) → historial, playlists, favoritos        │
+│  Binarios sidecar → yt-dlp + ffmpeg + deno por OS        │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ### Notas técnicas clave
 
 - **El caché de audio vive en el directorio de soporte de la app**
   (`%APPDATA%/<org>/scrup/audio_cache` en Windows). Límite por defecto: 2 GiB,
-  configurable con `SCRUP_CACHE_MAX_MB` si se expone.
+  configurable con la variable de entorno `SCRUP_CACHE_MAX_MB` (en MiB).
 - **Los streams remotos pueden cortarse** (expiración/rate-limit de YouTube);
   por eso la reproducción es cache-first: archivo local estable.
 - El cifrado de firma lo resuelve `yt-dlp`; `mpv` reproduce el archivo final.
 - `yt-dlp` se actualiza a menudo (YouTube cambia cosas): el script de binarios
   siempre descarga la versión más reciente.
+- **Descarga automática de binarios**: si al arrancar no se encuentran
+  `yt-dlp`/`ffmpeg`, la app intenta descargarlos sola (con curl o PowerShell)
+  y avisa del progreso con un toast.
+- **Presencia de Discord sin librerías nativas**: el cliente habla el IPC
+  local de Discord (named pipe en Windows vía FFI, sockets Unix en
+  Linux/macOS), con el Application ID de Scrup embebido. Solo hay que activar
+  el interruptor en Configuración.
+- **Controles nativos del OS**: en Windows `audio_service` no lo soporta por
+  sí solo, así que se usa `audio_service_win` (SMTC); en Linux se usa
+  `audio_service_mpris` (MPRIS) y en macOS el soporte nativo de Now Playing.
+  Nota: `audio_service_win` no implementa la línea de tiempo, por lo que la
+  barra de progreso/seek del SMTC no aparece en Windows.
 
 ## Requisitos
 
@@ -68,7 +105,9 @@ Plataformas objetivo: **Windows, Linux y macOS** (una sola base de código Flutt
 ## Puesta en marcha
 
 ```bash
-# 1. Descargar binarios sidecar para tu plataforma (yt-dlp + ffmpeg)
+# 1. (Opcional) Descargar binarios sidecar para tu plataforma
+#    (yt-dlp + ffmpeg + deno). Si se omite, la app los descarga sola
+#    la primera vez que arranca.
 bash tool/fetch_binaries.sh
 
 # 2. Generar código de drift (tras cambiar las tablas)
@@ -110,13 +149,13 @@ Mientras se itera, el ciclo es solo código + recarga en la consola de
 | `R` | Hot restart | Cambios en `main.dart` o en `PlayerService` (singleton) |
 | `q` | Quit | Cerrar la app y la sesión de debug |
 
-> 💡 **Title bar por plataforma**: Windows usa la title bar personalizada
-> (oculta la nativa vía `window_manager`). Linux y macOS conservan la title
-> bar nativa del sistema — ocultarla en Linux depende del gestor de ventanas
-> (Mutter, KWin, XFWM…) y es poco fiable, así que ahí solo se dibuja una
-> barra superior con back + configuración.
+> **Title bar por plataforma**: Windows y Linux usan la title bar
+> personalizada (ocultan la nativa vía `window_manager` y dibujan sus propios
+> botones de minimizar/maximizar/cerrar). macOS conserva los traffic lights
+> nativos (oculta solo la barra con `TitleBarStyle.hidden`) y la barra deja
+> espacio para ellos sin dibujar botones propios.
 
-> ⚠️ **`media_kit` + hot restart**: cada `R` crea un `Player` nativo (libmpv)
+> **`media_kit` + hot restart**: cada `R` crea un `Player` nativo (libmpv)
 > nuevo en el mismo proceso. En Windows esto puede crashear la app. Si al
 > pulsar `R` la app se cae o se pierde la conexión, usa `q` y relanza
 > `flutter run -d windows` — es la vía más estable para cambios de servicios.
@@ -125,14 +164,36 @@ Mientras se itera, el ciclo es solo código + recarga en la consola de
 
 ```
 lib/
-├── core/          # Binaries (resolución sidecar) y modelo Track
-├── data/          # Drift: tablas, DB, historial y playlists
-├── services/      # YtDlpService, AudioCacheService y PlayerService
+├── core/              # Binaries (resolución sidecar), Track, letras y utilidades
+│   ├── binaries.dart              # Resolución y descarga automática de sidecars
+│   ├── track.dart                 # Modelo de pista
+│   ├── title_cleaner.dart         # Limpieza de títulos de YouTube
+│   ├── queue_shuffle.dart         # Barajado de la cola
+│   ├── synced_lyrics.dart         # Modelo de letras sincronizadas (LRC)
+│   └── lyrics_search_result.dart  # DTO de resultados de LRCLIB
+├── data/              # Drift: tablas, DB, historial, playlists y favoritos
+├── l10n/              # ARB de idiomas (es, en, pt, pt_BR, ru, ja, ko, zh)
+│   └── generated/     # AppLocalizations generado
+├── services/
+│   ├── ytdlp_service.dart             # Subprocesos yt-dlp (buscar/descargar)
+│   ├── audio_cache_service.dart       # Caché local con LRU y precarga
+│   ├── player_service.dart            # Cola, repeat, shuffle, radio
+│   ├── deezer_service.dart            # Metadatos y portadas vía Deezer
+│   ├── lyrics_service.dart            # Letras sincronizadas (LRCLIB)
+│   ├── scrup_audio_handler.dart       # SMTC / Now Playing / MPRIS
+│   ├── palette_cache_store.dart       # Caché en disco de colores de artwork
+│   ├── playlist_cover_store.dart      # Copia de portadas elegidas por el usuario
+│   ├── settings_store.dart            # Preferencias persistidas de la sesión
+│   └── discord/                       # Rich Presence (IPC + FFI, sin nativas)
 └── ui/
-    ├── app_shell.dart        # Title bar + navegación + player bar
-    ├── playback.dart         # Helper playTrack / playQueue
-    ├── views/                # HomeView, SearchView, PlaylistsView, PlaylistDetail
-    └── widgets/              # CustomTitleBar, PlayerBar, TrackTile
+    ├── app_shell.dart         # Title bar + navegación + player bar + panel de cola
+    ├── playback.dart          # Helpers playTrack / playQueue
+    ├── locale_controller.dart # Cambio de idioma en caliente
+    ├── theme_controller.dart  # Acento dinámico desde el artwork
+    ├── playlist_actions.dart  # Modal "añadir a playlist"
+    ├── views/                 # Home, Search, PlaylistDetail, Lyrics, Settings
+    └── widgets/               # CustomTitleBar, PlayerBar, TrackTile, QueuePanel,
+                               # PlaylistsSidebar, LyricsDisplay, CoverImage, etc.
 tool/
 └── fetch_binaries.sh   # Descarga yt-dlp + ffmpeg + deno por SO
 bin/<plataforma>/       # Binarios sidecar (no versionados)
