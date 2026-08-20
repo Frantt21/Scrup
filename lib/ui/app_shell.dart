@@ -174,9 +174,8 @@ class _AppShellState extends State<AppShell> {
   void _selectPlaylist(Playlist? playlist) {
     setState(() {
       _openPlaylist = playlist;
-      // Abrir una playlist cierra la configuración (y viceversa): solo hay
-      // un contenido "abierto" a la vez además de inicio/búsqueda.
       _showSettings = false;
+      _showLyrics = false;
     });
   }
 
@@ -184,6 +183,7 @@ class _AppShellState extends State<AppShell> {
     setState(() {
       _showSettings = true;
       _openPlaylist = null;
+      _showLyrics = false;
       _settingsOpenCount++;
     });
   }
