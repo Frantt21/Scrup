@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
-import 'dart:ui' as ui show Gradient;
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
@@ -311,26 +309,13 @@ class _PlayerBarState extends State<PlayerBar> {
               Positioned.fill(
                 child: DecoratedBox(decoration: BoxDecoration(color: base)),
               ),
-              // Degradado (barrido del acento del artwork) ENCIMA de la
-              // base, se repinta sin tocar nada más. El barrido usa extremos
-              // transparentes (el tinte base lo pone la capa inferior). La
-              // animación se puede desactivar desde Configuración: el
-              // ValueNotifier del SettingsStore reacciona al instante y se
-              // muestra un degradado estático (congelado en el centro).
+              // Degradado estático del acento del artwork sobre la base.
               Positioned.fill(
-                child: ValueListenableBuilder<bool>(
-                  valueListenable: settings.playerAnimationEnabled,
-                  builder: (context, animated, _) {
+                child: Builder(
+                  builder: (context) {
                     final accent =
                         themeController.accentColor?.withValues(alpha: 0.25) ??
                         theme.colorScheme.primary.withValues(alpha: 0.25);
-                    if (animated) {
-                      return _AnimatedPlayerGradient(
-                        toneA: accent,
-                        toneB: Colors.transparent,
-                      );
-                    }
-                    // Estático: mismo degradado pero sin movimiento.
                     return DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -1126,125 +1111,4 @@ class _EditMetadataDialogState extends State<_EditMetadataDialog> {
   }
 }
 
-/// Degradado animado de dos tonos para el cristal del player: un barrido
-/// sutil del acento sobre el fondo oscuro translúcido, que se mueve
-/// ligeramente. Optimizado: el [CustomPainter] se suscribe al controller vía
-/// `repaint`, así solo se repinta el canvas (sin reconstruir widgets por
-/// frame), y la animación se pausa cuando no hay reproducción.
-class _AnimatedPlayerGradient extends StatefulWidget {
-  /// Tono de acento (color del artwork, o lila por defecto).
-  final Color toneA;
 
-  /// Tono oscuro translúcido base del cristal.
-  final Color toneB;
-
-  const _AnimatedPlayerGradient({required this.toneA, required this.toneB});
-
-  @override
-  State<_AnimatedPlayerGradient> createState() =>
-      _AnimatedPlayerGradientState();
-}
-
-class _AnimatedPlayerGradientState extends State<_AnimatedPlayerGradient> {
-  /// Frecuencia del barrido: ~4fps. El degradado se mueve MUY despacio
-  /// (ciclo de 10s): el pico avanza un par de % del ancho por frame, así que
-  /// 4 frames por segundo se ven idénticos a 60.
-  ///
-  /// No se usa [AnimationController] a propósito: un Ticker activo obliga al
-  /// engine a producir un frame en cada vsync (60fps) aunque la escena no
-  /// cambie visiblemente — era la principal fuente del consumo de CPU/GPU
-  /// durante la reproducción (cada frame además re-evalúa el blur del
-  /// cristal). Un [Timer] solo repinta al avanzar.
-  static const Duration _frameInterval = Duration(milliseconds: 250);
-
-  /// Duración de un ciclo completo del barrido (10s, como antes).
-  static const int _cycleMillis = 10000;
-
-  Timer? _timer;
-
-  /// Fase 0..1 del barrido; el painter la lee vía `repaint` (solo repinta
-  /// cuando este notifier cambia).
-  final ValueNotifier<double> _frame = ValueNotifier<double>(0);
-  StreamSubscription<bool>? _playingSub;
-
-  @override
-  void initState() {
-    super.initState();
-    // Optimización: solo animar mientras hay reproducción (pausado o sin
-    // pista, el degradado queda estático y no consume frames).
-    final player = context.read<PlayerService>();
-    _playingSub = player.playing.listen((playing) {
-      if (playing) {
-        _start();
-      } else {
-        _stop();
-      }
-    });
-    if (player.isPlaying) _start();
-  }
-
-  void _start() {
-    _timer ??= Timer.periodic(_frameInterval, (_) {
-      _frame.value =
-          (_frame.value + _frameInterval.inMilliseconds / _cycleMillis) % 1.0;
-    });
-  }
-
-  void _stop() {
-    _timer?.cancel();
-    _timer = null;
-  }
-
-  @override
-  void dispose() {
-    _playingSub?.cancel();
-    _stop();
-    _frame.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _MovingGradientPainter(
-        toneA: widget.toneA,
-        toneB: widget.toneB,
-        animation: _frame,
-      ),
-    );
-  }
-}
-
-/// Pinta el degradado de dos tonos con el centro del barrido oscilando
-/// lentamente (izquierda ↔ derecha). Repinta solo el canvas (`repaint`).
-class _MovingGradientPainter extends CustomPainter {
-  final Color toneA;
-  final Color toneB;
-  final ValueListenable<double> animation;
-
-  _MovingGradientPainter({
-    required this.toneA,
-    required this.toneB,
-    required this.animation,
-  }) : super(repaint: animation);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Onda suave -1..1 (un ciclo por vuelta): el barrido va y viene.
-    final wave = math.sin(animation.value * 2 * math.pi);
-    // Centro del acento: oscila entre el 15% y el 85% del ancho.
-    final mid = 0.5 + wave * 0.35;
-    final rect = Offset.zero & size;
-    final shader = ui.Gradient.linear(
-      Offset.zero,
-      Offset(size.width, size.height * 0.35),
-      [toneB, toneA, toneB],
-      [0.0, mid, 1.0],
-    );
-    canvas.drawRect(rect, Paint()..shader = shader);
-  }
-
-  @override
-  bool shouldRepaint(_MovingGradientPainter oldDelegate) =>
-      oldDelegate.toneA != toneA || oldDelegate.toneB != toneB;
-}

@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/track.dart';
 import 'tables.dart';
@@ -32,14 +33,14 @@ class Playlist {
   });
 }
 
-@DriftDatabase(tables: [Tracks, History, Playlists, PlaylistTracks])
+@DriftDatabase(tables: [Tracks, History, Playlists, PlaylistTracks, Lyrics])
 class AppDatabase extends _$AppDatabase {
   /// [executor] permite inyectar una base en memoria en los tests.
   AppDatabase({QueryExecutor? executor})
     : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -67,8 +68,112 @@ class AppDatabase extends _$AppDatabase {
         // Playlist especial de Favoritos
         await m.addColumn(playlists, playlists.isFavorites);
       }
+      if (from < 7) {
+        // Tabla de lyrics cacheadas
+        await m.createTable(lyrics);
+        // Migrar lyrics viejas de SharedPreferences a SQLite (una sola vez).
+        await _migrateSharedPrefsLyrics();
+      }
     },
   );
+
+  // -------------------------------------------------------------- lyrics
+  String _lyricsKey(String title, String artist) =>
+      '${title.toLowerCase().trim()}_${artist.toLowerCase().trim()}';
+
+  /// Guarda lyrics (LRC) en la base de datos.
+  Future<void> storeLyrics(
+    String title,
+    String artist,
+    String lrcContent, {
+    required bool notFound,
+  }) async {
+    final key = _lyricsKey(title, artist);
+    await into(lyrics).insertOnConflictUpdate(
+      LyricsCompanion(
+        id: Value(key),
+        lrcContent: Value(lrcContent),
+        isNotFound: Value(notFound),
+        fetchedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Obtiene lyrics almacenadas, o null si no existen.
+  Future<String?> getStoredLrc(String title, String artist) async {
+    final key = _lyricsKey(title, artist);
+    final row = await (select(
+      lyrics,
+    )..where((l) => l.id.equals(key))).getSingleOrNull();
+    if (row == null) return null;
+    if (row.isNotFound) return null;
+    return row.lrcContent.isEmpty ? null : row.lrcContent;
+  }
+
+  /// Marca una canción como "lyrics no encontradas" para evitar búsquedas
+  /// repetidas.
+  Future<void> markLyricsNotFound(String title, String artist) async {
+    final key = _lyricsKey(title, artist);
+    await into(lyrics).insertOnConflictUpdate(
+      LyricsCompanion(
+        id: Value(key),
+        lrcContent: const Value(''),
+        isNotFound: const Value(true),
+        fetchedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Elimina lyrics cacheadas de una canción.
+  Future<void> deleteLyrics(String title, String artist) async {
+    final key = _lyricsKey(title, artist);
+    await (delete(lyrics)..where((l) => l.id.equals(key))).go();
+  }
+
+  /// Migra lyrics de SharedPreferences (formato legacy) a SQLite.
+  /// Se ejecuta una sola vez durante la migración v6→v7 y borra las
+  /// claves viejas de SharedPreferences después de migrarlas.
+  Future<void> _migrateSharedPrefsLyrics() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      for (final prefKey in keys) {
+        if (prefKey.startsWith('scrup_lyrics_nf_')) {
+          // Marca "no encontrado" → migrar como isNotFound=true
+          final songKey = prefKey.replaceFirst('scrup_lyrics_nf_', '');
+          await into(lyrics).insertOnConflictUpdate(
+            LyricsCompanion(
+              id: Value(songKey),
+              lrcContent: const Value(''),
+              isNotFound: const Value(true),
+              fetchedAt: Value(DateTime.now()),
+            ),
+          );
+          await prefs.remove(prefKey);
+          continue;
+        }
+        if (!prefKey.startsWith('scrup_lyrics_')) continue;
+        // Lyrics encontradas → migrar como isNotFound=false
+        final lrcContent = prefs.getString(prefKey);
+        final songKey = prefKey.replaceFirst('scrup_lyrics_', '');
+        if (lrcContent == null || lrcContent.isEmpty) {
+          await prefs.remove(prefKey);
+          continue;
+        }
+        await into(lyrics).insertOnConflictUpdate(
+          LyricsCompanion(
+            id: Value(songKey),
+            lrcContent: Value(lrcContent),
+            isNotFound: const Value(false),
+            fetchedAt: Value(DateTime.now()),
+          ),
+        );
+        await prefs.remove(prefKey);
+      }
+    } catch (_) {
+      // Silencioso: la migración es best-effort.
+    }
+  }
 
   // ---------------------------------------------------------------- cache
   /// Guarda (o actualiza) los metadatos de una pista. Nunca guardamos la URL

@@ -1,29 +1,24 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/lyrics_search_result.dart';
 import '../core/synced_lyrics.dart';
+import '../data/database.dart';
 
 /// Servicio de letras sincronizadas (proveedor: LRCLIB).
 ///
 /// Busca y cachea las letras de una canción: primero en memoria, luego en
-/// disco (shared_preferences) y por último en la API de LRCLIB. También
-/// recuerda qué canciones ya se buscaron sin resultado para no repetir la
-/// llamada de red en cada reproducción.
+/// Drift (SQLite) y por último en la API de LRCLIB. También recuerda qué
+/// canciones ya se buscaron sin resultado para no repetir la llamada de red
+/// en cada reproducción.
 class LyricsService {
-  LyricsService();
+  LyricsService(this._db);
+
+  final AppDatabase _db;
 
   final _cache = <String, SyncedLyrics>{};
   final _notFound = <String>{}; // keys ya buscadas sin resultado (sesión)
-
-  static const _prefLyricsPrefix = 'scrup_lyrics_';
-  static const _prefNotFoundPrefix = 'scrup_lyrics_nf_';
-
-  /// Clave estable para una canción (título + artista normalizados).
-  String _key(String title, String artist) =>
-      '${title.toLowerCase().trim()}_${artist.toLowerCase().trim()}';
 
   /// Busca letras manualmente devolviendo una lista de resultados.
   Future<List<LyricsSearchResult>> searchLyrics(String query) async {
@@ -59,14 +54,15 @@ class LyricsService {
     String lrcContent,
   ) async {
     try {
-      await _storeLyrics(songTitle, artist, lrcContent, notFound: false);
+      await _db.storeLyrics(songTitle, artist, lrcContent, notFound: false);
 
       final lyrics = SyncedLyrics.fromLRC(
         songTitle: songTitle,
         artist: artist,
         lrcContent: lrcContent,
       );
-      _cache[_key(songTitle, artist)] = lyrics;
+      final key = _key(songTitle, artist);
+      _cache[key] = lyrics;
     } catch (_) {
       // Silencioso: guardar lyrics es best-effort.
     }
@@ -80,16 +76,16 @@ class LyricsService {
       if (_cache.containsKey(cacheKey)) return _cache[cacheKey];
       if (_notFound.contains(cacheKey)) return null;
 
-      final stored = await getStoredLyrics(title, artist);
+      // 1) SQLite (getStoredLrc retorna null si isNotFound==true)
+      final stored = await _db.getStoredLrc(title, artist);
       if (stored != null) {
-        _cache[cacheKey] = stored;
-        return stored;
-      }
-
-      final alreadyChecked = await _wasStoredNotFound(title, artist);
-      if (alreadyChecked) {
-        _notFound.add(cacheKey);
-        return null;
+        final lyrics = SyncedLyrics.fromLRC(
+          songTitle: title,
+          artist: artist,
+          lrcContent: stored,
+        );
+        _cache[cacheKey] = lyrics;
+        return lyrics;
       }
 
       // Limpiar título y artista (remaster, "Topic", feats, etc.)
@@ -150,7 +146,7 @@ class LyricsService {
               lrcContent: syncedLyricsRaw,
             );
 
-            await _storeLyrics(title, artist, syncedLyricsRaw, notFound: false);
+            await _db.storeLyrics(title, artist, syncedLyricsRaw, notFound: false);
             _cache[cacheKey] = lyrics;
             return lyrics;
           }
@@ -159,59 +155,10 @@ class LyricsService {
 
       // Sin resultado: marcarlo para no volver a buscar.
       _notFound.add(cacheKey);
-      await _storeLyrics(title, artist, '', notFound: true);
+      await _db.markLyricsNotFound(title, artist);
       return null;
     } catch (e) {
       return null;
-    }
-  }
-
-  /// Obtiene lyrics almacenados localmente (disco).
-  Future<SyncedLyrics?> getStoredLyrics(String title, String artist) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lrc = prefs.getString('$_prefLyricsPrefix${_key(title, artist)}');
-      if (lrc == null || lrc.isEmpty) return null;
-      return SyncedLyrics.fromLRC(
-        songTitle: title,
-        artist: artist,
-        lrcContent: lrc,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<bool> _wasStoredNotFound(String title, String artist) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool(
-            '$_prefNotFoundPrefix${_key(title, artist)}',
-          ) ??
-          false;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<void> _storeLyrics(
-    String title,
-    String artist,
-    String lrcContent, {
-    required bool notFound,
-  }) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = _key(title, artist);
-      if (notFound) {
-        await prefs.setBool('$_prefNotFoundPrefix$key', true);
-        await prefs.remove('$_prefLyricsPrefix$key');
-      } else {
-        await prefs.setString('$_prefLyricsPrefix$key', lrcContent);
-        await prefs.remove('$_prefNotFoundPrefix$key');
-      }
-    } catch (_) {
-      // Silencioso: la persistencia de lyrics es secundaria.
     }
   }
 
@@ -221,13 +168,15 @@ class LyricsService {
       final key = _key(title, artist);
       _cache.remove(key);
       _notFound.remove(key);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('$_prefLyricsPrefix$key');
-      await prefs.remove('$_prefNotFoundPrefix$key');
+      await _db.deleteLyrics(title, artist);
     } catch (_) {
       // Silencioso.
     }
   }
+
+  // ---------------------------------------------------------------- helpers
+  String _key(String title, String artist) =>
+      '${title.toLowerCase().trim()}_${artist.toLowerCase().trim()}';
 
   /// Limpia el título (remaster, remix, feats…).
   String _cleanTitle(String title) {

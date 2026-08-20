@@ -45,6 +45,18 @@ class Playlists extends Table {
   BoolColumn get isFavorites => boolean().withDefault(const Constant(false))();
 }
 
+/// Lyrics cacheadas de una canción (LRC sincronizado).
+@DataClassName('LyricsRow')
+class Lyrics extends Table {
+  TextColumn get id => text()(); // title_artist normalizado
+  TextColumn get lrcContent => text()(); // contenido LRC completo
+  BoolColumn get isNotFound => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get fetchedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// Relación N:M entre playlists y canciones, con posición de orden.
 @DataClassName('PlaylistTrackRow')
 class PlaylistTracks extends Table {

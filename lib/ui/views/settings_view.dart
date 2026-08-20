@@ -27,9 +27,6 @@ class _SettingsViewState extends State<SettingsView> {
   /// Estado de la presencia de Discord (cargado desde el store al abrir).
   bool _discordEnabled = false;
 
-  /// Animación del player activa (cargada desde el store al abrir).
-  bool _playerAnimationEnabled = true;
-
   /// Modo karaoke (sweep palabra por palabra) de los lyrics.
   bool _lyricsSweepEnabled = false;
 
@@ -57,15 +54,13 @@ class _SettingsViewState extends State<SettingsView> {
     _loadPlayerPrefs();
   }
 
-  /// Carga las preferencias del reproductor (animación + karaoke; best-effort).
+  /// Carga las preferencias del reproductor (karaoke; best-effort).
   Future<void> _loadPlayerPrefs() async {
     try {
       final settings = context.read<SettingsStore>();
-      final enabled = await settings.loadPlayerAnimationEnabled();
       final sweep = await settings.loadLyricsSweepEnabled();
       if (!mounted) return;
       setState(() {
-        _playerAnimationEnabled = enabled;
         _lyricsSweepEnabled = sweep;
       });
     } catch (_) {
@@ -400,39 +395,17 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
 
-  /// Reproductor: alterna la animación del degradado de dos tonos del player
-  /// (el ValueNotifier del store hace que el reproductor reaccione al
-  /// instante, sin recargar).
+  /// Lyrics: modo karaoke (sweep palabra por palabra).
   Widget _buildPlayerSection(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
     final settings = context.read<SettingsStore>();
 
     return _SectionCard(
-      icon: Icons.animation_outlined,
-      title: l10n.playerAnimation,
-      caption: l10n.playerAnimationHint,
+      icon: Icons.lyrics_outlined,
+      title: l10n.lyrics,
+      caption: l10n.syncLyricsTitle,
       child: Column(
         children: [
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            // Fondo transparente explícito: el ListTile por defecto advierte
-            // que sus ink splashes pueden ser invisibles sobre el cristal.
-            tileColor: Colors.transparent,
-            title: SizedBox(
-              width: 240,
-              child: Text(
-                l10n.playerAnimationEnabled,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-            ),
-            value: _playerAnimationEnabled,
-            onChanged: (value) async {
-              setState(() => _playerAnimationEnabled = value);
-              await settings.setPlayerAnimationEnabled(value);
-            },
-          ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             tileColor: Colors.transparent,

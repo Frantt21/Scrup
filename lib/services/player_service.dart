@@ -615,6 +615,21 @@ class PlayerService {
     _notifyQueueChanged();
   }
 
+  /// Añade una pista a la cola actual. Si shuffle está activo, se inserta
+  /// en una posición aleatoria (después de la actual); si no, al final.
+  /// Solo tiene efecto si hay una cola activa (reproducción desde una
+  /// playlist). Devuelve `true` si se añadió.
+  bool addToQueue(Track track) {
+    if (_queue.isEmpty) return false;
+    final insertAt = shuffle.value && _queueIndex >= 0
+        ? _queueIndex + 1 + _random.nextInt(_queue.length - _queueIndex)
+        : _queue.length;
+    _queue.insert(insertAt, track);
+    _notifyQueueChanged();
+    _schedulePreloads();
+    return true;
+  }
+
   /// Activa/desactiva el modo radio.
   void toggleRadio() => radio.value = !radio.value;
 

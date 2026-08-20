@@ -133,12 +133,6 @@ Future<void> main() async {
     final saved = await settings.loadLocale();
     if (saved != null) initialLocale = parseStoredLocale(saved);
   } catch (_) {}
-  // Cargar la preferencia de animación del player ANTES de runApp: el
-  // ValueNotifier queda con el valor guardado desde el primer frame (si solo
-  // lo cargara Configuración, el player animaría hasta abrirla).
-  try {
-    await settings.loadPlayerAnimationEnabled();
-  } catch (_) {}
   // Modo shuffle guardado (por defecto: desactivado). Se aplica de forma
   // SÍNCRONA al crear el PlayerService (no vía _restoreSession, que es
   // asíncrono y podría pisar un toggle del usuario en los primeros
@@ -278,7 +272,7 @@ class ScrupApp extends StatelessWidget {
               AudioCacheService(ytdlp: context.read<YtDlpService>()),
         ),
         Provider<DeezerService>(create: (_) => DeezerService()),
-        Provider<LyricsService>(create: (_) => LyricsService()),
+        Provider<LyricsService>(create: (context) => LyricsService(context.read<AppDatabase>())),
         Provider<SettingsStore>(create: (_) => settings),
         Provider<PaletteCacheStore>(create: (_) => paletteCache),
         Provider<ScrupAudioHandler>(create: (_) => audioHandler),

@@ -1506,6 +1506,321 @@ class PlaylistTracksCompanion extends UpdateCompanion<PlaylistTrackRow> {
   }
 }
 
+class $LyricsTable extends Lyrics with TableInfo<$LyricsTable, LyricsRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LyricsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lrcContentMeta = const VerificationMeta(
+    'lrcContent',
+  );
+  @override
+  late final GeneratedColumn<String> lrcContent = GeneratedColumn<String>(
+    'lrc_content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isNotFoundMeta = const VerificationMeta(
+    'isNotFound',
+  );
+  @override
+  late final GeneratedColumn<bool> isNotFound = GeneratedColumn<bool>(
+    'is_not_found',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_not_found" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _fetchedAtMeta = const VerificationMeta(
+    'fetchedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> fetchedAt = GeneratedColumn<DateTime>(
+    'fetched_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, lrcContent, isNotFound, fetchedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'lyrics';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LyricsRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('lrc_content')) {
+      context.handle(
+        _lrcContentMeta,
+        lrcContent.isAcceptableOrUnknown(data['lrc_content']!, _lrcContentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_lrcContentMeta);
+    }
+    if (data.containsKey('is_not_found')) {
+      context.handle(
+        _isNotFoundMeta,
+        isNotFound.isAcceptableOrUnknown(
+          data['is_not_found']!,
+          _isNotFoundMeta,
+        ),
+      );
+    }
+    if (data.containsKey('fetched_at')) {
+      context.handle(
+        _fetchedAtMeta,
+        fetchedAt.isAcceptableOrUnknown(data['fetched_at']!, _fetchedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LyricsRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LyricsRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      lrcContent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}lrc_content'],
+      )!,
+      isNotFound: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_not_found'],
+      )!,
+      fetchedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fetched_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LyricsTable createAlias(String alias) {
+    return $LyricsTable(attachedDatabase, alias);
+  }
+}
+
+class LyricsRow extends DataClass implements Insertable<LyricsRow> {
+  final String id;
+  final String lrcContent;
+  final bool isNotFound;
+  final DateTime fetchedAt;
+  const LyricsRow({
+    required this.id,
+    required this.lrcContent,
+    required this.isNotFound,
+    required this.fetchedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['lrc_content'] = Variable<String>(lrcContent);
+    map['is_not_found'] = Variable<bool>(isNotFound);
+    map['fetched_at'] = Variable<DateTime>(fetchedAt);
+    return map;
+  }
+
+  LyricsCompanion toCompanion(bool nullToAbsent) {
+    return LyricsCompanion(
+      id: Value(id),
+      lrcContent: Value(lrcContent),
+      isNotFound: Value(isNotFound),
+      fetchedAt: Value(fetchedAt),
+    );
+  }
+
+  factory LyricsRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LyricsRow(
+      id: serializer.fromJson<String>(json['id']),
+      lrcContent: serializer.fromJson<String>(json['lrcContent']),
+      isNotFound: serializer.fromJson<bool>(json['isNotFound']),
+      fetchedAt: serializer.fromJson<DateTime>(json['fetchedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'lrcContent': serializer.toJson<String>(lrcContent),
+      'isNotFound': serializer.toJson<bool>(isNotFound),
+      'fetchedAt': serializer.toJson<DateTime>(fetchedAt),
+    };
+  }
+
+  LyricsRow copyWith({
+    String? id,
+    String? lrcContent,
+    bool? isNotFound,
+    DateTime? fetchedAt,
+  }) => LyricsRow(
+    id: id ?? this.id,
+    lrcContent: lrcContent ?? this.lrcContent,
+    isNotFound: isNotFound ?? this.isNotFound,
+    fetchedAt: fetchedAt ?? this.fetchedAt,
+  );
+  LyricsRow copyWithCompanion(LyricsCompanion data) {
+    return LyricsRow(
+      id: data.id.present ? data.id.value : this.id,
+      lrcContent: data.lrcContent.present
+          ? data.lrcContent.value
+          : this.lrcContent,
+      isNotFound: data.isNotFound.present
+          ? data.isNotFound.value
+          : this.isNotFound,
+      fetchedAt: data.fetchedAt.present ? data.fetchedAt.value : this.fetchedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LyricsRow(')
+          ..write('id: $id, ')
+          ..write('lrcContent: $lrcContent, ')
+          ..write('isNotFound: $isNotFound, ')
+          ..write('fetchedAt: $fetchedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, lrcContent, isNotFound, fetchedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LyricsRow &&
+          other.id == this.id &&
+          other.lrcContent == this.lrcContent &&
+          other.isNotFound == this.isNotFound &&
+          other.fetchedAt == this.fetchedAt);
+}
+
+class LyricsCompanion extends UpdateCompanion<LyricsRow> {
+  final Value<String> id;
+  final Value<String> lrcContent;
+  final Value<bool> isNotFound;
+  final Value<DateTime> fetchedAt;
+  final Value<int> rowid;
+  const LyricsCompanion({
+    this.id = const Value.absent(),
+    this.lrcContent = const Value.absent(),
+    this.isNotFound = const Value.absent(),
+    this.fetchedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LyricsCompanion.insert({
+    required String id,
+    required String lrcContent,
+    this.isNotFound = const Value.absent(),
+    this.fetchedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       lrcContent = Value(lrcContent);
+  static Insertable<LyricsRow> custom({
+    Expression<String>? id,
+    Expression<String>? lrcContent,
+    Expression<bool>? isNotFound,
+    Expression<DateTime>? fetchedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (lrcContent != null) 'lrc_content': lrcContent,
+      if (isNotFound != null) 'is_not_found': isNotFound,
+      if (fetchedAt != null) 'fetched_at': fetchedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LyricsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? lrcContent,
+    Value<bool>? isNotFound,
+    Value<DateTime>? fetchedAt,
+    Value<int>? rowid,
+  }) {
+    return LyricsCompanion(
+      id: id ?? this.id,
+      lrcContent: lrcContent ?? this.lrcContent,
+      isNotFound: isNotFound ?? this.isNotFound,
+      fetchedAt: fetchedAt ?? this.fetchedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (lrcContent.present) {
+      map['lrc_content'] = Variable<String>(lrcContent.value);
+    }
+    if (isNotFound.present) {
+      map['is_not_found'] = Variable<bool>(isNotFound.value);
+    }
+    if (fetchedAt.present) {
+      map['fetched_at'] = Variable<DateTime>(fetchedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LyricsCompanion(')
+          ..write('id: $id, ')
+          ..write('lrcContent: $lrcContent, ')
+          ..write('isNotFound: $isNotFound, ')
+          ..write('fetchedAt: $fetchedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1513,6 +1828,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $HistoryTable history = $HistoryTable(this);
   late final $PlaylistsTable playlists = $PlaylistsTable(this);
   late final $PlaylistTracksTable playlistTracks = $PlaylistTracksTable(this);
+  late final $LyricsTable lyrics = $LyricsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1522,6 +1838,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     history,
     playlists,
     playlistTracks,
+    lyrics,
   ];
 }
 
@@ -2963,6 +3280,185 @@ typedef $$PlaylistTracksTableProcessedTableManager =
       PlaylistTrackRow,
       PrefetchHooks Function({bool playlistId, bool trackId})
     >;
+typedef $$LyricsTableCreateCompanionBuilder =
+    LyricsCompanion Function({
+      required String id,
+      required String lrcContent,
+      Value<bool> isNotFound,
+      Value<DateTime> fetchedAt,
+      Value<int> rowid,
+    });
+typedef $$LyricsTableUpdateCompanionBuilder =
+    LyricsCompanion Function({
+      Value<String> id,
+      Value<String> lrcContent,
+      Value<bool> isNotFound,
+      Value<DateTime> fetchedAt,
+      Value<int> rowid,
+    });
+
+class $$LyricsTableFilterComposer
+    extends Composer<_$AppDatabase, $LyricsTable> {
+  $$LyricsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lrcContent => $composableBuilder(
+    column: $table.lrcContent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isNotFound => $composableBuilder(
+    column: $table.isNotFound,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LyricsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LyricsTable> {
+  $$LyricsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lrcContent => $composableBuilder(
+    column: $table.lrcContent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isNotFound => $composableBuilder(
+    column: $table.isNotFound,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LyricsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LyricsTable> {
+  $$LyricsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get lrcContent => $composableBuilder(
+    column: $table.lrcContent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isNotFound => $composableBuilder(
+    column: $table.isNotFound,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get fetchedAt =>
+      $composableBuilder(column: $table.fetchedAt, builder: (column) => column);
+}
+
+class $$LyricsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LyricsTable,
+          LyricsRow,
+          $$LyricsTableFilterComposer,
+          $$LyricsTableOrderingComposer,
+          $$LyricsTableAnnotationComposer,
+          $$LyricsTableCreateCompanionBuilder,
+          $$LyricsTableUpdateCompanionBuilder,
+          (LyricsRow, BaseReferences<_$AppDatabase, $LyricsTable, LyricsRow>),
+          LyricsRow,
+          PrefetchHooks Function()
+        > {
+  $$LyricsTableTableManager(_$AppDatabase db, $LyricsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LyricsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LyricsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LyricsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> lrcContent = const Value.absent(),
+                Value<bool> isNotFound = const Value.absent(),
+                Value<DateTime> fetchedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LyricsCompanion(
+                id: id,
+                lrcContent: lrcContent,
+                isNotFound: isNotFound,
+                fetchedAt: fetchedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String lrcContent,
+                Value<bool> isNotFound = const Value.absent(),
+                Value<DateTime> fetchedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LyricsCompanion.insert(
+                id: id,
+                lrcContent: lrcContent,
+                isNotFound: isNotFound,
+                fetchedAt: fetchedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LyricsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LyricsTable,
+      LyricsRow,
+      $$LyricsTableFilterComposer,
+      $$LyricsTableOrderingComposer,
+      $$LyricsTableAnnotationComposer,
+      $$LyricsTableCreateCompanionBuilder,
+      $$LyricsTableUpdateCompanionBuilder,
+      (LyricsRow, BaseReferences<_$AppDatabase, $LyricsTable, LyricsRow>),
+      LyricsRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2975,4 +3471,6 @@ class $AppDatabaseManager {
       $$PlaylistsTableTableManager(_db, _db.playlists);
   $$PlaylistTracksTableTableManager get playlistTracks =>
       $$PlaylistTracksTableTableManager(_db, _db.playlistTracks);
+  $$LyricsTableTableManager get lyrics =>
+      $$LyricsTableTableManager(_db, _db.lyrics);
 }

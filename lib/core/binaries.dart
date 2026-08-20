@@ -9,8 +9,9 @@ import 'package:path/path.dart' as p;
 ///
 /// Orden de búsqueda:
 /// 1. Variables de entorno `SCRUP_YTDLP_PATH` / `SCRUP_FFMPEG_PATH` (override).
-/// 2. Directorio junto al ejecutable (modo empaquetado).
-/// 3. `bin/<plataforma>/` relativo al directorio de trabajo (desarrollo).
+/// 2. Directorio `<exeDir>/tools/` (modo empaquetado, nuevo).
+/// 3. Directorio junto al ejecutable (legacy).
+/// 4. `bin/<plataforma>/` relativo al directorio de trabajo (desarrollo).
 class BinaryDownloadStatus {
   const BinaryDownloadStatus({
     required this.name,
@@ -78,10 +79,12 @@ class Binaries {
   }
 
   /// Devuelve un par (comando, args) listo para Process.start/run.
-  /// El prefijo del shell (sh -lc / powershell -Command) lo maneja el caller
-  /// para no duplicar la invocación. Si curl está disponible, devuelve el
-  /// comando directamente (sin shell wrapper).
-  static (String, List<String>)? _downloadCommand(String url, String outputPath) {
+  /// Si curl está disponible, devuelve el comando directamente (sin shell
+  /// wrapper). En Windows usa PowerShell como fallback.
+  static (String, List<String>)? _downloadCommand(
+    String url,
+    String outputPath,
+  ) {
     final curl = _which('curl');
     if (curl != null) {
       return (curl, ['-L', '--fail', '--output', outputPath, url]);
@@ -89,9 +92,13 @@ class Binaries {
     if (Platform.isWindows) {
       final powershell = _which('powershell');
       if (powershell != null) {
-        final escaped = outputPath.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+        final escaped = outputPath
+            .replaceAll('\\', '\\\\')
+            .replaceAll('"', '\\"');
         final escapedUrl = url.replaceAll('"', '\\"');
-        final script = 'Invoke-WebRequest -Uri \"$escapedUrl\" -OutFile \"$escaped\"';
+        final script =
+            'Invoke-WebRequest -Uri \\"$escapedUrl\\" '
+            '-OutFile \\"$escaped\\"';
         return (
           powershell,
           ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
@@ -101,16 +108,21 @@ class Binaries {
     return null;
   }
 
-
-
   static void _ensureExecutable(String path) {
     if (Platform.isWindows) return;
     try {
-      Process.runSync('chmod', ['+x', path], environment: Platform.environment);
+      Process.runSync(
+        'chmod',
+        ['+x', path],
+        environment: Platform.environment,
+      );
     } catch (_) {}
   }
 
-  static BinaryDownloadStatus? _parseDownloadStatus(String line, String name) {
+  static BinaryDownloadStatus? _parseDownloadStatus(
+    String line,
+    String name,
+  ) {
     final percentMatch = RegExp(r'(\d{1,3})\s*%').firstMatch(line);
     final speedMatch = RegExp(
       r'(\d+(?:\.\d+)?\s*(?:[KMG]i?B|B)/s)',
@@ -129,9 +141,15 @@ class Binaries {
     List<String> arguments, {
     required String label,
   }) async {
-    final process = await Process.start(executable, arguments, environment: Platform.environment);
+    final process = await Process.start(
+      executable,
+      arguments,
+      environment: Platform.environment,
+    );
     final content = StringBuffer();
-    final progressLines = process.stderr.transform(utf8.decoder).transform(const LineSplitter());
+    final progressLines = process.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter());
 
     await for (final line in progressLines) {
       content.writeln(line);
@@ -183,27 +201,31 @@ class Binaries {
       final unzip = _which('powershell') ?? _which('tar');
       if (unzip == null) return false;
       final extractArgs = [
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
-        'Expand-Archive -LiteralPath "${zip.replaceAll('/', '\\')}" -DestinationPath "${ffmpegDir.replaceAll('/', '\\')}" -Force',
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        'Expand-Archive -LiteralPath '
+            '"${zip.replaceAll('/', '\\')}" '
+            '-DestinationPath '
+            '"${ffmpegDir.replaceAll('/', '\\')}" -Force',
       ];
-      final extract = await _runDownloadWithProgress(unzip, extractArgs, label: 'ffmpeg');
+      final extract = await _runDownloadWithProgress(
+        unzip,
+        extractArgs,
+        label: 'ffmpeg',
+      );
       if (extract.exitCode != 0) {
         debugPrint('[Scrup] ffmpeg unzip failed: ${extract.stderr}');
         return false;
       }
+      // Limpiar el zip después de extraer
       try {
         final zipFile = File(zip);
-        if (zipFile.existsSync()) {
-          await zipFile.delete();
-        }
+        if (zipFile.existsSync()) await zipFile.delete();
       } catch (_) {}
-      final ffmpegExe = p.join(ffmpegDir, 'ffmpeg.exe');
-      if (File(ffmpegExe).existsSync()) return true;
-      final nested = Directory(ffmpegDir).listSync(recursive: true);
-      for (final entry in nested) {
-        if (entry is File && p.basename(entry.path) == 'ffmpeg.exe') return true;
-      }
-      return false;
+      // Verificar que ffmpeg.exe existe (directo o anidado)
+      return _findFfmpegInDir(ffmpegDir) != null;
     }
 
     if (Platform.isLinux || Platform.isMacOS) {
@@ -220,7 +242,16 @@ class Binaries {
       if (tar == null) return false;
       final extract = await _runDownloadWithProgress(
         tar,
-        ['-xJf', tarPath, '-C', ffmpegDir, '--strip-components=1', '--wildcards', '*/ffmpeg', '*/ffprobe'],
+        [
+          '-xJf',
+          tarPath,
+          '-C',
+          ffmpegDir,
+          '--strip-components=1',
+          '--wildcards',
+          '*/ffmpeg',
+          '*/ffprobe',
+        ],
         label: 'ffmpeg',
       );
       if (extract.exitCode != 0) {
@@ -229,9 +260,7 @@ class Binaries {
       }
       try {
         final tarFile = File(tarPath);
-        if (tarFile.existsSync()) {
-          await tarFile.delete();
-        }
+        if (tarFile.existsSync()) await tarFile.delete();
       } catch (_) {}
       final ffmpeg = p.join(ffmpegDir, 'ffmpeg');
       final ffprobe = p.join(ffmpegDir, 'ffprobe');
@@ -242,21 +271,74 @@ class Binaries {
     return false;
   }
 
+  /// Busca recursivamente `ffmpeg.exe` (o `ffmpeg` en Unix) dentro de
+  /// [dir], incluyendo subcarpetas anidadas (el zip de gyan.dev crea
+  /// `ffmpeg-X.Y.Z-essentials_build/bin/ffmpeg.exe`).
+  static String? _findFfmpegInDir(String dir) {
+    try {
+      final ffmpegDir = Directory(dir);
+      if (!ffmpegDir.existsSync()) return null;
+      for (final entry in ffmpegDir.listSync(recursive: true)) {
+        if (entry is File && p.basename(entry.path) == 'ffmpeg$_exeExt') {
+          return entry.path;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Busca ffmpeg.exe en múltiples ubicaciones: junto a searchDir, en
+  /// subcarpetas anidadas del zip, y en la ubicación legacy junto al .exe.
+  static String? _findFfmpeg() {
+    final dir = _searchDir();
+    final exeDir = p.dirname(Platform.resolvedExecutable);
+
+    // 1. <searchDir>/ffmpeg/ffmpeg.exe
+    if (dir != null) {
+      final candidate = p.join(dir, 'ffmpeg', 'ffmpeg$_exeExt');
+      if (File(candidate).existsSync()) return candidate;
+      // 2. <searchDir>/ffmpeg.exe (sin subcarpeta)
+      final flat = p.join(dir, 'ffmpeg$_exeExt');
+      if (File(flat).existsSync()) return flat;
+      // 3. <searchDir>/ffmpeg/**/ffmpeg.exe (zip anidado)
+      final nested = _findFfmpegInDir(p.join(dir, 'ffmpeg'));
+      if (nested != null) return nested;
+    }
+
+    // 4-6. Fallback legacy: junto al .exe (sin carpeta tools)
+    if (dir != exeDir) {
+      final legacyCandidate = p.join(exeDir, 'ffmpeg', 'ffmpeg$_exeExt');
+      if (File(legacyCandidate).existsSync()) return legacyCandidate;
+      final legacyFlat = p.join(exeDir, 'ffmpeg$_exeExt');
+      if (File(legacyFlat).existsSync()) return legacyFlat;
+      final legacyNested = _findFfmpegInDir(p.join(exeDir, 'ffmpeg'));
+      if (legacyNested != null) return legacyNested;
+    }
+
+    return null;
+  }
+
   static Future<bool> ensureSidecarsPresent() async {
     if (_ytdlpPath != null && _ffmpegPath != null) return true;
 
+    // Verificación rápida: buscar en todas las ubicaciones conocidas
+    // antes de decidir descargar. Esto evita la notificación cuando los
+    // binarios ya existen.
+    ytdlpPath;
+    ffmpegPath;
+    if (_ytdlpPath != null && _ffmpegPath != null) return true;
+
     // Determinar el directorio de descarga:
-    // - En builds release/paquetados: junto al .exe (ubicación estable,
-    //   ya revisada por _searchDir). Así se encuentra en lanzamientos
-    //   siguientes aunque CWD cambie.
-    // - En desarrollo: projectRoot/bin/<plataforma> (ya revisado).
+    // - En builds release/paquetados: <exeDir>/tools/
+    // - En desarrollo: projectRoot/bin/<plataforma>
     String downloadDir;
     final root = projectRoot;
     if (root != null) {
       downloadDir = p.join(root, 'bin', _platformDir);
     } else {
       try {
-        downloadDir = p.dirname(Platform.resolvedExecutable);
+        final exeDir = p.dirname(Platform.resolvedExecutable);
+        downloadDir = p.join(exeDir, 'tools');
       } catch (_) {
         downloadDir = Directory.current.path;
       }
@@ -266,16 +348,19 @@ class Binaries {
     final downloadedYtDlp = await _downloadYtDlp(downloadDir);
     final downloadedFfmpeg = await _downloadFfmpeg(downloadDir);
     if (!downloadedYtDlp && !downloadedFfmpeg) {
-      debugPrint('[Scrup] Auto-fetch sidecars skipped: no native download path available.');
+      debugPrint(
+        '[Scrup] Auto-fetch sidecars skipped: '
+        'no native download path available.',
+      );
       return false;
     }
 
-    // Re-buscar los binarios después de descargarlos (ahora existen).
+    // Re-buscar los binarios después de descargarlos.
     _ytdlpPath = null;
     _ffmpegPath = null;
     _denoPath = null;
-    ytdlpPath; // Fuerza la búsqueda para cachearla
-    ffmpegPath; // Fuerza la búsqueda para cachearla
+    ytdlpPath;
+    ffmpegPath;
     return true;
   }
 
@@ -286,9 +371,15 @@ class Binaries {
         env['SCRUP_YTDLP_PATH']!.isNotEmpty) {
       return p.dirname(env['SCRUP_YTDLP_PATH']!);
     }
-    // Modo empaquetado: los binarios van junto al .exe
+    // Modo empaquetado: buscar en <exeDir>/tools/ (nuevo) y
+    // <exeDir>/ (legacy, binarios descargados antes del cambio).
     try {
       final exeDir = p.dirname(Platform.resolvedExecutable);
+      final toolsDir = p.join(exeDir, 'tools');
+      if (File(p.join(toolsDir, 'yt-dlp$_exeExt')).existsSync()) {
+        return toolsDir;
+      }
+      // Fallback legacy: binarios junto al .exe (sin carpeta tools).
       if (File(p.join(exeDir, 'yt-dlp$_exeExt')).existsSync()) {
         return exeDir;
       }
@@ -343,13 +434,11 @@ class Binaries {
       _ffmpegPath = env;
       return _ffmpegPath;
     }
-    final dir = _searchDir();
-    if (dir != null) {
-      final candidate = p.join(dir, 'ffmpeg', 'ffmpeg$_exeExt');
-      if (File(candidate).existsSync()) {
-        _ffmpegPath = candidate;
-        return _ffmpegPath;
-      }
+    // Buscar en múltiples ubicaciones (directo, flat, anidado, legacy).
+    final found = _findFfmpeg();
+    if (found != null) {
+      _ffmpegPath = found;
+      return _ffmpegPath;
     }
     final inPath = _which('ffmpeg');
     if (inPath != null) {

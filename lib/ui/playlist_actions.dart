@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/track.dart';
 import '../data/database.dart';
 import '../l10n/generated/app_localizations.dart';
+import '../services/player_service.dart';
 import 'widgets/cover_image.dart';
 import 'widgets/scrup_toasts.dart';
 
@@ -28,6 +29,12 @@ Future<void> showAddToPlaylistDialog(BuildContext context, Track track) async {
   );
   if (selected == null || !context.mounted) return;
   await db.addToPlaylist(selected, track);
+  // Si la playlist seleccionada es la que se está reproduciendo,
+  // añadir la canción también a la cola del reproductor.
+  final player = context.read<PlayerService>();
+  if (player.activePlaylistId.value == selected) {
+    player.addToQueue(track);
+  }
   showScrupToast(l10n.addedToPlaylist, kind: ScrupToastKind.success);
 }
 
