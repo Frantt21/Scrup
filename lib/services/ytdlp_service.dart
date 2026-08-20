@@ -17,6 +17,43 @@ class YtDlpException implements Exception {
   String toString() => message;
 }
 
+/// Reintenta una operación que puede fallar por un archivo bloqueado
+/// temporalmente (p. ej. Windows Defender escaneando un .exe recién
+/// descargado → ERROR_SHARING_VIOLATION / process_win.cc:577).
+/// 
+/// Si la excepción contiene "sharing violation", "being used by another
+/// process" o "process_win.cc", espera [delay] y reintenta hasta
+/// [maxRetries] veces. Otras excepciones se propagan de inmediato.
+Future<T> _retryOnSharingViolation<T>(
+  Future<T> Function() fn, {
+  int maxRetries = 3,
+  Duration delay = const Duration(seconds: 2),
+}) async {
+  for (var attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt < maxRetries && _isSharingViolation(e)) {
+        debugPrint(
+          '[yt-dlp] Archivo bloqueado (intento ${attempt + 1}/$maxRetries), '
+          'reintentando en ${delay.inSeconds}s...',
+        );
+        await Future<void>.delayed(delay);
+        continue;
+      }
+      rethrow;
+    }
+  }
+  throw StateError('unreachable');
+}
+
+bool _isSharingViolation(Object error) {
+  final msg = error.toString().toLowerCase();
+  return msg.contains('sharing violation') ||
+      msg.contains('being used by another process') ||
+      msg.contains('process_win.cc');
+}
+
 /// Descarga en streaming de yt-dlp en curso: el audio se escribe en un
 /// archivo `.part` que crece mientras se descarga.
 ///
@@ -132,13 +169,15 @@ class YtDlpService {
     }
 
     debugPrint('[yt-dlp] ${args.join(' ')}');
-    final result = await Process.run(
-      ytdlp,
-      args,
-      stdoutEncoding: utf8,
-      stderrEncoding: utf8,
-      environment: _envWithSidecars(),
-    ).timeout(timeout);
+    final result = await _retryOnSharingViolation(
+      () => Process.run(
+        ytdlp,
+        args,
+        stdoutEncoding: utf8,
+        stderrEncoding: utf8,
+        environment: _envWithSidecars(),
+      ).timeout(timeout),
+    );
 
     if (result.exitCode != 0) {
       final err = (result.stderr as String).trim();
@@ -246,10 +285,12 @@ class YtDlpService {
     }
 
     debugPrint('[yt-dlp] stream $videoId');
-    final process = await Process.start(
-      ytdlp,
-      _downloadArgs(videoId, outputDir),
-      environment: _envWithSidecars(),
+    final process = await _retryOnSharingViolation(
+      () => Process.start(
+        ytdlp,
+        _downloadArgs(videoId, outputDir),
+        environment: _envWithSidecars(),
+      ),
     );
 
     final started = DateTime.now();

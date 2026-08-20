@@ -77,41 +77,31 @@ class Binaries {
     return null;
   }
 
-  static String? _downloadCommand(String url, String outputPath) {
+  /// Devuelve un par (comando, args) listo para Process.start/run.
+  /// El prefijo del shell (sh -lc / powershell -Command) lo maneja el caller
+  /// para no duplicar la invocación. Si curl está disponible, devuelve el
+  /// comando directamente (sin shell wrapper).
+  static (String, List<String>)? _downloadCommand(String url, String outputPath) {
     final curl = _which('curl');
     if (curl != null) {
-      return '$curl -L --fail --output "$outputPath" "$url"';
+      return (curl, ['-L', '--fail', '--output', outputPath, url]);
     }
     if (Platform.isWindows) {
       final powershell = _which('powershell');
       if (powershell != null) {
         final escaped = outputPath.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
         final escapedUrl = url.replaceAll('"', '\\"');
-        return '$powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri \"$escapedUrl\" -OutFile \"$escaped\""';
+        final script = 'Invoke-WebRequest -Uri \"$escapedUrl\" -OutFile \"$escaped\"';
+        return (
+          powershell,
+          ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        );
       }
     }
     return null;
   }
 
-  static bool _runSystemDownload(String command) {
-    try {
-      final res = Process.runSync(
-        Platform.isWindows ? 'powershell' : 'sh',
-        Platform.isWindows
-            ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command]
-            : ['-lc', command],
-        environment: Platform.environment,
-      );
-      if (res.exitCode != 0) {
-        debugPrint('[Scrup] system download failed: ${res.stderr}');
-        return false;
-      }
-      return true;
-    } catch (err) {
-      debugPrint('[Scrup] system download exception: $err');
-      return false;
-    }
-  }
+
 
   static void _ensureExecutable(String path) {
     if (Platform.isWindows) return;
@@ -164,11 +154,7 @@ class Binaries {
     final cmd = _downloadCommand(url, target);
     if (cmd == null) return false;
 
-    final exe = Platform.isWindows ? 'powershell' : 'sh';
-    final args = Platform.isWindows
-        ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', cmd]
-        : ['-lc', cmd];
-
+    final (exe, args) = cmd;
     final res = await _runDownloadWithProgress(exe, args, label: 'yt-dlp');
     if (res.exitCode != 0) {
       debugPrint('[Scrup] yt-dlp download failed: ${res.stderr}');
@@ -188,7 +174,8 @@ class Binaries {
       final zip = p.join(dir, 'ffmpeg-release-essentials.zip');
       final cmd = _downloadCommand(url, zip);
       if (cmd == null) return false;
-      final res = await _runSystemDownloadAsync(cmd);
+      final (exe, args) = cmd;
+      final res = await Process.run(exe, args, environment: Platform.environment);
       if (res.exitCode != 0) {
         debugPrint('[Scrup] ffmpeg download failed: ${res.stderr}');
         return false;
@@ -196,10 +183,7 @@ class Binaries {
       final unzip = _which('powershell') ?? _which('tar');
       if (unzip == null) return false;
       final extractArgs = [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
         'Expand-Archive -LiteralPath "${zip.replaceAll('/', '\\')}" -DestinationPath "${ffmpegDir.replaceAll('/', '\\')}" -Force',
       ];
       final extract = await _runDownloadWithProgress(unzip, extractArgs, label: 'ffmpeg');
@@ -226,7 +210,8 @@ class Binaries {
       final tarPath = p.join(dir, 'ffmpeg-static.tar');
       final cmd = _downloadCommand(url, tarPath);
       if (cmd == null) return false;
-      final res = await _runSystemDownloadAsync(cmd);
+      final (exe, args) = cmd;
+      final res = await Process.run(exe, args, environment: Platform.environment);
       if (res.exitCode != 0) {
         debugPrint('[Scrup] ffmpeg download failed: ${res.stderr}');
         return false;
@@ -257,30 +242,29 @@ class Binaries {
     return false;
   }
 
-  static Future<ProcessResult> _runSystemDownloadAsync(String command) async {
-    try {
-      return await Process.run(
-        Platform.isWindows ? 'powershell' : 'sh',
-        Platform.isWindows
-            ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command]
-            : ['-lc', command],
-        environment: Platform.environment,
-      );
-    } catch (err) {
-      debugPrint('[Scrup] system download exception: $err');
-      return ProcessResult(0, 1, '', '$err');
-    }
-  }
-
   static Future<bool> ensureSidecarsPresent() async {
     if (_ytdlpPath != null && _ffmpegPath != null) return true;
 
-    final root = projectRoot ?? Directory.current.path;
-    final binDir = p.join(root, 'bin', _platformDir);
-    await Directory(binDir).create(recursive: true);
+    // Determinar el directorio de descarga:
+    // - En builds release/paquetados: junto al .exe (ubicación estable,
+    //   ya revisada por _searchDir). Así se encuentra en lanzamientos
+    //   siguientes aunque CWD cambie.
+    // - En desarrollo: projectRoot/bin/<plataforma> (ya revisado).
+    String downloadDir;
+    final root = projectRoot;
+    if (root != null) {
+      downloadDir = p.join(root, 'bin', _platformDir);
+    } else {
+      try {
+        downloadDir = p.dirname(Platform.resolvedExecutable);
+      } catch (_) {
+        downloadDir = Directory.current.path;
+      }
+    }
+    await Directory(downloadDir).create(recursive: true);
 
-    final downloadedYtDlp = await _downloadYtDlp(binDir);
-    final downloadedFfmpeg = await _downloadFfmpeg(binDir);
+    final downloadedYtDlp = await _downloadYtDlp(downloadDir);
+    final downloadedFfmpeg = await _downloadFfmpeg(downloadDir);
     if (!downloadedYtDlp && !downloadedFfmpeg) {
       debugPrint('[Scrup] Auto-fetch sidecars skipped: no native download path available.');
       return false;
