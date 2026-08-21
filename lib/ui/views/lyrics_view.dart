@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:provider/provider.dart';
 
 import '../../core/lyrics_search_result.dart';
@@ -30,7 +31,8 @@ class LyricsView extends StatefulWidget {
   State<LyricsView> createState() => _LyricsViewState();
 }
 
-class _LyricsViewState extends State<LyricsView> {
+class _LyricsViewState extends State<LyricsView>
+    with SingleTickerProviderStateMixin {
   Track? _track;
   SyncedLyrics? _lyrics;
 
@@ -40,6 +42,16 @@ class _LyricsViewState extends State<LyricsView> {
   final ValueNotifier<int?> _currentIndex = ValueNotifier<int?>(null);
   final ValueNotifier<Duration> _position = ValueNotifier(Duration.zero);
   final ValueNotifier<Duration> _duration = ValueNotifier(Duration.zero);
+
+  // ── Interpolación de posición para el sweep fluido ──
+  // El stream de posición del player viene throttled a ~250ms; el sweep
+  // karaoke necesita resolución por frame, así que un Ticker extrapola la
+  // posición entre emisiones reales (base + tiempo de pared) y se resincroniza
+  // con cada emisión para no acumular deriva.
+  late final Ticker _smoothingTick;
+  Duration _smoothBasePosition = Duration.zero;
+  DateTime _smoothBaseAt = DateTime.now();
+  bool _playing = false;
 
   /// Desfase de sincronización ajustado por el usuario (se resta a la
   /// posición para el índice y el sweep; el tap-to-seek lo suma).
@@ -52,6 +64,7 @@ class _LyricsViewState extends State<LyricsView> {
   StreamSubscription<Track?>? _trackSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<Duration?>? _durationSub;
+  StreamSubscription<bool>? _playingSub;
 
   /// Contador para descartar búsquedas obsoletas (cambio rápido de canción).
   int _fetchToken = 0;
@@ -77,20 +90,46 @@ class _LyricsViewState extends State<LyricsView> {
     });
     _positionSub = player.position.listen((p) {
       if (!mounted) return;
-      _position.value = p;
-      final lyrics = _lyrics;
-      if (lyrics != null) {
-        final idx = lyrics.getCurrentLineIndex(p - _lyricsOffset);
-        if (idx != _currentIndex.value) _currentIndex.value = idx;
+      // Nueva base de extrapolación (y snap para pausa/seek).
+      _smoothBasePosition = p;
+      _smoothBaseAt = DateTime.now();
+      if (!_playing) _position.value = p;
+      _updateCurrentIndex(p);
+    });
+    _playing = player.isPlaying;
+    _playingSub = player.playing.listen((playing) {
+      if (!mounted) return;
+      _playing = playing;
+      final service = context.read<PlayerService>();
+      if (playing) {
+        _smoothBasePosition = service.positionValue;
+        _smoothBaseAt = DateTime.now();
+        if (!_smoothingTick.isActive) _smoothingTick.start();
+      } else {
+        _smoothingTick.stop();
+        _position.value = service.positionValue;
       }
     });
+    _smoothingTick = createTicker((_) {
+      if (!mounted || !_playing) return;
+      final estimated =
+          _smoothBasePosition + DateTime.now().difference(_smoothBaseAt);
+      _position.value = estimated;
+      _updateCurrentIndex(estimated);
+    });
+    if (_playing) {
+      _smoothBasePosition = player.positionValue;
+      _smoothBaseAt = DateTime.now();
+      _smoothingTick.start();
+    }
     _durationSub = player.duration.listen((d) {
       if (!mounted) return;
       if (d != null) _duration.value = d;
     });
 
-    // Cargar la preferencia de karaoke (best-effort).
+    // Cargar preferencias (best-effort).
     unawaited(_loadSweepPref());
+    unawaited(_loadOffsetPref());
 
     // Buscar las letras de la pista actual al abrir.
     final track = _track;
@@ -109,15 +148,35 @@ class _LyricsViewState extends State<LyricsView> {
     }
   }
 
+  Future<void> _loadOffsetPref() async {
+    try {
+      final offset = await context
+          .read<SettingsStore>()
+          .loadLyricsOffset();
+      if (!mounted) return;
+      setState(() => _lyricsOffset = offset);
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _trackSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
+    _playingSub?.cancel();
+    _smoothingTick.dispose();
     _currentIndex.dispose();
     _position.dispose();
     _duration.dispose();
     super.dispose();
+  }
+
+  /// Recalcula el índice de línea actual para [position].
+  void _updateCurrentIndex(Duration position) {
+    final lyrics = _lyrics;
+    if (lyrics == null) return;
+    final idx = lyrics.getCurrentLineIndex(position - _lyricsOffset);
+    if (idx != _currentIndex.value) _currentIndex.value = idx;
   }
 
   /// Busca las letras de [track] en LRCLIB (con caché en disco/memoria).
@@ -145,13 +204,15 @@ class _LyricsViewState extends State<LyricsView> {
   }
 
   /// Aplica [lyrics] a la pista actual: se muestra al instante y se guarda
-  /// en la caché (disco) para las próximas veces.
-  Future<void> _applyLyrics(SyncedLyrics lyrics) async {
+  /// en la caché (disco) para las próximas veces. [sourceLrc] es el LRC
+  /// original de donde salió [lyrics]: guardarlo tal cual preserva los tags
+  /// word-by-word (`toLRC()` los descartaría).
+  Future<void> _applyLyrics(SyncedLyrics lyrics, {String? sourceLrc}) async {
     final track = _track;
     if (track == null) return;
     await context
         .read<LyricsService>()
-        .saveManualLyrics(track.title, track.artist, lyrics.toLRC());
+        .saveManualLyrics(track.title, track.artist, sourceLrc ?? lyrics.toLRC());
     if (!mounted) return;
     setState(() {
       _lyrics = lyrics;
@@ -185,6 +246,8 @@ class _LyricsViewState extends State<LyricsView> {
       context: context,
       builder: (ctx) => _LyricsSearchDialog(
         initialQuery: '${track.title} ${track.artist}',
+        titleHint: track.title,
+        artistHint: track.artist,
         accentColor: context.read<ThemeController>().accentColor,
       ),
     );
@@ -197,6 +260,7 @@ class _LyricsViewState extends State<LyricsView> {
           artist: track.artist,
           lrcContent: result.syncedLyrics,
         ),
+        sourceLrc: result.syncedLyrics,
       );
     } else if (result.plainLyrics.trim().isNotEmpty) {
       // Letra sin timestamps: se muestra como líneas (el highlight salta).
@@ -231,6 +295,8 @@ class _LyricsViewState extends State<LyricsView> {
           _lyricsOffset = offset;
           _currentIndex.value =
               lyrics.getCurrentLineIndex(_position.value - offset);
+          // Persist offset across app restarts
+          context.read<SettingsStore>().saveLyricsOffset(offset);
         },
       ),
     );
@@ -632,10 +698,17 @@ class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
 /// acciones por resultado (usar / editar la letra con sus timestamps).
 class _LyricsSearchDialog extends StatefulWidget {
   final String initialQuery;
+
+  /// Título/artista reales de la pista en reproducción: KPoe y Unison
+  /// exigen campos separados y con la query libre no encuentran nada.
+  final String? titleHint;
+  final String? artistHint;
   final Color? accentColor;
 
   const _LyricsSearchDialog({
     required this.initialQuery,
+    this.titleHint,
+    this.artistHint,
     this.accentColor,
   });
 
@@ -648,6 +721,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
   bool _searching = false;
   List<LyricsSearchResult> _results = const [];
   String? _error;
+  String _selectedProvider = 'all';
 
   @override
   void initState() {
@@ -670,7 +744,12 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
       _results = const [];
     });
     try {
-      final res = await context.read<LyricsService>().searchLyrics(q);
+      final res = await context.read<LyricsService>().searchLyrics(
+            q,
+            provider: _selectedProvider,
+            titleHint: widget.titleHint,
+            artistHint: widget.artistHint,
+          );
       if (!mounted) return;
       setState(() {
         _results = res;
@@ -740,7 +819,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
               child: TextField(
                 controller: _controller,
                 onSubmitted: _performSearch,
@@ -757,7 +836,10 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         )
-                      : null,
+                      : IconButton(
+                          icon: const Icon(Icons.search, size: 18),
+                          onPressed: () => _performSearch(_controller.text),
+                        ),
                   filled: true,
                   isDense: true,
                   border: OutlineInputBorder(
@@ -767,6 +849,35 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                 ),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Icon(Icons.source, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 8),
+                  Text('Proveedor:', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButton<String>(
+                      value: _selectedProvider,
+                      isDense: true,
+                      underline: const SizedBox(),
+                      style: theme.textTheme.bodySmall,
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('Todos (KPoe + Unison + LRCLIB)')),
+                        DropdownMenuItem(value: 'kpoe', child: Text('KPoe (Word-by-Word)')),
+                        DropdownMenuItem(value: 'unison', child: Text('Unison')),
+                        DropdownMenuItem(value: 'lrclib', child: Text('LRCLIB (Línea)')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) setState(() => _selectedProvider = v);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
             Flexible(
               child: _buildResults(theme, l10n),
             ),

@@ -1,3 +1,9 @@
+/// Adelanto aplicado al calcular la línea actual: la línea se marca como
+/// activa 500ms antes de su timestamp para que el highlight no llegue tarde.
+/// El sweep karaoke debe completar su última palabra antes de este adelanto
+/// (la línea pierde el estado "actual" en nextTs - kCurrentLineAdvance).
+const Duration kCurrentLineAdvance = Duration(milliseconds: 500);
+
 /// Palabra con timestamp propio (formato karaoke <mm:ss.xx> de SyncLRC).
 class KaraokeWord {
   final Duration timestamp;
@@ -136,13 +142,12 @@ class SyncedLyrics {
     return current;
   }
 
-  /// Obtiene el índice de la línea actual. Adelanta 500ms para mejor
-  /// sincronización visual.
+  /// Obtiene el índice de la línea actual. Adelanta [kCurrentLineAdvance]
+  /// para mejor sincronización visual.
   int? getCurrentLineIndex(Duration position) {
     if (lines.isEmpty) return null;
 
-    // Adelantar 500ms para mejor sincronización visual
-    final adjustedPosition = position + const Duration(milliseconds: 500);
+    final adjustedPosition = position + kCurrentLineAdvance;
 
     for (int i = lines.length - 1; i >= 0; i--) {
       if (lines[i].timestamp <= adjustedPosition) {

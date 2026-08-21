@@ -523,7 +523,7 @@ class _SettingsViewState extends State<SettingsView> {
           ),
           const Spacer(),
           Text(
-            '0.1.0',
+            '1.0.0',
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),

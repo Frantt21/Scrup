@@ -145,6 +145,23 @@ class SettingsStore {
     return value;
   }
 
+  // ── Lyrics sync offset ────────────────────────────────────────────
+
+  static const _lyricsOffsetKey = 'lyrics_sync_offset_ms';
+
+  /// Guarda el offset de sincronización de lyrics (en milisegundos).
+  Future<void> saveLyricsOffset(Duration offset) async {
+    final prefs = await _instance;
+    await prefs.setInt(_lyricsOffsetKey, offset.inMilliseconds);
+  }
+
+  /// Carga el offset de sincronización de lyrics (por defecto: 0).
+  Future<Duration> loadLyricsOffset() async {
+    final prefs = await _instance;
+    final ms = prefs.getInt(_lyricsOffsetKey);
+    return ms != null ? Duration(milliseconds: ms) : Duration.zero;
+  }
+
   /// Guarda el modo shuffle activo/desactivado para restaurarlo entre
   /// sesiones.
   Future<void> saveShuffleEnabled(bool enabled) async {
