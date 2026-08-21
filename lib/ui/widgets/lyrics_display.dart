@@ -264,10 +264,21 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                     final di = _mapToDisplayIndex(currentIndex);
                     final isCurrent = index == di;
                     final line = _lines[index];
-                    // Fin de ESTA línea (la siguiente en la lista; para la
-                    // última, la duración total del medio).
-                    final endTime =
-                        index < _lines.length - 1 ? _lines[index + 1].timestamp : _totalDuration;
+                    // Fin real de la línea para el sweep: la siguiente línea
+                    // ORIGINAL (los gaps '•••' son solo visuales y su
+                    // timestamp estimado recortaría el barrido). Solo importa
+                    // para la línea actual, la única que barre.
+                    final originals = widget.lyrics.lines;
+                    final Duration endTime;
+                    if (isCurrent &&
+                        currentIndex != null &&
+                        currentIndex < originals.length - 1) {
+                      endTime = originals[currentIndex + 1].timestamp;
+                    } else if (isCurrent || index >= _lines.length - 1) {
+                      endTime = _totalDuration;
+                    } else {
+                      endTime = _lines[index + 1].timestamp;
+                    }
                     return GestureDetector(
                       onTap: widget.onTap != null
                           ? () => widget.onTap!(line.timestamp)
@@ -394,13 +405,14 @@ class _KaraokeLine extends StatelessWidget {
 
   /// Smooth sweep: computes progress for each word from REAL timestamps,
   /// no TweenAnimationBuilder. The audio position drives everything.
+  ///
+  /// El fin de la última palabra es el timestamp de la línea siguiente SIN
+  /// adelanto: para líneas karaoke el índice cambia de línea de forma
+  /// exacta (ver getCurrentLineIndex), así que la palabra tiene su ventana
+  /// completa y siempre llega a pintarse.
   Widget _buildSweep(TextStyle baseStyle) {
     final words = line.words!;
-    // La línea pierde el estado "actual" en nextTs - kCurrentLineAdvance
-    // (adelanto del índice), así que la última palabra debe completar su
-    // sweep justo ahí; si no, nunca llega a pintarse entera.
-    final lineEndMs =
-        endTime.inMilliseconds - kCurrentLineAdvance.inMilliseconds;
+    final lineEndMs = endTime.inMilliseconds;
 
     return ValueListenableBuilder<Duration>(
       valueListenable: positionNotifier,
@@ -409,6 +421,11 @@ class _KaraokeLine extends StatelessWidget {
 
         final List<Widget> wordWidgets = [];
         for (var i = 0; i < words.length; i++) {
+          // Mismo espaciado que las líneas estáticas: palabra + espacio.
+          // Sin él, la línea activa se ve apretada frente a las demás.
+          final label =
+              words[i].text.trim() + (i < words.length - 1 ? ' ' : '');
+          if (label.trim().isEmpty) continue;
           final wStartMs = words[i].timestamp.inMilliseconds;
           // End of this word = start of next word, or line end for last word
           final wEndMs = i < words.length - 1
@@ -428,7 +445,7 @@ class _KaraokeLine extends StatelessWidget {
 
           wordWidgets.add(
             _KaraokeWord(
-              word: words[i].text,
+              word: label,
               progress: wordProgress.clamp(0.0, 1.0),
               style: baseStyle,
               activeColor: _activeColor,

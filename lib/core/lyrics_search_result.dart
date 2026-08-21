@@ -1,4 +1,4 @@
-/// DTO para resultados de búsqueda de lyrics (LRCLIB).
+/// DTO para resultados de búsqueda de lyrics.
 class LyricsSearchResult {
   final int id;
   final String trackName;
@@ -9,6 +9,10 @@ class LyricsSearchResult {
   final String plainLyrics;
   final String syncedLyrics;
 
+  /// Proveedor del resultado ('KPoe' | 'Unison' | 'LRCLIB'); vacío si se
+  /// desconoce (p. ej. resultados editados a mano).
+  final String provider;
+
   LyricsSearchResult({
     required this.id,
     required this.trackName,
@@ -18,9 +22,13 @@ class LyricsSearchResult {
     required this.synced,
     required this.plainLyrics,
     required this.syncedLyrics,
+    this.provider = '',
   });
 
-  factory LyricsSearchResult.fromJson(Map<String, dynamic> json) {
+  factory LyricsSearchResult.fromJson(
+    Map<String, dynamic> json, {
+    String provider = '',
+  }) {
     return LyricsSearchResult(
       id: json['id'] as int? ?? 0,
       trackName: json['trackName'] as String? ?? 'Unknown',
@@ -32,6 +40,7 @@ class LyricsSearchResult {
           (json['syncedLyrics'] as String).isNotEmpty,
       plainLyrics: json['plainLyrics'] as String? ?? '',
       syncedLyrics: json['syncedLyrics'] as String? ?? '',
+      provider: provider,
     );
   }
 }

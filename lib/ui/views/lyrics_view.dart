@@ -723,6 +723,91 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
   String? _error;
   String _selectedProvider = 'all';
 
+  /// Opciones de proveedor: (valor, etiqueta).
+  static const _providerOptions = <(String, String)>[
+    ('all', 'Todos (KPoe + Unison + LRCLIB)'),
+    ('kpoe', 'KPoe · palabra a palabra'),
+    ('unison', 'Unison'),
+    ('lrclib', 'LRCLIB · línea'),
+  ];
+
+  String _providerLabel(String value) {
+    for (final option in _providerOptions) {
+      if (option.$1 == value) return option.$2;
+    }
+    return value;
+  }
+
+  /// Selector de proveedor con el mismo estilo que los demás dropdowns de
+  /// la app (campo rectangular + showMenu anclado, items full-bleed).
+  Widget _buildProviderSelector(ThemeData theme) {
+    return Builder(
+      builder: (fieldContext) => InkWell(
+        borderRadius: BorderRadius.circular(14),
+        focusColor: Colors.transparent,
+        hoverColor: Colors.white.withValues(alpha: 0.04),
+        onTap: () => _openProviderMenu(fieldContext),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color:
+                theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _providerLabel(_selectedProvider),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: theme.colorScheme.primary,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openProviderMenu(BuildContext fieldContext) async {
+    final box = fieldContext.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(fieldContext).context.findRenderObject()! as RenderBox;
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(
+          box.localToGlobal(Offset.zero, ancestor: overlay),
+          box.localToGlobal(
+            box.size.bottomRight(Offset.zero),
+            ancestor: overlay,
+          ),
+        ),
+        Offset.zero & overlay.size,
+      ),
+      constraints: const BoxConstraints(minWidth: 260, maxHeight: 380),
+      clipBehavior: Clip.antiAlias,
+      items: [
+        for (final option in _providerOptions)
+          PopupMenuItem<String>(value: option.$1, child: Text(option.$2)),
+      ],
+    );
+    if (selected == null || !mounted || selected == _selectedProvider) return;
+    setState(() => _selectedProvider = selected);
+    // Re-buscar con el proveedor recién elegido si ya había consulta.
+    if (_controller.text.trim().isNotEmpty) {
+      _performSearch(_controller.text);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -856,24 +941,8 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                   Icon(Icons.source, size: 16, color: theme.colorScheme.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Text('Proveedor:', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: DropdownButton<String>(
-                      value: _selectedProvider,
-                      isDense: true,
-                      underline: const SizedBox(),
-                      style: theme.textTheme.bodySmall,
-                      items: const [
-                        DropdownMenuItem(value: 'all', child: Text('Todos (KPoe + Unison + LRCLIB)')),
-                        DropdownMenuItem(value: 'kpoe', child: Text('KPoe (Word-by-Word)')),
-                        DropdownMenuItem(value: 'unison', child: Text('Unison')),
-                        DropdownMenuItem(value: 'lrclib', child: Text('LRCLIB (Línea)')),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) setState(() => _selectedProvider = v);
-                      },
-                    ),
-                  ),
+                  const Spacer(),
+                  _buildProviderSelector(theme),
                 ],
               ),
             ),
@@ -935,10 +1004,37 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            title: Text(
-              r.trackName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    r.trackName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (r.provider.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      r.provider,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
             subtitle: Text(
               r.artistName,

@@ -97,6 +97,7 @@ class LyricsService {
                   synced: true,
                   syncedLyrics: lrcLines.join('\n'),
                   plainLyrics: plainLines.join('\n'),
+                  provider: 'KPoe',
                 ));
                 break outerKpoe;
               }
@@ -111,46 +112,17 @@ class LyricsService {
 
     // Try Unison
     if (wantUnison) {
+      // 1) Lookup exacto song+artist con los candidatos (preciso).
+      LyricsSearchResult? unison;
       final candidates = _searchCandidates(query, titleHint, artistHint);
-      outerUnison:
       for (final cand in candidates) {
-        try {
-          final uri = Uri.parse('https://unison.boidu.dev/lyrics').replace(
-            queryParameters: {'song': cand.$1, 'artist': cand.$2},
-          );
-          final response = await http
-              .get(uri)
-              .timeout(const Duration(seconds: 8));
-          if (response.statusCode == 200) {
-            final data = json.decode(response.body) as Map<String, dynamic>;
-            if (data['success'] == true && data['data'] != null) {
-              final lyricsData = data['data'] as Map<String, dynamic>;
-              final lyricsText = lyricsData['lyrics'] as String?;
-              if (lyricsText != null && lyricsText.isNotEmpty) {
-                // Gate: descarta respuestas (p. ej. TTML) que no parseen
-                // como LRC; si no, llegarían resultados vacíos a la UI.
-                final parsed = SyncedLyrics.fromLRC(
-                  songTitle: cand.$1,
-                  artist: cand.$2,
-                  lrcContent: lyricsText,
-                );
-                if (parsed.lines.isEmpty) continue outerUnison;
-                results.add(LyricsSearchResult(
-                  id: 0,
-                  trackName: (lyricsData['song'] as String?) ?? cand.$1,
-                  artistName: (lyricsData['artist'] as String?) ?? cand.$2,
-                  albumName: '',
-                  duration: 0.0,
-                  synced: true,
-                  syncedLyrics: lyricsText,
-                  plainLyrics: parsed.lines.map((l) => l.text).join('\n'),
-                ));
-                break outerUnison;
-              }
-            }
-          }
-        } catch (_) {}
+        unison = await _unisonExactLookup(cand.$1, cand.$2);
+        if (unison != null) break;
       }
+      // 2) Fallback: búsqueda full-text (acepta la query libre) y
+      //    descarga del cuerpo de los mejores candidatos por id.
+      unison ??= await _unisonSearchLookup(query);
+      if (unison != null) results.add(unison);
     }
 
     // Try LRCLIB (line-by-line)
@@ -167,7 +139,10 @@ class LyricsService {
         if (response.statusCode == 200) {
           final List lrclibResults = json.decode(response.body);
           for (final e in lrclibResults) {
-            results.add(LyricsSearchResult.fromJson(e as Map<String, dynamic>));
+            results.add(LyricsSearchResult.fromJson(
+              e as Map<String, dynamic>,
+              provider: 'LRCLIB',
+            ));
           }
         }
       } catch (_) {}
@@ -434,15 +409,34 @@ class LyricsService {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
-        if (data['success'] == true && data['data'] != null) {
-          final result = _parseUnisonResponse(data['data'], originalTitle, originalArtist);
-          if (result != null && result.lines.isNotEmpty) {
-            await _db.storeLyrics(
-              originalTitle, originalArtist,
-              result.toLRC(),
-              notFound: false,
-            );
-            return result;
+        if (data['success'] == true && data['data'] is Map) {
+          final record = data['data'] as Map<String, dynamic>;
+          final lyricsText = record['lyrics'] as String?;
+          if (lyricsText != null && lyricsText.isNotEmpty) {
+            final format =
+                ((record['format'] as String?) ?? '').toLowerCase();
+            final parsed = format == 'ttml'
+                ? SyncedLyrics.fromTtml(
+                    songTitle: originalTitle,
+                    artist: originalArtist,
+                    ttmlContent: lyricsText,
+                  )
+                : SyncedLyrics.fromLRC(
+                    songTitle: originalTitle,
+                    artist: originalArtist,
+                    lrcContent: lyricsText,
+                  );
+            if (parsed.lines.isNotEmpty) {
+              // JSON karaoke si hay palabras; LRC de línea si no.
+              final hasWords = parsed.lines.any((l) => l.hasWords);
+              await _db.storeLyrics(
+                originalTitle,
+                originalArtist,
+                hasWords ? _syncedLyricsToJson(parsed) : parsed.toLRC(),
+                notFound: false,
+              );
+              return parsed;
+            }
           }
         }
       }
@@ -450,30 +444,115 @@ class LyricsService {
     return null;
   }
 
-  SyncedLyrics? _parseUnisonResponse(
-    Map<String, dynamic> data,
-    String title,
+  // ── Unison: helpers de búsqueda manual ──────────────────────────────
+
+  /// Lookup exacto por song+artist (devuelve el registro completo).
+  Future<LyricsSearchResult?> _unisonExactLookup(
+    String song,
     String artist,
-  ) {
+  ) async {
     try {
-      final format = (data['format'] as String?)?.toLowerCase() ?? '';
-      final lyricsText = data['lyrics'] as String?;
-      if (lyricsText == null || lyricsText.isEmpty) return null;
-
-      // If TTML format, try to parse it (Apple Music word-by-word)
-      if (format == 'ttml') {
-        // For now, fall through to LRC parsing
-      }
-
-      // Parse as LRC (works for both 'lrc' format and plain LRC in text)
-      return SyncedLyrics.fromLRC(
-        songTitle: title,
-        artist: artist,
-        lrcContent: lyricsText,
+      final uri = Uri.parse('https://unison.boidu.dev/lyrics').replace(
+        queryParameters: {'song': song, 'artist': artist},
       );
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return null;
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      if (data['success'] != true || data['data'] is! Map) return null;
+      return _unisonRecordToResult(data['data'] as Map<String, dynamic>);
     } catch (_) {
       return null;
     }
+  }
+
+  /// Búsqueda full-text (`/lyrics/search?q=`): devuelve candidatos con
+  /// score pero SIN cuerpo de lyrics; se descarga el cuerpo de los mejores
+  /// por id hasta encontrar uno parseable.
+  Future<LyricsSearchResult?> _unisonSearchLookup(String query) async {
+    try {
+      final uri = Uri.parse('https://unison.boidu.dev/lyrics/search').replace(
+        queryParameters: {'q': query, 'limit': '3'},
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return null;
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      if (data['success'] != true || data['data'] is! List) return null;
+      for (final entry in (data['data'] as List).take(3)) {
+        if (entry is! Map) continue;
+        final id = entry['id'];
+        if (id == null) continue;
+        try {
+          final recUri = Uri.parse('https://unison.boidu.dev/lyrics/$id');
+          final recResponse =
+              await http.get(recUri).timeout(const Duration(seconds: 8));
+          if (recResponse.statusCode != 200) continue;
+          final recData = json.decode(recResponse.body) as Map<String, dynamic>;
+          if (recData['success'] != true || recData['data'] is! Map) continue;
+          final result =
+              _unisonRecordToResult(recData['data'] as Map<String, dynamic>);
+          if (result != null) return result;
+        } catch (_) {
+          continue;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Convierte el `data` de un registro Unison (formato ttml | lrc | plain)
+  /// en un resultado de búsqueda; null si no hay nada útil. El LRC se
+  /// re-serializa con tags de palabra para preservar el modo karaoke.
+  LyricsSearchResult? _unisonRecordToResult(Map<String, dynamic> record) {
+    final lyricsText = record['lyrics'] as String?;
+    if (lyricsText == null || lyricsText.isEmpty) return null;
+    final format = ((record['format'] as String?) ?? '').toLowerCase();
+    final song = (record['song'] as String?) ?? '';
+    final artist = (record['artist'] as String?) ?? '';
+
+    final SyncedLyrics parsed;
+    if (format == 'ttml') {
+      parsed = SyncedLyrics.fromTtml(
+        songTitle: song,
+        artist: artist,
+        ttmlContent: lyricsText,
+      );
+    } else {
+      parsed = SyncedLyrics.fromLRC(
+        songTitle: song,
+        artist: artist,
+        lrcContent: lyricsText,
+      );
+    }
+
+    if (parsed.lines.isEmpty) {
+      // Texto plano sin timestamps: útil como letra sin sincronizar.
+      if (format == 'plain') {
+        return LyricsSearchResult(
+          id: (record['id'] as num?)?.toInt() ?? 0,
+          trackName: song,
+          artistName: artist,
+          albumName: (record['album'] as String?) ?? '',
+          duration: (record['duration'] as num?)?.toDouble() ?? 0.0,
+          synced: false,
+          syncedLyrics: '',
+          plainLyrics: lyricsText,
+          provider: 'Unison',
+        );
+      }
+      return null;
+    }
+
+    return LyricsSearchResult(
+      id: (record['id'] as num?)?.toInt() ?? 0,
+      trackName: song,
+      artistName: artist,
+      albumName: (record['album'] as String?) ?? '',
+      duration: (record['duration'] as num?)?.toDouble() ?? 0.0,
+      synced: format != 'plain',
+      syncedLyrics: parsed.toKaraokeLrc(),
+      plainLyrics: parsed.lines.map((l) => l.text).join('\n'),
+      provider: 'Unison',
+    );
   }
 
   // ── LRCLIB API (line-by-line fallback) ─────────────────────────────
