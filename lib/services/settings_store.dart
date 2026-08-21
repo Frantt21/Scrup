@@ -145,20 +145,69 @@ class SettingsStore {
     return value;
   }
 
-  // ── Lyrics sync offset ────────────────────────────────────────────
+  // ── Omitir silencios ──────────────────────────────────────────────
 
-  static const _lyricsOffsetKey = 'lyrics_sync_offset_ms';
+  static const _skipSilenceKey = 'player.skip_silence';
 
-  /// Guarda el offset de sincronización de lyrics (en milisegundos).
-  Future<void> saveLyricsOffset(Duration offset) async {
+  /// Preferencia en memoria de "omitir silencios": un [ValueNotifier] para
+  /// que el SilenceSkipService reaccione al instante (el valor también se
+  /// persiste entre sesiones). Por defecto ACTIVA.
+  final ValueNotifier<bool> skipSilenceEnabled = ValueNotifier(true);
+
+  Future<void> setSkipSilenceEnabled(bool enabled) async {
+    skipSilenceEnabled.value = enabled;
     final prefs = await _instance;
-    await prefs.setInt(_lyricsOffsetKey, offset.inMilliseconds);
+    await prefs.setBool(_skipSilenceKey, enabled);
   }
 
-  /// Carga el offset de sincronización de lyrics (por defecto: 0).
-  Future<Duration> loadLyricsOffset() async {
+  Future<bool> loadSkipSilenceEnabled() async {
     final prefs = await _instance;
-    final ms = prefs.getInt(_lyricsOffsetKey);
+    final saved = prefs.getBool(_skipSilenceKey);
+    final value = saved ?? true;
+    skipSilenceEnabled.value = value;
+    return value;
+  }
+
+  // ── Lyrics sync offset ────────────────────────────────────────────
+
+  /// Offsets POR PISTA: `{trackId: ms}` en una sola clave JSON. Cada canción
+  /// recuerda su propio ajuste de sincronía (cambiar la fuente de la letra o
+  /// re-buscarla NO lo pierde). Sin ajuste propio el offset es cero: el
+  /// global legacy (`lyrics_sync_offset_ms`) NUNCA se aplica como fallback
+  /// (era un ajuste de UNA canción y contaminaba a todas las demás).
+  static const _lyricsOffsetsKey = 'lyrics_offsets_v1';
+
+  Map<String, int> _decodeOffsets(String? raw) {
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        return decoded.map(
+          (k, v) => MapEntry(k.toString(), v is int ? v : 0),
+        )..removeWhere((_, v) => v == 0);
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  /// Guarda el offset de sincronización de UNA pista. Cero lo elimina del
+  /// mapa (sin entradas huérfanas).
+  Future<void> saveLyricsOffsetFor(String trackId, Duration offset) async {
+    final prefs = await _instance;
+    final map = _decodeOffsets(prefs.getString(_lyricsOffsetsKey));
+    if (offset == Duration.zero) {
+      map.remove(trackId);
+    } else {
+      map[trackId] = offset.inMilliseconds;
+    }
+    await prefs.setString(_lyricsOffsetsKey, jsonEncode(map));
+  }
+
+  /// Carga el offset de sincronización de UNA pista (cero si nunca se
+  /// ajustó esa canción).
+  Future<Duration> loadLyricsOffsetFor(String trackId) async {
+    final prefs = await _instance;
+    final ms = _decodeOffsets(prefs.getString(_lyricsOffsetsKey))[trackId];
     return ms != null ? Duration(milliseconds: ms) : Duration.zero;
   }
 

@@ -131,6 +131,8 @@
   "done": "완료",
   "karaokeSweepOn": "노래방: 켜짐",
   "karaokeSweepOff": "노래방: 꺼짐",
+  "skipSilence": "무음 건너뛰기",
+  "skipSilenceHint": "재생 중 음악이 없는 무음 구간을 자동으로 건너뜁니다",
   "syncLyricsTitle": "가사 동기화",
   "syncCurrent": "현재",
   "lyricsSearchNoResults": "결과를 찾을 수 없습니다",

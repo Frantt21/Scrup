@@ -21,6 +21,7 @@ import 'services/palette_cache_store.dart';
 import 'services/player_service.dart';
 import 'services/scrup_audio_handler.dart';
 import 'services/settings_store.dart';
+import 'services/silence_skip_service.dart';
 import 'services/ytdlp_service.dart';
 import 'ui/app_shell.dart';
 import 'ui/locale_controller.dart';
@@ -98,14 +99,13 @@ Future<void> main() async {
         : null,
   );
   windowManager.waitUntilReadyToShow(windowOptions, () async {
-    if (Platform.isWindows) {
-      await windowManager.maximize();
-    } else {
-      try {
-        await windowManager.maximize();
-      } catch (_) {}
-    }
+    // setResizable ANTES de maximize: en Windows, tocar el estilo de la
+    // ventana (WS_THICKFRAME) DESPUÉS de maximizar puede restaurarla a modo
+    // ventana (la app arrancaba maximizada y "saltaba" a ventana).
     await windowManager.setResizable(true);
+    try {
+      await windowManager.maximize();
+    } catch (_) {}
     await windowManager.show();
     await windowManager.focus();
   });
@@ -152,6 +152,11 @@ Future<void> main() async {
     if (saved != null) {
       initialRepeatMode = LoopMode.values.asNameMap()[saved] ?? LoopMode.off;
     }
+  } catch (_) {}
+  // Preferencia de omitir silencios: cargarla ANTES de crear los providers
+  // para que el SilenceSkipService arranque con el valor guardado.
+  try {
+    await settings.loadSkipSilenceEnabled();
   } catch (_) {}
 
   runApp(
@@ -273,6 +278,14 @@ class ScrupApp extends StatelessWidget {
         ),
         Provider<DeezerService>(create: (_) => DeezerService()),
         Provider<LyricsService>(create: (context) => LyricsService(context.read<AppDatabase>())),
+        Provider<SilenceSkipService>(
+          create: (context) => SilenceSkipService(
+            context.read<PlayerService>(),
+            context.read<AudioCacheService>(),
+            context.read<SettingsStore>(),
+          ),
+          dispose: (_, service) => service.dispose(),
+        ),
         Provider<SettingsStore>(create: (_) => settings),
         Provider<PaletteCacheStore>(create: (_) => paletteCache),
         Provider<ScrupAudioHandler>(create: (_) => audioHandler),

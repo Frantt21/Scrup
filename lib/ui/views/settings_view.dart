@@ -30,6 +30,9 @@ class _SettingsViewState extends State<SettingsView> {
   /// Modo karaoke (sweep palabra por palabra) de los lyrics.
   bool _lyricsSweepEnabled = false;
 
+  /// Omitir silencios (saltar huecos sin música automáticamente).
+  bool _skipSilenceEnabled = true;
+
   /// Idiomas soportados: el nombre se muestra en el propio idioma (cada
   /// usuario lo reconoce aunque aún no lea la interfaz).
   ///
@@ -54,14 +57,17 @@ class _SettingsViewState extends State<SettingsView> {
     _loadPlayerPrefs();
   }
 
-  /// Carga las preferencias del reproductor (karaoke; best-effort).
+  /// Carga las preferencias del reproductor (karaoke + omitir silencios;
+  /// best-effort).
   Future<void> _loadPlayerPrefs() async {
     try {
       final settings = context.read<SettingsStore>();
       final sweep = await settings.loadLyricsSweepEnabled();
+      final skipSilence = await settings.loadSkipSilenceEnabled();
       if (!mounted) return;
       setState(() {
         _lyricsSweepEnabled = sweep;
+        _skipSilenceEnabled = skipSilence;
       });
     } catch (_) {
       // La configuración nunca debe romper la vista.
@@ -428,6 +434,30 @@ class _SettingsViewState extends State<SettingsView> {
             onChanged: (value) async {
               setState(() => _lyricsSweepEnabled = value);
               await settings.setLyricsSweepEnabled(value);
+            },
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            tileColor: Colors.transparent,
+            title: SizedBox(
+              width: 240,
+              child: Text(
+                l10n.skipSilence,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+            subtitle: Text(
+              l10n.skipSilenceHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            value: _skipSilenceEnabled,
+            onChanged: (value) async {
+              setState(() => _skipSilenceEnabled = value);
+              await settings.setSkipSilenceEnabled(value);
             },
           ),
         ],

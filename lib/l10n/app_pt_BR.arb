@@ -131,6 +131,8 @@
   "done": "Concluído",
   "karaokeSweepOn": "Karaokê: ativo",
   "karaokeSweepOff": "Karaokê: inativo",
+  "skipSilence": "Pular silêncios",
+  "skipSilenceHint": "Avança automaticamente as partes sem música durante a reprodução",
   "syncLyricsTitle": "Sincronização da letra",
   "syncCurrent": "Atual",
   "lyricsSearchNoResults": "Nenhum resultado encontrado",

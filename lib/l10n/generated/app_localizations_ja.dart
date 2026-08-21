@@ -437,6 +437,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get karaokeSweepOff => 'カラオケ: オフ';
 
   @override
+  String get skipSilence => '無音をスキップ';
+
+  @override
+  String get skipSilenceHint => '再生中に音楽のない無音部分を自動的にスキップします';
+
+  @override
   String get syncLyricsTitle => '歌詞の同期';
 
   @override

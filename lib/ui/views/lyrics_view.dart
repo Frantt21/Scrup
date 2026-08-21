@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:provider/provider.dart';
 
 import '../../core/lyrics_search_result.dart';
@@ -84,6 +85,9 @@ class _LyricsViewState extends State<LyricsView>
         _lyricsOffset = Duration.zero;
         _currentIndex.value = null;
       });
+      // El offset es POR PISTA: cargar el ajuste guardado de esta canción
+      // (cambiar de pista o de fuente de letra no lo pierde).
+      unawaited(_loadTrackOffset(t));
       _fetchLyrics(t);
     });
     _positionSub = player.position.listen((p) {
@@ -127,7 +131,7 @@ class _LyricsViewState extends State<LyricsView>
 
     // Cargar preferencias (best-effort).
     unawaited(_loadSweepPref());
-    unawaited(_loadOffsetPref());
+    unawaited(_loadTrackOffset(_track));
 
     // Buscar las letras de la pista actual al abrir.
     final track = _track;
@@ -146,13 +150,17 @@ class _LyricsViewState extends State<LyricsView>
     }
   }
 
-  Future<void> _loadOffsetPref() async {
+  /// Carga el offset POR PISTA y lo aplica si la pista sigue siendo la
+  /// actual (una respuesta tardía no pisa el offset de otra canción).
+  Future<void> _loadTrackOffset(Track? track) async {
+    if (track == null) return;
     try {
       final offset = await context
           .read<SettingsStore>()
-          .loadLyricsOffset();
-      if (!mounted) return;
+          .loadLyricsOffsetFor(track.id);
+      if (!mounted || _track?.id != track.id) return;
       setState(() => _lyricsOffset = offset);
+      _updateCurrentIndex(_position.value);
     } catch (_) {}
   }
 
@@ -214,7 +222,8 @@ class _LyricsViewState extends State<LyricsView>
     if (!mounted) return;
     setState(() {
       _lyrics = lyrics;
-      _lyricsOffset = Duration.zero;
+      // El offset por pista se CONSERVA: cambiar la fuente de la letra no
+      // debe perder la sincronización que el usuario ya ajustó.
       _currentIndex.value =
           lyrics.getCurrentLineIndex(_position.value - _lyricsOffset);
     });
@@ -293,8 +302,13 @@ class _LyricsViewState extends State<LyricsView>
           _lyricsOffset = offset;
           _currentIndex.value =
               lyrics.getCurrentLineIndex(_position.value - offset);
-          // Persist offset across app restarts
-          context.read<SettingsStore>().saveLyricsOffset(offset);
+          // Persistir POR PISTA: cada canción recuerda su propio ajuste.
+          final track = _track;
+          if (track != null) {
+            context
+                .read<SettingsStore>()
+                .saveLyricsOffsetFor(track.id, offset);
+          }
         },
       ),
     );
@@ -528,15 +542,44 @@ class _LyricsSyncDialog extends StatefulWidget {
 
 class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
   late Duration _offset;
+  late final TextEditingController _offsetCtrl;
+  final FocusNode _offsetFocus = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _offset = widget.offset;
+    _offsetCtrl = TextEditingController(text: '${_offset.inMilliseconds}');
+    // Al salir del campo: normalizar/clamp el valor tecleado.
+    _offsetFocus.addListener(() {
+      if (!_offsetFocus.hasFocus) _applyTyped(_offsetCtrl.text);
+    });
+  }
+
+  @override
+  void dispose() {
+    _offsetCtrl.dispose();
+    _offsetFocus.dispose();
+    super.dispose();
   }
 
   void _adjust(int ms) {
     setState(() => _offset += Duration(milliseconds: ms));
+    _offsetCtrl.text = '${_offset.inMilliseconds}';
+    widget.onOffsetChanged(_offset);
+  }
+
+  /// Aplica el valor tecleado en el campo numérico (clamp ±30s). Si no es
+  /// un número válido, restaura el texto al offset vigente.
+  void _applyTyped(String value) {
+    final parsed = int.tryParse(value.trim());
+    if (parsed == null) {
+      _offsetCtrl.text = '${_offset.inMilliseconds}';
+      return;
+    }
+    final clamped = parsed.clamp(-30000, 30000);
+    setState(() => _offset = Duration(milliseconds: clamped));
+    _offsetCtrl.text = '$clamped';
     widget.onOffsetChanged(_offset);
   }
 
@@ -642,7 +685,8 @@ class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  // Offset actual.
+                  // Offset actual: campo EDITABLE (se puede teclear el
+                  // valor exacto en ms, además de los botones ±).
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -652,11 +696,57 @@ class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      Text(
-                        '${_offset.inMilliseconds}ms',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: accent,
-                          fontWeight: FontWeight.bold,
+                      SizedBox(
+                        width: 104,
+                        child: TextField(
+                          controller: _offsetCtrl,
+                          focusNode: _offsetFocus,
+                          textAlign: TextAlign.center,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'-?\d{0,6}'),
+                            ),
+                          ],
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: accent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            suffixText: 'ms',
+                            suffixStyle: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                color: theme.colorScheme.outline
+                                    .withValues(alpha: 0.35),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: accent),
+                            ),
+                          ),
+                          onSubmitted: _applyTyped,
+                          onChanged: (v) {
+                            // Aplicar en vivo solo si lo tecleado es un
+                            // número completo (evita saltos al borrar).
+                            final parsed = int.tryParse(v.trim());
+                            if (parsed != null && v.trim().isNotEmpty) {
+                              final clamped = parsed.clamp(-30000, 30000);
+                              _offset = Duration(milliseconds: clamped);
+                              widget.onOffsetChanged(_offset);
+                            }
+                          },
+                          onEditingComplete: () =>
+                              FocusScope.of(context).unfocus(),
                         ),
                       ),
                     ],

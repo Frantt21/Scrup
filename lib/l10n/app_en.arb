@@ -224,6 +224,8 @@
   "done": "Done",
   "karaokeSweepOn": "Karaoke: on",
   "karaokeSweepOff": "Karaoke: off",
+  "skipSilence": "Skip silence",
+  "skipSilenceHint": "Automatically jumps over silent gaps during playback",
   "syncLyricsTitle": "Lyrics sync",
   "syncCurrent": "Current",
   "lyricsSearchNoResults": "No results found",

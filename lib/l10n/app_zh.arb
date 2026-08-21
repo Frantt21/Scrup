@@ -131,6 +131,8 @@
   "done": "完成",
   "karaokeSweepOn": "卡拉OK：开启",
   "karaokeSweepOff": "卡拉OK：关闭",
+  "skipSilence": "跳过静音",
+  "skipSilenceHint": "播放时自动跳过没有音乐的静音片段",
   "syncLyricsTitle": "歌词同步",
   "syncCurrent": "当前",
   "lyricsSearchNoResults": "未找到结果",

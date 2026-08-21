@@ -446,6 +446,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get karaokeSweepOff => 'Karaoke: inativo';
 
   @override
+  String get skipSilence => 'Ignorar silêncios';
+
+  @override
+  String get skipSilenceHint =>
+      'Avança automaticamente as partes sem música durante a reprodução';
+
+  @override
   String get syncLyricsTitle => 'Sincronização da letra';
 
   @override
@@ -913,6 +920,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get karaokeSweepOff => 'Karaokê: inativo';
+
+  @override
+  String get skipSilence => 'Pular silêncios';
+
+  @override
+  String get skipSilenceHint =>
+      'Avança automaticamente as partes sem música durante a reprodução';
 
   @override
   String get syncLyricsTitle => 'Sincronização da letra';

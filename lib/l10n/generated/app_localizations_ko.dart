@@ -437,6 +437,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get karaokeSweepOff => '노래방: 꺼짐';
 
   @override
+  String get skipSilence => '무음 건너뛰기';
+
+  @override
+  String get skipSilenceHint => '재생 중 음악이 없는 무음 구간을 자동으로 건너뜁니다';
+
+  @override
   String get syncLyricsTitle => '가사 동기화';
 
   @override

@@ -895,6 +895,18 @@ abstract class AppLocalizations {
   /// **'Karaoke: inactivo'**
   String get karaokeSweepOff;
 
+  /// No description provided for @skipSilence.
+  ///
+  /// In es, this message translates to:
+  /// **'Omitir silencios'**
+  String get skipSilence;
+
+  /// No description provided for @skipSilenceHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Salta automáticamente los huecos sin música durante la reproducción'**
+  String get skipSilenceHint;
+
   /// No description provided for @syncLyricsTitle.
   ///
   /// In es, this message translates to:

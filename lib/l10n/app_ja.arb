@@ -131,6 +131,8 @@
   "done": "完了",
   "karaokeSweepOn": "カラオケ: オン",
   "karaokeSweepOff": "カラオケ: オフ",
+  "skipSilence": "無音をスキップ",
+  "skipSilenceHint": "再生中に音楽のない無音部分を自動的にスキップします",
   "syncLyricsTitle": "歌詞の同期",
   "syncCurrent": "現在",
   "lyricsSearchNoResults": "結果が見つかりません",

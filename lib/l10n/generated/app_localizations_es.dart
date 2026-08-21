@@ -447,6 +447,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get karaokeSweepOff => 'Karaoke: inactivo';
 
   @override
+  String get skipSilence => 'Omitir silencios';
+
+  @override
+  String get skipSilenceHint =>
+      'Salta automáticamente los huecos sin música durante la reproducción';
+
+  @override
   String get syncLyricsTitle => 'Sincronización de letras';
 
   @override

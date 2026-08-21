@@ -451,6 +451,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get karaokeSweepOff => 'Караоке: выкл';
 
   @override
+  String get skipSilence => 'Пропускать тишину';
+
+  @override
+  String get skipSilenceHint =>
+      'Автоматически пропускает паузы без музыки во время воспроизведения';
+
+  @override
   String get syncLyricsTitle => 'Синхронизация текста';
 
   @override

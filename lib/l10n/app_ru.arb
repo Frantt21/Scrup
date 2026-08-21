@@ -131,6 +131,8 @@
   "done": "Готово",
   "karaokeSweepOn": "Караоке: вкл",
   "karaokeSweepOff": "Караоке: выкл",
+  "skipSilence": "Пропускать тишину",
+  "skipSilenceHint": "Автоматически пропускает паузы без музыки во время воспроизведения",
   "syncLyricsTitle": "Синхронизация текста",
   "syncCurrent": "Текущая",
   "lyricsSearchNoResults": "Результаты не найдены",

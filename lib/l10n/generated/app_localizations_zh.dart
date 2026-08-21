@@ -436,6 +436,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get karaokeSweepOff => '卡拉OK：关闭';
 
   @override
+  String get skipSilence => '跳过静音';
+
+  @override
+  String get skipSilenceHint => '播放时自动跳过没有音乐的静音片段';
+
+  @override
   String get syncLyricsTitle => '歌词同步';
 
   @override

@@ -446,6 +446,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get karaokeSweepOff => 'Karaoke: off';
 
   @override
+  String get skipSilence => 'Skip silence';
+
+  @override
+  String get skipSilenceHint =>
+      'Automatically jumps over silent gaps during playback';
+
+  @override
   String get syncLyricsTitle => 'Lyrics sync';
 
   @override
