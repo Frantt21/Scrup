@@ -287,7 +287,7 @@ class _AppShellState extends State<AppShell> {
                           else
                             const SizedBox.shrink(),
                           SettingsView(key: ValueKey(_settingsOpenCount)),
-                          LyricsView(onBack: _closeLyrics),
+                          LyricsView(),
                         ],
                       ),
                       // Player flotante tipo glass. El padding exterior es el

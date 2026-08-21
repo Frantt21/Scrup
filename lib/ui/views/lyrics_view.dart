@@ -14,6 +14,7 @@ import '../../services/lyrics_service.dart';
 import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
 import '../theme_controller.dart';
+import '../widgets/cover_image.dart';
 import '../widgets/lyrics_display.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 
@@ -22,10 +23,7 @@ import '../widgets/player_bar.dart' show kPlayerClearance;
 /// en reproducción con auto-scroll, karaoke sweep, tap-to-seek, búsqueda
 /// manual y sincronización manual (port de forawn_mobile).
 class LyricsView extends StatefulWidget {
-  /// Vuelve a la vista anterior (home/búsqueda).
-  final VoidCallback onBack;
-
-  const LyricsView({super.key, required this.onBack});
+  const LyricsView({super.key});
 
   @override
   State<LyricsView> createState() => _LyricsViewState();
@@ -333,31 +331,52 @@ class _LyricsViewState extends State<LyricsView>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Row(
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      tooltip: l10n.backToHome,
-                      onPressed: widget.onBack,
-                    ),
+                    // Artwork a la altura de ambas filas (título + artista).
+                    if (_track != null) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 46,
+                          height: 46,
+                          child: CoverImage(
+                            source: _track!.thumbnailUrl,
+                            fit: BoxFit.cover,
+                            fallback: Icon(
+                              Icons.music_note,
+                              size: 22,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Título de la canción como título de la vista.
                           Text(
-                            l10n.lyricsTitle,
+                            _track?.title ?? l10n.lyricsTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           if (_track != null)
-                            Text(
-                              '${_track!.title} — ${_track!.artist}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                _track!.artist,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
                         ],
