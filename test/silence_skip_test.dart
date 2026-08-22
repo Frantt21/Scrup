@@ -59,4 +59,41 @@ frame= 1234 fps=0.0 q=-0.0 Lsize=   12345kB
       expect(gap.contains(const Duration(seconds: 14)), isFalse);
     });
   });
+
+  group('SilenceSkipService.parseSkipSegments', () {
+    test('parsea la respuesta real de skipSegments (music_offtopic)', () {
+      const body = '''
+[{"category":"music_offtopic","actionType":"skip","segment":[0,56.03668],
+"UUID":"6fc5029710adb642ab604baa6bbe3d2d5a94d3b57f51e13062262af53bc2f16f",
+"videoDuration":0,"locked":0,"votes":4,"description":""},
+{"category":"music_offtopic","actionType":"skip","segment":[147.754,157.089],
+"UUID":"0973989df8abf2d7b62597d71563a096cee95454958caf6720c33159f3ddc2146",
+"videoDuration":279.761,"locked":0,"votes":1,"description":""}]
+''';
+      final gaps = SilenceSkipService.parseSkipSegments(body);
+      expect(gaps.length, 2);
+      expect(gaps[0].start, Duration.zero);
+      expect(gaps[0].end.inMilliseconds, 56036);
+      expect(gaps[1].start.inMilliseconds, 147754);
+      expect(gaps[1].end.inMilliseconds, 157089);
+    });
+
+    test('ignora actionType distinto de skip y segmentos diminutos', () {
+      const body = '''
+[{"category":"poi_highlight","actionType":"poi","segment":[10,12]},
+{"category":"filler","actionType":"skip","segment":[30,30.2]},
+{"category":"sponsor","actionType":"skip","segment":[40,45]}]
+''';
+      final gaps = SilenceSkipService.parseSkipSegments(body);
+      expect(gaps.length, 1);
+      expect(gaps[0].start.inSeconds, 40);
+      expect(gaps[0].end.inSeconds, 45);
+    });
+
+    test('JSON inválido o vacío devuelve lista vacía', () {
+      expect(SilenceSkipService.parseSkipSegments('Not Found'), isEmpty);
+      expect(SilenceSkipService.parseSkipSegments('{}'), isEmpty);
+      expect(SilenceSkipService.parseSkipSegments('[]'), isEmpty);
+    });
+  });
 }

@@ -278,14 +278,6 @@ class ScrupApp extends StatelessWidget {
         ),
         Provider<DeezerService>(create: (_) => DeezerService()),
         Provider<LyricsService>(create: (context) => LyricsService(context.read<AppDatabase>())),
-        Provider<SilenceSkipService>(
-          create: (context) => SilenceSkipService(
-            context.read<PlayerService>(),
-            context.read<AudioCacheService>(),
-            context.read<SettingsStore>(),
-          ),
-          dispose: (_, service) => service.dispose(),
-        ),
         Provider<SettingsStore>(create: (_) => settings),
         Provider<PaletteCacheStore>(create: (_) => paletteCache),
         Provider<ScrupAudioHandler>(create: (_) => audioHandler),
@@ -453,6 +445,20 @@ class ScrupApp extends StatelessWidget {
             return service;
           },
           dispose: (_, service) => service.dispose(),
+        ),
+        // Omitir silencios: servicio de FONDO que nadie consume desde la
+        // UI — sin `lazy: false` NUNCA se instanciaría y la función quedaría
+        // muerta. Debe ir DESPUÉS del provider de PlayerService: con
+        // lazy:false el create corre al montar su propio nodo, y un provider
+        // declarado antes no encontraría a PlayerService ("not found").
+        Provider<SilenceSkipService>(
+          create: (context) => SilenceSkipService(
+            context.read<PlayerService>(),
+            context.read<AudioCacheService>(),
+            context.read<SettingsStore>(),
+          ),
+          dispose: (_, service) => service.dispose(),
+          lazy: false,
         ),
         // Idioma de la interfaz: al cambiar, el MaterialApp se reconstruye
         // con el nuevo locale (y se persiste entre sesiones).

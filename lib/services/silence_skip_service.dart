@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 
 import '../core/binaries.dart';
 import '../core/track.dart';
@@ -33,7 +36,7 @@ class SilenceGap {
 /// - Solo se saltan huecos ≥ [_minGapToSkip] (los silencios musicales
 ///   cortos entre frases quedan intactos).
 /// - Best-effort total: cualquier fallo deja la reproducción normal.
-class SilenceSkipService {
+class SilenceSkipService extends ChangeNotifier {
   SilenceSkipService(this._player, this._cache, this._settings) {
     _trackSub = _player.currentTrack.listen(_onTrackChanged);
     _playingSub = _player.playing.listen((p) => _playing = p);
@@ -45,7 +48,7 @@ class SilenceSkipService {
     // Analizar la pista ya cargada (sesión restaurada al arrancar).
     final current = _player.currentTrackValue;
     if (current != null && _settings.skipSilenceEnabled.value) {
-      unawaited(_analyze(current.id));
+      _prepare(current.id);
     }
   }
 
@@ -70,6 +73,20 @@ class SilenceSkipService {
   static const _retryDelay = Duration(seconds: 12);
   static const _maxRetries = 5;
 
+  /// SponsorBlock (https://sponsor.ajay.app): base de datos COLABORATIVA de
+  /// segmentos por video de YouTube. `music_offtopic` son las partes que NO
+  /// son parte de la canción (intros habladas, visuales, promos…), que el
+  /// detector acústico no puede ver por no ser silencio puro.
+  static const _sbHost = 'sponsor.ajay.app';
+  static const List<String> _sbCategories = [
+    'music_offtopic',
+    'intro',
+    'outro',
+    'sponsor',
+    'selfpromo',
+    'filler',
+  ];
+
   final PlayerService _player;
   final AudioCacheService _cache;
   final SettingsStore _settings;
@@ -80,9 +97,19 @@ class SilenceSkipService {
   Timer? _retryTimer;
   int _retryCount = 0;
 
+  /// Segmentos de SponsorBlock por pista (curados por la comunidad:
+  /// prioridad sobre el detector acústico).
+  final Map<String, List<SilenceGap>> _sbGaps = {};
+
   /// Análisis por pista (memoria de sesión: re-analizar es barato pero
   /// innecesario dentro de la misma sesión).
   final Map<String, List<SilenceGap>> _gapsByTrack = {};
+
+  /// Análisis PROVISIONAL hecho sobre el `.part` de una descarga en curso:
+  /// fiable para el inicio del archivo (intro), se sustituye por el
+  /// definitivo cuando la descarga completa queda cacheada.
+  final Map<String, List<SilenceGap>> _provisionalGaps = {};
+  final Set<String> _provisionalDone = {};
   String? _analyzingId;
 
   bool _playing = false;
@@ -92,12 +119,34 @@ class SilenceSkipService {
   String? _lastSkipKey;
   DateTime _lastSkipAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  @override
   void dispose() {
     _trackSub?.cancel();
     _playingSub?.cancel();
     _settings.skipSilenceEnabled.removeListener(_onEnabledChanged);
     _pollTimer?.cancel();
     _retryTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Duración del intro NO musical al inicio de la pista según SponsorBlock
+  /// (segmento que arranca en los primeros ~2 s): el desfase entre el
+  /// comienzo del ARCHIVO y el de la CANCIÓN real. Las letras — sincronizadas
+  /// a la canción oficial — deben desplazarse exactamente ese tiempo. Null =
+  /// sin datos de SponsorBlock para esta pista.
+  ///
+  /// Nota: es información del archivo, no del toggle: aplica también con el
+  /// omitir-silencios apagado (durante el intro simplemente no hay letra).
+  Duration? introEndFor(String? trackId) {
+    if (trackId == null) return null;
+    final gaps = _sbGaps[trackId];
+    if (gaps == null || gaps.isEmpty) return null;
+    Duration? best;
+    for (final gap in gaps) {
+      if (gap.start > const Duration(seconds: 2)) continue;
+      if (best == null || gap.end > best) best = gap.end;
+    }
+    return best;
   }
 
   void _onEnabledChanged() {
@@ -105,37 +154,72 @@ class SilenceSkipService {
     _retryCount = 0;
     if (!_settings.skipSilenceEnabled.value) return;
     final current = _player.currentTrackValue;
-    if (current != null) unawaited(_analyze(current.id));
+    if (current != null) _prepare(current.id);
   }
 
   void _onTrackChanged(Track? track) {
     _retryTimer?.cancel();
     _retryCount = 0;
     if (track == null || !_settings.skipSilenceEnabled.value) return;
-    _analyze(track.id);
+    _prepare(track.id);
+  }
+
+  /// Prepara los huecos de UNA pista: primero SponsorBlock (instantáneo y
+  /// curado — cubre intros/outros que NO son silencio acústico), y en
+  /// paralelo el análisis local con ffmpeg como fallback.
+  void _prepare(String trackId) {
+    unawaited(_fetchSponsorBlock(trackId));
+    unawaited(_analyze(trackId));
+  }
+
+  /// Consulta SponsorBlock por el videoId de la pista. Sin segmentos la API
+  /// responde 404 "Not Found": se guarda lista vacía para no reconsultar.
+  Future<void> _fetchSponsorBlock(String trackId) async {
+    if (_sbGaps.containsKey(trackId)) return;
+    try {
+      final categories = Uri.encodeComponent(jsonEncode(_sbCategories));
+      final uri = Uri.parse(
+        'https://$_sbHost/api/skipSegments'
+        '?videoID=$trackId&categories=$categories',
+      );
+      final res = await http.get(uri).timeout(const Duration(seconds: 6));
+      final gaps = res.statusCode == 200
+          ? parseSkipSegments(res.body)
+          : const <SilenceGap>[];
+      _sbGaps[trackId] = gaps;
+      if (gaps.isNotEmpty) {
+        debugPrint(
+          '[Scrup] SilenceSkip: SponsorBlock ${gaps.length} segmento(s) '
+          'en $trackId '
+          '[${gaps.map((g) => '${g.start.inSeconds}-${g.end.inSeconds}s').join(', ')}]',
+        );
+        // Avisar a los oyentes (la vista de letras corrige su offset con
+        // [introEndFor] cuando llegan datos nuevos).
+        notifyListeners();
+      }
+    } catch (_) {
+      // Sin red / timeout: queda el detector acústico como fallback.
+    }
   }
 
   Future<void> _analyze(String trackId) async {
     if (_gapsByTrack.containsKey(trackId) || _analyzingId == trackId) return;
     _analyzingId = trackId;
     try {
-      final path = await _cache.cachedPath(trackId);
-      // Descarga progresiva en curso: reintentar periódicamente mientras la
-      // pista siga siendo la actual (el archivo completo queda en caché).
+      var path = await _cache.cachedPath(trackId);
+      var provisional = false;
+      // Descarga progresiva en curso: el `.part` parcial YA contiene el
+      // principio del archivo, así que los silencios del intro se pueden
+      // detectar de inmediato. El resultado es PROVISIONAL: cuando la
+      // descarga complete, se re-analiza el archivo entero.
       if (path == null) {
-        if (_retryCount >= _maxRetries ||
-            _player.currentTrackValue?.id != trackId) {
+        path = await _findPartialFile(trackId);
+        provisional = path != null;
+        if (path == null ||
+            (provisional && _provisionalDone.contains(trackId))) {
+          _scheduleRetry(trackId);
           return;
         }
-        _retryCount++;
-        _retryTimer?.cancel();
-        _retryTimer = Timer(_retryDelay, () {
-          if (_player.currentTrackValue?.id == trackId &&
-              !_gapsByTrack.containsKey(trackId)) {
-            unawaited(_analyze(trackId));
-          }
-        });
-        return;
       }
       final ffmpeg = Binaries.ffmpegPath;
       if (ffmpeg == null) return;
@@ -151,13 +235,22 @@ class SilenceSkipService {
         '-',
       ]).timeout(const Duration(seconds: 60));
       final gaps = parseSilences(res.stderr.toString());
-      _gapsByTrack[trackId] = gaps;
-      if (gaps.isNotEmpty) {
-        debugPrint(
-          '[Scrup] SilenceSkip: ${gaps.length} hueco(s) en $trackId '
-          '[${gaps.map((g) => '${g.start.inSeconds}-${g.end.inSeconds}s').join(', ')}]',
-        );
+      if (provisional) {
+        _provisionalGaps[trackId] = gaps;
+        _provisionalDone.add(trackId);
+      } else {
+        _gapsByTrack[trackId] = gaps;
+        _provisionalGaps.remove(trackId);
+        _provisionalDone.remove(trackId);
       }
+      debugPrint(
+        '[Scrup] SilenceSkip: ${gaps.length} hueco(s) en $trackId '
+        '${provisional ? "(parcial) " : ""}'
+        '[${gaps.map((g) => '${g.start.inSeconds}-${g.end.inSeconds}s').join(', ')}]',
+      );
+      // Resultado provisional: seguir reintentando para analizar el
+      // archivo completo en cuanto termine la descarga.
+      if (provisional) _scheduleRetry(trackId);
     } catch (_) {
       // Best-effort: sin análisis simplemente no se salta nada.
     } finally {
@@ -165,35 +258,104 @@ class SilenceSkipService {
     }
   }
 
+  /// Busca el `.part` de descarga en curso de [trackId] (el más reciente),
+  /// o `null` si no hay. ffmpeg decodifica lo descargado hasta el momento:
+  /// suficiente para los silencios del inicio.
+  Future<String?> _findPartialFile(String trackId) async {
+    try {
+      final dir = await _cache.cacheDir();
+      String? best;
+      DateTime bestTime = DateTime.fromMillisecondsSinceEpoch(0);
+      for (final e in dir.listSync()) {
+        if (e is! File) continue;
+        final name = p.basename(e.path);
+        if (!name.startsWith('$trackId.') || !name.endsWith('.part')) continue;
+        final t = e.lastModifiedSync();
+        if (t.isAfter(bestTime)) {
+          bestTime = t;
+          best = e.path;
+        }
+      }
+      return best;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reintento de análisis (descarga aún en curso o resultado parcial que
+  /// falta mejorar con el archivo completo).
+  void _scheduleRetry(String trackId) {
+    if (_retryCount >= _maxRetries ||
+        _player.currentTrackValue?.id != trackId) {
+      return;
+    }
+    _retryCount++;
+    _retryTimer?.cancel();
+    _retryTimer = Timer(_retryDelay, () {
+      if (_player.currentTrackValue?.id == trackId &&
+          !_gapsByTrack.containsKey(trackId)) {
+        unawaited(_analyze(trackId));
+      }
+    });
+  }
+
   /// Sondeo de posición (cada [_pollInterval]): si estamos DENTRO de un
-  /// hueco saltable, seek al final del mismo.
+  /// hueco saltable, seek al final del mismo. Prioridad: segmentos curados
+  /// de SponsorBlock → análisis acústico definitivo → provisional (.part).
   void _checkPosition() {
     if (!_settings.skipSilenceEnabled.value || !_playing) return;
     final track = _player.currentTrackValue;
     if (track == null) return;
-    final gaps = _gapsByTrack[track.id];
-    if (gaps == null || gaps.isEmpty) return;
     final pos = _player.positionValue;
+    if (_trySkip(_sbGaps[track.id], track.id, pos, curated: true)) return;
+    final acoustic = _gapsByTrack[track.id] ?? _provisionalGaps[track.id];
+    _trySkip(acoustic, track.id, pos, curated: false);
+  }
+
+  /// Busca en [gaps] uno que contenga [pos] y salte a su final. Los gaps
+  /// `curated` (SponsorBlock) se respetan sea cual sea su duración; los
+  /// acústicos exigen [_minGapToSkip]. Devuelve `true` si consumió la
+  /// comprobación (saltó o decidió no saltar).
+  bool _trySkip(
+    List<SilenceGap>? gaps,
+    String trackId,
+    Duration pos, {
+    required bool curated,
+  }) {
+    if (gaps == null || gaps.isEmpty) return false;
     for (final gap in gaps) {
       if (!gap.contains(pos)) continue;
-      if (gap.end - gap.start < _minGapToSkip) continue;
-      final target = gap.end - _tailGuard;
-      if (pos >= target) continue;
-      final key = '${track.id}:${gap.start.inMilliseconds}';
-      // Mismo salto hace <3s: es una lectura vieja post-seek, ignorar.
+      if (!curated && gap.end - gap.start < _minGapToSkip) continue;
+      var target = gap.end - _tailGuard;
+      // Si el aterrizaje cae al filo del fin del medio, no buscar: el
+      // avance natural está a punto de dispararse solo.
+      final durationMs = _player.durationValue?.inMilliseconds;
+      if (durationMs != null && target.inMilliseconds > durationMs - 200) {
+        return true;
+      }
+      if (pos >= target) target = pos;
+      final key = '$trackId:${gap.start.inMilliseconds}';
+      final now = DateTime.now();
+      // Mismo salto hace <3s: lectura vieja post-seek; y CUALQUIER salto
+      // hace <600ms: evita dobles seeks cuando SB y acústico solapan.
       if (_lastSkipKey == key &&
-          DateTime.now().difference(_lastSkipAt) < const Duration(seconds: 3)) {
-        return;
+          now.difference(_lastSkipAt) < const Duration(seconds: 3)) {
+        return true;
+      }
+      if (now.difference(_lastSkipAt) < const Duration(milliseconds: 600)) {
+        return true;
       }
       _lastSkipKey = key;
-      _lastSkipAt = DateTime.now();
+      _lastSkipAt = now;
       debugPrint(
-        '[Scrup] SilenceSkip: saltando ${gap.start.inSeconds}-'
-        '${gap.end.inSeconds}s → ${target.inMilliseconds}ms',
+        '[Scrup] SilenceSkip: saltando ${curated ? "[SB] " : ""}'
+        '${gap.start.inSeconds}-${gap.end.inSeconds}s '
+        '→ ${target.inMilliseconds}ms',
       );
       unawaited(_player.seek(target));
-      return;
+      return true;
     }
+    return false;
   }
 
   /// Parsea la salida de `silencedetect`: pares
@@ -228,5 +390,37 @@ class SilenceSkipService {
       }
     }
     return gaps;
+  }
+
+  /// Parsea la respuesta JSON de `/api/skipSegments`: lista de
+  /// `{segment: [start, end], category, actionType, ...}`. Solo se aceptan
+  /// segmentos `actionType: "skip"` de ≥0.5 s (los "poi_highlight" y
+  /// fragmentos minúsculos no son saltos).
+  static List<SilenceGap> parseSkipSegments(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is! List) return const [];
+      final gaps = <SilenceGap>[];
+      for (final item in decoded) {
+        if (item is! Map) continue;
+        final action = item['actionType'];
+        if (action != null && action != 'skip') continue;
+        final seg = item['segment'];
+        if (seg is! List || seg.length != 2) continue;
+        final s = (seg[0] as num?)?.toDouble();
+        final e = (seg[1] as num?)?.toDouble();
+        if (s == null || e == null || e <= s) continue;
+        if (e - s < 0.5) continue;
+        gaps.add(
+          SilenceGap(
+            Duration(microseconds: (s * Duration.microsecondsPerSecond).round()),
+            Duration(microseconds: (e * Duration.microsecondsPerSecond).round()),
+          ),
+        );
+      }
+      return gaps;
+    } catch (_) {
+      return const [];
+    }
   }
 }

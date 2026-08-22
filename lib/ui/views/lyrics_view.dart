@@ -14,6 +14,7 @@ import '../../services/audio_cache_service.dart';
 import '../../services/lyrics_service.dart';
 import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
+import '../../services/silence_skip_service.dart';
 import '../theme_controller.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/lyrics_display.dart';
@@ -56,6 +57,12 @@ class _LyricsViewState extends State<LyricsView>
   /// posición para el índice y el sweep; el tap-to-seek lo suma).
   Duration _lyricsOffset = Duration.zero;
 
+  /// Desfase AUTOMÁTICO por intro no musical: si SponsorBlock reporta que la
+  /// canción real empieza en X s dentro del archivo, las letras — hechas
+  /// para la canción oficial — deben atrasarse X s. Se SUMA al manual.
+  Duration _sbIntro = Duration.zero;
+  late final SilenceSkipService _silenceSkip;
+
   /// Modo karaoke (sweep palabra por palabra): se refleja en el widget de
   /// lyrics y se persiste vía el SettingsStore.
   bool _sweepEnabled = false;
@@ -77,6 +84,13 @@ class _LyricsViewState extends State<LyricsView>
     final dur = player.durationValue;
     if (dur != null) _duration.value = dur;
 
+    // Intro no musical reportado por SponsorBlock (si ya se consultó esta
+    // pista) y escucha para corregir en vivo cuando lleguen datos nuevos.
+    _silenceSkip = context.read<SilenceSkipService>();
+    _sbIntro =
+        _silenceSkip.introEndFor(_track?.id) ?? Duration.zero;
+    _silenceSkip.addListener(_onSilenceInfoChanged);
+
     _trackSub = player.currentTrack.listen((t) {
       if (!mounted) return;
       setState(() {
@@ -84,6 +98,8 @@ class _LyricsViewState extends State<LyricsView>
         _lyrics = null;
         _lyricsOffset = Duration.zero;
         _currentIndex.value = null;
+        _sbIntro =
+            _silenceSkip.introEndFor(t?.id) ?? Duration.zero;
       });
       // El offset es POR PISTA: cargar el ajuste guardado de esta canción
       // (cambiar de pista o de fuente de letra no lo pierde).
@@ -150,6 +166,23 @@ class _LyricsViewState extends State<LyricsView>
     }
   }
 
+  /// Offset TOTAL vigente: manual del usuario + automático por intro de
+  /// SponsorBlock. `tiempoCanción = posición - total` (y el inverso para
+  /// tap-to-seek).
+  Duration get _effectiveOffset => _lyricsOffset + _sbIntro;
+
+  /// SponsorBlock contestó con datos nuevos: recalcular el intro de la
+  /// pista actual (p.ej. la consulta llegó cuando la letra ya estaba en
+  /// pantalla).
+  void _onSilenceInfoChanged() {
+    if (!mounted) return;
+    final next =
+        _silenceSkip.introEndFor(_track?.id) ?? Duration.zero;
+    if (next == _sbIntro) return;
+    setState(() => _sbIntro = next);
+    _updateCurrentIndex(_position.value);
+  }
+
   /// Carga el offset POR PISTA y lo aplica si la pista sigue siendo la
   /// actual (una respuesta tardía no pisa el offset de otra canción).
   Future<void> _loadTrackOffset(Track? track) async {
@@ -170,6 +203,7 @@ class _LyricsViewState extends State<LyricsView>
     _positionSub?.cancel();
     _durationSub?.cancel();
     _playingSub?.cancel();
+    _silenceSkip.removeListener(_onSilenceInfoChanged);
     _smoothingTick.dispose();
     _currentIndex.dispose();
     _position.dispose();
@@ -181,7 +215,7 @@ class _LyricsViewState extends State<LyricsView>
   void _updateCurrentIndex(Duration position) {
     final lyrics = _lyrics;
     if (lyrics == null) return;
-    final idx = lyrics.getCurrentLineIndex(position - _lyricsOffset);
+    final idx = lyrics.getCurrentLineIndex(position - _effectiveOffset);
     if (idx != _currentIndex.value) _currentIndex.value = idx;
   }
 
@@ -201,7 +235,7 @@ class _LyricsViewState extends State<LyricsView>
       });
       if (lyrics != null) {
         _currentIndex.value =
-            lyrics.getCurrentLineIndex(_position.value - _lyricsOffset);
+            lyrics.getCurrentLineIndex(_position.value - _effectiveOffset);
       }
     } catch (_) {
       if (!mounted || token != _fetchToken) return;
@@ -225,14 +259,14 @@ class _LyricsViewState extends State<LyricsView>
       // El offset por pista se CONSERVA: cambiar la fuente de la letra no
       // debe perder la sincronización que el usuario ya ajustó.
       _currentIndex.value =
-          lyrics.getCurrentLineIndex(_position.value - _lyricsOffset);
+          lyrics.getCurrentLineIndex(_position.value - _effectiveOffset);
     });
   }
 
-  /// Tap en una línea: seek a ese timestamp (respetando el offset).
+  /// Tap en una línea: seek a ese timestamp (respetando el offset total).
   void _onLineTap(Duration timestamp) {
     final player = context.read<PlayerService>();
-    final target = timestamp + _lyricsOffset;
+    final target = timestamp + _effectiveOffset;
     player.seek(target);
   }
 
@@ -297,11 +331,12 @@ class _LyricsViewState extends State<LyricsView>
         positionNotifier: _position,
         currentIndexNotifier: _currentIndex,
         offset: _lyricsOffset,
+        autoExtra: _sbIntro,
         accentColor: context.read<ThemeController>().accentColor,
         onOffsetChanged: (offset) {
           _lyricsOffset = offset;
           _currentIndex.value =
-              lyrics.getCurrentLineIndex(_position.value - offset);
+              lyrics.getCurrentLineIndex(_position.value - offset - _sbIntro);
           // Persistir POR PISTA: cada canción recuerda su propio ajuste.
           final track = _track;
           if (track != null) {
@@ -501,13 +536,12 @@ class _LyricsViewState extends State<LyricsView>
     return FutureBuilder<String?>(
       future: _audioPathOf(track),
       builder: (context, snapshot) {
-        return LyricsDisplay(
-          lyrics: lyrics,
+        return LyricsDisplay(          lyrics: lyrics,
           currentIndexNotifier: _currentIndex,
           positionNotifier: _position,
           durationNotifier: _duration,
           audioPath: snapshot.data,
-          lyricsOffset: _lyricsOffset,
+          lyricsOffset: _effectiveOffset,
           onTap: _onLineTap,
           accentColor: accent,
           sweepEnabled: _sweepEnabled,
@@ -523,7 +557,14 @@ class _LyricsSyncDialog extends StatefulWidget {
   final SyncedLyrics lyrics;
   final ValueListenable<Duration> positionNotifier;
   final ValueNotifier<int?> currentIndexNotifier;
+
+  /// Offset MANUAL (editable aquí). El automático por intro va aparte en
+  /// [autoExtra] para que al guardar no quede cocinado dos veces.
   final Duration offset;
+
+  /// Desfase automático por intro de SponsorBlock (0 si no hay): se suma
+  /// al manual para el preview y se informa debajo del campo.
+  final Duration autoExtra;
   final Color? accentColor;
   final ValueChanged<Duration> onOffsetChanged;
 
@@ -532,6 +573,7 @@ class _LyricsSyncDialog extends StatefulWidget {
     required this.positionNotifier,
     required this.currentIndexNotifier,
     required this.offset,
+    required this.autoExtra,
     required this.accentColor,
     required this.onOffsetChanged,
   });
@@ -544,6 +586,9 @@ class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
   late Duration _offset;
   late final TextEditingController _offsetCtrl;
   final FocusNode _offsetFocus = FocusNode();
+
+  /// Offset TOTAL aplicado de verdad: manual (editable) + automático SB.
+  Duration get _total => _offset + widget.autoExtra;
 
   @override
   void initState() {
@@ -642,7 +687,7 @@ class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
                     valueListenable: widget.positionNotifier,
                     builder: (context, position, _) {
                       final idx = widget.lyrics.getCurrentLineIndex(
-                        position - _offset,
+                        position - _total,
                       );
                       final current = (idx != null && idx < lines.length)
                           ? lines[idx].text
@@ -751,6 +796,18 @@ class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
                       ),
                     ],
                   ),
+                  if (widget.autoExtra > Duration.zero) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      // "SponsorBlock" es marca; el resto son cifras.
+                      'SponsorBlock: +${widget.autoExtra.inMilliseconds} ms '
+                      '(total ${_total.inMilliseconds} ms)',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   // Botones ±100/±500 ms.
                   Row(
