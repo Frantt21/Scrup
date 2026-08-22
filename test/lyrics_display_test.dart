@@ -97,4 +97,79 @@ void main() {
     await tester.pumpAndSettle();
     expect(joinedLineText(tester), 'Solo texto');
   });
+
+  group('gaps de silencio (•••)', () {
+    // Primera línea a los 12 s ⇒ se inserta un gap en t=0 (intro).
+    final withIntro = SyncedLyrics(
+      songTitle: 'Tema',
+      artist: 'Artista',
+      lines: [
+        LyricLine(timestamp: const Duration(seconds: 12), text: 'Empieza'),
+      ],
+    );
+
+    Widget introDisplay({
+      required bool sweep,
+      required ValueNotifier<Duration> position,
+    }) {
+      return MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: LyricsDisplay(
+            lyrics: withIntro,
+            currentIndexNotifier: ValueNotifier<int?>(null),
+            positionNotifier: position,
+            sweepEnabled: sweep,
+          ),
+        ),
+      );
+    }
+
+    List<Color> dotColors(WidgetTester tester) {
+      return tester
+          .widgetList<Text>(find.byWidgetPredicate(
+              (w) => w is Text && w.data == '•' && w.style?.fontSize == 30))
+          .map((t) => t.style!.color!)
+          .toList();
+    }
+
+    testWidgets('gap activo con karaoke: barrido parcial sobre los puntos',
+        (tester) async {
+      // Mitad del hueco [0..12 s]: primer punto lleno, último sin empezar.
+      await tester.pumpWidget(introDisplay(
+        sweep: true,
+        position: ValueNotifier<Duration>(const Duration(seconds: 6)),
+      ));
+      await tester.pumpAndSettle();
+
+      final colors = dotColors(tester);
+      expect(colors, hasLength(3));
+      expect(colors.first, Colors.white); // barrido completo
+      expect(colors.last, Colors.white.withValues(alpha: 0.3)); // pendiente
+    });
+
+    testWidgets('gap activo sin karaoke: puntos encendidos en fijo',
+        (tester) async {
+      await tester.pumpWidget(introDisplay(
+        sweep: false,
+        position: ValueNotifier<Duration>(const Duration(seconds: 6)),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(dotColors(tester), everyElement(Colors.white));
+    });
+
+    testWidgets('fuera del gap: puntos apagados y línea activa encendida',
+        (tester) async {
+      await tester.pumpWidget(introDisplay(
+        sweep: true,
+        position: ValueNotifier<Duration>(const Duration(seconds: 20)),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(dotColors(tester),
+          everyElement(Colors.white.withValues(alpha: 0.3)));
+    });
+  });
 }

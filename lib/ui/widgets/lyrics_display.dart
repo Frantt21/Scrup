@@ -49,6 +49,12 @@ class _LyricsDisplayState extends State<LyricsDisplay>
   SyncedLyrics? _lastLyrics;
   bool _isSweepEnabled = false;
 
+  /// Índice ACTIVO en el listado VISUAL (incluye los gaps '•••'). Se deriva
+  /// de la posición y no del índice original del reproductor: las líneas de
+  /// gap no existen en SyncedLyrics, así que el índice original nunca las
+  /// señala y los puntos quedaban apagados durante intros/instrumentales.
+  final ValueNotifier<int> _activeIndex = ValueNotifier<int>(-1);
+
   @override
   bool get wantKeepAlive => true;
 
@@ -89,14 +95,35 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     return result;
   }
 
-  int _mapToDisplayIndex(int? oi) {
-    if (oi == null || oi < 0 || widget.lyrics.lines.isEmpty) return -1;
-    final target = widget.lyrics.lines[oi].timestamp;
-    var shift = 0;
-    for (final l in _lines) {
-      if (l.text == kGapMarker && l.timestamp <= target) shift++;
+  /// Índice activo en el LISTADO VISUAL (gaps incluidos), replicando la
+  /// semántica de SyncedLyrics.getCurrentLineIndex: exacto para líneas
+  /// karaoke (el adelanto cortaría el último barrido) y con adelanto de
+  /// [kCurrentLineAdvance] para las demás — los gaps, sin palabras, usan el
+  /// adelanto como cualquier línea sincronizada por línea.
+  int _computeActiveDisplayIndex(Duration position) {
+    final posMs = (position - widget.lyricsOffset).inMilliseconds;
+    var exact = -1;
+    for (var i = 0; i < _lines.length; i++) {
+      if (_lines[i].timestamp.inMilliseconds <= posMs) {
+        exact = i;
+      } else {
+        break;
+      }
     }
-    return oi + shift;
+    if (exact >= 0 && _lines[exact].hasWords) return exact;
+
+    final adjustedPosMs = posMs + kCurrentLineAdvance.inMilliseconds;
+    for (var i = _lines.length - 1; i >= 0; i--) {
+      if (_lines[i].timestamp.inMilliseconds <= adjustedPosMs) return i;
+    }
+    return -1;
+  }
+
+  void _onPositionChanged() {
+    final di = _computeActiveDisplayIndex(widget.positionNotifier.value);
+    if (di == _activeIndex.value) return;
+    _activeIndex.value = di;
+    _onActiveIndexChanged(di);
   }
 
   @override
@@ -104,7 +131,8 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     super.initState();
     _controller = ScrollController();
     _controller.addListener(_checkButtonVisibility);
-    widget.currentIndexNotifier.addListener(_onIndexChanged);
+    widget.positionNotifier.addListener(_onPositionChanged);
+    _onPositionChanged();
     _loadSweepSetting();
     for (var i = 0; i < _lines.length; i++) _itemKeys[i] = GlobalKey();
   }
@@ -137,6 +165,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
       _lastAutoScrolledIndex = -1;
       _userHasScrolled = false;
       _loadSweepSetting();
+      _onPositionChanged();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_controller.hasClients) _controller.jumpTo(0);
       });
@@ -145,14 +174,14 @@ class _LyricsDisplayState extends State<LyricsDisplay>
 
   @override
   void dispose() {
-    widget.currentIndexNotifier.removeListener(_onIndexChanged);
+    widget.positionNotifier.removeListener(_onPositionChanged);
     _controller.removeListener(_checkButtonVisibility);
     _controller.dispose();
     super.dispose();
   }
 
   void _checkButtonVisibility() {
-    final di = _mapToDisplayIndex(widget.currentIndexNotifier.value);
+    final di = _activeIndex.value;
     if (di < 0 || !_controller.hasClients) {
       if (_showSyncButton) setState(() => _showSyncButton = false);
       return;
@@ -172,7 +201,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
   }
 
   void _syncToCurrentLine() {
-    final di = _mapToDisplayIndex(widget.currentIndexNotifier.value);
+    final di = _activeIndex.value;
     if (di < 0 || !_controller.hasClients) return;
     final key = _itemKeys[di];
     void scroll() {
@@ -196,8 +225,9 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     setState(() => _showSyncButton = false);
   }
 
-  void _onIndexChanged() {
-    final di = _mapToDisplayIndex(widget.currentIndexNotifier.value);
+  /// Seguimiento de scroll al cambiar la línea activa (líneas reales Y gaps:
+  /// durante una intro/instrumental la vista sigue a los puntos).
+  void _onActiveIndexChanged(int di) {
     if (di < 0 || !_controller.hasClients) return;
     if (_userHasScrolled) {
       _checkButtonVisibility();
@@ -258,26 +288,33 @@ class _LyricsDisplayState extends State<LyricsDisplay>
               padding: const EdgeInsets.symmetric(vertical: 200),
               itemCount: _lines.length,
               itemBuilder: (context, index) {
-                return ValueListenableBuilder<int?>(
-                  valueListenable: widget.currentIndexNotifier,
-                  builder: (context, currentIndex, _) {
-                    final di = _mapToDisplayIndex(currentIndex);
-                    final isCurrent = index == di;
+                return ValueListenableBuilder<int>(
+                  valueListenable: _activeIndex,
+                  builder: (context, activeIndex, _) {
+                    final isCurrent = index == activeIndex;
                     final line = _lines[index];
-                    // Fin real de la línea para el sweep: la siguiente línea
-                    // ORIGINAL (los gaps '•••' son solo visuales y su
-                    // timestamp estimado recortaría el barrido). Solo importa
-                    // para la línea actual, la única que barre.
-                    final originals = widget.lyrics.lines;
+                    final isGap = line.text == kGapMarker;
+                    // Fin de la línea para el sweep:
+                    //  · Gap activo → la siguiente línea del listado es el
+                    //    fin del silencio (ventana de los puntos).
+                    //  · Línea real activa → saltar los '•••' intercalados
+                    //    (su timestamp estimado recortaría el barrido) y usar
+                    //    la siguiente línea REAL.
+                    //  · Resto → la siguiente del listado (solo cosmético).
                     final Duration endTime;
-                    if (isCurrent &&
-                        currentIndex != null &&
-                        currentIndex < originals.length - 1) {
-                      endTime = originals[currentIndex + 1].timestamp;
-                    } else if (isCurrent || index >= _lines.length - 1) {
-                      endTime = _totalDuration;
+                    if (isGap || !isCurrent) {
+                      endTime = index < _lines.length - 1
+                          ? _lines[index + 1].timestamp
+                          : _totalDuration;
                     } else {
-                      endTime = _lines[index + 1].timestamp;
+                      var j = index + 1;
+                      while (j < _lines.length &&
+                          _lines[j].text == kGapMarker) {
+                        j++;
+                      }
+                      endTime = j < _lines.length
+                          ? _lines[j].timestamp
+                          : _totalDuration;
                     }
                     return GestureDetector(
                       onTap: widget.onTap != null
@@ -291,6 +328,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                         child: _KaraokeLine(
                           line: line,
                           isCurrent: isCurrent,
+                          isGap: isGap,
                           startTime: line.timestamp,
                           endTime: endTime,
                           positionNotifier: widget.positionNotifier,
@@ -351,6 +389,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
 class _KaraokeLine extends StatelessWidget {
   final LyricLine line;
   final bool isCurrent;
+  final bool isGap;
   final Duration startTime;
   final Duration endTime;
   final ValueNotifier<Duration> positionNotifier;
@@ -361,6 +400,7 @@ class _KaraokeLine extends StatelessWidget {
   const _KaraokeLine({
     required this.line,
     required this.isCurrent,
+    this.isGap = false,
     required this.startTime,
     required this.endTime,
     required this.positionNotifier,
@@ -396,11 +436,70 @@ class _KaraokeLine extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: SizedBox(
         width: double.infinity,
-        child: shouldAnimate
-            ? _buildSweep(baseStyle, tokens.list)
-            : _buildStatic(
-                baseStyle, tokens.list, isCurrent ? _activeColor : _inactiveColor),
+        child: isGap
+            ? _buildDots(baseStyle)
+            : shouldAnimate
+                ? _buildSweep(baseStyle, tokens.list)
+                : _buildStatic(baseStyle, tokens.list,
+                    isCurrent ? _activeColor : _inactiveColor),
       ),
+    );
+  }
+
+  /// Los tres puntos de silencio ('•••'). Inactivos: tenues. Activos:
+  /// encendidos en fijo, o en BARRIDO secuencial si el karaoke está activo —
+  /// cada punto cubre un tercio del hueco y se llena con el mismo gradiente
+  /// del sweep de palabras, como indicador de cuánto queda de intro o
+  /// instrumental.
+  Widget _buildDots(TextStyle baseStyle) {
+    const dots = ['•', '•', '•'];
+    final startMs = startTime.inMilliseconds;
+    final endMs = max(startMs + 1, endTime.inMilliseconds);
+    final window = max(1, (endMs - startMs) ~/ dots.length);
+
+    return ValueListenableBuilder<Duration>(
+      valueListenable: positionNotifier,
+      builder: (context, position, _) {
+        final currentMs = (position - offset).inMilliseconds;
+        final children = <Widget>[];
+        for (var i = 0; i < dots.length; i++) {
+          final dot = dots[i];
+          if (!isCurrent) {
+            children.add(
+                Text(dot, style: baseStyle.copyWith(color: _inactiveColor)));
+            continue;
+          }
+          if (!isSweepEnabled) {
+            children.add(
+                Text(dot, style: baseStyle.copyWith(color: _activeColor)));
+            continue;
+          }
+          final wStart = startMs + i * window;
+          final wEnd = min(endMs, wStart + window);
+          double progress;
+          if (currentMs >= wEnd) {
+            progress = 1.0;
+          } else if (currentMs <= wStart) {
+            progress = 0.0;
+          } else {
+            progress = (currentMs - wStart) / max(1, wEnd - wStart);
+          }
+          children.add(_KaraokeWord(
+            word: dot,
+            progress: progress.clamp(0.0, 1.0),
+            style: baseStyle,
+            activeColor: _activeColor,
+            inactiveColor: _inactiveColor,
+          ));
+        }
+        return Wrap(
+          alignment: WrapAlignment.start,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 6.0,
+          runSpacing: 4.0,
+          children: children,
+        );
+      },
     );
   }
 
