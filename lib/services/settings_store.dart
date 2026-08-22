@@ -203,6 +203,16 @@ class SettingsStore {
     await prefs.setString(_lyricsOffsetsKey, jsonEncode(map));
   }
 
+  /// `true` si la pista tiene ENTRADA PROPIA en el mapa de offsets: distingue
+  /// «el usuario puso 0» (imposible: cero elimina la entrada) de «nunca se
+  /// tocó». Lo usa el auto-offset de SponsorBlock para saber si puede
+  /// absorberse en la raíz sin pisar un valor ya puesto a mano.
+  Future<bool> hasLyricsOffsetFor(String trackId) async {
+    final prefs = await _instance;
+    return _decodeOffsets(prefs.getString(_lyricsOffsetsKey))
+        .containsKey(trackId);
+  }
+
   /// Carga el offset de sincronización de UNA pista (cero si nunca se
   /// ajustó esa canción).
   Future<Duration> loadLyricsOffsetFor(String trackId) async {

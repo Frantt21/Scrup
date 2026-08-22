@@ -12,7 +12,6 @@ const String kGapMarker = '•••';
 
 class LyricsDisplay extends StatefulWidget {
   final SyncedLyrics lyrics;
-  final ValueNotifier<int?> currentIndexNotifier;
   final ValueNotifier<Duration> positionNotifier;
   final ValueListenable<Duration>? durationNotifier;
   final String? audioPath;
@@ -24,7 +23,6 @@ class LyricsDisplay extends StatefulWidget {
   const LyricsDisplay({
     super.key,
     required this.lyrics,
-    required this.currentIndexNotifier,
     required this.positionNotifier,
     this.durationNotifier,
     this.audioPath,
@@ -169,6 +167,11 @@ class _LyricsDisplayState extends State<LyricsDisplay>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_controller.hasClients) _controller.jumpTo(0);
       });
+    } else if (oldWidget.lyricsOffset != widget.lyricsOffset) {
+      // Ajuste en caliente desde el diálogo de sincronización: recalcular el
+      // índice activo AL INSTANTE (sin esperar al próximo tick de posición,
+      // que con la canción pausada podría no llegar nunca).
+      _onPositionChanged();
     }
   }
 

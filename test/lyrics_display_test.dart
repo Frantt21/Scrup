@@ -38,7 +38,6 @@ void main() {
       home: Scaffold(
         body: LyricsDisplay(
           lyrics: dirty,
-          currentIndexNotifier: ValueNotifier<int?>(currentIndex),
           positionNotifier: position,
           sweepEnabled: sweep,
         ),
@@ -88,7 +87,6 @@ void main() {
       home: Scaffold(
         body: LyricsDisplay(
           lyrics: plain,
-          currentIndexNotifier: ValueNotifier<int?>(0),
           positionNotifier: ValueNotifier<Duration>(Duration.zero),
           sweepEnabled: true,
         ),
@@ -118,7 +116,6 @@ void main() {
         home: Scaffold(
           body: LyricsDisplay(
             lyrics: withIntro,
-            currentIndexNotifier: ValueNotifier<int?>(null),
             positionNotifier: position,
             sweepEnabled: sweep,
           ),

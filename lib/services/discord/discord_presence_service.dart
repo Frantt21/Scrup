@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show debugPrint, ValueNotifier;
+import 'package:flutter/foundation.dart'
+    show debugPrint, visibleForTesting, ValueNotifier;
 
 import '../../core/track.dart';
 import '../player_service.dart';
@@ -227,36 +228,66 @@ class DiscordPresenceService {
       return;
     }
 
-    final title = track.title.isNotEmpty ? track.title : 'Unknown';
-    final state = track.artist.isNotEmpty ? track.artist : 'Scrup';
+    final activity = buildActivity(
+      track: track,
+      position: _position,
+      total: track.duration ?? player.durationValue,
+    );
 
-    // Timestamp de inicio (segundos Unix): si está sonando, el cronómetro
-    // de Discord arranca en `now - recorrido` para reflejar la posición.
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final start = now - _position.inSeconds;
-
-    debugPrint('[discord] SET_ACTIVITY: $title — $state');
+    debugPrint('[discord] SET_ACTIVITY: ${track.title} — ${track.artist}');
     transport.send(DiscordOpcode.frame, {
       'cmd': 'SET_ACTIVITY',
-      'args': {
-        'pid': pid,
-        'activity': {
-          'type': 2, // Listening
-          'details': title,
-          'state': state,
-          'timestamps': {'start': start},
-        },
-      },
+      'args': {'pid': pid, 'activity': activity},
       'nonce': _nonce(),
     });
   }
 
-  /// Línea de detalles: título + álbum (si existe).
-  String _details(Track track) {
+  /// Construye el payload `activity` de SET_ACTIVITY.
+  ///
+  /// · Tipo LISTENING (2): Discord muestra "Escuchando {details}" con el
+  ///   título de la canción. El tipo STREAMING (1) exige una URL de Twitch
+  ///   y el IPC RECHAZA el payload completo si no lo es — la presencia deja
+  ///   de aparecer aunque el socket siga conectado.
+  /// · Portada como `large_image`: las URL remotas https funcionan sin
+  ///   subir assets al portal de desarrolladores (igual que hace Forawn).
+  /// · Barra de progreso: `timestamps.start` + `end` (solo con duración
+  ///   conocida); sin `end` Discord muestra cronómetro simple.
+  @visibleForTesting
+  static Map<String, dynamic>? buildActivity({
+    required Track track,
+    required Duration position,
+    Duration? total,
+  }) {
+    final title = track.title.isNotEmpty ? track.title : 'Unknown';
+    final artist = track.artist.isNotEmpty ? track.artist : 'Scrup';
+
+    // Timestamps en segundos Unix: start retrocede lo ya reproducido para
+    // que el cronómetro coincida con la posición actual; end cierra la
+    // barra en el fin real de la pista.
+    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final startSec = nowSec - position.inSeconds;
+    final totalSec = total?.inSeconds ?? 0;
+    final hasEnd = totalSec > position.inSeconds;
+
+    final thumb = track.thumbnailUrl;
     final album = track.album;
-    return album == null || album.isEmpty
-        ? track.title
-        : '$track.title · $album';
+
+    return {
+      'type': 2, // Listening
+      'details': title,
+      'state': artist,
+      'timestamps': {
+        'start': startSec,
+        if (hasEnd) 'end': nowSec + (totalSec - position.inSeconds),
+      },
+      if (thumb != null && thumb.isNotEmpty)
+        'assets': {
+          'large_image': thumb,
+          'large_text': (album != null && album.isNotEmpty)
+              ? '$title · $album'
+              : title,
+        },
+    };
   }
 
   /// Id del proceso actual (lo exige el payload SET_ACTIVITY).

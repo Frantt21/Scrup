@@ -47,9 +47,7 @@ class SilenceSkipService extends ChangeNotifier {
     _pollTimer = Timer.periodic(_pollInterval, (_) => _checkPosition());
     // Analizar la pista ya cargada (sesión restaurada al arrancar).
     final current = _player.currentTrackValue;
-    if (current != null && _settings.skipSilenceEnabled.value) {
-      _prepare(current.id);
-    }
+    if (current != null) _prepare(current.id);
   }
 
   /// Frecuencia de sondeo de posición: 50 ms ⇒ el silencio se percibe como
@@ -160,15 +158,19 @@ class SilenceSkipService extends ChangeNotifier {
   void _onTrackChanged(Track? track) {
     _retryTimer?.cancel();
     _retryCount = 0;
-    if (track == null || !_settings.skipSilenceEnabled.value) return;
+    if (track == null) return;
     _prepare(track.id);
   }
 
   /// Prepara los huecos de UNA pista: primero SponsorBlock (instantáneo y
   /// curado — cubre intros/outros que NO son silencio acústico), y en
-  /// paralelo el análisis local con ffmpeg como fallback.
+  /// paralelo el análisis local con ffmpeg como fallback. SponsorBlock se
+  /// consulta SIEMPRE: además de saltar segmentos alimenta el auto-offset
+  /// de las letras (introEndFor), que aplica aunque el omitir-silencios
+  /// esté apagado; el análisis acústico y el salto sí quedan tras el toggle.
   void _prepare(String trackId) {
     unawaited(_fetchSponsorBlock(trackId));
+    if (!_settings.skipSilenceEnabled.value) return;
     unawaited(_analyze(trackId));
   }
 
