@@ -239,19 +239,10 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            // Plano: dos tonos oscuros en degradado VERTICAL (sin blur), con
-            // contraste suave (más claro arriba, más oscuro abajo). El
-            // degradado da el toque de profundidad; el acento colorido queda
-            // solo para el player.
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.72,
-                ),
-                theme.colorScheme.surfaceContainer.withValues(alpha: 0.45),
-              ],
+            // Plano: un único tono oscuro, sin degradado y sin blur. El
+            // acento colorido queda solo para el player.
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.72,
             ),
           ),
           child: Material(

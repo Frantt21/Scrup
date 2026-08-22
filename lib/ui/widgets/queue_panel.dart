@@ -94,18 +94,10 @@ class _QueueGlass extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            // Plano: los dos tonos oscuros del sidebar en degradado VERTICAL
-            // con contraste suave (más claro arriba, más oscuro abajo), para
-            // UI neutra y coherente.
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.72,
-                ),
-                theme.colorScheme.surfaceContainer.withValues(alpha: 0.45),
-              ],
+            // Plano: un único tono oscuro, sin degradado, para UI neutra y
+            // coherente.
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.72,
             ),
           ),
           child: StreamBuilder<bool>(

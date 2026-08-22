@@ -59,10 +59,17 @@ StartupWMClass=$APP_ID
 EOF
 
 # Refresca la base de datos de aplicaciones y la caché de iconos (best-effort).
+# kbuildsycoca es la caché de .desktop de KDE/Plasma: sin ella, el icono no
+# aparece en la barra de tareas hasta reiniciar plasmashell.
 command -v update-desktop-database >/dev/null && \
   update-desktop-database "$APPS_DIR" >/dev/null 2>&1 || true
 command -v gtk-update-icon-cache >/dev/null && \
   gtk-update-icon-cache -f -t "$ICON_BASE" >/dev/null 2>&1 || true
+if command -v kbuildsycoca6 >/dev/null; then
+  kbuildsycoca6 >/dev/null 2>&1 || true
+elif command -v kbuildsycoca5 >/dev/null; then
+  kbuildsycoca5 >/dev/null 2>&1 || true
+fi
 
 echo "OK: Scrup registrado en el escritorio."
 echo "  Icono: $ICON_BASE/256x256/apps/$APP_ID.png"

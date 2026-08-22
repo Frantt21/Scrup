@@ -386,8 +386,8 @@ class _KaraokeLine extends StatelessWidget {
         height: 1.3,
         fontFamily: 'Roboto');
 
-    final hasRealWords = line.words != null && line.words!.isNotEmpty;
-    final shouldAnimate = isCurrent && isSweepEnabled && hasRealWords;
+    final tokens = computeTokens();
+    final shouldAnimate = isCurrent && isSweepEnabled && tokens.karaoke;
 
     return AnimatedScale(
       scale: isCurrent ? 1.05 : 1.0,
@@ -397,43 +397,76 @@ class _KaraokeLine extends StatelessWidget {
       child: SizedBox(
         width: double.infinity,
         child: shouldAnimate
-            ? _buildSweep(baseStyle)
-            : _buildStatic(baseStyle, isCurrent ? _activeColor : _inactiveColor),
+            ? _buildSweep(baseStyle, tokens.list)
+            : _buildStatic(
+                baseStyle, tokens.list, isCurrent ? _activeColor : _inactiveColor),
       ),
     );
   }
 
-  /// Smooth sweep: computes progress for each word from REAL timestamps,
+  /// Tokens visuales de la línea, calculados por `build` y compartidos por
+  /// ambos modos de render. Tanto el estático como el sweep consumen esta
+  /// MISMA lista, así el layout es idéntico al ganar/perder el foco y las
+  /// palabras no "saltan".
+  ///
+  /// Cada palabra del proveedor se trocea por sus espacios internos: los
+  /// datos word-by-word (LRCLIB/KPoe, TTML, SyncLRC) traen espacios dobles
+  /// o tabs dentro del texto de una palabra que el texto plano normalizado
+  /// no tiene, y eran los responsables de la separación visible solo en la
+  /// línea activa.
+  _LineTokens computeTokens() {
+    final words = line.words;
+    if (words != null && words.isNotEmpty) {
+      final lineEndMs = endTime.inMilliseconds;
+      final toks = <_LineToken>[];
+      for (var i = 0; i < words.length; i++) {
+        final wStartMs = words[i].timestamp.inMilliseconds;
+        // End of this word = start of next word, or line end for last word
+        var wEndMs = i < words.length - 1
+            ? words[i + 1].timestamp.inMilliseconds
+            : max(wStartMs + 1, lineEndMs);
+        wEndMs = max(wStartMs + 1, wEndMs);
+        for (final piece in words[i].text.trim().split(RegExp(r'\s+'))) {
+          if (piece.isEmpty) continue;
+          toks.add(_LineToken(piece, wStartMs, wEndMs));
+        }
+      }
+      if (toks.isNotEmpty) return _LineTokens(toks, true);
+    }
+    // Sin palabras (o todas vacías): tokens desde el texto plano, ya
+    // normalizado; las ventanas quedan en cero porque no hay sweep.
+    return _LineTokens(
+      [
+        for (final t in line.text.split(' '))
+          if (t.isNotEmpty) _LineToken(t, 0, 0),
+      ],
+      false,
+    );
+  }
+
+  /// Smooth sweep: computes progress for each token from REAL timestamps,
   /// no TweenAnimationBuilder. The audio position drives everything.
   ///
   /// El fin de la última palabra es el timestamp de la línea siguiente SIN
   /// adelanto: para líneas karaoke el índice cambia de línea de forma
   /// exacta (ver getCurrentLineIndex), así que la palabra tiene su ventana
   /// completa y siempre llega a pintarse.
-  Widget _buildSweep(TextStyle baseStyle) {
-    final words = line.words!;
-    final lineEndMs = endTime.inMilliseconds;
-
+  Widget _buildSweep(TextStyle baseStyle, List<_LineToken> tokens) {
     return ValueListenableBuilder<Duration>(
       valueListenable: positionNotifier,
       builder: (context, position, _) {
         final currentMs = (position - offset).inMilliseconds;
 
         final List<Widget> wordWidgets = [];
-        for (var i = 0; i < words.length; i++) {
-          // Mismo espaciado que las líneas estáticas: palabra + espacio.
+        for (var i = 0; i < tokens.length; i++) {
+          // Mismo espaciado que las líneas estáticas: token + espacio.
           // Sin él, la línea activa se ve apretada frente a las demás.
-          final label =
-              words[i].text.trim() + (i < words.length - 1 ? ' ' : '');
-          if (label.trim().isEmpty) continue;
-          final wStartMs = words[i].timestamp.inMilliseconds;
-          // End of this word = start of next word, or line end for last word
-          final wEndMs = i < words.length - 1
-              ? words[i + 1].timestamp.inMilliseconds
-              : max(wStartMs + 1, lineEndMs);
+          final label = tokens[i].text + (i < tokens.length - 1 ? ' ' : '');
+          final wStartMs = tokens[i].startMs;
+          final wEndMs = tokens[i].endMs;
           final wordDuration = max(1, wEndMs - wStartMs);
 
-          // Progress through this specific word using real timestamps
+          // Progress through this specific token using real timestamps
           double wordProgress;
           if (currentMs >= wEndMs) {
             wordProgress = 1.0;
@@ -457,7 +490,9 @@ class _KaraokeLine extends StatelessWidget {
         return Wrap(
           alignment: WrapAlignment.start,
           crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 2.0,
+          // El hueco entre palabras es SOLO el espacio dentro del Text:
+          // un espaciado extra aquí las hacía verse separadas.
+          spacing: 0.0,
           runSpacing: 4.0,
           children: wordWidgets,
         );
@@ -465,20 +500,38 @@ class _KaraokeLine extends StatelessWidget {
     );
   }
 
-  Widget _buildStatic(TextStyle baseStyle, Color color) {
-    final words = line.text.split(' ');
+  Widget _buildStatic(
+      TextStyle baseStyle, List<_LineToken> tokens, Color color) {
     return Wrap(
       alignment: WrapAlignment.start,
       crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 2.0,
+      // Mismo criterio que el sweep: solo el espacio tipográfico.
+      spacing: 0.0,
       runSpacing: 4.0,
       children: [
-        for (int i = 0; i < words.length; i++)
-          Text(words[i] + (i < words.length - 1 ? ' ' : ''),
+        for (int i = 0; i < tokens.length; i++)
+          Text(tokens[i].text + (i < tokens.length - 1 ? ' ' : ''),
               style: baseStyle.copyWith(color: color))
       ],
     );
   }
+}
+
+/// Tokens de una línea karaoke + si vienen de datos word-by-word reales
+/// (`karaoke`) o del texto plano (sin ventanas de tiempo).
+class _LineTokens {
+  final List<_LineToken> list;
+  final bool karaoke;
+  const _LineTokens(this.list, this.karaoke);
+}
+
+/// Trozo visual de una línea karaoke: una pieza SIN espacios con su ventana
+/// de tiempo (startMs/endMs solo relevantes para el sweep).
+class _LineToken {
+  final String text;
+  final int startMs;
+  final int endMs;
+  const _LineToken(this.text, this.startMs, this.endMs);
 }
 
 // ─── _KaraokeWord ─────────────────────────────────────────────────────

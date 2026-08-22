@@ -561,32 +561,21 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              // Plano: la MISMA base oscura que el sidebar (mismos dos tonos
-              // y alphas, en degradado VERTICAL), pero en el detalle se le
-              // añade un matiz sutil del color de la portada de la playlist
-              // (solo aquí; el sidebar se queda neutro).
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  if (playlistColor != null)
-                    // Tinte SOLO del tono: se mezclan los colores opacos
-                    // (sin alpha) y luego se aplican los mismos alphas del
-                    // sidebar, para que la translucidez coincida exactamente
-                    // (Color.lerp también interpolaría el canal alfa y el
-                    // detalle quedaría más opaco que el sidebar).
-                    Color.lerp(
-                      theme.colorScheme.surfaceContainerHighest,
-                      playlistColor,
-                      0.30,
-                    )!.withValues(alpha: 0.72)
-                  else
-                    theme.colorScheme.surfaceContainerHighest.withValues(
-                      alpha: 0.72,
-                    ),
-                  theme.colorScheme.surfaceContainer.withValues(alpha: 0.45),
-                ],
-              ),
+              // Plano: la MISMA base oscura plana del sidebar (un único
+              // tono, sin degradado), pero en el detalle se le añade un
+              // matiz sutil del color de la portada de la playlist (solo
+              // aquí; el sidebar se queda neutro).
+              color: (playlistColor != null
+                      // Tinte SOLO del tono: se mezclan los colores opacos
+                      // (sin alpha) y luego se aplica el mismo alpha del
+                      // sidebar, para que la translucidez coincida exactamente.
+                      ? Color.lerp(
+                          theme.colorScheme.surfaceContainerHighest,
+                          playlistColor,
+                          0.30,
+                        )!
+                      : theme.colorScheme.surfaceContainerHighest)
+                  .withValues(alpha: 0.72),
             ),
             child: Material(
               color: Colors.transparent,

@@ -172,18 +172,11 @@ class _SettingsViewState extends State<SettingsView> {
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            // Plano: la MISMA receta del sidebar (dos tonos oscuros en
-            // degradado VERTICAL con contraste suave), sin tinte del acento
-            // — el degradado con acento queda solo para el player.
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.72,
-                ),
-                theme.colorScheme.surfaceContainer.withValues(alpha: 0.45),
-              ],
+            // Plano: la MISMA receta del sidebar (un único tono oscuro),
+            // sin tinte del acento — el degradado con acento queda solo para
+            // el player.
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.72,
             ),
           ),
           child: Material(

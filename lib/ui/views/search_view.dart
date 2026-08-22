@@ -150,14 +150,7 @@ class _SearchViewState extends State<SearchView> {
         borderRadius: BorderRadius.circular(18),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
-                theme.colorScheme.surfaceContainer.withValues(alpha: 0.45),
-              ],
-            ),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
