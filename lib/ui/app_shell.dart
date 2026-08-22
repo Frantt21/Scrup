@@ -203,26 +203,48 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final openPlaylist = _openPlaylist;
-    // Barra superior: con una playlist o la configuración abiertas muestra el
-    // botón de volver y su nombre; el engranaje de configuración vive a la
-    // derecha. Lo usa la CustomTitleBar en las 3 plataformas (la title bar
-    // personalizada sustituye a la nativa en todas; en macOS los botones de
-    // ventana los conserva el sistema, en Windows/Linux los dibuja la barra).
+    // Barra superior: el título de la zona ocupa EL MISMO sitio que el
+    // título de la app ("Scrup"), sin nada delante que lo desplace. Al estar
+    // dentro de una zona (playlist/configuración) se muestran junto al
+    // título las acciones de navegación: inicio (home) y búsqueda. El
+    // engranaje de configuración vive a la derecha. Lo usa la CustomTitleBar
+    // en las 3 plataformas (la title bar personalizada sustituye a la nativa
+    // en todas; en macOS los botones de ventana los conserva el sistema, en
+    // Windows/Linux los dibuja la barra).
+    final inZone = _showSettings || openPlaylist != null;
     final barTitle = _showSettings
         ? l10n.settings
         : (openPlaylist?.name ?? 'Scrup');
-    final Widget? barLeading = _showSettings || openPlaylist != null
-        ? IconButton(
-            icon: const Icon(Icons.arrow_back),
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-            padding: EdgeInsets.zero,
-            tooltip: _showSettings ? l10n.backToHome : l10n.backToPlaylists,
-            onPressed: _showSettings
-                ? _closeSettings
-                : () => _selectPlaylist(null),
-          )
-        : null;
+    final List<Widget> barActions = [
+      if (inZone) ...[
+        IconButton(
+          icon: const Icon(Icons.home_outlined),
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+          padding: EdgeInsets.zero,
+          tooltip: l10n.backToHome,
+          onPressed: () => setState(() {
+            _showSettings = false;
+            _openPlaylist = null;
+            _showLyrics = false;
+            _selectedIndex = 0;
+          }),
+        ),
+        IconButton(
+          icon: const Icon(Icons.search_outlined),
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+          padding: EdgeInsets.zero,
+          tooltip: l10n.searchTitle,
+          onPressed: () => setState(() {
+            _showSettings = false;
+            _openPlaylist = null;
+            _showLyrics = false;
+            _selectedIndex = 1;
+          }),
+        ),
+      ],
+    ];
     final Widget barTrailing = IconButton(
       icon: Icon(
         Icons.settings_outlined,
@@ -240,7 +262,7 @@ class _AppShellState extends State<AppShell> {
         children: [
           CustomTitleBar(
             title: barTitle,
-            leading: barLeading,
+            actions: barActions,
             trailing: barTrailing,
           ),
           Expanded(
@@ -287,7 +309,14 @@ class _AppShellState extends State<AppShell> {
                           else
                             const SizedBox.shrink(),
                           SettingsView(key: ValueKey(_settingsOpenCount)),
-                          LyricsView(),
+                          // TickerMode: con la vista de letras oculta se
+                          // MUTA el ticker del sweep karaoke (createTicker
+                          // respeta TickerMode). Sin esto, mientras suena
+                          // música el ticker escribe la posición cada frame,
+                          // fuerza un frame por vsync (60+) y repinta TODA
+                          // la UI glass (blurs) aunque nadie vea las letras
+                          // — principal fuente de CPU en reproducción.
+                          TickerMode(enabled: _showLyrics, child: LyricsView()),
                         ],
                       ),
                       // Player flotante tipo glass. El padding exterior es el

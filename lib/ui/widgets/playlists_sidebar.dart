@@ -839,6 +839,7 @@ class _CreatePlaylistTile extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: onTap,
+        mouseCursor: SystemMouseCursors.click,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Row(
@@ -891,9 +892,12 @@ class _CreateGridCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
+    // GestureDetector no pinta cursor propio: MouseRegion lo pone en manita.
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Mismo bloque que la portada de las celdas de playlist
@@ -935,6 +939,7 @@ class _CreateGridCell extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -985,91 +990,191 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    return AlertDialog(
-      title: Text(l10n.newPlaylist),
-      content: SizedBox(
-        width: 400,
+    // Mismo shell glass que el resto de diálogos de la app (editar
+    // playlist/metadatos, sync de letra): Container sólido con radio 18 +
+    // sombra profunda, cabecera con X y cuerpo en padding 24.
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Container(
+        width: 420,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: theme.colorScheme.surfaceContainerHigh,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.45),
+              blurRadius: 32,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: l10n.playlistName,
-                hintText: l10n.playlistNameHint,
-              ),
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _descController,
-              maxLines: 3,
-              maxLength: 300,
-              decoration: InputDecoration(
-                labelText: l10n.descriptionOptional,
-                hintText: l10n.descriptionHint,
-              ),
-            ),
-            const SizedBox(height: 4),
-            // Portada: preview + selector de archivo
-            Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
-                    width: 48,
-                    height: 48,
-                    child: _imagePath != null
-                        ? Image.file(
-                            File(_imagePath!),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => _placeholder(theme),
-                          )
-                        : _placeholder(theme),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _imagePath == null ? l10n.noCover : p.basename(_imagePath!),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 18, 8, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.newPlaylist,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-                TextButton.icon(
-                  onPressed: _pickImage,
-                  icon: Icon(
-                    _imagePath == null
-                        ? Icons.image_outlined
-                        : Icons.swap_horiz,
-                    size: 18,
-                  ),
-                  label: Text(
-                    _imagePath == null ? l10n.chooseImage : l10n.changeImage,
-                  ),
-                ),
-                if (_imagePath != null)
                   IconButton(
                     icon: const Icon(Icons.close, size: 18),
-                    tooltip: l10n.removeImage,
-                    onPressed: () => setState(() => _imagePath = null),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: l10n.close,
+                    onPressed: () => Navigator.pop(context),
                   ),
-              ],
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _field(
+                    l10n.playlistName,
+                    _nameController,
+                    Icons.queue_music,
+                    hint: l10n.playlistNameHint,
+                    submit: true,
+                  ),
+                  const SizedBox(height: 16),
+                  _field(
+                    l10n.descriptionOptional,
+                    _descController,
+                    Icons.notes,
+                    hint: l10n.descriptionHint,
+                    maxLines: 3,
+                    maxLength: 300,
+                  ),
+                  const SizedBox(height: 20),
+                  // Portada: vista previa + selector de archivo + quitar.
+                  Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 56,
+                          height: 56,
+                          child: _imagePath != null
+                              ? Image.file(
+                                  File(_imagePath!),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => _placeholder(theme),
+                                )
+                              : _placeholder(theme),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _imagePath == null
+                              ? l10n.noCover
+                              : p.basename(_imagePath!),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          _imagePath == null
+                              ? Icons.image_outlined
+                              : Icons.swap_horiz,
+                          size: 20,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        tooltip: _imagePath == null
+                            ? l10n.chooseImage
+                            : l10n.changeImage,
+                        onPressed: _pickImage,
+                      ),
+                      if (_imagePath != null)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          visualDensity: VisualDensity.compact,
+                          tooltip: l10n.removeImage,
+                          onPressed: () => setState(() => _imagePath = null),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(l10n.cancel),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(onPressed: _submit, child: Text(l10n.create)),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(l10n.cancel),
+    );
+  }
+
+  /// Campo con su label como título ENCIMA del input (mismo patrón que los
+  /// diálogos de editar metadatos/playlist).
+  Widget _field(
+    String label,
+    TextEditingController controller,
+    IconData icon, {
+    int maxLines = 1,
+    int? maxLength,
+    bool submit = false,
+    String? hint,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        FilledButton(onPressed: _submit, child: Text(l10n.create)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          autofocus: controller == _nameController,
+          maxLines: maxLines,
+          maxLength: maxLength,
+          decoration: InputDecoration(
+            hintText: hint ?? label,
+            prefixIcon: maxLines == 1 ? Icon(icon, size: 18) : null,
+            filled: true,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            counterText: '',
+          ),
+          style: theme.textTheme.bodyMedium,
+          onSubmitted: submit ? (_) => _submit() : null,
+        ),
       ],
     );
   }

@@ -18,6 +18,7 @@ import '../playback.dart';
 import '../theme_controller.dart';
 import '../widgets/context_menu_item.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/edit_metadata_dialog.dart';
 import '../widgets/now_playing_bars.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/scrup_toasts.dart';
@@ -327,6 +328,12 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
           color: _menuTrackColor(track) ?? _ambientColor,
         ),
         ContextMenuItem(
+          value: 'edit',
+          icon: Icons.edit,
+          label: l10n.editMetadata,
+          color: _menuTrackColor(track) ?? _ambientColor,
+        ),
+        ContextMenuItem(
           value: 'remove',
           icon: Icons.remove_circle_outline,
           label: l10n.removeFromPlaylist,
@@ -346,9 +353,34 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
           startIndex: start < 0 ? 0 : start,
           playlistId: widget.playlist.id,
         );
+      case 'edit':
+        await _editTrackMetadata(track);
       case 'remove':
         await _removeTrack(track);
     }
+  }
+
+  /// Editor de metadatos de una canción del playlist (clic derecho →
+  /// Editar metadatos). Al guardar: si la pista editada es la que SUENA, el
+  /// player actualiza cola/UI/base; si no, basta persistir la fila — el
+  /// stream de `watchPlaylistTracks` re-emite y la lista se refresca sola.
+  Future<void> _editTrackMetadata(Track track) async {
+    final saved = await showDialog<Track>(
+      context: context,
+      builder: (ctx) => EditMetadataDialog(track: track),
+    );
+    if (saved == null || !mounted) return;
+    final player = context.read<PlayerService>();
+    if (player.currentTrackValue?.id == track.id) {
+      await player.updateCurrentMetadata(saved);
+    } else {
+      await context.read<AppDatabase>().updateTrackMetadata(saved);
+    }
+    if (!mounted) return;
+    showScrupToast(
+      AppLocalizations.of(context).metadataSaved,
+      kind: ScrupToastKind.success,
+    );
   }
 
   /// Color del artwork de una canción para el menú contextual: mira el
@@ -946,103 +978,208 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    return AlertDialog(
-      title: Text(l10n.editPlaylist),
-      content: SizedBox(
+    // Mismo shell glass que el resto de diálogos de la app (editar
+    // metadatos, sync de letra, búsqueda LRCLIB): Container sólido con
+    // radio 18 + sombra profunda, cabecera con X y cuerpo en padding 24.
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Container(
         width: 420,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          // Fondo sólido (sin borde ni gradiente translúcido).
+          color: theme.colorScheme.surfaceContainerHigh,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.45),
+              blurRadius: 32,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              decoration: InputDecoration(labelText: l10n.playlistName),
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _descController,
-              maxLines: 3,
-              maxLength: 300,
-              decoration: InputDecoration(labelText: l10n.description),
-            ),
-            const SizedBox(height: 4),
-            // Portada: preview + acciones
-            Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
-                    width: 48,
-                    height: 48,
-                    child: CoverImage(
-                      source: _previewSource,
-                      cacheWidth: 120,
-                      fallback: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              theme.colorScheme.surfaceContainerHigh,
-                              theme.colorScheme.surfaceContainer,
-                            ],
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.queue_music,
-                          size: 20,
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.5,
-                          ),
-                        ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 18, 8, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.editPlaylist,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _previewLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.image_outlined, size: 20),
-                  tooltip: l10n.chooseImage,
-                  onPressed: _pickImage,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.library_music_outlined, size: 20),
-                  tooltip: l10n.coverFromTrackLabel,
-                  onPressed: _pickTrackCover,
-                ),
-                if (_previewSource != null)
                   IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    tooltip: l10n.removeCover,
-                    onPressed: () => setState(() {
-                      _imagePath = null;
-                      _trackCoverUrl = null;
-                      _removeCover = true;
-                    }),
+                    icon: const Icon(Icons.close, size: 18),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: l10n.close,
+                    onPressed: () => Navigator.pop(context),
                   ),
-              ],
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _field(
+                    l10n.playlistName,
+                    _nameController,
+                    Icons.queue_music,
+                    submit: true,
+                  ),
+                  const SizedBox(height: 16),
+                  _field(
+                    l10n.description,
+                    _descController,
+                    Icons.notes,
+                    maxLines: 3,
+                    maxLength: 300,
+                  ),
+                  const SizedBox(height: 20),
+                  // Portada: vista previa + origen (archivo / canción de la
+                  // playlist) + quitar.
+                  Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 56,
+                          height: 56,
+                          child: CoverImage(
+                            source: _previewSource,
+                            cacheWidth: 120,
+                            fallback: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    theme.colorScheme.surfaceContainerHigh,
+                                    theme.colorScheme.surfaceContainer,
+                                  ],
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.queue_music,
+                                size: 22,
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _previewLabel,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.image_outlined, size: 20),
+                        visualDensity: VisualDensity.compact,
+                        tooltip: l10n.chooseImage,
+                        onPressed: _pickImage,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.library_music_outlined, size: 20),
+                        visualDensity: VisualDensity.compact,
+                        tooltip: l10n.coverFromTrackLabel,
+                        onPressed: _pickTrackCover,
+                      ),
+                      if (_previewSource != null)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          visualDensity: VisualDensity.compact,
+                          tooltip: l10n.removeCover,
+                          onPressed: () => setState(() {
+                            _imagePath = null;
+                            _trackCoverUrl = null;
+                            _removeCover = true;
+                          }),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(l10n.cancel),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(onPressed: _submit, child: Text(l10n.save)),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(l10n.cancel),
+    );
+  }
+
+  /// Campo con su label como título ENCIMA del input (mismo patrón que el
+  /// editor de metadatos). [submit] habilita Enter para guardar; en campos
+  /// multilínea se omite el prefixIcon (queda mal centrado en 3 líneas).
+  Widget _field(
+    String label,
+    TextEditingController controller,
+    IconData icon, {
+    int maxLines = 1,
+    int? maxLength,
+    bool submit = false,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        FilledButton(onPressed: _submit, child: Text(l10n.save)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          autofocus: controller == _nameController,
+          maxLines: maxLines,
+          maxLength: maxLength,
+          decoration: InputDecoration(
+            hintText: label,
+            prefixIcon: maxLines == 1 ? Icon(icon, size: 18) : null,
+            filled: true,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            counterText: '',
+          ),
+          style: theme.textTheme.bodyMedium,
+          onSubmitted: submit ? (_) => _submit() : null,
+        ),
       ],
     );
   }

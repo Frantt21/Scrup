@@ -17,10 +17,20 @@ class CustomTitleBar extends StatefulWidget {
   final Widget? leading;
   final String? title;
 
+  /// Acciones opcionales justo DESPUÉS del título (p. ej. navegación
+  /// inicio/búsqueda cuando se está dentro de una zona).
+  final List<Widget> actions;
+
   /// Acción opcional alineada a la derecha (p. ej. el botón de configuración).
   final Widget? trailing;
 
-  const CustomTitleBar({super.key, this.leading, this.title, this.trailing});
+  const CustomTitleBar({
+    super.key,
+    this.leading,
+    this.title,
+    this.actions = const [],
+    this.trailing,
+  });
 
   @override
   State<CustomTitleBar> createState() => _CustomTitleBarState();
@@ -121,6 +131,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                 ),
               ),
             ),
+          // Acciones junto al título (p. ej. inicio/búsqueda en una zona).
+          if (widget.actions.isNotEmpty) ...[
+            const SizedBox(width: 4),
+            ...widget.actions,
+          ],
           // Área de arrastre ocupa el espacio restante
           Expanded(child: DragToMoveArea(child: SizedBox.expand())),
           // Acción opcional (p. ej. configuración) antes de los controles
