@@ -18,6 +18,10 @@
   "recentEmptyHint": "Use the search above to get started",
   "backToHome": "Back to home",
   "searchTitle": "Search",
+  "filterPlaylists": "Filter playlists…",
+  "@filterPlaylists": {
+    "description": "Hint del campo para filtrar playlists en el modal de añadir a playlist"
+  },
   "searchStartHint": "Search for a song to start playing it",
   "searchNoResults": "No results. Try another search.",
   "cantCreatePlaylist": "Could not create the playlist",
@@ -31,6 +35,19 @@
   },
   "deletePlaylistTitle": "Delete playlist",
   "confirmDeletePlaylist": "Delete \"{name}\"?",
+  "confirmRemoveTrackTitle": "Remove from this playlist?",
+  "@confirmRemoveTrackTitle": {
+    "description": "Título del diálogo de confirmación al quitar una canción de una playlist"
+  },
+  "confirmRemoveTrackBody": "\"{name}\" will be removed from this playlist.",
+  "@confirmRemoveTrackBody": {
+    "description": "Cuerpo del diálogo de confirmación; {name} es el título de la canción",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "@confirmDeletePlaylist": {
     "placeholders": {
       "name": {

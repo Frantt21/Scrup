@@ -38,8 +38,9 @@ Future<void> showAddToPlaylistDialog(BuildContext context, Track track) async {
   showScrupToast(l10n.addedToPlaylist, kind: ScrupToastKind.success);
 }
 
-/// Modal de selección: glass oscuro con las playlists en grid de 3 columnas.
-class _AddToPlaylistDialog extends StatelessWidget {
+/// Modal de selección: plano, con buscador para filtrar por nombre y las
+/// playlists en grid de 3 columnas.
+class _AddToPlaylistDialog extends StatefulWidget {
   final List<Playlist> playlists;
 
   /// Playlists que ya contienen la pista (se marcan con un check).
@@ -55,9 +56,37 @@ class _AddToPlaylistDialog extends StatelessWidget {
   });
 
   @override
+  State<_AddToPlaylistDialog> createState() => _AddToPlaylistDialogState();
+}
+
+class _AddToPlaylistDialogState extends State<_AddToPlaylistDialog> {
+  final _filter = TextEditingController();
+
+  String _query = '';
+
+  @override
+  void dispose() {
+    _filter.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+
+    // Filtrado por nombre, insensible a mayúsculas/acentos básicos.
+    String norm(String s) => s
+        .toLowerCase()
+        .replaceAll(RegExp(r'[áàäâã]'), 'a')
+        .replaceAll(RegExp(r'[éèëê]'), 'e')
+        .replaceAll(RegExp(r'[íìïî]'), 'i')
+        .replaceAll(RegExp(r'[óòöôõ]'), 'o')
+        .replaceAll(RegExp(r'[úùüû]'), 'u');
+    final q = norm(_query.trim());
+    final filtered = q.isEmpty
+        ? widget.playlists
+        : widget.playlists.where((p) => norm(p.name).contains(q)).toList();
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -67,22 +96,7 @@ class _AddToPlaylistDialog extends StatelessWidget {
         constraints: const BoxConstraints(maxHeight: 520),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.92),
-              theme.colorScheme.surfaceContainer.withValues(alpha: 0.92),
-            ],
-          ),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.45),
-              blurRadius: 32,
-              offset: const Offset(0, 14),
-            ),
-          ],
+          color: theme.colorScheme.surfaceContainerHigh,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -110,10 +124,44 @@ class _AddToPlaylistDialog extends StatelessWidget {
                 ],
               ),
             ),
+            if (widget.playlists.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: TextField(
+                  controller: _filter,
+                  autofocus: false,
+                  onChanged: (v) => setState(() => _query = v),
+                  decoration: InputDecoration(
+                    hintText: l10n.filterPlaylists,
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    isDense: true,
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceContainer,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
             // Grid de playlists (o estado vacío)
             Flexible(
-              child: playlists.isEmpty
-                  ? _EmptyState(onCreate: onCreate)
+              child: widget.playlists.isEmpty
+                  ? _EmptyState(onCreate: widget.onCreate)
+                  : filtered.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+                        child: Text(
+                          l10n.searchNoResults,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    )
                   : GridView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                       gridDelegate:
@@ -123,15 +171,20 @@ class _AddToPlaylistDialog extends StatelessWidget {
                             crossAxisSpacing: 12,
                             childAspectRatio: 0.82,
                           ),
-                      itemCount: playlists.length + 1,
+                      // Con filtro activo se oculta la celda de crear para no
+                      // confundir ("nueva" no coincide con la búsqueda).
+                      itemCount:
+                          filtered.length + (_query.trim().isEmpty ? 1 : 0),
                       itemBuilder: (context, i) {
-                        if (i == playlists.length) {
-                          return _CreateCell(onTap: onCreate);
+                        if (i == filtered.length) {
+                          return _CreateCell(onTap: widget.onCreate);
                         }
-                        final playlist = playlists[i];
+                        final playlist = filtered[i];
                         return _PlaylistOptionCell(
                           playlist: playlist,
-                          containsTrack: containing.contains(playlist.id),
+                          containsTrack: widget.containing.contains(
+                            playlist.id,
+                          ),
                           onTap: () => Navigator.pop(context, playlist.id),
                         );
                       },
@@ -332,9 +385,6 @@ class _CreateCell extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.55),
-                  ),
                   color: theme.colorScheme.primary.withValues(alpha: 0.08),
                 ),
                 child: Center(

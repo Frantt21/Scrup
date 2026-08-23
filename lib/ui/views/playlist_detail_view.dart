@@ -15,6 +15,7 @@ import '../../services/palette_cache_store.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/player_service.dart';
 import '../playback.dart';
+import '../playlist_actions.dart';
 import '../theme_controller.dart';
 import '../widgets/context_menu_item.dart';
 import '../widgets/cover_image.dart';
@@ -294,7 +295,28 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     await playQueue(context, _tracks, playlistId: widget.playlist.id);
   }
 
+  /// Quita una canción del playlist, previa confirmación (el borrado es
+  /// destructivo y un clic derecho distraído no debería costar la canción).
   Future<void> _removeTrack(Track track) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.confirmRemoveTrackTitle),
+        content: Text(l10n.confirmRemoveTrackBody(track.title)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.removeFromPlaylist),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     await context.read<AppDatabase>().removeFromPlaylist(
       widget.playlist.id,
       track.id,
@@ -328,6 +350,12 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
           color: _menuTrackColor(track) ?? _ambientColor,
         ),
         ContextMenuItem(
+          value: 'add',
+          icon: Icons.playlist_add,
+          label: l10n.addToPlaylist,
+          color: _menuTrackColor(track) ?? _ambientColor,
+        ),
+        ContextMenuItem(
           value: 'edit',
           icon: Icons.edit,
           label: l10n.editMetadata,
@@ -353,6 +381,8 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
           startIndex: start < 0 ? 0 : start,
           playlistId: widget.playlist.id,
         );
+      case 'add':
+        await showAddToPlaylistDialog(context, track);
       case 'edit':
         await _editTrackMetadata(track);
       case 'remove':

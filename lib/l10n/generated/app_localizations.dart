@@ -175,6 +175,12 @@ abstract class AppLocalizations {
   /// **'Buscar'**
   String get searchTitle;
 
+  /// Hint del campo para filtrar playlists en el modal de añadir a playlist
+  ///
+  /// In es, this message translates to:
+  /// **'Filtrar playlists…'**
+  String get filterPlaylists;
+
   /// No description provided for @searchStartHint.
   ///
   /// In es, this message translates to:
@@ -210,6 +216,18 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'¿Eliminar \"{name}\"?'**
   String confirmDeletePlaylist(String name);
+
+  /// Título del diálogo de confirmación al quitar una canción de una playlist
+  ///
+  /// In es, this message translates to:
+  /// **'¿Quitar de la playlist?'**
+  String get confirmRemoveTrackTitle;
+
+  /// Cuerpo del diálogo de confirmación; {name} es el título de la canción
+  ///
+  /// In es, this message translates to:
+  /// **'\"{name}\" se quitará de esta playlist.'**
+  String confirmRemoveTrackBody(String name);
 
   /// No description provided for @cancel.
   ///

@@ -44,6 +44,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchTitle => '搜索';
 
   @override
+  String get filterPlaylists => '筛选播放列表…';
+
+  @override
   String get searchStartHint => '搜索歌曲开始播放';
 
   @override
@@ -63,6 +66,14 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String confirmDeletePlaylist(String name) {
     return '删除“$name”？';
+  }
+
+  @override
+  String get confirmRemoveTrackTitle => '从播放列表中移除？';
+
+  @override
+  String confirmRemoveTrackBody(String name) {
+    return '将从该播放列表中移除“$name”。';
   }
 
   @override

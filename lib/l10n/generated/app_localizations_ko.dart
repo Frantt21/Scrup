@@ -44,6 +44,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get searchTitle => '검색';
 
   @override
+  String get filterPlaylists => '플레이리스트 필터…';
+
+  @override
   String get searchStartHint => '재생할 노래를 검색하세요';
 
   @override
@@ -63,6 +66,14 @@ class AppLocalizationsKo extends AppLocalizations {
   @override
   String confirmDeletePlaylist(String name) {
     return '\"$name\"을(를) 삭제할까요?';
+  }
+
+  @override
+  String get confirmRemoveTrackTitle => '플레이리스트에서 제거할까요?';
+
+  @override
+  String confirmRemoveTrackBody(String name) {
+    return '\"$name\"을(를) 이 플레이리스트에서 제거합니다.';
   }
 
   @override

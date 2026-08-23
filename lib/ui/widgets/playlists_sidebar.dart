@@ -894,9 +894,6 @@ class _CreatePlaylistTile extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.55),
-                  ),
                   color: theme.colorScheme.primary.withValues(alpha: 0.10),
                 ),
                 child: Icon(
@@ -956,9 +953,6 @@ class _CreateGridCell extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.55),
-                ),
                 color: theme.colorScheme.primary.withValues(alpha: 0.08),
               ),
               child: Center(

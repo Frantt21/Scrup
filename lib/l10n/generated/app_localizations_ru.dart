@@ -44,6 +44,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get searchTitle => 'Поиск';
 
   @override
+  String get filterPlaylists => 'Фильтровать плейлисты…';
+
+  @override
   String get searchStartHint =>
       'Найдите песню, чтобы начать её воспроизведение';
 
@@ -64,6 +67,14 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String confirmDeletePlaylist(String name) {
     return 'Удалить \"$name\"?';
+  }
+
+  @override
+  String get confirmRemoveTrackTitle => 'Убрать из плейлиста?';
+
+  @override
+  String confirmRemoveTrackBody(String name) {
+    return '«$name» будет убрана из этого плейлиста.';
   }
 
   @override

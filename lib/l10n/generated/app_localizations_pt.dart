@@ -44,6 +44,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchTitle => 'Buscar';
 
   @override
+  String get filterPlaylists => 'Filtrar playlists…';
+
+  @override
   String get searchStartHint => 'Busque uma música para começar a reproduzi-la';
 
   @override
@@ -63,6 +66,14 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String confirmDeletePlaylist(String name) {
     return 'Excluir \"$name\"?';
+  }
+
+  @override
+  String get confirmRemoveTrackTitle => 'Remover da playlist?';
+
+  @override
+  String confirmRemoveTrackBody(String name) {
+    return '\"$name\" será removida desta playlist.';
   }
 
   @override
@@ -566,6 +577,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get searchTitle => 'Buscar';
 
   @override
+  String get filterPlaylists => 'Filtrar playlists…';
+
+  @override
   String get searchStartHint => 'Busque uma música para começar a reproduzi-la';
 
   @override
@@ -585,6 +599,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String confirmDeletePlaylist(String name) {
     return 'Excluir \"$name\"?';
+  }
+
+  @override
+  String get confirmRemoveTrackTitle => 'Remover da playlist?';
+
+  @override
+  String confirmRemoveTrackBody(String name) {
+    return '\"$name\" será removida desta playlist.';
   }
 
   @override

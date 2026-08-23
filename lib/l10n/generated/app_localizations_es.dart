@@ -44,6 +44,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get searchTitle => 'Buscar';
 
   @override
+  String get filterPlaylists => 'Filtrar playlists…';
+
+  @override
   String get searchStartHint => 'Busca una canción para empezar a reproducirla';
 
   @override
@@ -63,6 +66,14 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String confirmDeletePlaylist(String name) {
     return '¿Eliminar \"$name\"?';
+  }
+
+  @override
+  String get confirmRemoveTrackTitle => '¿Quitar de la playlist?';
+
+  @override
+  String confirmRemoveTrackBody(String name) {
+    return '\"$name\" se quitará de esta playlist.';
   }
 
   @override
