@@ -15,7 +15,20 @@ Plataformas objetivo: **Windows, Linux y macOS** (una sola base de código Flutt
 ## Funcionalidades
 
 - **Inicio**: reproducciones recientes (desde SQLite) en el arranque.
-- **Búsqueda**: busca canciones en YouTube y las reproduce al instante.
+- **Búsqueda**: busca canciones y las reproduce al instante. Combina en
+  paralelo **YouTube Music** (canciones canónicas con metadatos limpios,
+  vía la API interna InnerTube) y YouTube general (`yt-dlp`): primero
+  canciones reales del artista, después vídeos sueltos; sin duplicados y
+  con degradación graceful si YT Music falla.
+- **Importación de playlists**: pega un enlace y Scrup crea la playlist
+  local automáticamente, con diálogo de emparejamiento en vivo (✓ por pista):
+  - **Spotify** (enlace, URI `spotify:` o ID): lee la playlist pública sin
+    API keys desde el embed web y empareja cada pista contra YouTube
+    puntuando título normalizado + duración + artista. Límite honesto: el
+    embed público expone solo las primeras ~100 pistas (la app avisa).
+  - **YouTube / YouTube Music** (`list=…` o ID pelado): lectura completa vía
+    InnerTube browse con paginación (sin límite práctico) y coincidencia
+    exacta al 100 %: los videoIds ya vienen dados, no hay búsqueda.
 - **Playlists**: crea, elimina y añade canciones; reproduce toda la playlist
   como cola con auto-advance al terminar cada pista. Incluye portada
   personalizada (imagen local o artwork de sus canciones) y descripción
@@ -26,7 +39,9 @@ Plataformas objetivo: **Windows, Linux y macOS** (una sola base de código Flutt
   saltar entre canciones; su estado (abierto/cerrado) se restaura entre
   sesiones.
 - **Modo radio**: al agotarse la cola, busca más canciones del mismo
-  artista/género y sigue sonando (activo por defecto).
+  artista/género y sigue sonando (activo por defecto). Usa la misma búsqueda
+  combinada (YouTube Music primero), así que propone canciones reales del
+  artista en vez de vídeos random.
 - **Title bar personalizada**: en las tres plataformas (Windows y Linux sin
   marco, macOS con los traffic lights nativos conservados).
 - **Caché local de audio**: evicción LRU por tamaño (2 GiB por defecto),
@@ -61,6 +76,12 @@ Plataformas objetivo: **Windows, Linux y macOS** (una sola base de código Flutt
 │  UI Flutter (title bar, navegación, player bar, lyrics)  │
 ├──────────────────────────────────────────────────────────┤
 │  yt-dlp → busca y descarga audio (progreso)              │  (subproceso + parseo JSON)
+│  YtMusicService → YouTube Music vía InnerTube (búsqueda, │  (HTTP público, sin API key)
+│                     playlists con paginación)             │
+│  SearchService → fusión YT Music + yt-dlp (canciones     │
+│                   primero, dedupe por videoId)           │
+│  SpotifyImportService → lee playlists de Spotify (embed) │
+│                          y las empareja contra YouTube   │
 │  AudioCacheService → caché local con límite LRU          │  (2 GiB, evicción por mtime)
 │  media_kit (libmpv) → reproduce archivo local            │
 │  PlayerService → cola, repeat, shuffle, radio            │
@@ -75,6 +96,16 @@ Plataformas objetivo: **Windows, Linux y macOS** (una sola base de código Flutt
 
 ### Notas técnicas clave
 
+- **YouTube Music vía InnerTube**: la búsqueda de canciones y la lectura de
+  playlists usan la API interna de YouTube Music (`WEB_REMIX`), la misma
+  técnica de herramientas como spotdl: sin API key ni login. Al ser un
+  endpoint no documentado, todo lo que depende de él tiene fallback al
+  `ytsearch` clásico de yt-dlp, así que la app nunca queda peor si cambia.
+- **Importación de Spotify sin API keys**: se lee el embed web público
+  (`__NEXT_DATA__`), que no requiere cuenta pero trunca en ~100 pistas y no
+  expone el total. Con una app propia de Spotify Developer + Premium sería
+  posible leer playlists completas vía Web API oficial (pendiente, el
+  importador está preparado para caer del embed a la API).
 - **El caché de audio vive en el directorio de soporte de la app**
   (`%APPDATA%/<org>/scrup/audio_cache` en Windows). Límite por defecto: 2 GiB,
   configurable con la variable de entorno `SCRUP_CACHE_MAX_MB` (en MiB).
@@ -176,6 +207,11 @@ lib/
 │   └── generated/     # AppLocalizations generado
 ├── services/
 │   ├── ytdlp_service.dart             # Subprocesos yt-dlp (buscar/descargar)
+│   ├── ytmusic_service.dart           # YouTube Music vía InnerTube: búsqueda
+│   │                                  #  de canciones y playlists paginadas
+│   ├── search_service.dart            # Fusión YT Music + yt-dlp con dedupe
+│   ├── spotify_import_service.dart    # Lectura de playlists de Spotify (embed)
+│   │                                  #  + emparejamiento contra YouTube
 │   ├── audio_cache_service.dart       # Caché local con LRU y precarga
 │   ├── player_service.dart            # Cola, repeat, shuffle, radio
 │   ├── deezer_service.dart            # Metadatos y portadas vía Deezer
@@ -193,7 +229,8 @@ lib/
     ├── playlist_actions.dart  # Modal "añadir a playlist"
     ├── views/                 # Home, Search, PlaylistDetail, Lyrics, Settings
     └── widgets/               # CustomTitleBar, PlayerBar, TrackTile, QueuePanel,
-                               # PlaylistsSidebar, LyricsDisplay, CoverImage, etc.
+                               # PlaylistsSidebar, LyricsDisplay, CoverImage,
+                               # SpotifyImportDialog (importar de Spotify/YouTube)
 tool/
 └── fetch_binaries.sh   # Descarga yt-dlp + ffmpeg + deno por SO
 bin/<plataforma>/       # Binarios sidecar (no versionados)
