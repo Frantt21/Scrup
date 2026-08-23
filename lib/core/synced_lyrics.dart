@@ -18,13 +18,28 @@ class LyricLine {
   final String text;
   final List<KaraokeWord>? words;
 
-  LyricLine({required this.timestamp, required this.text, this.words});
+  /// `true` si ESTA línea acredita por sí sola la convención sílabo-word de
+  /// Apple/LRCLIB (algún separador ≥2 espacios o tags pegados): se usa a
+  /// nivel de canción para decidir si las líneas sin evidencia propia
+  /// también fusionan sus sílabas partidas (ver SyncedLyrics.fromLRC).
+  final bool conventionEvidence;
+
+  LyricLine({
+    required this.timestamp,
+    required this.text,
+    this.words,
+    this.conventionEvidence = false,
+  });
 
   /// `true` si la línea tiene timestamps por palabra (karaoke).
   bool get hasWords => words != null && words!.isNotEmpty;
 
   /// Crea una LyricLine desde formato LRC: [mm:ss.xx] texto
-  factory LyricLine.fromLRC(String line) {
+  ///
+  /// Con [forceWordGlue], los tokens separados por ≤1 espacio se consideran
+  /// sílabas de una misma palabra y se fusionan aunque la línea no acredite
+  /// por sí misma la convención (la acreditan otras líneas de la canción).
+  factory LyricLine.fromLRC(String line, {bool forceWordGlue = false}) {
     final regex = RegExp(r'\[(\d{2}):(\d{2})\.(\d{2})\]\s*(.*)');
     final match = regex.firstMatch(line);
 
@@ -45,37 +60,81 @@ class LyricLine {
 
     // Palabras con timestamps propios (formato karaoke <mm:ss.xx>)
     List<KaraokeWord>? words;
+    var evidence = false;
     final wordRegex = RegExp(r'(?:<(\d{2}):(\d{2})\.(\d{2,3})>)?([^<]+)');
     if (fullText.contains('<')) {
-      words = [];
+      // Recolectar cada token junto a los espacios que LE SIGUEN antes del
+      // próximo tag (el grupo captura hasta el '<'). La convención de las
+      // letras sílabo-word de Apple/LRCLIB marca ahí la diferencia que el
+      // texto plano pierde: ≥2 espacios = fin de palabra real («Me␣␣»),
+      // exactamente 1 = sílaba dentro de la MISMA palabra
+      // («stalkeándo␣»+«te.» = «stalkeándote.»), 0 = tags pegados.
+      final tokens = <({Duration ts, String text, int sepAfter})>[];
       for (final wMatch in wordRegex.allMatches(fullText)) {
-        final wText = wMatch.group(4)!.trimRight();
-        if (wText.isEmpty) continue;
-        words.add(
-          KaraokeWord(
-            timestamp: wMatch.group(1) != null
-                ? Duration(
-                    minutes: int.parse(wMatch.group(1)!),
-                    seconds: int.parse(wMatch.group(2)!),
-                    milliseconds:
-                        int.parse(wMatch.group(3)!) *
-                        (wMatch.group(3)!.length == 3 ? 1 : 10),
-                  )
-                : timestamp,
-            text: wText,
-          ),
-        );
+        final raw = wMatch.group(4)!;
+        final text = raw.trimRight();
+        final sepAfter = raw.length - text.length;
+        final ts = wMatch.group(1) != null
+            ? Duration(
+                minutes: int.parse(wMatch.group(1)!),
+                seconds: int.parse(wMatch.group(2)!),
+                milliseconds: int.parse(wMatch.group(3)!) *
+                    (wMatch.group(3)!.length == 3 ? 1 : 10),
+              )
+            : timestamp;
+        if (text.isEmpty) {
+          // Token solo de espacios (dos tags seguidos): su separación
+          // engorda la del último token real.
+          if (tokens.isNotEmpty) {
+            final p = tokens.removeLast();
+            tokens.add((ts: p.ts, text: p.text, sepAfter: p.sepAfter + sepAfter));
+          }
+          continue;
+        }
+        tokens.add((ts: ts, text: text, sepAfter: sepAfter));
       }
+
+      // Fusionar sílabas SOLO con la convención acreditada (por esta línea
+      // o forzada a nivel de canción): una fuente que separa palabras
+      // normales con un único espacio queda intacta.
+      evidence = tokens.length >= 2 &&
+          tokens
+              .take(tokens.length - 1)
+              .any((t) => t.sepAfter >= 2 || t.sepAfter == 0);
+      final conventional = evidence || forceWordGlue;
+      final merged = <KaraokeWord>[];
+      for (var i = 0; i < tokens.length; i++) {
+        final t = tokens[i];
+        if (conventional && i > 0 && tokens[i - 1].sepAfter <= 1) {
+          final p = merged.removeLast();
+          merged.add(KaraokeWord(timestamp: p.timestamp, text: p.text + t.text));
+        } else {
+          merged.add(KaraokeWord(timestamp: t.ts, text: t.text));
+        }
+      }
+      words = merged;
     }
 
-    // Limpiar las etiquetas internas <mm:ss.xx> del texto visible
-    var text = fullText.replaceAll(
-      RegExp(r'<\d{2}:\d{2}\.\d{2,3}>'),
-      '',
-    );
-    text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    // Limpiar las etiquetas internas <mm:ss.xx> del texto visible. Con la
+    // convención acreditada, el texto visible sigue a las palabras FUSIONADAS
+    // («stalkeándote.», no «stalkeándo te.»).
+    String text;
+    if (words != null && words.isNotEmpty && (evidence || forceWordGlue)) {
+      text = words.map((w) => w.text).join(' ');
+    } else {
+      text = fullText.replaceAll(
+        RegExp(r'<\d{2}:\d{2}\.\d{2,3}>'),
+        '',
+      );
+      text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    }
 
-    return LyricLine(timestamp: timestamp, text: text, words: words);
+    return LyricLine(
+      timestamp: timestamp,
+      text: text,
+      words: words,
+      conventionEvidence: evidence,
+    );
   }
 
   /// Convierte a formato LRC. Con [includeWordTags] emite los timestamps
@@ -222,11 +281,35 @@ class SyncedLyrics {
   }
 
   /// Crea SyncedLyrics desde el formato LRC completo.
+  ///
+  /// La detección de sílabas partidas («dar␣te?» = «darte?») se hace en dos
+  /// pasos: primero se parsea normal; si ALGUNA línea del archivo acredita la
+  /// convención Apple/LRCLIB (doble espacio / tags pegados) pero otras líneas
+  /// karaoke no la acreditan por sí solas, se re-parsea forzando la fusión —
+  /// el archivo entero procede de la misma fuente, así que la convención que
+  /// una línea demuestra aplica a todas.
   factory SyncedLyrics.fromLRC({
     required String songTitle,
     required String artist,
     required String lrcContent,
   }) {
+    final lines = _parseLrc(lrcContent);
+
+    if (lines.any((l) => l.conventionEvidence) &&
+        lines.any((l) => !l.conventionEvidence && l.hasWords)) {
+      final glued = _parseLrc(lrcContent, forceWordGlue: true);
+      return SyncedLyrics(
+        songTitle: songTitle,
+        artist: artist,
+        lines: glued,
+      );
+    }
+
+    return SyncedLyrics(songTitle: songTitle, artist: artist, lines: lines);
+  }
+
+  static List<LyricLine> _parseLrc(String lrcContent,
+      {bool forceWordGlue = false}) {
     final lines = <LyricLine>[];
 
     for (final line in lrcContent.split('\n')) {
@@ -234,7 +317,7 @@ class SyncedLyrics {
       if (trimmed.isEmpty) continue;
 
       try {
-        lines.add(LyricLine.fromLRC(trimmed));
+        lines.add(LyricLine.fromLRC(trimmed, forceWordGlue: forceWordGlue));
       } catch (e) {
         // Ignorar líneas con formato inválido
         continue;
@@ -243,8 +326,7 @@ class SyncedLyrics {
 
     // Ordenar por timestamp
     lines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-
-    return SyncedLyrics(songTitle: songTitle, artist: artist, lines: lines);
+    return lines;
   }
 
   /// Obtiene la línea actual basada en la posición de reproducción.
