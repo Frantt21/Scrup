@@ -19,6 +19,7 @@ class SettingsStore {
   static const _playerAnimationKey = 'player.animation_enabled';
   static const _shuffleEnabledKey = 'player.shuffle_enabled';
   static const _repeatModeKey = 'player.repeat_mode';
+  static const _radioEnabledKey = 'player.radio_enabled';
   static const _queueKey = 'player.queue_ids';
   static const _originalQueueKey = 'player.queue_original_ids';
   static const _queueIndexKey = 'player.queue_index';
@@ -232,6 +233,20 @@ class SettingsStore {
   Future<bool?> loadShuffleEnabled() async {
     final prefs = await _instance;
     return prefs.getBool(_shuffleEnabledKey);
+  }
+
+  /// Guarda el modo radio (activo/desactivado) para restaurarlo entre
+  /// sesiones.
+  Future<void> saveRadioEnabled(bool enabled) async {
+    final prefs = await _instance;
+    await prefs.setBool(_radioEnabledKey, enabled);
+  }
+
+  /// `null` si el usuario nunca tocó el botón de radio (por defecto:
+  /// activado, como el ValueNotifier del player).
+  Future<bool?> loadRadioEnabled() async {
+    final prefs = await _instance;
+    return prefs.getBool(_radioEnabledKey);
   }
 
   /// Guarda el modo de repetición (nombre del enum `LoopMode`: `off`,

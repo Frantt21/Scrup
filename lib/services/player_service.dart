@@ -96,6 +96,10 @@ class PlayerService {
   /// escritura no debe romper el toggle.
   final Future<void> Function(bool enabled)? onShuffleChanged;
 
+  /// Notifica cada cambio del modo radio (activo/desactivado) para
+  /// persistirlo entre sesiones. Opcional y *best-effort*.
+  final Future<void> Function(bool enabled)? onRadioChanged;
+
   /// Notifica cada cambio del modo de repetición (off/all/one) para
   /// persistirlo entre sesiones. Opcional y *best-effort*.
   final Future<void> Function(LoopMode mode)? onRepeatChanged;
@@ -263,6 +267,7 @@ class PlayerService {
     this.onPlayed,
     this.onEnriched,
     this.onShuffleChanged,
+    this.onRadioChanged,
     this.onRepeatChanged,
     this.onQueueChanged,
   }) {
@@ -630,8 +635,24 @@ class PlayerService {
     return true;
   }
 
-  /// Activa/desactiva el modo radio.
-  void toggleRadio() => radio.value = !radio.value;
+  /// Activa/desactiva el modo radio. Persiste la preferencia entre sesiones
+  /// (best-effort).
+  void toggleRadio() {
+    radio.value = !radio.value;
+    unawaited(_notifyRadioChanged(radio.value));
+  }
+
+  /// Notifica el cambio de radio de forma segura: nunca lanza (un fallo de
+  /// persistencia es secundario al toggle).
+  Future<void> _notifyRadioChanged(bool enabled) async {
+    final cb = onRadioChanged;
+    if (cb == null) return;
+    try {
+      await cb(enabled);
+    } catch (_) {
+      // Silencioso: la persistencia no debe romper el toggle.
+    }
+  }
 
   // ------------------------------------------------------------- interno
   /// Decide qué reproducir cuando una pista termina.

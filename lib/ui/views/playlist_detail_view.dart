@@ -323,6 +323,26 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     );
   }
 
+  /// Reordena arrastrando (onReorderItem ya ajusta newIndex). Actualiza la
+  /// lista en memoria (feedback inmediato) y persiste el orden nuevo; el
+  /// stream re-emite el orden de la base sin cambiar nada visualmente. Si el
+  /// guardado falla, la próxima emisión del stream deshace el movimiento.
+  Future<void> _onReorderItem(int oldIndex, int newIndex) async {
+    final updated = [..._tracks];
+    final moved = updated.removeAt(oldIndex);
+    updated.insert(newIndex, moved);
+    setState(() => _tracks = updated);
+    try {
+      await context
+          .read<AppDatabase>()
+          .reorderPlaylistTracks(widget.playlist.id, [
+            for (final t in updated) t.id,
+          ]);
+    } catch (_) {
+      // Best-effort: el stream restaurará el orden persistido.
+    }
+  }
+
   /// Menú contextual (clic derecho) sobre una canción del playlist.
   Future<void> _showTrackMenu(Track track, Offset position) async {
     final l10n = AppLocalizations.of(context);
@@ -741,53 +761,73 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                               ],
                             ),
                           )
-                        : ListView.separated(
-                            // El contenedor ya termina por encima del
-                            // player (margen inferior), así que aquí solo
-                            // hace falta un respiro pequeño.
-                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                            itemCount: _tracks.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 4),
-                            itemBuilder: (context, i) {
-                              final track = _tracks[i];
-                              return GestureDetector(
-                                onSecondaryTapUp: (details) => _showTrackMenu(
-                                  track,
-                                  details.globalPosition,
-                                ),
-                                child: TrackTile(
-                                  track: track,
-                                  // La cola es LA PLAYLIST: al tocar una
-                                  // canción, el siguiente/anterior (y el
-                                  // auto-advance) recorren la playlist,
-                                  // no caen en radio. El índice se
-                                  // recalcula al tocar (por si la lista
-                                  // cambió desde el build).
-                                  onPlay: () {
-                                    final start = _tracks.indexWhere(
-                                      (t) => t.id == track.id,
-                                    );
-                                    playQueue(
-                                      context,
-                                      _tracks,
-                                      startIndex: start < 0 ? 0 : start,
-                                      playlistId: widget.playlist.id,
-                                    );
-                                  },
-                                  isCurrent: track.id == currentId,
-                                  isPlaying: _playing,
-                                  // Texto e iconos con el color del
-                                  // artwork de SU canción (extraído de
-                                  // forma perezosa por fila); mientras se
-                                  // extrae, fallback al color de la
-                                  // playlist para que no haya saltos
-                                  accentColor:
-                                      _trackColorFor(track) ?? playlistColor,
-                                ),
-                              );
-                            },
-                          ),
+                         : ReorderableListView.builder(
+                             // El contenedor ya termina por encima del
+                             // player (margen inferior), así que aquí solo
+                             // hace falta un respiro pequeño.
+                             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                             // Sin asas automáticas: cada fila trae su grip
+                             // propio (visible al hover) para no robar ancho
+                             // al contenido ni chocar con el scroll.
+                             buildDefaultDragHandles: false,
+                             proxyDecorator: (child, index, animation) =>
+                                 AnimatedBuilder(
+                                   animation: animation,
+                                   builder: (_, child) => Transform.scale(
+                                     scale: 1 + animation.value * 0.02,
+                                     child: child,
+                                   ),
+                                   child: child,
+                                 ),
+                             itemCount: _tracks.length,
+                             onReorderItem: _onReorderItem,
+                             itemBuilder: (context, i) {
+                               final track = _tracks[i];
+                               return _SortableTrackRow(
+                                 key: ValueKey(track.id),
+                                 index: i,
+                                 accentColor:
+                                     _trackColorFor(track) ?? playlistColor,
+                                 child: GestureDetector(
+                                   onSecondaryTapUp: (details) =>
+                                       _showTrackMenu(
+                                         track,
+                                         details.globalPosition,
+                                       ),
+                                   child: TrackTile(
+                                     track: track,
+                                     // La cola es LA PLAYLIST: al tocar una
+                                     // canción, el siguiente/anterior (y el
+                                     // auto-advance) recorren la playlist,
+                                     // no caen en radio. El índice se
+                                     // recalcula al tocar (por si la lista
+                                     // cambió desde el build).
+                                     onPlay: () {
+                                       final start = _tracks.indexWhere(
+                                         (t) => t.id == track.id,
+                                       );
+                                       playQueue(
+                                         context,
+                                         _tracks,
+                                         startIndex: start < 0 ? 0 : start,
+                                         playlistId: widget.playlist.id,
+                                       );
+                                     },
+                                     isCurrent: track.id == currentId,
+                                     isPlaying: _playing,
+                                     // Texto e iconos con el color del
+                                     // artwork de SU canción (extraído de
+                                     // forma perezosa por fila); mientras se
+                                     // extrae, fallback al color de la
+                                     // playlist
+                                     accentColor:
+                                         _trackColorFor(track) ??
+                                         playlistColor,
+                                   ),
+                                 ),
+                               );
+                             },
+                           ),
                   ),
                 ],
               ),
@@ -844,6 +884,68 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fila reordenable de la lista: envuelve la [TrackTile] (ya construida) y
+/// añade a la derecha un grip de arrastre que se intensifica con el hover de
+/// la fila. Solo el grip inicia el arrastre: el resto de la fila conserva el
+/// clic para reproducir y el clic derecho para el menú, sin pelearse con el
+/// scroll vertical.
+class _SortableTrackRow extends StatefulWidget {
+  final int index;
+
+  /// Fila ya construida (GestureDetector + TrackTile).
+  final Widget child;
+
+  /// Color de acento (artwork/playlist) para el grip; null usa el primario.
+  final Color? accentColor;
+
+  const _SortableTrackRow({
+    super.key,
+    required this.index,
+    required this.child,
+    required this.accentColor,
+  });
+
+  @override
+  State<_SortableTrackRow> createState() => _SortableTrackRowState();
+}
+
+class _SortableTrackRowState extends State<_SortableTrackRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Padding(
+        // Sustituye al separatorBuilder del ListView anterior.
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(
+          children: [
+            Expanded(child: widget.child),
+            ReorderableDragStartListener(
+              index: widget.index,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(
+                  Icons.drag_indicator,
+                  size: 18,
+                  color: (_hovered
+                          ? (widget.accentColor ?? theme.colorScheme.primary)
+                          : theme.colorScheme.outlineVariant)
+                      .withValues(alpha: _hovered ? 0.85 : 0.45),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

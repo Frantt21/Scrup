@@ -34,6 +34,22 @@ class SearchService {
     return mergeResults(songs, videos, limit);
   }
 
+  /// Recomendaciones para el modo radio: SOLO YouTube Music (InnerTube).
+  /// La consulta suele ser el nombre del artista, y el filtro de canciones
+  /// de YT Music devuelve pistas canónicas del artista (sin covers, lives
+  /// ni mixes que yt-dlp suele colar). Tolerante a fallos: cualquier error
+  /// → lista vacía.
+  Future<List<Track>> recommendByArtist(String query, {int limit = 10}) async {
+    final q = query.trim();
+    if (q.isEmpty) return const [];
+    try {
+      final results = await _ytMusic.search(q, limit: limit);
+      return [for (final r in results) r.toTrack()];
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Canciones primero y después vídeos generales, descartando ids ya
   /// vistos y capando al límite pedido. Expuesto para tests.
   static List<Track> mergeResults(

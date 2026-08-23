@@ -154,6 +154,13 @@ Future<void> main() async {
       initialRepeatMode = LoopMode.values.asNameMap()[saved] ?? LoopMode.off;
     }
   } catch (_) {}
+  // Modo radio guardado (por defecto: activado, como el ValueNotifier del
+  // player). Se aplica de forma SÍNCRONA al crear el PlayerService.
+  var initialRadioEnabled = true;
+  try {
+    final saved = await settings.loadRadioEnabled();
+    if (saved != null) initialRadioEnabled = saved;
+  } catch (_) {}
   // Preferencia de omitir silencios: cargarla ANTES de crear los providers
   // para que el SilenceSkipService arranque con el valor guardado.
   try {
@@ -167,6 +174,7 @@ Future<void> main() async {
       initialLocale: initialLocale,
       initialShuffleEnabled: initialShuffleEnabled,
       initialRepeatMode: initialRepeatMode,
+      initialRadioEnabled: initialRadioEnabled,
       audioHandler: audioHandler,
       paletteCache: paletteCache,
     ),
@@ -249,6 +257,9 @@ class ScrupApp extends StatelessWidget {
   /// Modo de repetición guardado en la última sesión (por defecto: off).
   final LoopMode initialRepeatMode;
 
+  /// Modo radio inicial (restaurado de la última sesión).
+  final bool initialRadioEnabled;
+
   /// Puente con los controles multimedia nativos del OS.
   final ScrupAudioHandler audioHandler;
 
@@ -263,6 +274,7 @@ class ScrupApp extends StatelessWidget {
     required this.initialLocale,
     required this.initialShuffleEnabled,
     required this.initialRepeatMode,
+    required this.initialRadioEnabled,
     required this.audioHandler,
     required this.paletteCache,
   });
@@ -310,12 +322,20 @@ class ScrupApp extends StatelessWidget {
                 );
                 return PlayableSource(source.path, isLocal: true);
               },
-              // Radio: busca canciones del mismo artista/género
-              // (YouTube Music: canciones reales del artista primero).
+              // Radio: canciones del mismo artista/género SOLO con YouTube
+              // Music (InnerTube): resultados limpios (canciones reales del
+              // artista, sin covers/lives/mixes de yt-dlp). Si InnerTube no
+              // da nada (fallo o sin red), cae a la búsqueda fusionada para
+              // que la radio nunca muera en seco.
               recommend: (track) async {
                 final query = track.artist.isNotEmpty
                     ? track.artist
                     : track.title;
+                final clean = await searchService.recommendByArtist(
+                  query,
+                  limit: 10,
+                );
+                if (clean.isNotEmpty) return clean;
                 return searchService.search(query, limit: 10);
               },
               // Precarga de la cola: cachea las siguientes pistas en segundo
@@ -334,6 +354,8 @@ class ScrupApp extends StatelessWidget {
               // Persistir el modo shuffle (activo/desactivado) entre sesiones
               onShuffleChanged: (enabled) =>
                   settings.saveShuffleEnabled(enabled),
+              // Persistir el modo radio (activo/desactivado) entre sesiones
+              onRadioChanged: (enabled) => settings.saveRadioEnabled(enabled),
               // Persistir el modo de repetición (off/all/one) entre sesiones
               onRepeatChanged: (mode) => settings.saveRepeatMode(mode.name),
               // Persistir la cola completa (orden, orden pre-shuffle, índice
@@ -354,6 +376,7 @@ class ScrupApp extends StatelessWidget {
             // re-persiste).
             player.shuffle.value = initialShuffleEnabled;
             player.repeatMode.value = initialRepeatMode;
+            player.radio.value = initialRadioEnabled;
             // Controles nativos del OS: sincronizar metadatos/estado y
             // reenviar comandos (play/pausa/siguiente/anterior/seek).
             context.read<ScrupAudioHandler>().attach(player);
