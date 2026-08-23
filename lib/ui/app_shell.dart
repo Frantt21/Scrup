@@ -154,21 +154,16 @@ class _AppShellState extends State<AppShell> {
     setState(() => _selectedIndex = 0);
   }
 
-  /// Abre la vista de lyrics (cierra settings/playlist si estaban abiertas).
+  /// Abre la vista de lyrics como capa sobre la zona actual: NO cierra
+  /// playlist/settings (el IndexedStack prioriza el índice de letras y al
+  /// cerrar se recupera exactamente donde estaba el usuario).
   void _openLyrics() {
-    setState(() {
-      _showLyrics = true;
-      _showSettings = false;
-      _openPlaylist = null;
-    });
+    setState(() => _showLyrics = true);
   }
 
-  /// Cierra la vista de lyrics y vuelve al inicio.
+  /// Cierra la vista de lyrics y vuelve a la zona que hubiera debajo.
   void _closeLyrics() {
-    setState(() {
-      _showLyrics = false;
-      _selectedIndex = 0;
-    });
+    setState(() => _showLyrics = false);
   }
 
   void _selectPlaylist(Playlist? playlist) {
