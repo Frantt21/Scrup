@@ -7,7 +7,7 @@ import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/deezer_service.dart';
 import '../../services/player_service.dart';
-import '../../services/ytdlp_service.dart';
+import '../../services/search_service.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
@@ -90,7 +90,7 @@ class _SearchViewState extends State<SearchView> {
       _hasSearched = true;
     });
     try {
-      final tracks = await context.read<YtDlpService>().search(q);
+      final tracks = await context.read<SearchService>().search(q);
       if (!mounted || token != _searchToken) return; // búsqueda obsoleta
       // Mostrar ya los resultados de YouTube (rápido, sin spinner) y, en
       // segundo plano, enriquecerlos con la metadata de Deezer (título/

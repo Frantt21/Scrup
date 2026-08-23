@@ -15,6 +15,7 @@ import 'data/database.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'services/audio_cache_service.dart';
 import 'services/deezer_service.dart';
+import 'services/search_service.dart';
 import 'services/discord/discord_presence_service.dart';
 import 'services/lyrics_service.dart';
 import 'services/palette_cache_store.dart';
@@ -277,6 +278,11 @@ class ScrupApp extends StatelessWidget {
               AudioCacheService(ytdlp: context.read<YtDlpService>()),
         ),
         Provider<DeezerService>(create: (_) => DeezerService()),
+        Provider<SearchService>(
+          create: (context) => SearchService(
+            ytDlp: context.read<YtDlpService>(),
+          ),
+        ),
         Provider<LyricsService>(create: (context) => LyricsService(context.read<AppDatabase>())),
         Provider<SettingsStore>(create: (_) => settings),
         Provider<PaletteCacheStore>(create: (_) => paletteCache),
@@ -285,7 +291,7 @@ class ScrupApp extends StatelessWidget {
           // Inyecta la resolución de fuente (cache-first con yt-dlp), la
           // búsqueda de radio y el enriquecimiento de metadatos (Deezer).
           create: (context) {
-            final ytdlp = context.read<YtDlpService>();
+            final searchService = context.read<SearchService>();
             final cache = context.read<AudioCacheService>();
             final deezer = context.read<DeezerService>();
             final db = context.read<AppDatabase>();
@@ -305,11 +311,12 @@ class ScrupApp extends StatelessWidget {
                 return PlayableSource(source.path, isLocal: true);
               },
               // Radio: busca canciones del mismo artista/género
+              // (YouTube Music: canciones reales del artista primero).
               recommend: (track) async {
                 final query = track.artist.isNotEmpty
                     ? track.artist
                     : track.title;
-                return ytdlp.search(query, limit: 10);
+                return searchService.search(query, limit: 10);
               },
               // Precarga de la cola: cachea las siguientes pistas en segundo
               // plano (recursos limitados por el caché) para que el salto de

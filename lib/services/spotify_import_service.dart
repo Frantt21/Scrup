@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../core/track.dart';
 import 'ytdlp_service.dart';
+import 'ytmusic_service.dart';
 
 /// Pista tal y como viene de una playlist de Spotify (metadatos crudos).
 class SpotifyPlaylistTrack {
@@ -263,6 +264,28 @@ class SpotifyImportService {
     return bestScore >= .35 ? best : null;
   }
 
+  /// Busca en YouTube Music primero (canciones canónicas con metadatos
+  /// limpios, técnica de spotdl); si no devuelve nada o falla, cae al
+  /// `ytsearch` genérico de yt-dlp.
+  Future<List<Track>> _candidatesFor(
+    SpotifyPlaylistTrack target, {
+    required YtDlpService ytDlp,
+    YtMusicService? ytMusic,
+    int limitPerSearch = 5,
+  }) async {
+    if (ytMusic != null) {
+      try {
+        final songs = await ytMusic.search(target.searchQuery, limit: 8);
+        if (songs.isNotEmpty) {
+          return [for (final s in songs) s.toTrack()];
+        }
+      } catch (_) {
+        // Endpoint no oficial: cualquier fallo cae al fallback.
+      }
+    }
+    return ytDlp.search(target.searchQuery, limit: limitPerSearch);
+  }
+
   /// Empareja todas las pistas contra YouTube con un pool de trabajadores
   /// ([concurrency], como DeezerService.enrichAll). Reporta cada resultado
   /// por callback en cuanto termina (sin orden garantizado); devuelve la
@@ -270,6 +293,7 @@ class SpotifyImportService {
   Future<List<SpotifyMatchResult>> importToYoutube({
     required SpotifyPlaylist playlist,
     required YtDlpService ytDlp,
+    YtMusicService? ytMusic,
     void Function(SpotifyMatchResult result)? onResult,
     int concurrency = 2,
     int limitPerSearch = 5,
@@ -283,7 +307,12 @@ class SpotifyImportService {
         if (i >= playlist.tracks.length) return;
         final t = playlist.tracks[i];
         try {
-          final candidates = await ytDlp.search(t.searchQuery, limit: limitPerSearch);
+          final candidates = await _candidatesFor(
+            t,
+            ytDlp: ytDlp,
+            ytMusic: ytMusic,
+            limitPerSearch: limitPerSearch,
+          );
           results[i] = SpotifyMatchResult(i, t, match: pickBestMatch(candidates, t));
         } catch (e) {
           results[i] = SpotifyMatchResult(i, t, error: e.toString());

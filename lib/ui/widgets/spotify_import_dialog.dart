@@ -7,6 +7,7 @@ import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/spotify_import_service.dart';
 import '../../services/ytdlp_service.dart';
+import '../../services/ytmusic_service.dart';
 
 /// Abre el diálogo de migración de una playlist de Spotify a Scrup.
 /// Devuelve el nombre elegido y las pistas emparejadas en YouTube, o null
@@ -82,6 +83,7 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
     await service.importToYoutube(
       playlist: playlist,
       ytDlp: context.read<YtDlpService>(),
+      ytMusic: YtMusicService(),
       onResult: (r) {
         if (!mounted) return;
         setState(() {
