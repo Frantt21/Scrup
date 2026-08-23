@@ -440,6 +440,22 @@ class AppLocalizationsPt extends AppLocalizations {
   String get done => 'Concluído';
 
   @override
+  String get importSpotify => 'Importar do Spotify';
+
+  @override
+  String get spotifyUrlHint => 'Link, URI ou ID da playlist';
+
+  @override
+  String get importAction => 'Importar';
+
+  @override
+  String get spotifyFetchError =>
+      'Não foi possível ler a playlist (o link está correto e é pública?)';
+
+  @override
+  String get spotifyNoMatch => 'Sem correspondência';
+
+  @override
   String get karaokeSweepOn => 'Karaoke: ativo';
 
   @override
@@ -939,6 +955,22 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get done => 'Concluído';
+
+  @override
+  String get importSpotify => 'Importar do Spotify';
+
+  @override
+  String get spotifyUrlHint => 'Link, URI ou ID da playlist';
+
+  @override
+  String get importAction => 'Importar';
+
+  @override
+  String get spotifyFetchError =>
+      'Não foi possível ler a playlist (o link está correto e ela é pública?)';
+
+  @override
+  String get spotifyNoMatch => 'Sem correspondência';
 
   @override
   String get karaokeSweepOn => 'Karaokê: ativo';

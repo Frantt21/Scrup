@@ -431,6 +431,21 @@ class AppLocalizationsKo extends AppLocalizations {
   String get done => '완료';
 
   @override
+  String get importSpotify => 'Spotify에서 가져오기';
+
+  @override
+  String get spotifyUrlHint => '플레이리스트 링크, URI 또는 ID';
+
+  @override
+  String get importAction => '가져오기';
+
+  @override
+  String get spotifyFetchError => '플레이리스트를 읽을 수 없습니다(링크와 공개 여부를 확인하세요)';
+
+  @override
+  String get spotifyNoMatch => '일치 없음';
+
+  @override
   String get karaokeSweepOn => '노래방: 켜짐';
 
   @override

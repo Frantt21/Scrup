@@ -430,6 +430,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get done => '完成';
 
   @override
+  String get importSpotify => '从 Spotify 导入';
+
+  @override
+  String get spotifyUrlHint => '播放列表链接、URI 或 ID';
+
+  @override
+  String get importAction => '导入';
+
+  @override
+  String get spotifyFetchError => '无法读取播放列表（请检查链接是否正确且公开）';
+
+  @override
+  String get spotifyNoMatch => '无匹配';
+
+  @override
   String get karaokeSweepOn => '卡拉OK：开启';
 
   @override

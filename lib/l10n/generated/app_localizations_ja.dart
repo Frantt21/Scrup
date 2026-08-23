@@ -431,6 +431,21 @@ class AppLocalizationsJa extends AppLocalizations {
   String get done => '完了';
 
   @override
+  String get importSpotify => 'Spotifyからインポート';
+
+  @override
+  String get spotifyUrlHint => 'プレイリストのリンク・URI・ID';
+
+  @override
+  String get importAction => 'インポート';
+
+  @override
+  String get spotifyFetchError => 'プレイリストを読み込めませんでした（リンクと公開設定を確認してください）';
+
+  @override
+  String get spotifyNoMatch => '一致なし';
+
+  @override
   String get karaokeSweepOn => 'カラオケ: オン';
 
   @override

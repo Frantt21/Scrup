@@ -441,6 +441,22 @@ class AppLocalizationsEs extends AppLocalizations {
   String get done => 'Listo';
 
   @override
+  String get importSpotify => 'Importar de Spotify';
+
+  @override
+  String get spotifyUrlHint => 'Enlace, URI o ID de la playlist';
+
+  @override
+  String get importAction => 'Importar';
+
+  @override
+  String get spotifyFetchError =>
+      'No se pudo leer la playlist (¿enlace correcto y pública?)';
+
+  @override
+  String get spotifyNoMatch => 'Sin coincidencia';
+
+  @override
   String get karaokeSweepOn => 'Karaoke: activo';
 
   @override

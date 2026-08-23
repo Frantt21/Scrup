@@ -445,6 +445,22 @@ class AppLocalizationsRu extends AppLocalizations {
   String get done => 'Готово';
 
   @override
+  String get importSpotify => 'Импорт из Spotify';
+
+  @override
+  String get spotifyUrlHint => 'Ссылка, URI или ID плейлиста';
+
+  @override
+  String get importAction => 'Импортировать';
+
+  @override
+  String get spotifyFetchError =>
+      'Не удалось прочитать плейлист (проверьте ссылку и доступность)';
+
+  @override
+  String get spotifyNoMatch => 'Нет совпадения';
+
+  @override
   String get karaokeSweepOn => 'Караоке: вкл';
 
   @override

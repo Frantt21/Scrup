@@ -883,6 +883,36 @@ abstract class AppLocalizations {
   /// **'Listo'**
   String get done;
 
+  /// No description provided for @importSpotify.
+  ///
+  /// In es, this message translates to:
+  /// **'Importar de Spotify'**
+  String get importSpotify;
+
+  /// No description provided for @spotifyUrlHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Enlace, URI o ID de la playlist'**
+  String get spotifyUrlHint;
+
+  /// No description provided for @importAction.
+  ///
+  /// In es, this message translates to:
+  /// **'Importar'**
+  String get importAction;
+
+  /// No description provided for @spotifyFetchError.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudo leer la playlist (¿enlace correcto y pública?)'**
+  String get spotifyFetchError;
+
+  /// No description provided for @spotifyNoMatch.
+  ///
+  /// In es, this message translates to:
+  /// **'Sin coincidencia'**
+  String get spotifyNoMatch;
+
   /// No description provided for @karaokeSweepOn.
   ///
   /// In es, this message translates to:

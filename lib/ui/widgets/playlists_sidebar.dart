@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../../data/database.dart';
+import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/player_service.dart';
@@ -13,6 +14,7 @@ import '../../services/settings_store.dart';
 import 'cover_image.dart';
 import 'now_playing_bars.dart';
 import 'scrup_toasts.dart';
+import 'spotify_import_dialog.dart';
 
 /// Ancho fijo del contenedor lateral de playlists.
 const double kSidebarWidth = 250;
@@ -165,6 +167,40 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
     }
   }
 
+  /// Importa una playlist pública de Spotify: empareja cada pista contra
+  /// YouTube y crea la playlist local con las coincidencias.
+  Future<void> _importFromSpotify() async {
+    final l10n = AppLocalizations.of(context);
+    final db = context.read<AppDatabase>();
+    final data = await showDialog<({String name, List<Track> tracks})>(
+      context: context,
+      builder: (_) => const SpotifyImportDialog(),
+    );
+    if (data == null || !mounted) return;
+    final name = data.name.trim();
+    if (name.isEmpty || data.tracks.isEmpty) return;
+    final int id;
+    try {
+      id = await db.createPlaylist(name);
+    } catch (_) {
+      if (!mounted) return;
+      showScrupToast(l10n.cantCreatePlaylist, kind: ScrupToastKind.error);
+      return;
+    }
+    for (final track in data.tracks) {
+      try {
+        // Dedupe interno: si ya estaba, no la duplica.
+        await db.addToPlaylist(id, track);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    showScrupToast(l10n.playlistCreated(name), kind: ScrupToastKind.success);
+    final playlist = await db.getPlaylist(id);
+    if (mounted && playlist != null) {
+      widget.onSelectPlaylist(playlist);
+    }
+  }
+
   Future<void> _deletePlaylist(Playlist playlist) async {
     final l10n = AppLocalizations.of(context);
     final db = context.read<AppDatabase>();
@@ -306,6 +342,11 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
           ),
         const SizedBox(height: 4),
         _CreatePlaylistTile(onTap: _createPlaylist),
+        _CreatePlaylistTile(
+          onTap: _importFromSpotify,
+          icon: Icons.sync_alt,
+          label: AppLocalizations.of(context).importSpotify,
+        ),
       ],
     );
   }
@@ -321,10 +362,17 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
         crossAxisSpacing: 10,
         childAspectRatio: 0.78,
       ),
-      itemCount: _playlists.length + 1,
+      itemCount: _playlists.length + 2,
       itemBuilder: (context, i) {
         if (i == _playlists.length) {
           return _CreateGridCell(onTap: _createPlaylist);
+        }
+        if (i == _playlists.length + 1) {
+          return _CreateGridCell(
+            onTap: _importFromSpotify,
+            icon: Icons.sync_alt,
+            label: AppLocalizations.of(context).importSpotify,
+          );
         }
         final playlist = _playlists[i];
         return _PlaylistGridCell(
@@ -818,8 +866,14 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
 /// (vista lista).
 class _CreatePlaylistTile extends StatelessWidget {
   final VoidCallback onTap;
+  final IconData icon;
+  final String? label;
 
-  const _CreatePlaylistTile({required this.onTap});
+  const _CreatePlaylistTile({
+    required this.onTap,
+    this.icon = Icons.add,
+    this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -846,7 +900,7 @@ class _CreatePlaylistTile extends StatelessWidget {
                   color: theme.colorScheme.primary.withValues(alpha: 0.10),
                 ),
                 child: Icon(
-                  Icons.add,
+                  icon,
                   size: 20,
                   color: theme.colorScheme.primary,
                 ),
@@ -854,7 +908,7 @@ class _CreatePlaylistTile extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  AppLocalizations.of(context).newPlaylist,
+                  label ?? AppLocalizations.of(context).newPlaylist,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleSmall?.copyWith(
@@ -877,8 +931,14 @@ class _CreatePlaylistTile extends StatelessWidget {
 /// dimensiones coincidan.
 class _CreateGridCell extends StatelessWidget {
   final VoidCallback onTap;
+  final IconData icon;
+  final String? label;
 
-  const _CreateGridCell({required this.onTap});
+  const _CreateGridCell({
+    required this.onTap,
+    this.icon = Icons.add,
+    this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -903,7 +963,7 @@ class _CreateGridCell extends StatelessWidget {
               ),
               child: Center(
                 child: Icon(
-                  Icons.add,
+                  icon,
                   size: 32,
                   color: theme.colorScheme.primary,
                 ),
@@ -912,7 +972,7 @@ class _CreateGridCell extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            AppLocalizations.of(context).newPlaylist,
+            label ?? AppLocalizations.of(context).newPlaylist,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
