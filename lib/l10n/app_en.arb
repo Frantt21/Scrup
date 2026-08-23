@@ -238,7 +238,7 @@
   "shareLyrics": "Share lyrics",
   "saveAsImage": "Save image",
   "copyText": "Copy",
-  "lyricsCopied": "Lyrics copied to clipboard",
+  "imageCopied": "Image copied to clipboard",
   "imageSaved": "Image saved",
   "shareOnSite": "Share on {site}",
   "lineOfTotal": "{index} of {total}",

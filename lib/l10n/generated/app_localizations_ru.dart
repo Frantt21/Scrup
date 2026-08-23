@@ -494,7 +494,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get copyText => 'Копировать';
 
   @override
-  String get lyricsCopied => 'Текст скопирован в буфер обмена';
+  String get imageCopied => 'Изображение скопировано в буфер обмена';
 
   @override
   String get imageSaved => 'Изображение сохранено';

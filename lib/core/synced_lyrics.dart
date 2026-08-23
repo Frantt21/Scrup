@@ -390,25 +390,3 @@ class SyncedLyrics {
   /// Obtiene el número de líneas.
   int get lineCount => lines.length;
 }
-
-/// Compone el texto a compartir de una letra: hasta tres líneas (la
-/// anterior y la siguiente se omiten si no existen) más la atribución
-/// «— título · artista» al pie. Puro para facilitar tests.
-String buildLyricsShareText({
-  LyricLine? previous,
-  required LyricLine current,
-  LyricLine? next,
-  required String title,
-  required String artist,
-}) {
-  final buf = StringBuffer();
-  if (previous != null) buf.writeln(previous.text);
-  buf.writeln(current.text);
-  if (next != null) buf.writeln(next.text);
-  final who = [
-    if (title.trim().isNotEmpty) title.trim(),
-    if (artist.trim().isNotEmpty) artist.trim(),
-  ].join(' · ');
-  if (who.isNotEmpty) buf.write('— $who');
-  return buf.toString();
-}

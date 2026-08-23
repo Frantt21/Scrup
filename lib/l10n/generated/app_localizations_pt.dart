@@ -489,7 +489,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get copyText => 'Copiar';
 
   @override
-  String get lyricsCopied => 'Letra copiada para a área de transferência';
+  String get imageCopied => 'Imagem copiada para a área de transferência';
 
   @override
   String get imageSaved => 'Imagem guardada';
@@ -990,7 +990,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get copyText => 'Copiar';
 
   @override
-  String get lyricsCopied => 'Letra copiada para a área de transferência';
+  String get imageCopied => 'Imagem copiada para a área de transferência';
 
   @override
   String get imageSaved => 'Imagem salva';

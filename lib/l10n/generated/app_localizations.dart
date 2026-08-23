@@ -979,11 +979,11 @@ abstract class AppLocalizations {
   /// **'Copiar'**
   String get copyText;
 
-  /// No description provided for @lyricsCopied.
+  /// No description provided for @imageCopied.
   ///
   /// In es, this message translates to:
-  /// **'Letra copiada al portapapeles'**
-  String get lyricsCopied;
+  /// **'Imagen copiada al portapapeles'**
+  String get imageCopied;
 
   /// No description provided for @imageSaved.
   ///

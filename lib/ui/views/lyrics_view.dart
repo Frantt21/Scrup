@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show File, Platform, Process;
 import 'dart:typed_data' show Uint8List;
 import 'dart:ui' as ui;
 
@@ -7,8 +8,8 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/scheduler.dart' show Ticker;
-import 'package:flutter/services.dart'
-    show Clipboard, ClipboardData, FilteringTextInputFormatter;
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -359,6 +360,7 @@ class _LyricsViewState extends State<LyricsView>
         initialIndex: idx ?? 0,
         trackTitle: track.title,
         artist: track.artist,
+        artworkUrl: track.thumbnailUrl,
         accentColor: context.read<ThemeController>().accentColor,
       ),
     );
@@ -1312,16 +1314,18 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
   }
 }
 
-/// Diálogo de compartir letra: tarjeta prevista (la MISMA que se exporta
-/// como PNG vía RepaintBoundary), navegación de la ventana de tres líneas
-/// (anterior / actual / siguiente), texto editable y salidas: copiar al
-/// portapapeles, guardar imagen o abrir intents web (X, WhatsApp,
-/// Telegram, email).
+/// Diálogo de compartir letra: tarjeta prevista (la MISMA que se exporta:
+/// PNG vía RepaintBoundary o portapapeles), navegación de la ventana de
+/// tres líneas (anterior / actual / siguiente) con el MISMO estilo de las
+/// letras en pantalla, y salidas: copiar imagen, guardar PNG o abrir una
+/// web (X, WhatsApp, Telegram, email) con la imagen ya en el portapapeles
+/// para pegarla ahí mismo.
 class _LyricsShareDialog extends StatefulWidget {
   final SyncedLyrics lyrics;
   final int initialIndex;
   final String trackTitle;
   final String artist;
+  final String? artworkUrl;
   final Color? accentColor;
 
   const _LyricsShareDialog({
@@ -1329,6 +1333,7 @@ class _LyricsShareDialog extends StatefulWidget {
     required this.initialIndex,
     required this.trackTitle,
     required this.artist,
+    this.artworkUrl,
     this.accentColor,
   });
 
@@ -1338,8 +1343,12 @@ class _LyricsShareDialog extends StatefulWidget {
 
 class _LyricsShareDialogState extends State<_LyricsShareDialog> {
   late int _center;
-  late final TextEditingController _textCtrl;
   final GlobalKey _captureKey = GlobalKey();
+
+  /// Mismo tratamiento que la pantalla: acento «legible» para la línea
+  /// activa y el mismo color al 30% para las inactivas.
+  static Color _readableAccent(Color c) =>
+      c.computeLuminance() < 0.35 ? Color.lerp(c, Colors.white, 0.5)! : c;
 
   int get _lineCount => widget.lyrics.lines.length;
 
@@ -1351,60 +1360,101 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     return widget.lyrics.lines[i];
   }
 
-  String _composeText() => buildLyricsShareText(
-        previous: _lineAt(_center - 1),
-        current: _current,
-        next: _lineAt(_center + 1),
-        title: widget.trackTitle,
-        artist: widget.artist,
-      );
-
   @override
   void initState() {
     super.initState();
     _center = widget.initialIndex.clamp(0, _lineCount - 1);
-    _textCtrl = TextEditingController(text: _composeText());
-  }
-
-  @override
-  void dispose() {
-    _textCtrl.dispose();
-    super.dispose();
+    // Precargar el artwork para que el PNG no salga con el fallback.
+    final src = widget.artworkUrl;
+    if (src != null && src.isNotEmpty) {
+      final ImageProvider provider = CoverImage.isLocalPath(src)
+          ? FileImage(File(src))
+          : NetworkImage(src);
+      precacheImage(provider, context).then((_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   void _move(int delta) {
     final next = (_center + delta).clamp(0, _lineCount - 1);
     if (next == _center) return;
-    setState(() {
-      _center = next;
-      _textCtrl.text = _composeText();
-    });
+    setState(() => _center = next);
   }
 
-  Future<void> _copy() async {
-    await Clipboard.setData(ClipboardData(text: _textCtrl.text));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppLocalizations.of(context).lyricsCopied)),
+  /// Captura la tarjeta tal como se ve (pixelRatio 3 ⇒ nítida).
+  Future<Uint8List?> _captureBytes() async {
+    final boundary = _captureKey.currentContext?.findRenderObject();
+    if (boundary is! RenderRepaintBoundary) return null;
+    final image = await boundary.toImage(pixelRatio: 3);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    if (data == null) return null;
+    return Uint8List.view(
+      data.buffer,
+      data.offsetInBytes,
+      data.lengthInBytes,
     );
   }
 
-  /// Exporta la tarjeta prevista tal cual se ve (pixelRatio 3 ⇒ nítida).
+  /// Copia el PNG al portapapeles del sistema sin dependencias extra:
+   /// escribe un temporal y delega en wl-copy (Wayland), xclip (X11) o
+  /// PowerShell (Windows).
+  Future<bool> _pngToClipboard(Uint8List bytes) async {
+    final dir = await getTemporaryDirectory();
+    final file = File(
+      '${dir.path}/scrup-share-${DateTime.now().millisecondsSinceEpoch}.png',
+    );
+    await file.writeAsBytes(bytes);
+    try {
+      if (Platform.isWindows) {
+        final quoted = file.path.replaceAll("'", "''");
+        final res = await Process.run('powershell', [
+          '-NoProfile',
+          '-Command',
+          "Set-Clipboard -Path '$quoted'",
+        ]);
+        return res.exitCode == 0;
+      }
+      final escaped = file.path.replaceAll("'", r"'\''");
+      var res = await Process.run(
+        'sh',
+        ['-c', "wl-copy -t image/png < '$escaped'"],
+      );
+      if (res.exitCode != 0) {
+        res = await Process.run('sh', [
+          '-c',
+          'xclip -selection clipboard -t image/png -i \'$escaped\'',
+        ]);
+      }
+      return res.exitCode == 0;
+    } catch (e) {
+      debugPrint('[Scrup] Share: portapapeles falló: $e');
+      return false;
+    } finally {
+      unawaited(file.delete().catchError((_) => file));
+    }
+  }
+
+  Future<void> _copyImage() async {
+    final l10n = AppLocalizations.of(context);
+    final bytes = await _captureBytes();
+    if (bytes == null) return;
+    final ok = await _pngToClipboard(bytes);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? l10n.imageCopied : l10n.copyText),
+      ),
+    );
+  }
+
+  /// Exporta la tarjeta prevista como archivo PNG (selector de guardado).
   Future<void> _saveImage() async {
     final l10n = AppLocalizations.of(context);
     try {
-      final boundary =
-          _captureKey.currentContext?.findRenderObject();
-      if (boundary is! RenderRepaintBoundary) return;
-      final image = await boundary.toImage(pixelRatio: 3);
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
-      if (data == null) return;
-      final bytes = Uint8List.view(
-        data.buffer,
-        data.offsetInBytes,
-        data.lengthInBytes,
-      );
+      final bytes = await _captureBytes();
+      if (bytes == null) return;
       final safe = widget.trackTitle
           .replaceAll(RegExp(r'[^\w\s-]'), '')
           .trim();
@@ -1431,43 +1481,47 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     }
   }
 
-  Future<void> _openShareUrl(Uri uri) async {
+  /// Abre la web destino CON la imagen ya copiada en el portapapeles:
+  /// compartir es colocar la imagen, no un texto.
+  Future<void> _openShareTarget(String site, Uri uri) async {
+    final l10n = AppLocalizations.of(context);
+    final bytes = await _captureBytes();
+    var copied = false;
+    if (bytes != null) copied = await _pngToClipboard(bytes);
+    if (!mounted) return;
+    if (copied) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.imageCopied)),
+      );
+    }
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e) {
-      debugPrint('[Scrup] Share: no se pudo abrir ${uri.host}: $e');
+      debugPrint('[Scrup] Share: no se pudo abrir $site: $e');
     }
   }
 
   List<Widget> _webActions(AppLocalizations l10n, ThemeData theme) {
-    final text = _textCtrl.text;
-    final subject = [
-      widget.trackTitle,
-      widget.artist,
-    ].where((s) => s.trim().isNotEmpty).join(' — ');
     final targets = <(String, IconData, Uri)>[
       (
         'X',
         Icons.alternate_email,
-        Uri.https('twitter.com', '/intent/tweet', {'text': text}),
+        Uri.https('twitter.com', '/intent/tweet'),
       ),
       (
         'WhatsApp',
         Icons.chat_bubble_outline,
-        Uri.https('wa.me', '/', {'text': text}),
+        Uri.https('wa.me', '/'),
       ),
       (
         'Telegram',
         Icons.send_outlined,
-        Uri.https('t.me', '/share/url', {'url': '', 'text': text}),
+        Uri.https('t.me', '/share/url'),
       ),
       (
         'Email',
         Icons.mail_outline,
-        Uri(
-          scheme: 'mailto',
-          queryParameters: {'subject': subject, 'body': text},
-        ),
+        Uri(scheme: 'mailto', queryParameters: {'subject': widget.trackTitle}),
       ),
     ];
     return [
@@ -1476,7 +1530,7 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
           icon: Icon(icon),
           tooltip: l10n.shareOnSite(site),
           color: theme.colorScheme.onSurfaceVariant,
-          onPressed: () => _openShareUrl(uri),
+          onPressed: () => _openShareTarget(site, uri),
         ),
     ];
   }
@@ -1493,7 +1547,7 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
       backgroundColor: theme.colorScheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
+        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 680),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: SingleChildScrollView(
@@ -1532,21 +1586,6 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _textCtrl,
-                  maxLines: 4,
-                  minLines: 3,
-                  style: theme.textTheme.bodyMedium,
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: theme.colorScheme.surfaceContainerHigh,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 16),
                 Wrap(
                   alignment: WrapAlignment.center,
@@ -1562,7 +1601,7 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                     OutlinedButton.icon(
                       icon: const Icon(Icons.copy_rounded, size: 18),
                       label: Text(l10n.copyText),
-                      onPressed: _copy,
+                      onPressed: _copyImage,
                     ),
                     ..._webActions(l10n, theme),
                   ],
@@ -1575,6 +1614,15 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     );
   }
 
+  /// Estilo EXACTO de las letras en pantalla (lyrics_display): 30 px bold,
+  /// height 1.3, Roboto; activa en acento legible, inactivas al 30%.
+  TextStyle _lyricStyle(Color color) => const TextStyle(
+        fontSize: 30,
+        fontWeight: FontWeight.bold,
+        height: 1.3,
+        fontFamily: 'Roboto',
+      ).copyWith(color: color);
+
   Widget _buildCard(
     ThemeData theme,
     Color accent,
@@ -1582,15 +1630,17 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     LyricLine? next,
   ) {
     const bg = Color(0xFF15151C);
-    final onBg = Colors.white;
+    final readable = _readableAccent(accent);
+    final activeColor = readable;
+    final inactiveColor = readable.withValues(alpha: 0.3);
     return RepaintBoundary(
       key: _captureKey,
       child: Container(
-        width: 460,
-        padding: const EdgeInsets.all(28),
+        width: 520,
+        padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color: Color.alphaBlend(accent.withValues(alpha: .22), bg),
+          color: Color.alphaBlend(readable.withValues(alpha: .14), bg),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1601,39 +1651,45 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                 prev.text,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: onBg.withValues(alpha: .55),
-                  fontSize: 15,
-                  height: 1.35,
-                ),
+                style: _lyricStyle(inactiveColor),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
             ],
-            Text(
-              _current.text,
-              style: TextStyle(
-                color: onBg,
-                fontSize: 22,
-                height: 1.3,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            Text(_current.text, style: _lyricStyle(activeColor)),
             if (next != null) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Text(
                 next.text,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: onBg.withValues(alpha: .55),
-                  fontSize: 15,
-                  height: 1.35,
-                ),
+                style: _lyricStyle(inactiveColor),
               ),
             ],
-            const SizedBox(height: 22),
+            const SizedBox(height: 26),
             Row(
               children: [
+                // Mismo patrón que el header de letras: artwork 1:1 a la
+                // izquierda y columna título/artista al lado (en miniatura).
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CoverImage(
+                      source: widget.artworkUrl,
+                      fit: BoxFit.cover,
+                      fallback: ColoredBox(
+                        color: Colors.white.withValues(alpha: .08),
+                        child: const Icon(
+                          Icons.music_note,
+                          size: 20,
+                          color: Colors.white38,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1642,8 +1698,8 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                         widget.trackTitle.toUpperCase(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: onBg.withValues(alpha: .7),
+                        style: const TextStyle(
+                          color: Colors.white,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 1,
@@ -1655,20 +1711,22 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: onBg.withValues(alpha: .38),
+                          color: Colors.white.withValues(alpha: .7),
                           fontSize: 11,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  'Scrup',
-                  style: TextStyle(
-                    color: onBg.withValues(alpha: .24),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                const SizedBox(width: 14),
+                // Logo de la app donde antes decía «Scrup».
+                Opacity(
+                  opacity: 0.55,
+                  child: Image.asset(
+                    'assets/app-logo.png',
+                    width: 24,
+                    height: 24,
+                    errorBuilder: (_, _, _) => const Text('Scrup'),
                   ),
                 ),
               ],

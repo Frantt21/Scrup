@@ -145,7 +145,7 @@
   "shareLyrics": "歌詞をシェア",
   "saveAsImage": "画像として保存",
   "copyText": "コピー",
-  "lyricsCopied": "歌詞をクリップボードにコピーしました",
+  "imageCopied": "画像をクリップボードにコピーしました",
   "imageSaved": "画像を保存しました",
   "shareOnSite": "{site}でシェア",
   "lineOfTotal": "{total}件中{index}件目"

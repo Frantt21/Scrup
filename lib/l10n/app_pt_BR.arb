@@ -145,7 +145,7 @@
   "shareLyrics": "Compartilhar letra",
   "saveAsImage": "Salvar imagem",
   "copyText": "Copiar",
-  "lyricsCopied": "Letra copiada para a área de transferência",
+  "imageCopied": "Imagem copiada para a área de transferência",
   "imageSaved": "Imagem salva",
   "shareOnSite": "Compartilhar no {site}",
   "lineOfTotal": "{index} de {total}"

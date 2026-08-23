@@ -479,7 +479,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get copyText => 'コピー';
 
   @override
-  String get lyricsCopied => '歌詞をクリップボードにコピーしました';
+  String get imageCopied => '画像をクリップボードにコピーしました';
 
   @override
   String get imageSaved => '画像を保存しました';

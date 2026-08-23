@@ -490,7 +490,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get copyText => 'Copiar';
 
   @override
-  String get lyricsCopied => 'Letra copiada al portapapeles';
+  String get imageCopied => 'Imagen copiada al portapapeles';
 
   @override
   String get imageSaved => 'Imagen guardada';

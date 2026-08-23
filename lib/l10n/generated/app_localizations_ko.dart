@@ -479,7 +479,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get copyText => '복사';
 
   @override
-  String get lyricsCopied => '가사가 클립보드에 복사되었습니다';
+  String get imageCopied => '이미지가 클립보드에 복사되었습니다';
 
   @override
   String get imageSaved => '이미지가 저장되었습니다';

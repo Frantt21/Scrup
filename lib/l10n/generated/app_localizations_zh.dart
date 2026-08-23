@@ -478,7 +478,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get copyText => '复制';
 
   @override
-  String get lyricsCopied => '歌词已复制到剪贴板';
+  String get imageCopied => '图片已复制到剪贴板';
 
   @override
   String get imageSaved => '图片已保存';

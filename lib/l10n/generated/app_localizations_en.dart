@@ -489,7 +489,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get copyText => 'Copy';
 
   @override
-  String get lyricsCopied => 'Lyrics copied to clipboard';
+  String get imageCopied => 'Image copied to clipboard';
 
   @override
   String get imageSaved => 'Image saved';
