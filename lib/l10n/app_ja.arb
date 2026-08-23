@@ -129,11 +129,19 @@
   "karaokeSweep": "カラオケ",
   "karaokeSweepHint": "曲に合わせて歌詞を単語ごとにハイライトします",
   "done": "完了",
-  "importSpotify": "Spotifyからインポート",
-  "spotifyUrlHint": "プレイリストのリンク・URI・ID",
+  "importSpotify": "プレイリストをインポート",
+  "spotifyUrlHint": "Spotify・YouTubeのプレイリストリンク",
   "importAction": "インポート",
   "spotifyFetchError": "プレイリストを読み込めませんでした（リンクと公開設定を確認してください）",
   "spotifyNoMatch": "一致なし",
+  "spotifyTruncated": "大きなプレイリスト：Premiumなしでは最初の{limit}曲のみインポートされます。",
+  "@spotifyTruncated": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
   "karaokeSweepOn": "カラオケ: オン",
   "karaokeSweepOff": "カラオケ: オフ",
   "skipSilence": "無音をスキップ",

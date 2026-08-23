@@ -9,9 +9,10 @@ import '../../services/spotify_import_service.dart';
 import '../../services/ytdlp_service.dart';
 import '../../services/ytmusic_service.dart';
 
-/// Abre el diálogo de migración de una playlist de Spotify a Scrup.
-/// Devuelve el nombre elegido y las pistas emparejadas en YouTube, o null
-/// si el usuario cancela.
+/// Abre el diálogo de migración de playlists a Scrup. Detecta la fuente por
+/// el enlace: Spotify (embed público, primeras ~100) o YouTube/YouTube Music
+/// (InnerTube browse, sin límite práctico). Devuelve el nombre elegido y las
+/// pistas emparejadas en YouTube, o null si el usuario cancela.
 Future<({String name, List<Track> tracks})?> showSpotifyImportDialog(
   BuildContext context,
 ) {
@@ -26,7 +27,14 @@ enum _Phase { url, fetching, matching, done }
 enum _RowStatus { searching, matched, unmatched }
 
 class _RowState {
-  _RowState({this.status = _RowStatus.searching, this.track});
+  _RowState({
+    required this.label,
+    required this.sub,
+    this.status = _RowStatus.searching,
+    this.track,
+  });
+  final String label;
+  final String sub;
   final _RowStatus status;
   final Track? track;
 }
@@ -42,7 +50,7 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
   final _urlCtrl = TextEditingController();
   var _phase = _Phase.url;
   String? _error;
-  SpotifyPlaylist? _playlist;
+  String? _playlistName;
   List<_RowState> _rows = const [];
   int _matched = 0;
 
@@ -53,7 +61,54 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
   }
 
   Future<void> _start() async {
-    if (_urlCtrl.text.trim().isEmpty || _phase == _Phase.fetching) return;
+    final input = _urlCtrl.text.trim();
+    if (input.isEmpty || _phase == _Phase.fetching) return;
+    if (SpotifyImportService.extractPlaylistId(input) != null) {
+      await _startSpotify(input);
+    } else if (YtMusicService.extractYoutubePlaylistId(input) != null) {
+      await _startYoutube(input);
+    } else {
+      setState(() => _error = AppLocalizations.of(context).spotifyUrlHint);
+    }
+  }
+
+  /// YouTube / YT Music: los videoIds vienen exactos del browse, no hay
+  /// búsqueda por pista → resultado inmediato.
+  Future<void> _startYoutube(String input) async {
+    setState(() {
+      _phase = _Phase.fetching;
+      _error = null;
+    });
+    YtmPlaylist playlist;
+    try {
+      playlist = await YtMusicService().fetchPlaylist(input);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _phase = _Phase.url;
+        _error = AppLocalizations.of(context).spotifyFetchError;
+      });
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _playlistName = playlist.name;
+      _rows = [
+        for (final t in playlist.tracks)
+          _RowState(
+            label: t.title,
+            sub: t.artist,
+            status: _RowStatus.matched,
+            track: t,
+          ),
+      ];
+      _matched = playlist.tracks.length;
+      _phase = _Phase.done;
+    });
+  }
+
+  /// Spotify: leer embed → emparejar cada pista contra YouTube en vivo.
+  Future<void> _startSpotify(String input) async {
     final l10n = AppLocalizations.of(context);
     final service = SpotifyImportService();
     setState(() {
@@ -62,7 +117,7 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
     });
     SpotifyPlaylist playlist;
     try {
-      playlist = await service.fetchPlaylist(_urlCtrl.text);
+      playlist = await service.fetchPlaylist(input);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -73,9 +128,10 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
     }
     if (!mounted) return;
     setState(() {
-      _playlist = playlist;
+      _playlistName = playlist.name;
       _rows = [
-        for (var i = 0; i < playlist.tracks.length; i++) _RowState(),
+        for (final t in playlist.tracks)
+          _RowState(label: t.title, sub: t.artists),
       ];
       _matched = 0;
       _phase = _Phase.matching;
@@ -88,6 +144,8 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
         if (!mounted) return;
         setState(() {
           _rows[r.index] = _RowState(
+            label: r.requested.title,
+            sub: r.requested.artists,
             status: r.hasMatch ? _RowStatus.matched : _RowStatus.unmatched,
             track: r.match,
           );
@@ -100,10 +158,9 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
   }
 
   void _confirm() {
-    final playlist = _playlist;
-    if (playlist == null || _matched == 0) return;
+    if (_playlistName == null || _matched == 0) return;
     Navigator.pop(context, (
-      name: playlist.name,
+      name: _playlistName!,
       tracks: [
         for (final r in _rows)
           if (r.status == _RowStatus.matched && r.track != null) r.track!,
@@ -115,42 +172,62 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final total = _playlist?.tracks.length ?? 0;
 
-    return AlertDialog(
-      title: Row(
-        children: [
-          const Icon(Icons.sync_alt),
-          const SizedBox(width: 8),
-          Expanded(child: Text(l10n.importSpotify)),
-        ],
-      ),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: switch (_phase) {
-          _Phase.url || _Phase.fetching => _buildUrlInput(theme, l10n),
-          _Phase.matching || _Phase.done =>
-            _buildProgress(theme, l10n, total),
-        },
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(l10n.cancel),
+    // Mismo shell glass que el resto de diálogos de la app (crear/editar
+    // playlist, metadatos): Container sólido radio 18 + sombra profunda,
+    // cabecera con X y cuerpo en padding 24.
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Container(
+        width: 420,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: theme.colorScheme.surfaceContainerHigh,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.45),
+              blurRadius: 32,
+              offset: const Offset(0, 14),
+            ),
+          ],
         ),
-        if (_phase == _Phase.url || _phase == _Phase.fetching)
-          FilledButton(
-            onPressed:
-                _urlCtrl.text.trim().isEmpty ? null : () => unawaited(_start()),
-            child: Text(l10n.importAction),
-          )
-        else
-          FilledButton(
-            // Al menos una coincidencia para crear la playlist.
-            onPressed: _matched > 0 ? _confirm : null,
-            child: Text(_phase == _Phase.done ? l10n.done : l10n.close),
-          ),
-      ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 18, 8, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.importSpotify,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: l10n.close,
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+              child: switch (_phase) {
+                _Phase.url || _Phase.fetching => _buildUrlInput(theme, l10n),
+                _Phase.matching || _Phase.done =>
+                  _buildProgress(theme, l10n),
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -165,7 +242,21 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
           enabled: _phase == _Phase.url,
           onChanged: (_) => setState(() {}),
           onSubmitted: (_) => unawaited(_start()),
-          decoration: InputDecoration(hintText: l10n.spotifyUrlHint),
+          decoration: InputDecoration(
+            hintText: l10n.spotifyUrlHint,
+            prefixIcon: const Icon(Icons.link, size: 18),
+            filled: true,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          style: theme.textTheme.bodyMedium,
         ),
         if (_error != null) ...[
           const SizedBox(height: 10),
@@ -176,22 +267,44 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
         ],
         if (_phase == _Phase.fetching) ...[
           const SizedBox(height: 16),
-          const LinearProgressIndicator(),
+          const LinearProgressIndicator(minHeight: 3),
         ],
+        const SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.cancel),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: _urlCtrl.text.trim().isEmpty
+                  ? null
+                  : () => unawaited(_start()),
+              child: Text(l10n.importAction),
+            ),
+          ],
+        ),
       ],
     );
   }
 
-  Widget _buildProgress(ThemeData theme, AppLocalizations l10n, int total) {
+  Widget _buildProgress(ThemeData theme, AppLocalizations l10n) {
+    final total = _rows.length;
+    // El embed público de Spotify trunca ~100 pistas y no expone el total:
+    // si llegamos justo al límite asumimos recorte y avisamos.
+    final truncated = total >= 100;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          _playlist!.name,
+          _playlistName ?? '',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          style:
+              theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 2),
         Text(
@@ -200,14 +313,50 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
-        const SizedBox(height: 10),
+        if (truncated) ...[
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 14, color: Colors.amber.shade600),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  l10n.spotifyTruncated(total),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.amber.shade700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 12),
         SizedBox(
           height: 300,
-          width: 380,
+          width: double.infinity,
           child: ListView.builder(
             itemCount: _rows.length,
             itemBuilder: (context, i) => _buildRow(theme, l10n, i),
           ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.cancel),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              // Al menos una coincidencia para crear la playlist.
+              onPressed: _matched > 0 && _phase == _Phase.done
+                  ? _confirm
+                  : null,
+              child: Text(_phase == _Phase.done ? l10n.done : l10n.close),
+            ),
+          ],
         ),
       ],
     );
@@ -215,7 +364,6 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
 
   Widget _buildRow(ThemeData theme, AppLocalizations l10n, int index) {
     final row = _rows[index];
-    final track = _playlist!.tracks[index];
 
     final Widget trailing = switch (row.status) {
       _RowStatus.searching => const SizedBox(
@@ -243,9 +391,9 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
       visualDensity: VisualDensity.compact,
       minLeadingWidth: 20,
       leading: Text('${index + 1}'),
-      title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Text(row.label, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
-        track.artists,
+        row.sub,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.bodySmall,

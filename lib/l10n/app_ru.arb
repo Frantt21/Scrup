@@ -129,11 +129,19 @@
   "karaokeSweep": "Караоке",
   "karaokeSweepHint": "Подсвечивает текст слово за словом в такт песне",
   "done": "Готово",
-  "importSpotify": "Импорт из Spotify",
-  "spotifyUrlHint": "Ссылка, URI или ID плейлиста",
+  "importSpotify": "Импортировать плейлист",
+  "spotifyUrlHint": "Ссылка на плейлист Spotify или YouTube",
   "importAction": "Импортировать",
   "spotifyFetchError": "Не удалось прочитать плейлист (проверьте ссылку и доступность)",
   "spotifyNoMatch": "Нет совпадения",
+  "spotifyTruncated": "Большой плейлист: без Spotify Premium импортируются только первые {limit} треков.",
+  "@spotifyTruncated": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
   "karaokeSweepOn": "Караоке: вкл",
   "karaokeSweepOff": "Караоке: выкл",
   "skipSilence": "Пропускать тишину",

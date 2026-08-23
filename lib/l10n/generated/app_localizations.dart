@@ -886,13 +886,13 @@ abstract class AppLocalizations {
   /// No description provided for @importSpotify.
   ///
   /// In es, this message translates to:
-  /// **'Importar de Spotify'**
+  /// **'Importar playlist'**
   String get importSpotify;
 
   /// No description provided for @spotifyUrlHint.
   ///
   /// In es, this message translates to:
-  /// **'Enlace, URI o ID de la playlist'**
+  /// **'Enlace de playlist de Spotify o YouTube'**
   String get spotifyUrlHint;
 
   /// No description provided for @importAction.
@@ -912,6 +912,12 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Sin coincidencia'**
   String get spotifyNoMatch;
+
+  /// No description provided for @spotifyTruncated.
+  ///
+  /// In es, this message translates to:
+  /// **'Playlist grande: sin Spotify Premium solo se importan las primeras {limit} pistas.'**
+  String spotifyTruncated(int limit);
 
   /// No description provided for @karaokeSweepOn.
   ///

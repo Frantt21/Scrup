@@ -431,10 +431,10 @@ class AppLocalizationsKo extends AppLocalizations {
   String get done => '완료';
 
   @override
-  String get importSpotify => 'Spotify에서 가져오기';
+  String get importSpotify => '플레이리스트 가져오기';
 
   @override
-  String get spotifyUrlHint => '플레이리스트 링크, URI 또는 ID';
+  String get spotifyUrlHint => 'Spotify 또는 YouTube 재생목록 링크';
 
   @override
   String get importAction => '가져오기';
@@ -444,6 +444,11 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get spotifyNoMatch => '일치 없음';
+
+  @override
+  String spotifyTruncated(int limit) {
+    return '큰 플레이리스트: Premium 없이는 처음 $limit곡만 가져옵니다.';
+  }
 
   @override
   String get karaokeSweepOn => '노래방: 켜짐';

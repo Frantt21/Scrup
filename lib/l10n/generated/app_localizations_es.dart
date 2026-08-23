@@ -441,10 +441,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get done => 'Listo';
 
   @override
-  String get importSpotify => 'Importar de Spotify';
+  String get importSpotify => 'Importar playlist';
 
   @override
-  String get spotifyUrlHint => 'Enlace, URI o ID de la playlist';
+  String get spotifyUrlHint => 'Enlace de playlist de Spotify o YouTube';
 
   @override
   String get importAction => 'Importar';
@@ -455,6 +455,11 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get spotifyNoMatch => 'Sin coincidencia';
+
+  @override
+  String spotifyTruncated(int limit) {
+    return 'Playlist grande: sin Spotify Premium solo se importan las primeras $limit pistas.';
+  }
 
   @override
   String get karaokeSweepOn => 'Karaoke: activo';

@@ -431,10 +431,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get done => '完了';
 
   @override
-  String get importSpotify => 'Spotifyからインポート';
+  String get importSpotify => 'プレイリストをインポート';
 
   @override
-  String get spotifyUrlHint => 'プレイリストのリンク・URI・ID';
+  String get spotifyUrlHint => 'Spotify・YouTubeのプレイリストリンク';
 
   @override
   String get importAction => 'インポート';
@@ -444,6 +444,11 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get spotifyNoMatch => '一致なし';
+
+  @override
+  String spotifyTruncated(int limit) {
+    return '大きなプレイリスト：Premiumなしでは最初の$limit曲のみインポートされます。';
+  }
 
   @override
   String get karaokeSweepOn => 'カラオケ: オン';

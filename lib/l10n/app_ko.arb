@@ -129,11 +129,19 @@
   "karaokeSweep": "노래방",
   "karaokeSweepHint": "노래에 맞춰 가사를 단어별로 강조합니다",
   "done": "완료",
-  "importSpotify": "Spotify에서 가져오기",
-  "spotifyUrlHint": "플레이리스트 링크, URI 또는 ID",
+  "importSpotify": "플레이리스트 가져오기",
+  "spotifyUrlHint": "Spotify 또는 YouTube 재생목록 링크",
   "importAction": "가져오기",
   "spotifyFetchError": "플레이리스트를 읽을 수 없습니다(링크와 공개 여부를 확인하세요)",
   "spotifyNoMatch": "일치 없음",
+  "spotifyTruncated": "큰 플레이리스트: Premium 없이는 처음 {limit}곡만 가져옵니다.",
+  "@spotifyTruncated": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
   "karaokeSweepOn": "노래방: 켜짐",
   "karaokeSweepOff": "노래방: 꺼짐",
   "skipSilence": "무음 건너뛰기",

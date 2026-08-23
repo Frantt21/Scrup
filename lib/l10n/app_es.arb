@@ -222,11 +222,19 @@
   "karaokeSweep": "Karaoke",
   "karaokeSweepHint": "Ilumina la letra palabra por palabra al ritmo de la canción",
   "done": "Listo",
-  "importSpotify": "Importar de Spotify",
-  "spotifyUrlHint": "Enlace, URI o ID de la playlist",
+  "importSpotify": "Importar playlist",
+  "spotifyUrlHint": "Enlace de playlist de Spotify o YouTube",
   "importAction": "Importar",
   "spotifyFetchError": "No se pudo leer la playlist (¿enlace correcto y pública?)",
   "spotifyNoMatch": "Sin coincidencia",
+  "spotifyTruncated": "Playlist grande: sin Spotify Premium solo se importan las primeras {limit} pistas.",
+  "@spotifyTruncated": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
   "karaokeSweepOn": "Karaoke: activo",
   "karaokeSweepOff": "Karaoke: inactivo",
   "skipSilence": "Omitir silencios",

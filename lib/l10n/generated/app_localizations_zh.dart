@@ -430,10 +430,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get done => '完成';
 
   @override
-  String get importSpotify => '从 Spotify 导入';
+  String get importSpotify => '导入播放列表';
 
   @override
-  String get spotifyUrlHint => '播放列表链接、URI 或 ID';
+  String get spotifyUrlHint => 'Spotify 或 YouTube 播放列表链接';
 
   @override
   String get importAction => '导入';
@@ -443,6 +443,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get spotifyNoMatch => '无匹配';
+
+  @override
+  String spotifyTruncated(int limit) {
+    return '大播放列表：无 Premium 仅导入前 $limit 首。';
+  }
 
   @override
   String get karaokeSweepOn => '卡拉OK：开启';

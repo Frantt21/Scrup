@@ -129,11 +129,19 @@
   "karaokeSweep": "卡拉OK",
   "karaokeSweepHint": "随歌曲逐词高亮歌词",
   "done": "完成",
-  "importSpotify": "从 Spotify 导入",
-  "spotifyUrlHint": "播放列表链接、URI 或 ID",
+  "importSpotify": "导入播放列表",
+  "spotifyUrlHint": "Spotify 或 YouTube 播放列表链接",
   "importAction": "导入",
   "spotifyFetchError": "无法读取播放列表（请检查链接是否正确且公开）",
   "spotifyNoMatch": "无匹配",
+  "spotifyTruncated": "大播放列表：无 Premium 仅导入前 {limit} 首。",
+  "@spotifyTruncated": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
   "karaokeSweepOn": "卡拉OK：开启",
   "karaokeSweepOff": "卡拉OK：关闭",
   "skipSilence": "跳过静音",

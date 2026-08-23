@@ -445,10 +445,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get done => 'Готово';
 
   @override
-  String get importSpotify => 'Импорт из Spotify';
+  String get importSpotify => 'Импортировать плейлист';
 
   @override
-  String get spotifyUrlHint => 'Ссылка, URI или ID плейлиста';
+  String get spotifyUrlHint => 'Ссылка на плейлист Spotify или YouTube';
 
   @override
   String get importAction => 'Импортировать';
@@ -459,6 +459,11 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get spotifyNoMatch => 'Нет совпадения';
+
+  @override
+  String spotifyTruncated(int limit) {
+    return 'Большой плейлист: без Spotify Premium импортируются только первые $limit треков.';
+  }
 
   @override
   String get karaokeSweepOn => 'Караоке: вкл';
