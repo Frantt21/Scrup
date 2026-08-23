@@ -116,7 +116,7 @@ class _AddToPlaylistDialogState extends State<_AddToPlaylistDialog> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: const Icon(Icons.close_rounded, size: 18),
                     visualDensity: VisualDensity.compact,
                     tooltip: l10n.close,
                     onPressed: () => Navigator.pop(context),
@@ -133,7 +133,7 @@ class _AddToPlaylistDialogState extends State<_AddToPlaylistDialog> {
                   onChanged: (v) => setState(() => _query = v),
                   decoration: InputDecoration(
                     hintText: l10n.filterPlaylists,
-                    prefixIcon: const Icon(Icons.search, size: 20),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
                     isDense: true,
                     filled: true,
                     fillColor: theme.colorScheme.surfaceContainer,
@@ -294,7 +294,7 @@ class _PlaylistOptionCellState extends State<_PlaylistOptionCell> {
                           ),
                         ),
                         child: const Icon(
-                          Icons.check,
+                          Icons.check_rounded,
                           size: 12,
                           color: Colors.white,
                         ),
@@ -338,7 +338,7 @@ class _PlaylistOptionCellState extends State<_PlaylistOptionCell> {
           ],
         ),
       ),
-      child: Icon(Icons.favorite, size: 30, color: primary),
+      child: Icon(Icons.favorite_rounded, size: 30, color: primary),
     );
   }
 
@@ -356,7 +356,7 @@ class _PlaylistOptionCellState extends State<_PlaylistOptionCell> {
         ),
       ),
       child: Icon(
-        Icons.queue_music,
+        Icons.queue_music_rounded,
         size: 28,
         color: theme.colorScheme.primary.withValues(alpha: 0.45),
       ),
@@ -389,7 +389,7 @@ class _CreateCell extends StatelessWidget {
                 ),
                 child: Center(
                   child: Icon(
-                    Icons.add,
+                    Icons.add_rounded,
                     size: 30,
                     color: theme.colorScheme.primary,
                   ),
@@ -439,7 +439,7 @@ class _EmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.queue_music,
+              Icons.queue_music_rounded,
               size: 40,
               color: theme.colorScheme.primary.withValues(alpha: 0.4),
             ),
@@ -454,7 +454,7 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: onCreate,
-              icon: const Icon(Icons.add, size: 18),
+              icon: const Icon(Icons.add_rounded, size: 18),
               label: Text(l10n.newPlaylist),
             ),
           ],

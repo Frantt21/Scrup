@@ -163,7 +163,7 @@ class _SearchViewState extends State<SearchView> {
                     Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.arrow_back),
+                          icon: const Icon(Icons.arrow_back_rounded),
                           tooltip: l10n.backToHome,
                           onPressed: widget.onBack,
                         ),
@@ -182,7 +182,7 @@ class _SearchViewState extends State<SearchView> {
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
                         hintText: l10n.searchHint,
-                        prefixIcon: const Icon(Icons.search),
+                        prefixIcon: const Icon(Icons.search_rounded),
                         suffixIcon: _searching
                             ? const Padding(
                                 padding: EdgeInsets.all(12),
@@ -241,7 +241,7 @@ class _SearchViewState extends State<SearchView> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.error_outline,
+                Icons.error_rounded,
                 size: 48,
                 color: theme.colorScheme.error,
               ),
@@ -259,7 +259,7 @@ class _SearchViewState extends State<SearchView> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.music_note,
+              Icons.music_note_rounded,
               size: 72,
               color: theme.colorScheme.primary.withValues(alpha: 0.4),
             ),

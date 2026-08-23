@@ -147,7 +147,7 @@ class TrackTile extends StatelessWidget {
             if (onAddToPlaylist != null)
               IconButton(
                 icon: Icon(
-                  Icons.playlist_add,
+                  Icons.playlist_add_rounded,
                   color:
                       tint?.withValues(alpha: 0.85) ??
                       theme.colorScheme.onSurfaceVariant,
@@ -167,7 +167,7 @@ class TrackTile extends StatelessWidget {
     return Container(
       color: theme.colorScheme.surfaceContainerHighest,
       child: Icon(
-        Icons.music_note,
+        Icons.music_note_rounded,
         color:
             tint?.withValues(alpha: 0.75) ?? theme.colorScheme.onSurfaceVariant,
       ),

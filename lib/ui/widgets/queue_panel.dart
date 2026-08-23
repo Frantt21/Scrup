@@ -121,7 +121,7 @@ class _QueueGlass extends StatelessWidget {
                         child: Row(
                           children: [
                             Icon(
-                              Icons.queue_music,
+                              Icons.queue_music_rounded,
                               size: 18,
                               color: theme.colorScheme.primary,
                             ),
@@ -146,7 +146,7 @@ class _QueueGlass extends StatelessWidget {
                             // salir de la cola.
                             IconButton(
                               icon: Icon(
-                                Icons.shuffle,
+                                Icons.shuffle_rounded,
                                 size: 17,
                                 color: player.shuffle.value
                                     ? theme.colorScheme.primary
@@ -223,7 +223,7 @@ class _EmptyQueue extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.queue_music,
+              Icons.queue_music_rounded,
               size: 40,
               color: theme.colorScheme.primary.withValues(alpha: 0.4),
             ),

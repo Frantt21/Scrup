@@ -16,7 +16,7 @@ class AppLogo extends StatelessWidget {
       fit: BoxFit.contain,
       semanticLabel: 'Scrup',
       errorBuilder: (_, _, _) => Icon(
-        Icons.graphic_eq,
+        Icons.graphic_eq_rounded,
         size: size,
         color: Theme.of(context).colorScheme.primary,
       ),

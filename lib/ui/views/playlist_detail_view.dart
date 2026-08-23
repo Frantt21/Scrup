@@ -371,19 +371,19 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         ),
         ContextMenuItem(
           value: 'add',
-          icon: Icons.playlist_add,
+          icon: Icons.playlist_add_rounded,
           label: l10n.addToPlaylist,
           color: _menuTrackColor(track) ?? _ambientColor,
         ),
         ContextMenuItem(
           value: 'edit',
-          icon: Icons.edit,
+          icon: Icons.edit_rounded,
           label: l10n.editMetadata,
           color: _menuTrackColor(track) ?? _ambientColor,
         ),
         ContextMenuItem(
           value: 'remove',
-          icon: Icons.remove_circle_outline,
+          icon: Icons.remove_circle_rounded,
           label: l10n.removeFromPlaylist,
           color: _menuTrackColor(track) ?? _ambientColor,
         ),
@@ -550,7 +550,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
           ),
         ),
         child: Icon(
-          Icons.queue_music,
+          Icons.queue_music_rounded,
           size: 40,
           color: theme.colorScheme.primary.withValues(alpha: 0.5),
         ),
@@ -697,7 +697,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                     // Label corto: solo "Aleatorio"; el
                                     // texto largo anterior agrandaba el
                                     // botón respecto al de play.
-                                    icon: const Icon(Icons.shuffle),
+                                    icon: const Icon(Icons.shuffle_rounded),
                                     label: Text(l10n.shuffle),
                                   ),
                                   Text(
@@ -732,7 +732,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  Icons.music_off,
+                                  Icons.music_off_rounded,
                                   size: 64,
                                   // Icono tintado con el artwork de la
                                   // playlist (si ya se extrajo)
@@ -936,7 +936,7 @@ class _SortableTrackRowState extends State<_SortableTrackRow> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Icon(
-                  Icons.drag_indicator,
+                  Icons.drag_indicator_rounded,
                   size: 18,
                   color: (_hovered
                           ? (widget.accentColor ?? theme.colorScheme.primary)
@@ -1059,7 +1059,7 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
     return Container(
       color: theme.colorScheme.surfaceContainerHigh,
       child: Icon(
-        Icons.music_note,
+        Icons.music_note_rounded,
         size: 20,
         color: theme.colorScheme.onSurfaceVariant,
       ),
@@ -1136,7 +1136,7 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: const Icon(Icons.close_rounded, size: 18),
                     visualDensity: VisualDensity.compact,
                     tooltip: l10n.close,
                     onPressed: () => Navigator.pop(context),
@@ -1152,14 +1152,14 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
                   _field(
                     l10n.playlistName,
                     _nameController,
-                    Icons.queue_music,
+                    Icons.queue_music_rounded,
                     submit: true,
                   ),
                   const SizedBox(height: 16),
                   _field(
                     l10n.description,
                     _descController,
-                    Icons.notes,
+                    Icons.notes_rounded,
                     maxLines: 3,
                     maxLength: 300,
                   ),
@@ -1188,7 +1188,7 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
                                 ),
                               ),
                               child: Icon(
-                                Icons.queue_music,
+                                Icons.queue_music_rounded,
                                 size: 22,
                                 color: theme.colorScheme.primary.withValues(
                                   alpha: 0.5,
@@ -1210,20 +1210,20 @@ class _EditPlaylistDialogState extends State<_EditPlaylistDialog> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.image_outlined, size: 20),
+                        icon: const Icon(Icons.image_rounded, size: 20),
                         visualDensity: VisualDensity.compact,
                         tooltip: l10n.chooseImage,
                         onPressed: _pickImage,
                       ),
                       IconButton(
-                        icon: const Icon(Icons.library_music_outlined, size: 20),
+                        icon: const Icon(Icons.library_music_rounded, size: 20),
                         visualDensity: VisualDensity.compact,
                         tooltip: l10n.coverFromTrackLabel,
                         onPressed: _pickTrackCover,
                       ),
                       if (_previewSource != null)
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 20),
+                          icon: const Icon(Icons.delete_rounded, size: 20),
                           visualDensity: VisualDensity.compact,
                           tooltip: l10n.removeCover,
                           onPressed: () => setState(() {

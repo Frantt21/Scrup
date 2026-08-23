@@ -193,12 +193,12 @@ class _PlayerBarState extends State<PlayerBar> {
       items: [
         ContextMenuItem(
           value: 'edit',
-          icon: Icons.edit,
+          icon: Icons.edit_rounded,
           label: l10n.editMetadata,
         ),
         ContextMenuItem(
           value: 'add',
-          icon: Icons.playlist_add,
+          icon: Icons.playlist_add_rounded,
           label: l10n.addToPlaylist,
         ),
       ],
@@ -553,7 +553,7 @@ class _PlayerBarState extends State<PlayerBar> {
         const SizedBox(width: 6),
         IconButton(
           icon: Icon(
-            _isFavorite ? Icons.favorite : Icons.favorite_border,
+            _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
             size: 18,
           ),
           constraints: const BoxConstraints.tightFor(width: 32, height: 32),
@@ -595,7 +595,7 @@ class _PlayerBarState extends State<PlayerBar> {
             ValueListenableBuilder<bool>(
               valueListenable: player.shuffle,
               builder: (context, on, _) => IconButton(
-                icon: Icon(Icons.shuffle, size: iconSize),
+                icon: Icon(Icons.shuffle_rounded, size: iconSize),
                 constraints: btnConstraints,
                 padding: EdgeInsets.zero,
                 color: on ? primary : muted,
@@ -605,7 +605,7 @@ class _PlayerBarState extends State<PlayerBar> {
             ),
             // Anterior
             IconButton(
-              icon: const Icon(Icons.skip_previous),
+              icon: const Icon(Icons.skip_previous_rounded),
               constraints: btnConstraints,
               padding: EdgeInsets.zero,
               color: muted,
@@ -633,8 +633,8 @@ class _PlayerBarState extends State<PlayerBar> {
                         ),
                         icon: Icon(
                           _playing
-                              ? Icons.pause_circle_filled
-                              : Icons.play_circle_fill,
+                              ? Icons.pause_circle_filled_rounded
+                              : Icons.play_circle_fill_rounded,
                           color: primary,
                         ),
                         tooltip: _playing ? l10n.pause : l10n.play,
@@ -644,7 +644,7 @@ class _PlayerBarState extends State<PlayerBar> {
             ),
             // Siguiente
             IconButton(
-              icon: const Icon(Icons.skip_next),
+              icon: const Icon(Icons.skip_next_rounded),
               constraints: btnConstraints,
               padding: EdgeInsets.zero,
               color: muted,
@@ -658,7 +658,7 @@ class _PlayerBarState extends State<PlayerBar> {
                 final active = mode != LoopMode.off;
                 return IconButton(
                   icon: Icon(
-                    mode == LoopMode.one ? Icons.repeat_one : Icons.repeat,
+                    mode == LoopMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
                     size: iconSize,
                   ),
                   constraints: btnConstraints,
@@ -683,7 +683,7 @@ class _PlayerBarState extends State<PlayerBar> {
     return Container(
       color: theme.colorScheme.surfaceContainerHigh,
       child: Icon(
-        Icons.music_note,
+        Icons.music_note_rounded,
         size: 22,
         color: theme.colorScheme.onSurfaceVariant,
       ),
@@ -707,7 +707,7 @@ class _PlayerBarState extends State<PlayerBar> {
         // Lyrics: abre la vista de letras sincronizadas (resaltada en lila
         // cuando está abierta).
         IconButton(
-          icon: const Icon(Icons.lyrics_outlined, size: 20),
+          icon: const Icon(Icons.lyrics_rounded, size: 20),
           constraints: const BoxConstraints.tightFor(width: 34, height: 40),
           padding: EdgeInsets.zero,
           color: widget.lyricsOpen ? primary : muted,
@@ -719,7 +719,7 @@ class _PlayerBarState extends State<PlayerBar> {
         ValueListenableBuilder<bool>(
           valueListenable: player.radio,
           builder: (context, on, _) => IconButton(
-            icon: Icon(Icons.radio, size: 20, color: on ? primary : muted),
+            icon: Icon(Icons.radio_rounded, size: 20, color: on ? primary : muted),
             constraints: const BoxConstraints.tightFor(width: 34, height: 40),
             padding: EdgeInsets.zero,
             tooltip: on ? l10n.radioOn : l10n.radioOff,
@@ -728,7 +728,7 @@ class _PlayerBarState extends State<PlayerBar> {
         ),
         // Cola: resaltada en lila cuando el panel está abierto.
         IconButton(
-          icon: const Icon(Icons.queue_music, size: 20),
+          icon: const Icon(Icons.queue_music_rounded, size: 20),
           constraints: const BoxConstraints.tightFor(width: 34, height: 40),
           padding: EdgeInsets.zero,
           color: widget.queueOpen ? primary : muted,
@@ -740,8 +740,8 @@ class _PlayerBarState extends State<PlayerBar> {
           valueListenable: player.volume,
           builder: (context, vol, _) {
             final icon = vol <= 0
-                ? Icons.volume_off
-                : (vol < 0.5 ? Icons.volume_down : Icons.volume_up);
+                ? Icons.volume_off_rounded
+                : (vol < 0.5 ? Icons.volume_down_rounded : Icons.volume_up_rounded);
             return Row(
               mainAxisSize: MainAxisSize.min,
               children: [

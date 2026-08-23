@@ -344,7 +344,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
         _CreatePlaylistTile(onTap: _createPlaylist),
         _CreatePlaylistTile(
           onTap: _importFromSpotify,
-          icon: Icons.sync_alt,
+          icon: Icons.sync_alt_rounded,
           label: AppLocalizations.of(context).importSpotify,
         ),
       ],
@@ -370,7 +370,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
         if (i == _playlists.length + 1) {
           return _CreateGridCell(
             onTap: _importFromSpotify,
-            icon: Icons.sync_alt,
+            icon: Icons.sync_alt_rounded,
             label: AppLocalizations.of(context).importSpotify,
           );
         }
@@ -398,7 +398,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            Icons.queue_music,
+            Icons.queue_music_rounded,
             size: 32,
             color: theme.colorScheme.primary.withValues(alpha: 0.4),
           ),
@@ -448,7 +448,7 @@ class _ViewToggle extends StatelessWidget {
         children: [
           _seg(
             context: context,
-            icon: Icons.view_list_outlined,
+            icon: Icons.view_list_rounded,
             tooltip: AppLocalizations.of(context).listViewTooltip,
             active: !gridMode,
             onTap: () => onChanged(false),
@@ -606,7 +606,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
                     width: 32,
                     child: _hovered
                         ? IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 18),
+                            icon: const Icon(Icons.delete_rounded, size: 18),
                             visualDensity: VisualDensity.compact,
                             tooltip: AppLocalizations.of(context).delete,
                             color: theme.colorScheme.onSurfaceVariant,
@@ -648,7 +648,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
                     ),
                   ),
                   child: Icon(
-                    Icons.queue_music,
+                    Icons.queue_music_rounded,
                     size: 18,
                     color: theme.colorScheme.primary.withValues(alpha: 0.5),
                   ),
@@ -675,7 +675,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
           ],
         ),
       ),
-      child: Icon(Icons.favorite, size: 18, color: primary),
+      child: Icon(Icons.favorite_rounded, size: 18, color: primary),
     );
   }
 }
@@ -732,7 +732,7 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
           ],
         ),
       ),
-      child: Icon(Icons.favorite, size: 32, color: primary),
+      child: Icon(Icons.favorite_rounded, size: 32, color: primary),
     );
   }
 
@@ -776,7 +776,7 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                                 ),
                               ),
                               child: Icon(
-                                Icons.queue_music,
+                                Icons.queue_music_rounded,
                                 size: 28,
                                 color: theme.colorScheme.primary.withValues(
                                   alpha: 0.45,
@@ -813,7 +813,7 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                           child: const Padding(
                             padding: EdgeInsets.all(4),
                             child: Icon(
-                              Icons.delete_outline,
+                              Icons.delete_rounded,
                               size: 14,
                               color: Colors.white,
                             ),
@@ -871,7 +871,7 @@ class _CreatePlaylistTile extends StatelessWidget {
 
   const _CreatePlaylistTile({
     required this.onTap,
-    this.icon = Icons.add,
+    this.icon = Icons.add_rounded,
     this.label,
   });
 
@@ -933,7 +933,7 @@ class _CreateGridCell extends StatelessWidget {
 
   const _CreateGridCell({
     required this.onTap,
-    this.icon = Icons.add,
+    this.icon = Icons.add_rounded,
     this.label,
   });
 
@@ -1071,7 +1071,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: const Icon(Icons.close_rounded, size: 18),
                     visualDensity: VisualDensity.compact,
                     tooltip: l10n.close,
                     onPressed: () => Navigator.pop(context),
@@ -1087,7 +1087,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                   _field(
                     l10n.playlistName,
                     _nameController,
-                    Icons.queue_music,
+                    Icons.queue_music_rounded,
                     hint: l10n.playlistNameHint,
                     submit: true,
                   ),
@@ -1095,7 +1095,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                   _field(
                     l10n.descriptionOptional,
                     _descController,
-                    Icons.notes,
+                    Icons.notes_rounded,
                     hint: l10n.descriptionHint,
                     maxLines: 3,
                     maxLength: 300,
@@ -1134,8 +1134,8 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                       IconButton(
                         icon: Icon(
                           _imagePath == null
-                              ? Icons.image_outlined
-                              : Icons.swap_horiz,
+                              ? Icons.image_rounded
+                              : Icons.swap_horiz_rounded,
                           size: 20,
                         ),
                         visualDensity: VisualDensity.compact,
@@ -1146,7 +1146,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                       ),
                       if (_imagePath != null)
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 20),
+                          icon: const Icon(Icons.delete_rounded, size: 20),
                           visualDensity: VisualDensity.compact,
                           tooltip: l10n.removeImage,
                           onPressed: () => setState(() => _imagePath = null),
@@ -1237,7 +1237,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
         ),
       ),
       child: Icon(
-        Icons.queue_music,
+        Icons.queue_music_rounded,
         size: 20,
         color: theme.colorScheme.primary.withValues(alpha: 0.5),
       ),

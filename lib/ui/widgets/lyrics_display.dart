@@ -369,7 +369,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                           width: 1),
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.sync, color: Colors.white, size: 20),
+                      const Icon(Icons.sync_rounded, color: Colors.white, size: 20),
                       const SizedBox(width: 8),
                       Text(l10n.syncLyrics,
                           style: const TextStyle(

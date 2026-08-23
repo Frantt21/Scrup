@@ -209,7 +209,7 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: const Icon(Icons.close_rounded, size: 18),
                     visualDensity: VisualDensity.compact,
                     tooltip: l10n.close,
                     onPressed: () => Navigator.pop(context),
@@ -244,7 +244,7 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
           onSubmitted: (_) => unawaited(_start()),
           decoration: InputDecoration(
             hintText: l10n.spotifyUrlHint,
-            prefixIcon: const Icon(Icons.link, size: 18),
+            prefixIcon: const Icon(Icons.link_rounded, size: 18),
             filled: true,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(
@@ -318,7 +318,7 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline, size: 14, color: Colors.amber.shade600),
+              Icon(Icons.info_rounded, size: 14, color: Colors.amber.shade600),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -372,14 +372,14 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
         child: CircularProgressIndicator(strokeWidth: 2),
       ),
       _RowStatus.matched => Icon(
-        Icons.check_circle_outline,
+        Icons.check_circle_rounded,
         size: 18,
         color: Colors.green.shade400,
       ),
       _RowStatus.unmatched => Tooltip(
         message: l10n.spotifyNoMatch,
         child: Icon(
-          Icons.remove_circle_outline,
+          Icons.remove_circle_rounded,
           size: 18,
           color: theme.colorScheme.outline,
         ),

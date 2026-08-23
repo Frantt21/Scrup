@@ -144,13 +144,13 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
           // el sistema (traffic lights) y no se dibujan.
           if (_showWindowButtons) ...[
             _WindowButton(
-              icon: Icons.remove,
+              icon: Icons.remove_rounded,
               tooltip: AppLocalizations.of(context).minimize,
               onPressed: _minimize,
               hoverColor: onSurface.withValues(alpha: 0.08),
             ),
             _WindowButton(
-              icon: _maximized ? Icons.filter_none : Icons.crop_square,
+              icon: _maximized ? Icons.filter_none_rounded : Icons.crop_square_rounded,
               tooltip: _maximized
                   ? AppLocalizations.of(context).restore
                   : AppLocalizations.of(context).maximize,
@@ -158,7 +158,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
               hoverColor: onSurface.withValues(alpha: 0.08),
             ),
             _WindowButton(
-              icon: Icons.close,
+              icon: Icons.close_rounded,
               tooltip: AppLocalizations.of(context).close,
               onPressed: _close,
               hoverColor: const Color(0xFFE81123),

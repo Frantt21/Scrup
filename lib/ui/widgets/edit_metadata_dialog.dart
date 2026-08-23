@@ -180,7 +180,7 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: const Icon(Icons.close_rounded, size: 18),
                     visualDensity: VisualDensity.compact,
                     tooltip: l10n.close,
                     onPressed: () => Navigator.pop(context),
@@ -196,19 +196,19 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
                   _field(
                     l10n.metadataTitle,
                     _title,
-                    Icons.music_note,
+                    Icons.music_note_rounded,
                   ),
                   const SizedBox(height: 16),
                   _field(
                     l10n.metadataArtist,
                     _artist,
-                    Icons.person,
+                    Icons.person_rounded,
                   ),
                   const SizedBox(height: 16),
                   _field(
                     l10n.metadataAlbum,
                     _album,
-                    Icons.album,
+                    Icons.album_rounded,
                   ),
                   const SizedBox(height: 16),
                   // Portada: miniatura en vivo + campo de URL + botón para
@@ -216,9 +216,9 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
                   _field(
                     l10n.metadataCoverUrl,
                     _cover,
-                    Icons.link,
+                    Icons.link_rounded,
                     trailing: IconButton(
-                      icon: const Icon(Icons.photo_library, size: 20),
+                      icon: const Icon(Icons.photo_library_rounded, size: 20),
                       visualDensity: VisualDensity.compact,
                       tooltip: l10n.chooseImage,
                       onPressed: _pickLocalCover,
@@ -237,7 +237,7 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
                           fallback: Container(
                             color: theme.colorScheme.surfaceContainerHigh,
                             child: Icon(
-                              Icons.image,
+                              Icons.image_rounded,
                               size: 24,
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -260,7 +260,7 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
                                 height: 14,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : const Icon(Icons.auto_awesome, size: 16),
+                            : const Icon(Icons.auto_awesome_rounded, size: 16),
                         label: Text(l10n.metadataSearchDeezer),
                       ),
                       Row(

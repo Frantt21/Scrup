@@ -127,7 +127,7 @@ class _HomeViewState extends State<HomeView> {
                         textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
                           hintText: l10n.searchHint,
-                          prefixIcon: const Icon(Icons.search),
+                          prefixIcon: const Icon(Icons.search_rounded),
                           filled: true,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(28),
@@ -238,7 +238,7 @@ class _RecentCardState extends State<_RecentCard> {
       items: [
         ContextMenuItem(
           value: 'add',
-          icon: Icons.playlist_add,
+          icon: Icons.playlist_add_rounded,
           label: l10n.addToPlaylist,
         ),
       ],
@@ -373,7 +373,7 @@ class _RecentCardState extends State<_RecentCard> {
       fallback: Container(
         color: theme.colorScheme.surfaceContainerHigh,
         child: Icon(
-          Icons.music_note,
+          Icons.music_note_rounded,
           size: 40,
           color: theme.colorScheme.onSurfaceVariant,
         ),
@@ -394,7 +394,7 @@ class _EmptyHint extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(
-          Icons.history,
+          Icons.history_rounded,
           size: 40,
           color: theme.colorScheme.primary.withValues(alpha: 0.4),
         ),

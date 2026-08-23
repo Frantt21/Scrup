@@ -216,7 +216,7 @@ class _SettingsViewState extends State<SettingsView> {
     final l10n = AppLocalizations.of(context);
     final controller = context.watch<LocaleController>();
     return _SectionCard(
-      icon: Icons.language,
+      icon: Icons.language_rounded,
       title: l10n.language,
       caption: l10n.languageHint,
       // Campo compacto RECTANGULAR (no ocupa todo el ancho de la tarjeta ni
@@ -400,7 +400,7 @@ class _SettingsViewState extends State<SettingsView> {
     final settings = context.read<SettingsStore>();
 
     return _SectionCard(
-      icon: Icons.lyrics_outlined,
+      icon: Icons.lyrics_rounded,
       title: l10n.lyrics,
       caption: l10n.syncLyricsTitle,
       child: Column(
@@ -466,7 +466,7 @@ class _SettingsViewState extends State<SettingsView> {
     final muted = theme.colorScheme.onSurfaceVariant;
 
     return _SectionCard(
-      icon: Icons.sd_storage_outlined,
+      icon: Icons.sd_storage_rounded,
       title: l10n.cache,
       caption: l10n.cacheHint,
       child: Column(
@@ -504,7 +504,7 @@ class _SettingsViewState extends State<SettingsView> {
             children: [
               OutlinedButton.icon(
                 onPressed: _refreshStats,
-                icon: const Icon(Icons.refresh, size: 18),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: Text(l10n.refresh),
               ),
               const SizedBox(width: 10),
@@ -520,7 +520,7 @@ class _SettingsViewState extends State<SettingsView> {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.delete_sweep_outlined, size: 18),
+                    : const Icon(Icons.delete_sweep_rounded, size: 18),
                 label: Text(l10n.clearCache),
               ),
             ],
@@ -534,7 +534,7 @@ class _SettingsViewState extends State<SettingsView> {
   Widget _buildAboutSection(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
     return _SectionCard(
-      icon: Icons.info_outline,
+      icon: Icons.info_rounded,
       title: l10n.about,
       child: Row(
         children: [

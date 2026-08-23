@@ -213,7 +213,7 @@ class _AppShellState extends State<AppShell> {
     final List<Widget> barActions = [
       if (inZone) ...[
         IconButton(
-          icon: const Icon(Icons.home_outlined),
+          icon: const Icon(Icons.home_rounded),
           visualDensity: VisualDensity.compact,
           constraints: const BoxConstraints.tightFor(width: 40, height: 40),
           padding: EdgeInsets.zero,
@@ -226,7 +226,7 @@ class _AppShellState extends State<AppShell> {
           }),
         ),
         IconButton(
-          icon: const Icon(Icons.search_outlined),
+          icon: const Icon(Icons.search_rounded),
           visualDensity: VisualDensity.compact,
           constraints: const BoxConstraints.tightFor(width: 40, height: 40),
           padding: EdgeInsets.zero,
@@ -242,7 +242,7 @@ class _AppShellState extends State<AppShell> {
     ];
     final Widget barTrailing = IconButton(
       icon: Icon(
-        Icons.settings_outlined,
+        Icons.settings_rounded,
         color: _showSettings ? Theme.of(context).colorScheme.primary : null,
       ),
       visualDensity: VisualDensity.compact,

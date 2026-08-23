@@ -411,7 +411,7 @@ class _LyricsViewState extends State<LyricsView>
                             source: _track!.thumbnailUrl,
                             fit: BoxFit.cover,
                             fallback: Icon(
-                              Icons.music_note,
+                              Icons.music_note_rounded,
                               size: 22,
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -451,7 +451,7 @@ class _LyricsViewState extends State<LyricsView>
                     // Modo karaoke (sweep palabra por palabra).
                     IconButton(
                       icon: Icon(
-                        Icons.graphic_eq,
+                        Icons.graphic_eq_rounded,
                         color: _sweepEnabled
                             ? theme.colorScheme.primary
                             : theme.colorScheme.onSurfaceVariant,
@@ -469,19 +469,19 @@ class _LyricsViewState extends State<LyricsView>
                     ),
                     // Sincronización manual (ajuste de offset).
                     IconButton(
-                      icon: const Icon(Icons.timer_outlined),
+                      icon: const Icon(Icons.timer_rounded),
                       tooltip: l10n.syncLyricsTitle,
                       onPressed: _lyrics == null ? null : _showSyncDialog,
                     ),
                     // Búsqueda manual en LRCLIB.
                     IconButton(
-                      icon: const Icon(Icons.search),
+                      icon: const Icon(Icons.search_rounded),
                       tooltip: l10n.searchLyrics,
                       onPressed: _track == null ? null : _showSearchDialog,
                     ),
                     // Compartir la línea actual (imagen o web).
                     IconButton(
-                      icon: const Icon(Icons.share_outlined),
+                      icon: const Icon(Icons.share_rounded),
                       tooltip: l10n.shareLyrics,
                       onPressed:
                           _lyrics == null ? null : _showShareDialog,
@@ -527,7 +527,7 @@ class _LyricsViewState extends State<LyricsView>
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.lyrics_outlined,
+                Icons.lyrics_rounded,
                 size: 56,
                 color: theme.colorScheme.primary.withValues(alpha: 0.4),
               ),
@@ -548,7 +548,7 @@ class _LyricsViewState extends State<LyricsView>
               const SizedBox(height: 16),
               FilledButton.tonalIcon(
                 onPressed: _showSearchDialog,
-                icon: const Icon(Icons.search, size: 18),
+                icon: const Icon(Icons.search_rounded, size: 18),
                 label: Text(l10n.searchLyrics),
               ),
             ],
@@ -674,7 +674,7 @@ class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
               padding: const EdgeInsets.fromLTRB(20, 14, 8, 0),
               child: Row(
                 children: [
-                  Icon(Icons.timer_outlined, color: accent, size: 20),
+                  Icon(Icons.timer_rounded, color: accent, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -685,7 +685,7 @@ class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: const Icon(Icons.close_rounded, size: 18),
                     visualDensity: VisualDensity.compact,
                     onPressed: () => Navigator.pop(context),
                   ),
@@ -1051,7 +1051,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
               child: Row(
                 children: [
                   Icon(
-                    Icons.lyrics_outlined,
+                    Icons.lyrics_rounded,
                     color: theme.colorScheme.primary,
                     size: 20,
                   ),
@@ -1065,7 +1065,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: const Icon(Icons.close_rounded, size: 18),
                     visualDensity: VisualDensity.compact,
                     onPressed: () => Navigator.pop(context),
                   ),
@@ -1080,7 +1080,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: l10n.lyricsSearchHint,
-                  prefixIcon: const Icon(Icons.search, size: 18),
+                  prefixIcon: const Icon(Icons.search_rounded, size: 18),
                   suffixIcon: _searching
                       ? const Padding(
                           padding: EdgeInsets.all(12),
@@ -1091,7 +1091,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                           ),
                         )
                       : IconButton(
-                          icon: const Icon(Icons.search, size: 18),
+                          icon: const Icon(Icons.search_rounded, size: 18),
                           onPressed: () => _performSearch(_controller.text),
                         ),
                   filled: true,
@@ -1107,7 +1107,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  Icon(Icons.source, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                  Icon(Icons.source_rounded, size: 16, color: theme.colorScheme.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Text('Proveedor:', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                   const Spacer(),
@@ -1168,7 +1168,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
-                Icons.lyrics_outlined,
+                Icons.lyrics_rounded,
                 size: 20,
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -1215,12 +1215,12 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
               children: [
                 // Editar la letra (texto con sus timestamps) antes de usar.
                 IconButton(
-                  icon: const Icon(Icons.edit, size: 18),
+                  icon: const Icon(Icons.edit_rounded, size: 18),
                   tooltip: l10n.editLyrics,
                   onPressed: () => _openEditor(r),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.check, size: 18),
+                  icon: const Icon(Icons.check_rounded, size: 18),
                   tooltip: l10n.useLyrics,
                   onPressed: () => Navigator.pop(context, r),
                 ),
@@ -1505,22 +1505,22 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     final targets = <(String, IconData, Uri)>[
       (
         'X',
-        Icons.alternate_email,
+        Icons.alternate_email_rounded,
         Uri.https('twitter.com', '/intent/tweet'),
       ),
       (
         'WhatsApp',
-        Icons.chat_bubble_outline,
+        Icons.chat_bubble_rounded,
         Uri.https('wa.me', '/'),
       ),
       (
         'Telegram',
-        Icons.send_outlined,
+        Icons.send_rounded,
         Uri.https('t.me', '/share/url'),
       ),
       (
         'Email',
-        Icons.mail_outline,
+        Icons.mail_rounded,
         Uri(scheme: 'mailto', queryParameters: {'subject': widget.trackTitle}),
       ),
     ];
@@ -1570,7 +1570,7 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.keyboard_arrow_up),
+                      icon: const Icon(Icons.keyboard_arrow_up_rounded),
                       onPressed: _center <= 0 ? null : () => _move(-1),
                     ),
                     Text(
@@ -1580,7 +1580,7 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.keyboard_arrow_down),
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded),
                       onPressed:
                           _center >= _lineCount - 1 ? null : () => _move(1),
                     ),
@@ -1594,7 +1594,7 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                   runSpacing: 8,
                   children: [
                     FilledButton.icon(
-                      icon: const Icon(Icons.image_outlined, size: 18),
+                      icon: const Icon(Icons.image_rounded, size: 18),
                       label: Text(l10n.saveAsImage),
                       onPressed: _saveImage,
                     ),
@@ -1681,7 +1681,7 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                       fallback: ColoredBox(
                         color: Colors.white.withValues(alpha: .08),
                         child: const Icon(
-                          Icons.music_note,
+                          Icons.music_note_rounded,
                           size: 20,
                           color: Colors.white38,
                         ),
