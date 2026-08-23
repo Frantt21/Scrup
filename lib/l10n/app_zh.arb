@@ -141,5 +141,12 @@
   "editLyrics": "编辑歌词",
   "useLyrics": "使用歌词",
   "editLyricsHint": "在此粘贴 LRC：每行 [mm:ss.xx] 文本",
-  "searchLyrics": "搜索歌词"
+  "searchLyrics": "搜索歌词",
+  "shareLyrics": "分享歌词",
+  "saveAsImage": "保存为图片",
+  "copyText": "复制",
+  "lyricsCopied": "歌词已复制到剪贴板",
+  "imageSaved": "图片已保存",
+  "shareOnSite": "分享到 {site}",
+  "lineOfTotal": "第 {index}/{total} 句"
 }

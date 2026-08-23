@@ -960,6 +960,48 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Buscar letras'**
   String get searchLyrics;
+
+  /// No description provided for @shareLyrics.
+  ///
+  /// In es, this message translates to:
+  /// **'Compartir letra'**
+  String get shareLyrics;
+
+  /// No description provided for @saveAsImage.
+  ///
+  /// In es, this message translates to:
+  /// **'Guardar imagen'**
+  String get saveAsImage;
+
+  /// No description provided for @copyText.
+  ///
+  /// In es, this message translates to:
+  /// **'Copiar'**
+  String get copyText;
+
+  /// No description provided for @lyricsCopied.
+  ///
+  /// In es, this message translates to:
+  /// **'Letra copiada al portapapeles'**
+  String get lyricsCopied;
+
+  /// No description provided for @imageSaved.
+  ///
+  /// In es, this message translates to:
+  /// **'Imagen guardada'**
+  String get imageSaved;
+
+  /// No description provided for @shareOnSite.
+  ///
+  /// In es, this message translates to:
+  /// **'Compartir en {site}'**
+  String shareOnSite(String site);
+
+  /// No description provided for @lineOfTotal.
+  ///
+  /// In es, this message translates to:
+  /// **'{index} de {total}'**
+  String lineOfTotal(int index, int total);
 }
 
 class _AppLocalizationsDelegate

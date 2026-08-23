@@ -479,4 +479,29 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get searchLyrics => 'Buscar letras';
+
+  @override
+  String get shareLyrics => 'Compartir letra';
+
+  @override
+  String get saveAsImage => 'Guardar imagen';
+
+  @override
+  String get copyText => 'Copiar';
+
+  @override
+  String get lyricsCopied => 'Letra copiada al portapapeles';
+
+  @override
+  String get imageSaved => 'Imagen guardada';
+
+  @override
+  String shareOnSite(String site) {
+    return 'Compartir en $site';
+  }
+
+  @override
+  String lineOfTotal(int index, int total) {
+    return '$index de $total';
+  }
 }

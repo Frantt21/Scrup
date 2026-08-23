@@ -141,5 +141,12 @@
   "editLyrics": "Редактировать текст",
   "useLyrics": "Использовать текст",
   "editLyricsHint": "Вставьте LRC здесь: [мм:сс.сс] текст на строку",
-  "searchLyrics": "Найти текст"
+  "searchLyrics": "Найти текст",
+  "shareLyrics": "Поделиться текстом",
+  "saveAsImage": "Сохранить изображение",
+  "copyText": "Копировать",
+  "lyricsCopied": "Текст скопирован в буфер обмена",
+  "imageSaved": "Изображение сохранено",
+  "shareOnSite": "Поделиться в {site}",
+  "lineOfTotal": "{index} из {total}"
 }

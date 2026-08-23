@@ -141,5 +141,12 @@
   "editLyrics": "가사 편집",
   "useLyrics": "가사 사용",
   "editLyricsHint": "여기에 LRC 붙여넣기: 줄마다 [mm:ss.xx] 텍스트",
-  "searchLyrics": "가사 검색"
+  "searchLyrics": "가사 검색",
+  "shareLyrics": "가사 공유",
+  "saveAsImage": "이미지로 저장",
+  "copyText": "복사",
+  "lyricsCopied": "가사가 클립보드에 복사되었습니다",
+  "imageSaved": "이미지가 저장되었습니다",
+  "shareOnSite": "{site}에서 공유",
+  "lineOfTotal": "총 {total}줄 중 {index}"
 }

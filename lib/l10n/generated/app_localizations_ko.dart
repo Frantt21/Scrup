@@ -468,4 +468,29 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get searchLyrics => '가사 검색';
+
+  @override
+  String get shareLyrics => '가사 공유';
+
+  @override
+  String get saveAsImage => '이미지로 저장';
+
+  @override
+  String get copyText => '복사';
+
+  @override
+  String get lyricsCopied => '가사가 클립보드에 복사되었습니다';
+
+  @override
+  String get imageSaved => '이미지가 저장되었습니다';
+
+  @override
+  String shareOnSite(String site) {
+    return '$site에서 공유';
+  }
+
+  @override
+  String lineOfTotal(int index, int total) {
+    return '총 $total줄 중 $index';
+  }
 }

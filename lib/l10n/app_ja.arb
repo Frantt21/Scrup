@@ -141,5 +141,12 @@
   "editLyrics": "歌詞を編集",
   "useLyrics": "歌詞を使用",
   "editLyricsHint": "ここにLRCを貼り付け: 行ごとに [mm:ss.xx] テキスト",
-  "searchLyrics": "歌詞を検索"
+  "searchLyrics": "歌詞を検索",
+  "shareLyrics": "歌詞をシェア",
+  "saveAsImage": "画像として保存",
+  "copyText": "コピー",
+  "lyricsCopied": "歌詞をクリップボードにコピーしました",
+  "imageSaved": "画像を保存しました",
+  "shareOnSite": "{site}でシェア",
+  "lineOfTotal": "{total}件中{index}件目"
 }

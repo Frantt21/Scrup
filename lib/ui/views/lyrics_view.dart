@@ -1,10 +1,16 @@
 import 'dart:async';
+import 'dart:typed_data' show Uint8List;
+import 'dart:ui' as ui;
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/scheduler.dart' show Ticker;
-import 'package:flutter/services.dart' show FilteringTextInputFormatter;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, FilteringTextInputFormatter;
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/lyrics_search_result.dart';
 import '../../core/track.dart';
@@ -337,6 +343,27 @@ class _LyricsViewState extends State<LyricsView>
     );
   }
 
+  /// Diálogo para compartir la letra: ventana de tres líneas (anterior,
+  /// actual, siguiente) navegable, texto editable y salidas (copiar, PNG
+  /// o intents web).
+  void _showShareDialog() {
+    final lyrics = _lyrics;
+    final track = _track;
+    if (lyrics == null || track == null) return;
+    // Misma fórmula que la pantalla: posición menos el offset raíz.
+    final idx = lyrics.getCurrentLineIndex(_position.value - _lyricsOffset);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => _LyricsShareDialog(
+        lyrics: lyrics,
+        initialIndex: idx ?? 0,
+        trackTitle: track.title,
+        artist: track.artist,
+        accentColor: context.read<ThemeController>().accentColor,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -449,6 +476,13 @@ class _LyricsViewState extends State<LyricsView>
                       icon: const Icon(Icons.search),
                       tooltip: l10n.searchLyrics,
                       onPressed: _track == null ? null : _showSearchDialog,
+                    ),
+                    // Compartir la línea actual (imagen o web).
+                    IconButton(
+                      icon: const Icon(Icons.share_outlined),
+                      tooltip: l10n.shareLyrics,
+                      onPressed:
+                          _lyrics == null ? null : _showShareDialog,
                     ),
                   ],
                 ),
@@ -1275,5 +1309,373 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
         .where((l) => l.trim().isNotEmpty)
         .map((l) => '[00:00.00] ${l.trim()}')
         .join('\n');
+  }
+}
+
+/// Diálogo de compartir letra: tarjeta prevista (la MISMA que se exporta
+/// como PNG vía RepaintBoundary), navegación de la ventana de tres líneas
+/// (anterior / actual / siguiente), texto editable y salidas: copiar al
+/// portapapeles, guardar imagen o abrir intents web (X, WhatsApp,
+/// Telegram, email).
+class _LyricsShareDialog extends StatefulWidget {
+  final SyncedLyrics lyrics;
+  final int initialIndex;
+  final String trackTitle;
+  final String artist;
+  final Color? accentColor;
+
+  const _LyricsShareDialog({
+    required this.lyrics,
+    required this.initialIndex,
+    required this.trackTitle,
+    required this.artist,
+    this.accentColor,
+  });
+
+  @override
+  State<_LyricsShareDialog> createState() => _LyricsShareDialogState();
+}
+
+class _LyricsShareDialogState extends State<_LyricsShareDialog> {
+  late int _center;
+  late final TextEditingController _textCtrl;
+  final GlobalKey _captureKey = GlobalKey();
+
+  int get _lineCount => widget.lyrics.lines.length;
+
+  LyricLine? _lineAt(int i) =>
+      (i >= 0 && i < _lineCount) ? widget.lyrics.lines[i] : null;
+
+  LyricLine get _current {
+    final i = _center.clamp(0, _lineCount - 1);
+    return widget.lyrics.lines[i];
+  }
+
+  String _composeText() => buildLyricsShareText(
+        previous: _lineAt(_center - 1),
+        current: _current,
+        next: _lineAt(_center + 1),
+        title: widget.trackTitle,
+        artist: widget.artist,
+      );
+
+  @override
+  void initState() {
+    super.initState();
+    _center = widget.initialIndex.clamp(0, _lineCount - 1);
+    _textCtrl = TextEditingController(text: _composeText());
+  }
+
+  @override
+  void dispose() {
+    _textCtrl.dispose();
+    super.dispose();
+  }
+
+  void _move(int delta) {
+    final next = (_center + delta).clamp(0, _lineCount - 1);
+    if (next == _center) return;
+    setState(() {
+      _center = next;
+      _textCtrl.text = _composeText();
+    });
+  }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: _textCtrl.text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppLocalizations.of(context).lyricsCopied)),
+    );
+  }
+
+  /// Exporta la tarjeta prevista tal cual se ve (pixelRatio 3 ⇒ nítida).
+  Future<void> _saveImage() async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      final boundary =
+          _captureKey.currentContext?.findRenderObject();
+      if (boundary is! RenderRepaintBoundary) return;
+      final image = await boundary.toImage(pixelRatio: 3);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      if (data == null) return;
+      final bytes = Uint8List.view(
+        data.buffer,
+        data.offsetInBytes,
+        data.lengthInBytes,
+      );
+      final safe = widget.trackTitle
+          .replaceAll(RegExp(r'[^\w\s-]'), '')
+          .trim();
+      final suggested =
+          '${safe.isEmpty ? 'lyrics' : safe} - scrup.png';
+      final location = await getSaveLocation(
+        suggestedName: suggested,
+        acceptedTypeGroups: const [
+          XTypeGroup(label: 'PNG', extensions: ['png']),
+        ],
+      );
+      if (location == null) return;
+      await XFile.fromData(
+        bytes,
+        mimeType: 'image/png',
+        name: 'lyrics.png',
+      ).saveTo(location.path);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.imageSaved)),
+      );
+    } catch (e) {
+      debugPrint('[Scrup] Share: error guardando imagen: $e');
+    }
+  }
+
+  Future<void> _openShareUrl(Uri uri) async {
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('[Scrup] Share: no se pudo abrir ${uri.host}: $e');
+    }
+  }
+
+  List<Widget> _webActions(AppLocalizations l10n, ThemeData theme) {
+    final text = _textCtrl.text;
+    final subject = [
+      widget.trackTitle,
+      widget.artist,
+    ].where((s) => s.trim().isNotEmpty).join(' — ');
+    final targets = <(String, IconData, Uri)>[
+      (
+        'X',
+        Icons.alternate_email,
+        Uri.https('twitter.com', '/intent/tweet', {'text': text}),
+      ),
+      (
+        'WhatsApp',
+        Icons.chat_bubble_outline,
+        Uri.https('wa.me', '/', {'text': text}),
+      ),
+      (
+        'Telegram',
+        Icons.send_outlined,
+        Uri.https('t.me', '/share/url', {'url': '', 'text': text}),
+      ),
+      (
+        'Email',
+        Icons.mail_outline,
+        Uri(
+          scheme: 'mailto',
+          queryParameters: {'subject': subject, 'body': text},
+        ),
+      ),
+    ];
+    return [
+      for (final (site, icon, uri) in targets)
+        IconButton(
+          icon: Icon(icon),
+          tooltip: l10n.shareOnSite(site),
+          color: theme.colorScheme.onSurfaceVariant,
+          onPressed: () => _openShareUrl(uri),
+        ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final accent = widget.accentColor ?? theme.colorScheme.primary;
+    final prev = _lineAt(_center - 1);
+    final next = _lineAt(_center + 1);
+
+    return Dialog(
+      backgroundColor: theme.colorScheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l10n.shareLyrics,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 16),
+                // Tarjeta compartible (WYSIWYG: esto ES el PNG).
+                Center(child: _buildCard(theme, accent, prev, next)),
+                const SizedBox(height: 12),
+                // Navegación de la línea central.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.keyboard_arrow_up),
+                      onPressed: _center <= 0 ? null : () => _move(-1),
+                    ),
+                    Text(
+                      l10n.lineOfTotal(_center + 1, _lineCount),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.keyboard_arrow_down),
+                      onPressed:
+                          _center >= _lineCount - 1 ? null : () => _move(1),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _textCtrl,
+                  maxLines: 4,
+                  minLines: 3,
+                  style: theme.textTheme.bodyMedium,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceContainerHigh,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      icon: const Icon(Icons.image_outlined, size: 18),
+                      label: Text(l10n.saveAsImage),
+                      onPressed: _saveImage,
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                      label: Text(l10n.copyText),
+                      onPressed: _copy,
+                    ),
+                    ..._webActions(l10n, theme),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCard(
+    ThemeData theme,
+    Color accent,
+    LyricLine? prev,
+    LyricLine? next,
+  ) {
+    const bg = Color(0xFF15151C);
+    final onBg = Colors.white;
+    return RepaintBoundary(
+      key: _captureKey,
+      child: Container(
+        width: 460,
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: Color.alphaBlend(accent.withValues(alpha: .22), bg),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (prev != null) ...[
+              Text(
+                prev.text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: onBg.withValues(alpha: .55),
+                  fontSize: 15,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
+            Text(
+              _current.text,
+              style: TextStyle(
+                color: onBg,
+                fontSize: 22,
+                height: 1.3,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (next != null) ...[
+              const SizedBox(height: 14),
+              Text(
+                next.text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: onBg.withValues(alpha: .55),
+                  fontSize: 15,
+                  height: 1.35,
+                ),
+              ),
+            ],
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.trackTitle.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: onBg.withValues(alpha: .7),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: onBg.withValues(alpha: .38),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Scrup',
+                  style: TextStyle(
+                    color: onBg.withValues(alpha: .24),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

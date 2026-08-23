@@ -467,4 +467,29 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get searchLyrics => '搜索歌词';
+
+  @override
+  String get shareLyrics => '分享歌词';
+
+  @override
+  String get saveAsImage => '保存为图片';
+
+  @override
+  String get copyText => '复制';
+
+  @override
+  String get lyricsCopied => '歌词已复制到剪贴板';
+
+  @override
+  String get imageSaved => '图片已保存';
+
+  @override
+  String shareOnSite(String site) {
+    return '分享到 $site';
+  }
+
+  @override
+  String lineOfTotal(int index, int total) {
+    return '第 $index/$total 句';
+  }
 }

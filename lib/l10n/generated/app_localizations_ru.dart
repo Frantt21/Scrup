@@ -483,4 +483,29 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get searchLyrics => 'Найти текст';
+
+  @override
+  String get shareLyrics => 'Поделиться текстом';
+
+  @override
+  String get saveAsImage => 'Сохранить изображение';
+
+  @override
+  String get copyText => 'Копировать';
+
+  @override
+  String get lyricsCopied => 'Текст скопирован в буфер обмена';
+
+  @override
+  String get imageSaved => 'Изображение сохранено';
+
+  @override
+  String shareOnSite(String site) {
+    return 'Поделиться в $site';
+  }
+
+  @override
+  String lineOfTotal(int index, int total) {
+    return '$index из $total';
+  }
 }

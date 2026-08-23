@@ -478,6 +478,31 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get searchLyrics => 'Pesquisar letra';
+
+  @override
+  String get shareLyrics => 'Partilhar letra';
+
+  @override
+  String get saveAsImage => 'Guardar imagem';
+
+  @override
+  String get copyText => 'Copiar';
+
+  @override
+  String get lyricsCopied => 'Letra copiada para a área de transferência';
+
+  @override
+  String get imageSaved => 'Imagem guardada';
+
+  @override
+  String shareOnSite(String site) {
+    return 'Partilhar no $site';
+  }
+
+  @override
+  String lineOfTotal(int index, int total) {
+    return '$index de $total';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -954,4 +979,29 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get searchLyrics => 'Pesquisar letra';
+
+  @override
+  String get shareLyrics => 'Compartilhar letra';
+
+  @override
+  String get saveAsImage => 'Salvar imagem';
+
+  @override
+  String get copyText => 'Copiar';
+
+  @override
+  String get lyricsCopied => 'Letra copiada para a área de transferência';
+
+  @override
+  String get imageSaved => 'Imagem salva';
+
+  @override
+  String shareOnSite(String site) {
+    return 'Compartilhar no $site';
+  }
+
+  @override
+  String lineOfTotal(int index, int total) {
+    return '$index de $total';
+  }
 }

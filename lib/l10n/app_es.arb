@@ -234,5 +234,29 @@
   "editLyrics": "Editar letra",
   "useLyrics": "Usar letra",
   "editLyricsHint": "Pega el LRC aquí: [mm:ss.xx] texto por línea",
-  "searchLyrics": "Buscar letras"
+  "searchLyrics": "Buscar letras",
+  "shareLyrics": "Compartir letra",
+  "saveAsImage": "Guardar imagen",
+  "copyText": "Copiar",
+  "lyricsCopied": "Letra copiada al portapapeles",
+  "imageSaved": "Imagen guardada",
+  "shareOnSite": "Compartir en {site}",
+  "lineOfTotal": "{index} de {total}",
+  "@shareOnSite": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      }
+    }
+  },
+  "@lineOfTotal": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  }
 }

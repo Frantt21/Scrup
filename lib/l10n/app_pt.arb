@@ -141,5 +141,12 @@
   "editLyrics": "Editar letra",
   "useLyrics": "Usar letra",
   "editLyricsHint": "Cole o LRC aqui: [mm:ss.xx] texto por linha",
-  "searchLyrics": "Pesquisar letra"
+  "searchLyrics": "Pesquisar letra",
+  "shareLyrics": "Partilhar letra",
+  "saveAsImage": "Guardar imagem",
+  "copyText": "Copiar",
+  "lyricsCopied": "Letra copiada para a área de transferência",
+  "imageSaved": "Imagem guardada",
+  "shareOnSite": "Partilhar no {site}",
+  "lineOfTotal": "{index} de {total}"
 }

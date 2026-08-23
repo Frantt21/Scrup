@@ -468,4 +468,29 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get searchLyrics => '歌詞を検索';
+
+  @override
+  String get shareLyrics => '歌詞をシェア';
+
+  @override
+  String get saveAsImage => '画像として保存';
+
+  @override
+  String get copyText => 'コピー';
+
+  @override
+  String get lyricsCopied => '歌詞をクリップボードにコピーしました';
+
+  @override
+  String get imageSaved => '画像を保存しました';
+
+  @override
+  String shareOnSite(String site) {
+    return '$siteでシェア';
+  }
+
+  @override
+  String lineOfTotal(int index, int total) {
+    return '$total件中$index件目';
+  }
 }
