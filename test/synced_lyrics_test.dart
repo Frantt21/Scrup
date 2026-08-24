@@ -27,6 +27,56 @@ void main() {
       expect(line.words![2].timestamp.inMilliseconds, 2000);
     });
 
+    test(
+        'fusiona sílabas de una misma palabra (convención Apple: 1 espacio '
+        'intra-palabra, ≥2 entre palabras)', () {
+      // Ejemplo real: «stalkeándote» viene partida en «stalkeándo» + «te.»
+      final line = LyricLine.fromLRC(
+        '[00:24.04] <00:24.04>Me  <00:24.16>paso  '
+        '<00:24.51>stalkeándo <00:25.35>te.',
+      );
+      expect(line.text, 'Me paso stalkeándote.');
+      expect(line.words, hasLength(3));
+      expect(line.words![2].text, 'stalkeándote.');
+      // La palabra fusionada conserva el timestamp de su PRIMERA sílaba.
+      expect(line.words![2].timestamp.inMilliseconds, 24510);
+    });
+
+    test('fusiona infinitivo + enclítico vía convención de la CANCIÓN', () {
+      // La línea «dar te?» no tiene ningún doble espacio por sí sola: la
+      // evidencia de la primera línea fuerza la fusión en todo el archivo.
+      final lyrics = SyncedLyrics.fromLRC(
+        songTitle: 'Tema',
+        artist: 'Artista',
+        lrcContent: '[00:20.00] <00:20.00>Una  <00:20.50>vez  <00:21.00>más\n'
+            '[00:41.70] <00:41.70>dar <00:42.67>te?',
+      );
+      expect(lyrics.lines[0].words!.map((w) => w.text).toList(),
+          ['Una', 'vez', 'más']);
+      expect(lyrics.lines[1].text, 'darte?');
+      expect(lyrics.lines[1].words, hasLength(1));
+      expect(lyrics.lines[1].words!.single.text, 'darte?');
+      expect(lyrics.lines[1].words!.single.timestamp.inMilliseconds, 41700);
+    });
+
+    test('sin convención en el archivo, los espacios simples separan palabras',
+        () {
+      final lyrics = SyncedLyrics.fromLRC(
+        songTitle: 'Tema',
+        artist: 'Artista',
+        lrcContent: '[00:01.00]<00:01.00>One <00:01.50>More <00:02.00>Time',
+      );
+      expect(lyrics.lines.single.words!.map((w) => w.text).toList(),
+          ['One', 'More', 'Time']);
+    });
+
+    test('tags pegados sin espacio también se fusionan', () {
+      final line = LyricLine.fromLRC(
+        '[00:05.00] <00:05.00>Hell<00:05.40>o  <00:06.00>world',
+      );
+      expect(line.words!.map((w) => w.text).toList(), ['Hello', 'world']);
+    });
+
     test('ignora líneas con formato inválido en SyncedLyrics.fromLRC', () {
       final lyrics = SyncedLyrics.fromLRC(
         songTitle: 'Tema',

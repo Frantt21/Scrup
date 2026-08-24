@@ -62,12 +62,23 @@ class PlayerBar extends StatefulWidget {
   State<PlayerBar> createState() => _PlayerBarState();
 }
 
-class _PlayerBarState extends State<PlayerBar> {
+class _PlayerBarState extends State<PlayerBar>
+    with SingleTickerProviderStateMixin {
   Track? _track;
   Duration _position = Duration.zero;
   Duration? _duration;
   bool _playing = false;
   bool _buffering = false;
+
+  /// Swipe del artwork/título/artista al cambiar de pista: controlador que
+  /// se reinicia en cada cambio y dirección del movimiento (1 = siguiente,
+  /// entra desde la derecha; -1 = anterior, desde la izquierda).
+  late final AnimationController _swipeCtrl;
+  int _swipeDir = 1;
+
+  /// Dirección solicitada por el ÚLTIMO botón pulsado (next/prev): el stream
+  /// de pista llega después, así que el botón deja aquí su intención.
+  int _pendingSwipeDir = 1;
 
   /// Intervalo mínimo entre repintados de la posición (throttle): el stream
   /// de posición de media_kit emite decenas de ticks por segundo durante la
@@ -99,6 +110,10 @@ class _PlayerBarState extends State<PlayerBar> {
     super.initState();
     final player = context.read<PlayerService>();
     final db = context.read<AppDatabase>();
+    _swipeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
     // Valores iniciales: si la sesión se restauró antes de que este widget
     // se construyera (los streams broadcast no re-emiten lo pasado), leer la
     // pista/duración actuales evita la pantalla "Sin reproducción".
@@ -107,10 +122,17 @@ class _PlayerBarState extends State<PlayerBar> {
     _subs.addAll([
       player.currentTrack.listen((t) {
         if (!mounted) return;
+        // Swipe solo cuando CAMBIA la pista (no al restaurar sesión).
+        final changed = t?.id != _track?.id && t != null;
         setState(() {
           _track = t;
           _dragValue = null;
         });
+        if (changed) {
+          _swipeDir = _pendingSwipeDir;
+          _pendingSwipeDir = 1;
+          _swipeCtrl.forward(from: 0);
+        }
         _refreshFavoriteState();
       }),
       player.position.listen((p) {
@@ -244,6 +266,7 @@ class _PlayerBarState extends State<PlayerBar> {
     for (final s in _subs) {
       s.cancel();
     }
+    _swipeCtrl.dispose();
     super.dispose();
   }
 
@@ -307,13 +330,20 @@ class _PlayerBarState extends State<PlayerBar> {
               Positioned.fill(
                 child: DecoratedBox(decoration: BoxDecoration(color: base)),
               ),
-              // Degradado estático del acento del artwork sobre la base.
+              // Degradado del acento del artwork sobre la base. El cambio
+              // de color entre pistas se ANIMA (TweenAnimationBuilder):
+              // interpola desde el tono actual al nuevo (~700ms) en vez de
+              // saltar de golpe cuando llega la paleta nueva.
               Positioned.fill(
-                child: Builder(
-                  builder: (context) {
-                    final accent =
-                        themeController.accentColor?.withValues(alpha: 0.25) ??
-                        theme.colorScheme.primary.withValues(alpha: 0.25);
+                child: TweenAnimationBuilder<Color?>(
+                  tween: ColorTween(
+                    end:
+                        themeController.accentColor ??
+                        theme.colorScheme.primary,
+                  ),
+                  duration: const Duration(milliseconds: 700),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, color, _) {
                     return DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -321,7 +351,9 @@ class _PlayerBarState extends State<PlayerBar> {
                           end: Alignment.bottomRight,
                           colors: [
                             Colors.transparent,
-                            accent,
+                            (color ?? theme.colorScheme.primary).withValues(
+                              alpha: 0.25,
+                            ),
                             Colors.transparent,
                           ],
                           stops: const [0.0, 0.5, 1.0],
@@ -477,20 +509,37 @@ class _PlayerBarState extends State<PlayerBar> {
         ),
       );
     }
-    return Row(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: SizedBox(
-            width: 36,
-            height: 36,
-            child: CoverImage(
-              source: _track!.thumbnailUrl,
-              fit: BoxFit.cover,
-              fallback: _artworkFallback(theme),
+    // Swipe al cambiar de pista: el bloque completo (artwork + título +
+    // artista) entra deslizándose desde la dirección del botón pulsado
+    // (next → derecha, prev → izquierda) con un fade corto. La traslación
+    // es solo de PAINT (FractionalTranslation): no mueve el layout ni las
+    // secciones vecinas.
+    return AnimatedBuilder(
+      animation: _swipeCtrl,
+      builder: (context, child) {
+        final t = Curves.easeOutCubic.transform(_swipeCtrl.value);
+        return Opacity(
+          opacity: t,
+          child: FractionalTranslation(
+            translation: Offset(_swipeDir * (1 - t) * 0.35, 0),
+            child: child,
+          ),
+        );
+      },
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              width: 36,
+              height: 36,
+              child: CoverImage(
+                source: _track!.thumbnailUrl,
+                fit: BoxFit.cover,
+                fallback: _artworkFallback(theme),
+              ),
             ),
           ),
-        ),
         const SizedBox(width: 10),
         // Flexible (no Expanded): el texto ocupa solo su ancho natural y el
         // corazón queda PEGADO al título/artista en vez de tirado al borde
@@ -567,7 +616,8 @@ class _PlayerBarState extends State<PlayerBar> {
               : theme.colorScheme.onSurfaceVariant,
           onPressed: _toggleFavorite,
         ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -603,14 +653,19 @@ class _PlayerBarState extends State<PlayerBar> {
                 onPressed: player.toggleShuffle,
               ),
             ),
-            // Anterior
+            // Anterior (el swipe entra desde la izquierda)
             IconButton(
               icon: const Icon(Icons.skip_previous_rounded),
               constraints: btnConstraints,
               padding: EdgeInsets.zero,
               color: muted,
               tooltip: l10n.previous,
-              onPressed: hasTrack ? player.previous : null,
+              onPressed: hasTrack
+                  ? () {
+                      _pendingSwipeDir = -1;
+                      player.previous();
+                    }
+                  : null,
             ),
             // Play / Pausa (o loader). Footprint fijo (44x40) para que la
             // barra no cambie de tamaño ni el botón se desalinee.
@@ -642,14 +697,19 @@ class _PlayerBarState extends State<PlayerBar> {
                       ),
               ),
             ),
-            // Siguiente
+            // Siguiente (el swipe entra desde la derecha)
             IconButton(
               icon: const Icon(Icons.skip_next_rounded),
               constraints: btnConstraints,
               padding: EdgeInsets.zero,
               color: muted,
               tooltip: l10n.next,
-              onPressed: hasTrack ? player.next : null,
+              onPressed: hasTrack
+                  ? () {
+                      _pendingSwipeDir = 1;
+                      player.next();
+                    }
+                  : null,
             ),
             // Repeat (cicla off → all → one)
             ValueListenableBuilder<LoopMode>(
