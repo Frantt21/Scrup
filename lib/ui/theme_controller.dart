@@ -158,19 +158,50 @@ class ThemeController extends ChangeNotifier {
   }
 
   /// Elige el color de acento de una paleta: prefiere el vibrante oscuro
-  /// (legible sobre negro), luego vibrante, dominante y muted.
+  /// (legible sobre negro), luego vibrante, dominante y muted. Si la paleta
+  /// es esencialmente MONOCROMA (artwork B/N: ningún swatch con saturación
+  /// real), devuelve un plata neutro derivado de la luminancia en vez de
+  /// arrastrar el ruido de croma del JPEG (que daba azulados/verdosos
+  /// pastel sin relación con la imagen).
   static Color? pickAccent(PaletteGenerator palette) {
-    final candidates = [
-      palette.darkVibrantColor,
-      palette.vibrantColor,
-      palette.dominantColor,
-      palette.darkMutedColor,
-      palette.mutedColor,
-    ];
+    return accentFromSwatches([
+      palette.darkVibrantColor?.color,
+      palette.vibrantColor?.color,
+      palette.dominantColor?.color,
+      palette.darkMutedColor?.color,
+      palette.mutedColor?.color,
+    ]);
+  }
+
+  /// Umbral de saturación HSL a partir del cual un swatch cuenta como
+  /// "color de verdad" (por debajo hay tinte por compresión, no intención
+  /// del artista).
+  @visibleForTesting
+  static const double kMonochromeSaturationThreshold = 0.22;
+
+  /// Selección pura de acento sobre una lista priorizada de swatches.
+  /// Expuesta para tests (no depende de PaletteGenerator/imágenes).
+  @visibleForTesting
+  static Color? accentFromSwatches(List<Color?> swatches) {
+    final candidates = swatches.whereType<Color>().toList();
+    if (candidates.isEmpty) return null;
+
+    // 1er pase: el primer swatch prioritario con saturación de verdad.
     for (final c in candidates) {
-      if (c != null) return c.color;
+      if (HSLColor.fromColor(c).saturation >=
+          kMonochromeSaturationThreshold) {
+        return c;
+      }
     }
-    return null;
+
+    // 2º pase: artwork monocromo. Plata neutro legible sobre UI oscura:
+    // saturación a CERO (sin ruido de croma) y luminancia elevada desde la
+    // del swatch dominante (clamp para que ni desaparezca ni deslumbre).
+    final hsl = HSLColor.fromColor(candidates.first);
+    return hsl
+        .withSaturation(0)
+        .withLightness(hsl.lightness.clamp(0.60, 0.82))
+        .toColor();
   }
 
   @override
