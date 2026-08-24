@@ -60,6 +60,35 @@ class ThemeController extends ChangeNotifier {
       _setAccent(null);
       return;
     }
+
+    // Acierto de caché → aplicar YA, sin debounce. El color suele conocerse
+    // de antemano (extraído por el detalle de la playlist o en una sesión
+    // anterior): esperar aquí era lo que hacía sentir que "el player no
+    // sabía el color" de la pista. El debounce SOLO aplica cuando toca
+    // descargar/analizar la portada.
+    final stored = paletteCache?.get(url);
+    if (stored != null) {
+      _debounce?.cancel();
+      _paletteCache[url] = stored;
+      _setAccent(stored);
+      return;
+    }
+    if (_paletteCache.containsKey(url)) {
+      _debounce?.cancel();
+      final mem = _paletteCache[url];
+      if (mem != null) _setAccent(mem);
+      return;
+    }
+    // Fallo ya conocido: no hay nada mejor que el acento actual.
+    if (paletteCache?.isFailed(url) ?? false) {
+      _debounce?.cancel();
+      _paletteCache[url] = null;
+      return;
+    }
+
+    // Sin caché: descargar con debounce. El reproductor publica primero el
+    // track de YouTube y poco después el enriquecido con Deezer (portada
+    // distinta): esperar un instante evita analizar dos portadas seguidas.
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 600), () {
       if (token != _token) return;
