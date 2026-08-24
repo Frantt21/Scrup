@@ -20,6 +20,10 @@ class LyricsDisplay extends StatefulWidget {
   final Color? accentColor;
   final bool? sweepEnabled;
 
+  /// Modo embebido (fullscreen): menos aire vertical arriba/abajo del
+  /// listado (los anclajes de auto-scroll no necesitan tanto margen).
+  final bool embedded;
+
   const LyricsDisplay({
     super.key,
     required this.lyrics,
@@ -30,6 +34,7 @@ class LyricsDisplay extends StatefulWidget {
     this.onTap,
     this.accentColor,
     this.sweepEnabled,
+    this.embedded = false,
   });
 
   @override
@@ -199,7 +204,8 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     final vp = RenderAbstractViewport.of(ro);
     final t = vp.getOffsetToReveal(ro, 0.5).offset;
     final isFar =
-        (_controller.offset - t).abs() > _controller.position.viewportDimension / 3;
+        (_controller.offset - t).abs() >
+        _controller.position.viewportDimension / 3;
     if (_showSyncButton != isFar) setState(() => _showSyncButton = isFar);
   }
 
@@ -209,16 +215,19 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     final key = _itemKeys[di];
     void scroll() {
       if (key?.currentContext != null) {
-        Scrollable.ensureVisible(key!.currentContext!,
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.easeInOutCubic,
-            alignment: 0.5);
+        Scrollable.ensureVisible(
+          key!.currentContext!,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOutCubic,
+          alignment: 0.5,
+        );
       }
     }
 
     if (key?.currentContext == null) {
       _controller.jumpTo(
-          (di * 70.0).clamp(0.0, _controller.position.maxScrollExtent));
+        (di * 70.0).clamp(0.0, _controller.position.maxScrollExtent),
+      );
       WidgetsBinding.instance.addPostFrameCallback((_) => scroll());
     } else {
       scroll();
@@ -240,21 +249,27 @@ class _LyricsDisplayState extends State<LyricsDisplay>
       _lastAutoScrolledIndex = di;
       final key = _itemKeys[di];
       if (key?.currentContext != null) {
-        Scrollable.ensureVisible(key!.currentContext!,
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.easeInOutCubic,
-            alignment: 0.5);
+        Scrollable.ensureVisible(
+          key!.currentContext!,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOutCubic,
+          alignment: 0.5,
+        );
       } else {
-        final est =
-            (di * 70.0).clamp(0.0, _controller.position.maxScrollExtent);
+        final est = (di * 70.0).clamp(
+          0.0,
+          _controller.position.maxScrollExtent,
+        );
         if ((_controller.offset - est).abs() > 500) {
           _controller.jumpTo(est);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (key?.currentContext != null) {
-              Scrollable.ensureVisible(key!.currentContext!,
-                  duration: const Duration(milliseconds: 600),
-                  curve: Curves.easeInOutCubic,
-                  alignment: 0.5);
+              Scrollable.ensureVisible(
+                key!.currentContext!,
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeInOutCubic,
+                alignment: 0.5,
+              );
             }
           });
         }
@@ -270,16 +285,16 @@ class _LyricsDisplayState extends State<LyricsDisplay>
       children: [
         ShaderMask(
           shaderCallback: (rect) => const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black,
-                    Colors.black,
-                    Colors.transparent
-                  ],
-                  stops: [0.0, 0.1, 0.9, 1.0])
-              .createShader(rect),
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.transparent,
+              Colors.black,
+              Colors.black,
+              Colors.transparent,
+            ],
+            stops: [0.0, 0.1, 0.9, 1.0],
+          ).createShader(rect),
           blendMode: BlendMode.dstIn,
           child: NotificationListener<UserScrollNotification>(
             onNotification: (n) {
@@ -288,7 +303,12 @@ class _LyricsDisplayState extends State<LyricsDisplay>
             },
             child: ListView.builder(
               controller: _controller,
-              padding: const EdgeInsets.symmetric(vertical: 200),
+              // Embebido: primer renglón a la altura del top del artwork
+              // (aire inferior solo para el anclaje de auto-scroll);
+              // normal: 200px arriba y abajo para centrar la línea activa.
+              padding: widget.embedded
+                  ? const EdgeInsets.only(top: 4, bottom: 72)
+                  : const EdgeInsets.symmetric(vertical: 200),
               itemCount: _lines.length,
               itemBuilder: (context, index) {
                 return ValueListenableBuilder<int>(
@@ -327,7 +347,9 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                       child: Container(
                         key: _itemKeys[index],
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 12),
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                         child: _KaraokeLine(
                           line: line,
                           isCurrent: isCurrent,
@@ -360,23 +382,36 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                   borderRadius: BorderRadius.circular(30),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(30),
                       border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.3),
-                          width: 1),
+                        color: Colors.white.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
                     ),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.sync_rounded, color: Colors.white, size: 20),
-                      const SizedBox(width: 8),
-                      Text(l10n.syncLyrics,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.sync_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          l10n.syncLyrics,
                           style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600)),
-                    ]),
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -424,10 +459,11 @@ class _KaraokeLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const baseStyle = TextStyle(
-        fontSize: 30,
-        fontWeight: FontWeight.bold,
-        height: 1.3,
-        fontFamily: 'Roboto');
+      fontSize: 30,
+      fontWeight: FontWeight.bold,
+      height: 1.3,
+      fontFamily: 'Roboto',
+    );
 
     final tokens = computeTokens();
     final shouldAnimate = isCurrent && isSweepEnabled && tokens.karaoke;
@@ -442,9 +478,12 @@ class _KaraokeLine extends StatelessWidget {
         child: isGap
             ? _buildDots(baseStyle)
             : shouldAnimate
-                ? _buildSweep(baseStyle, tokens.list)
-                : _buildStatic(baseStyle, tokens.list,
-                    isCurrent ? _activeColor : _inactiveColor),
+            ? _buildSweep(baseStyle, tokens.list)
+            : _buildStatic(
+                baseStyle,
+                tokens.list,
+                isCurrent ? _activeColor : _inactiveColor,
+              ),
       ),
     );
   }
@@ -469,12 +508,14 @@ class _KaraokeLine extends StatelessWidget {
           final dot = dots[i];
           if (!isCurrent) {
             children.add(
-                Text(dot, style: baseStyle.copyWith(color: _inactiveColor)));
+              Text(dot, style: baseStyle.copyWith(color: _inactiveColor)),
+            );
             continue;
           }
           if (!isSweepEnabled) {
             children.add(
-                Text(dot, style: baseStyle.copyWith(color: _activeColor)));
+              Text(dot, style: baseStyle.copyWith(color: _activeColor)),
+            );
             continue;
           }
           final wStart = startMs + i * window;
@@ -487,13 +528,15 @@ class _KaraokeLine extends StatelessWidget {
           } else {
             progress = (currentMs - wStart) / max(1, wEnd - wStart);
           }
-          children.add(_KaraokeWord(
-            word: dot,
-            progress: progress.clamp(0.0, 1.0),
-            style: baseStyle,
-            activeColor: _activeColor,
-            inactiveColor: _inactiveColor,
-          ));
+          children.add(
+            _KaraokeWord(
+              word: dot,
+              progress: progress.clamp(0.0, 1.0),
+              style: baseStyle,
+              activeColor: _activeColor,
+              inactiveColor: _inactiveColor,
+            ),
+          );
         }
         return Wrap(
           alignment: WrapAlignment.start,
@@ -537,13 +580,10 @@ class _KaraokeLine extends StatelessWidget {
     }
     // Sin palabras (o todas vacías): tokens desde el texto plano, ya
     // normalizado; las ventanas quedan en cero porque no hay sweep.
-    return _LineTokens(
-      [
-        for (final t in line.text.split(' '))
-          if (t.isNotEmpty) _LineToken(t, 0, 0),
-      ],
-      false,
-    );
+    return _LineTokens([
+      for (final t in line.text.split(' '))
+        if (t.isNotEmpty) _LineToken(t, 0, 0),
+    ], false);
   }
 
   /// Smooth sweep: computes progress for each token from REAL timestamps,
@@ -603,7 +643,10 @@ class _KaraokeLine extends StatelessWidget {
   }
 
   Widget _buildStatic(
-      TextStyle baseStyle, List<_LineToken> tokens, Color color) {
+    TextStyle baseStyle,
+    List<_LineToken> tokens,
+    Color color,
+  ) {
     return Wrap(
       alignment: WrapAlignment.start,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -612,8 +655,10 @@ class _KaraokeLine extends StatelessWidget {
       runSpacing: 4.0,
       children: [
         for (int i = 0; i < tokens.length; i++)
-          Text(tokens[i].text + (i < tokens.length - 1 ? ' ' : ''),
-              style: baseStyle.copyWith(color: color))
+          Text(
+            tokens[i].text + (i < tokens.length - 1 ? ' ' : ''),
+            style: baseStyle.copyWith(color: color),
+          ),
       ],
     );
   }

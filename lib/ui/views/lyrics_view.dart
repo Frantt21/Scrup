@@ -32,7 +32,12 @@ import '../widgets/player_bar.dart' show kPlayerClearance;
 /// en reproducción con auto-scroll, karaoke sweep, tap-to-seek, búsqueda
 /// manual y sincronización manual (port de forawn_mobile).
 class LyricsView extends StatefulWidget {
-  const LyricsView({super.key});
+  /// Modo EMBEBIDO (pantalla completa): sin margen, sombra ni fondo plano —
+  /// las letras flotan sobre el fondo que las rodea. Por defecto `false`
+  /// (contenedor glass habitual dentro del shell).
+  final bool embedded;
+
+  const LyricsView({super.key, this.embedded = false});
 
   @override
   State<LyricsView> createState() => _LyricsViewState();
@@ -70,6 +75,9 @@ class _LyricsViewState extends State<LyricsView>
   /// Modo karaoke (sweep palabra por palabra): se refleja en el widget de
   /// lyrics y se persiste vía el SettingsStore.
   bool _sweepEnabled = false;
+
+  /// Modo embebido (fullscreen): acciones de la cabecera solo con hover.
+  bool _actionsHovered = false;
 
   StreamSubscription<Track?>? _trackSub;
   StreamSubscription<Duration>? _positionSub;
@@ -177,9 +185,9 @@ class _LyricsViewState extends State<LyricsView>
   Future<void> _loadTrackOffset(Track? track) async {
     if (track == null) return;
     try {
-      final offset = await context
-          .read<SettingsStore>()
-          .loadLyricsOffsetFor(track.id);
+      final offset = await context.read<SettingsStore>().loadLyricsOffsetFor(
+        track.id,
+      );
       if (!mounted || _track?.id != track.id) return;
       setState(() => _lyricsOffset = offset);
     } catch (_) {}
@@ -227,9 +235,10 @@ class _LyricsViewState extends State<LyricsView>
     final token = ++_fetchToken;
     setState(() => _loading = true);
     try {
-      final lyrics = await context
-          .read<LyricsService>()
-          .fetchLyrics(track.title, track.artist);
+      final lyrics = await context.read<LyricsService>().fetchLyrics(
+        track.title,
+        track.artist,
+      );
       if (!mounted || token != _fetchToken) return;
       setState(() {
         _lyrics = lyrics;
@@ -248,9 +257,11 @@ class _LyricsViewState extends State<LyricsView>
   Future<void> _applyLyrics(SyncedLyrics lyrics, {String? sourceLrc}) async {
     final track = _track;
     if (track == null) return;
-    await context
-        .read<LyricsService>()
-        .saveManualLyrics(track.title, track.artist, sourceLrc ?? lyrics.toLRC());
+    await context.read<LyricsService>().saveManualLyrics(
+      track.title,
+      track.artist,
+      sourceLrc ?? lyrics.toLRC(),
+    );
     if (!mounted) return;
     setState(() {
       _lyrics = lyrics;
@@ -335,9 +346,7 @@ class _LyricsViewState extends State<LyricsView>
           // Persistir POR PISTA: cada canción recuerda su propio ajuste.
           final track = _track;
           if (track != null) {
-            context
-                .read<SettingsStore>()
-                .saveLyricsOffsetFor(track.id, offset);
+            context.read<SettingsStore>().saveLyricsOffsetFor(track.id, offset);
           }
         },
       ),
@@ -373,81 +382,128 @@ class _LyricsViewState extends State<LyricsView>
     // El acento del artwork de la pista tiñe las letras.
     final accent = context.watch<ThemeController>().accentColor;
 
+    final embedded = widget.embedded;
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.45),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            // Fondo plano (sin gradiente translúcido): las letras del color
-            // de la canción se leen sobre él.
-            color: theme.colorScheme.surfaceContainer,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Row(
-                  children: [
-                    // Artwork a la altura de ambas filas (título + artista).
-                    if (_track != null) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: SizedBox(
-                          width: 46,
-                          height: 46,
-                          child: CoverImage(
-                            source: _track!.thumbnailUrl,
-                            fit: BoxFit.cover,
-                            fallback: Icon(
-                              Icons.music_note_rounded,
-                              size: 22,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
+      margin: embedded
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
+      decoration: embedded
+          ? null
+          : BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+      child: embedded
+          ? _body(theme, l10n, accent, embedded)
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  // Fondo plano (sin gradiente translúcido): las letras del
+                  // color de la canción se leen sobre él.
+                  color: theme.colorScheme.surfaceContainer,
+                ),
+                child: _body(theme, l10n, accent, embedded),
+              ),
+            ),
+    );
+  }
+
+  /// Cuerpo común de la vista (header + listado de letras), compartido por
+  /// el modo normal (con contenedor) y el embebido (fullscreen).
+  Widget _body(
+    ThemeData theme,
+    AppLocalizations l10n,
+    Color? accent,
+    bool embedded,
+  ) {
+    final header = Padding(
+      // Embebido: header mínimo (solo botones hover) → menos alto.
+      padding: embedded
+          ? const EdgeInsets.fromLTRB(4, 6, 4, 0)
+          : const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Row(
+        children: [
+          // Artwork a la altura de ambas filas (título + artista).
+          // En modo embebido (fullscreen) se omite: el artwork y
+          // el título ya viven en la cabecera del modo.
+          if (!embedded && _track != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 46,
+                height: 46,
+                child: CoverImage(
+                  source: _track!.thumbnailUrl,
+                  fit: BoxFit.cover,
+                  fallback: Icon(
+                    Icons.music_note_rounded,
+                    size: 22,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          // En embebido el título/artista se ocultan: los botones
+          // se alinean a la derecha con un Spacer.
+          if (!embedded)
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Título de la canción como título de la vista.
+                  Text(
+                    _track?.title ?? l10n.lyricsTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (_track != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        _track!.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(width: 10),
-                    ],
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Título de la canción como título de la vista.
-                          Text(
-                            _track?.title ?? l10n.lyricsTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          if (_track != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(
-                                _track!.artist,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
                     ),
+                ],
+              ),
+            )
+          else
+            const Spacer(),
+          // Acciones (karaoke/sync/buscar/compartir): sueltas y
+          // SOLO visibles al hover en modo embebido; siempre
+          // visibles en el modo normal.
+          MouseRegion(
+            onEnter: (_) {
+              if (embedded) setState(() => _actionsHovered = true);
+            },
+            onExit: (_) {
+              if (embedded) setState(() => _actionsHovered = false);
+            },
+            child: IgnorePointer(
+              ignoring: embedded && !_actionsHovered,
+              child: AnimatedOpacity(
+                opacity: !embedded || _actionsHovered ? 1 : 0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     // Modo karaoke (sweep palabra por palabra).
                     IconButton(
                       icon: Icon(
@@ -483,17 +539,33 @@ class _LyricsViewState extends State<LyricsView>
                     IconButton(
                       icon: const Icon(Icons.share_rounded),
                       tooltip: l10n.shareLyrics,
-                      onPressed:
-                          _lyrics == null ? null : _showShareDialog,
+                      onPressed: _lyrics == null ? null : _showShareDialog,
                     ),
                   ],
                 ),
               ),
-              Expanded(child: _buildBody(theme, l10n, accent)),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
+    );
+
+    // En embebido el header NO ocupa layout: flota sobre la esquina
+    // superior derecha (hover) y las letras empiezan en el MISMO top que
+    // el artwork.
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!embedded) header,
+        Expanded(child: _buildBody(theme, l10n, accent, embedded)),
+      ],
+    );
+    if (!embedded) return content;
+    return Stack(
+      children: [
+        content,
+        Positioned(top: 0, right: 0, child: header),
+      ],
     );
   }
 
@@ -501,6 +573,7 @@ class _LyricsViewState extends State<LyricsView>
     ThemeData theme,
     AppLocalizations l10n,
     Color? accent,
+    bool embedded,
   ) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
@@ -569,6 +642,7 @@ class _LyricsViewState extends State<LyricsView>
           onTap: _onLineTap,
           accentColor: accent,
           sweepEnabled: _sweepEnabled,
+          embedded: embedded,
         );
       },
     );
@@ -785,8 +859,9 @@ class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
-                                color: theme.colorScheme.outline
-                                    .withValues(alpha: 0.35),
+                                color: theme.colorScheme.outline.withValues(
+                                  alpha: 0.35,
+                                ),
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
@@ -844,9 +919,7 @@ class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
           style: FilledButton.styleFrom(
             backgroundColor: (isNegative ? Colors.red : Colors.green)
                 .withValues(alpha: 0.15),
-            foregroundColor: isNegative
-                ? Colors.redAccent
-                : Colors.greenAccent,
+            foregroundColor: isNegative ? Colors.redAccent : Colors.greenAccent,
             padding: const EdgeInsets.symmetric(vertical: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -920,8 +993,9 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            color:
-                theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.35,
+            ),
             border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
           ),
           child: Row(
@@ -999,11 +1073,11 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
     });
     try {
       final res = await context.read<LyricsService>().searchLyrics(
-            q,
-            provider: _selectedProvider,
-            titleHint: widget.titleHint,
-            artistHint: widget.artistHint,
-          );
+        q,
+        provider: _selectedProvider,
+        titleHint: widget.titleHint,
+        artistHint: widget.artistHint,
+      );
       if (!mounted) return;
       setState(() {
         _results = res;
@@ -1107,18 +1181,25 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  Icon(Icons.source_rounded, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                  Icon(
+                    Icons.source_rounded,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                   const SizedBox(width: 8),
-                  Text('Proveedor:', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  Text(
+                    'Proveedor:',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                   const Spacer(),
                   _buildProviderSelector(theme),
                 ],
               ),
             ),
             const SizedBox(height: 4),
-            Flexible(
-              child: _buildResults(theme, l10n),
-            ),
+            Flexible(child: _buildResults(theme, l10n)),
           ],
         ),
       ),
@@ -1141,10 +1222,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
       );
     }
     if (_results.isEmpty) {
-      return const SizedBox(
-        height: 120,
-        child: Center(child: Text('')),
-      );
+      return const SizedBox(height: 120, child: Center(child: Text('')));
     }
     return ListView.separated(
       shrinkWrap: true,
@@ -1390,15 +1468,11 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
     if (data == null) return null;
-    return Uint8List.view(
-      data.buffer,
-      data.offsetInBytes,
-      data.lengthInBytes,
-    );
+    return Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
   }
 
   /// Copia el PNG al portapapeles del sistema sin dependencias extra:
-   /// escribe un temporal y delega en wl-copy (Wayland), xclip (X11) o
+  /// escribe un temporal y delega en wl-copy (Wayland), xclip (X11) o
   /// PowerShell (Windows).
   Future<bool> _pngToClipboard(Uint8List bytes) async {
     final dir = await getTemporaryDirectory();
@@ -1417,10 +1491,10 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
         return res.exitCode == 0;
       }
       final escaped = file.path.replaceAll("'", r"'\''");
-      var res = await Process.run(
-        'sh',
-        ['-c', "wl-copy -t image/png < '$escaped'"],
-      );
+      var res = await Process.run('sh', [
+        '-c',
+        "wl-copy -t image/png < '$escaped'",
+      ]);
       if (res.exitCode != 0) {
         res = await Process.run('sh', [
           '-c',
@@ -1443,9 +1517,7 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     final ok = await _pngToClipboard(bytes);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(ok ? l10n.imageCopied : l10n.copyText),
-      ),
+      SnackBar(content: Text(ok ? l10n.imageCopied : l10n.copyText)),
     );
   }
 
@@ -1455,11 +1527,8 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     try {
       final bytes = await _captureBytes();
       if (bytes == null) return;
-      final safe = widget.trackTitle
-          .replaceAll(RegExp(r'[^\w\s-]'), '')
-          .trim();
-      final suggested =
-          '${safe.isEmpty ? 'lyrics' : safe} - scrup.png';
+      final safe = widget.trackTitle.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
+      final suggested = '${safe.isEmpty ? 'lyrics' : safe} - scrup.png';
       final location = await getSaveLocation(
         suggestedName: suggested,
         acceptedTypeGroups: const [
@@ -1473,9 +1542,9 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
         name: 'lyrics.png',
       ).saveTo(location.path);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.imageSaved)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.imageSaved)));
     } catch (e) {
       debugPrint('[Scrup] Share: error guardando imagen: $e');
     }
@@ -1490,9 +1559,9 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     if (bytes != null) copied = await _pngToClipboard(bytes);
     if (!mounted) return;
     if (copied) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.imageCopied)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.imageCopied)));
     }
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -1508,16 +1577,8 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
         Icons.alternate_email_rounded,
         Uri.https('twitter.com', '/intent/tweet'),
       ),
-      (
-        'WhatsApp',
-        Icons.chat_bubble_rounded,
-        Uri.https('wa.me', '/'),
-      ),
-      (
-        'Telegram',
-        Icons.send_rounded,
-        Uri.https('t.me', '/share/url'),
-      ),
+      ('WhatsApp', Icons.chat_bubble_rounded, Uri.https('wa.me', '/')),
+      ('Telegram', Icons.send_rounded, Uri.https('t.me', '/share/url')),
       (
         'Email',
         Icons.mail_rounded,
@@ -1558,8 +1619,9 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                 Text(
                   l10n.shareLyrics,
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 // Tarjeta compartible (WYSIWYG: esto ES el PNG).
@@ -1581,8 +1643,9 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                      onPressed:
-                          _center >= _lineCount - 1 ? null : () => _move(1),
+                      onPressed: _center >= _lineCount - 1
+                          ? null
+                          : () => _move(1),
                     ),
                   ],
                 ),
@@ -1617,11 +1680,11 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
   /// Estilo EXACTO de las letras en pantalla (lyrics_display): 30 px bold,
   /// height 1.3, Roboto; activa en acento legible, inactivas al 30%.
   TextStyle _lyricStyle(Color color) => const TextStyle(
-        fontSize: 30,
-        fontWeight: FontWeight.bold,
-        height: 1.3,
-        fontFamily: 'Roboto',
-      ).copyWith(color: color);
+    fontSize: 30,
+    fontWeight: FontWeight.bold,
+    height: 1.3,
+    fontFamily: 'Roboto',
+  ).copyWith(color: color);
 
   Widget _buildCard(
     ThemeData theme,

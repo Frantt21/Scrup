@@ -386,7 +386,12 @@ class _PlayerBarState extends State<PlayerBar>
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                _buildControls(theme, player, hasTrack),
+                                _buildControls(
+                                  theme,
+                                  player,
+                                  hasTrack,
+                                  accent: themeController.seededPrimary,
+                                ),
                                 SizedBox(
                                   height: 22,
                                   child: Row(
@@ -624,7 +629,12 @@ class _PlayerBarState extends State<PlayerBar>
   /// Centro: controles de reproducción. Todos los botones usan constraints
   /// explícitos idénticos (34x40) con el play en su propia caja fija, para
   /// que toda la fila quede perfectamente alineada verticalmente.
-  Widget _buildControls(ThemeData theme, PlayerService player, bool hasTrack) {
+  Widget _buildControls(
+    ThemeData theme,
+    PlayerService player,
+    bool hasTrack, {
+    required Color accent,
+  }) {
     final l10n = AppLocalizations.of(context);
     final primary = theme.colorScheme.primary;
     final muted = theme.colorScheme.onSurfaceVariant;
@@ -653,12 +663,13 @@ class _PlayerBarState extends State<PlayerBar>
                 onPressed: player.toggleShuffle,
               ),
             ),
-            // Anterior (el swipe entra desde la izquierda)
+            // Anterior (el swipe entra desde la izquierda). Tinte del
+            // artwork: la fila de transporte vive en el color del álbum.
             IconButton(
               icon: const Icon(Icons.skip_previous_rounded),
               constraints: btnConstraints,
               padding: EdgeInsets.zero,
-              color: muted,
+              color: accent,
               tooltip: l10n.previous,
               onPressed: hasTrack
                   ? () {
@@ -702,7 +713,7 @@ class _PlayerBarState extends State<PlayerBar>
               icon: const Icon(Icons.skip_next_rounded),
               constraints: btnConstraints,
               padding: EdgeInsets.zero,
-              color: muted,
+              color: accent,
               tooltip: l10n.next,
               onPressed: hasTrack
                   ? () {

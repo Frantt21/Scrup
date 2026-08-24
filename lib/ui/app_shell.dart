@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../core/binaries.dart';
 import '../data/database.dart';
@@ -14,6 +16,7 @@ import 'views/playlist_detail_view.dart';
 import 'views/search_view.dart';
 import 'views/settings_view.dart';
 import 'widgets/custom_title_bar.dart';
+import 'widgets/fullscreen_player_view.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/playlists_sidebar.dart';
 import 'widgets/queue_panel.dart';
@@ -61,6 +64,20 @@ class _AppShellState extends State<AppShell> {
   /// `true` mientras la vista de lyrics esté abierta (se monta en el
   /// IndexedStack como Inicio/Búsqueda).
   bool _showLyrics = false;
+
+  /// Modo pantalla completa (F11 para alternar, Esc para salir): oculta la
+  /// title bar y monta el reproductor dedicado encima de TODO. PUNTO DE
+  /// PARTIDA del diseño visual completo definido con el usuario.
+  bool _fullscreen = false;
+
+  /// El overlay fullscreen permanece montado mientras anima la salida (el
+  /// flag lógico [_fullscreen] ya está en false: F11/Esc no re-disparan).
+  bool _showFsOverlay = false;
+
+  /// Key global para reparentar LyricsView entre el IndexedStack normal y
+  /// el panel derecho del modo fullscreen SIN recrear su State: cero
+  /// re-fetch de letras y un solo ticker de sweep.
+  final GlobalKey _fsLyricsKey = GlobalKey();
 
   void _onBinaryDownloadStatus() {
     final status = Binaries.downloadStatus.value;
@@ -120,6 +137,39 @@ class _AppShellState extends State<AppShell> {
     });
     // Restaurar el estado de la cola (abierta/cerrada) de la última sesión.
     unawaited(_loadQueuePref());
+    // Atajos del modo fullscreen (F11 alterna, Esc sale).
+    HardwareKeyboard.instance.addHandler(_handleKey);
+  }
+
+  /// Atajos globales de teclado: F11 entra/sale de fullscreen; Esc sale si
+  /// ya está en fullscreen. Devuelve true solo cuando consume la tecla.
+  bool _handleKey(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    if (event.logicalKey == LogicalKeyboardKey.f11) {
+      _setFullscreen(!_fullscreen);
+      return true;
+    }
+    if (_fullscreen && event.logicalKey == LogicalKeyboardKey.escape) {
+      _setFullscreen(false);
+      return true;
+    }
+    return false;
+  }
+
+  /// Entra/sale de pantalla completa: oculta la title bar, monta el
+  /// reproductor dedicado y pide al WM el modo nativo. La salida animada la
+  /// gestiona el overlay (reverse → onExited → desmontar).
+  Future<void> _setFullscreen(bool on) async {
+    if (_fullscreen == on) return;
+    setState(() {
+      _fullscreen = on;
+      if (on) _showFsOverlay = true;
+    });
+    try {
+      await windowManager.setFullScreen(on);
+    } catch (_) {
+      // Sin WM cooperativo el overlay sigue siendo usable.
+    }
   }
 
   /// Restaura el panel de la cola al estado en que quedó la última sesión
@@ -137,6 +187,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _errorSub?.cancel();
+    HardwareKeyboard.instance.removeHandler(_handleKey);
     Binaries.downloadStatus.removeListener(_onBinaryDownloadStatus);
     _searchRequest.dispose();
     super.dispose();
@@ -253,111 +304,116 @@ class _AppShellState extends State<AppShell> {
     );
 
     return Scaffold(
-      body: Column(
+      body: Stack(
         children: [
-          CustomTitleBar(
-            title: barTitle,
-            actions: barActions,
-            trailing: barTrailing,
-          ),
-          Expanded(
-            // El sidebar ocupa su propio espacio; el player flota SOLO sobre
-            // el área de contenido (no cubre el sidebar).
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                PlaylistsSidebar(
-                  openPlaylistId: openPlaylist?.id,
-                  onSelectPlaylist: _selectPlaylist,
+          // UI normal (title bar + sidebar + contenido + player). En
+          // fullscreen queda DEBAJO del overlay dedicado.
+          Column(
+            children: [
+              // En fullscreen la title bar se oculta (los botones de ventana
+              // no aplican); F11/Esc devuelven el modo normal.
+              if (!_fullscreen)
+                CustomTitleBar(
+                  title: barTitle,
+                  actions: barActions,
+                  trailing: barTrailing,
                 ),
-                Expanded(
-                  child: Stack(
-                    children: [
-                      // Contenido con el player flotando ENCIMA (el contenido
-                      // se extiende por detrás y el blur lo difumina). El
-                      // detalle de playlist vive en el IndexedStack para
-                      // preservar el estado de Home/Buscar al volver.
-                      IndexedStack(
-                        index: _showLyrics
-                            ? 4
-                            : (openPlaylist != null
-                                  ? 2
-                                  : (_showSettings ? 3 : _selectedIndex)),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    PlaylistsSidebar(
+                      openPlaylistId: openPlaylist?.id,
+                      onSelectPlaylist: _selectPlaylist,
+                    ),
+                    Expanded(
+                      child: Stack(
                         children: [
-                          HomeView(onSearch: _submitSearch),
-                          SearchView(
-                            searchRequest: _searchRequest,
-                            onBack: _backToHome,
+                          IndexedStack(
+                            index: _showLyrics
+                                ? 4
+                                : (openPlaylist != null
+                                      ? 2
+                                      : (_showSettings ? 3 : _selectedIndex)),
+                            children: [
+                              HomeView(onSearch: _submitSearch),
+                              SearchView(
+                                searchRequest: _searchRequest,
+                                onBack: _backToHome,
+                              ),
+                              if (openPlaylist != null)
+                                PlaylistDetailView(
+                                  key: ValueKey(openPlaylist.id),
+                                  playlist: openPlaylist,
+                                  onBack: () => _selectPlaylist(null),
+                                  onUpdated: _onPlaylistUpdated,
+                                )
+                              else
+                                const SizedBox.shrink(),
+                              SettingsView(key: ValueKey(_settingsOpenCount)),
+                              // TickerMode muta el ticker del sweep karaoke
+                              // cuando las letras están ocultas. Con el modo
+                              // fullscreen activo la instancia vive en el
+                              // overlay (reparenting por _fsLyricsKey), así
+                              // que aquí va un placeholder.
+                              _showFsOverlay
+                                  ? const SizedBox.shrink()
+                                  : TickerMode(
+                                      enabled: _showLyrics,
+                                      child: LyricsView(key: _fsLyricsKey),
+                                    ),
+                            ],
                           ),
-                          if (openPlaylist != null)
-                            // Key por playlist: si se cambia de una playlist a
-                            // otra con el detalle abierto, se fuerza un State
-                            // nuevo (el IndexedStack reutiliza el State si el
-                            // widget es del mismo tipo y re-suscribiría las
-                            // canciones de la playlist anterior).
-                            PlaylistDetailView(
-                              key: ValueKey(openPlaylist.id),
-                              playlist: openPlaylist,
-                              onBack: () => _selectPlaylist(null),
-                              onUpdated: _onPlaylistUpdated,
-                            )
-                          else
-                            const SizedBox.shrink(),
-                          SettingsView(key: ValueKey(_settingsOpenCount)),
-                          // TickerMode: con la vista de letras oculta se
-                          // MUTA el ticker del sweep karaoke (createTicker
-                          // respeta TickerMode). Sin esto, mientras suena
-                          // música el ticker escribe la posición cada frame,
-                          // fuerza un frame por vsync (60+) y repinta TODA
-                          // la UI glass (blurs) aunque nadie vea las letras
-                          // — principal fuente de CPU en reproducción.
-                          TickerMode(enabled: _showLyrics, child: LyricsView()),
+                          Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                              child: PlayerBar(
+                                queueOpen: _queueOpen,
+                                lyricsOpen: _showLyrics,
+                                onToggleLyrics: () => _showLyrics
+                                    ? _closeLyrics()
+                                    : _openLyrics(),
+                                onToggleQueue: () {
+                                  _queueUserToggled = true;
+                                  final next = !_queueOpen;
+                                  setState(() => _queueOpen = next);
+                                  unawaited(
+                                    context
+                                        .read<SettingsStore>()
+                                        .saveQueueOpen(next),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
                         ],
                       ),
-                      // Player flotante tipo glass. El padding exterior es el
-                      // margen flotante, alineado lateralmente con los
-                      // contenedores (12); las vistas usan kPlayerOverlayInset
-                      // como padding inferior para no quedar ocultas.
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                          child: PlayerBar(
-                            queueOpen: _queueOpen,
-                            lyricsOpen: _showLyrics,
-                            onToggleLyrics: () => _showLyrics
-                                ? _closeLyrics()
-                                : _openLyrics(),
-                            onToggleQueue: () {
-                              _queueUserToggled = true;
-                              final next = !_queueOpen;
-                              setState(() => _queueOpen = next);
-                              // Recordar la última elección entre sesiones.
-                              unawaited(
-                                context.read<SettingsStore>().saveQueueOpen(
-                                  next,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      // El host de toasts vive en el builder del MaterialApp
-                      // (main.dart) para flotar por encima de los diálogos.
-                    ],
-                  ),
+                    ),
+                    QueuePanel(open: _queueOpen),
+                  ],
                 ),
-                // Cola: panel glass que se desliza desde la derecha y EMPUJA
-                // el contenedor principal (contenido + player). Vive en el
-                // Row para que el ancho animado corra el contenido, no para
-                // superponerse.
-                QueuePanel(open: _queueOpen),
-              ],
-            ),
+              ),
+            ],
           ),
+          // Overlay fullscreen: cubre TODO. Mientras anima la salida sigue
+          // montado; al terminar desmonta vía onExited.
+          if (_showFsOverlay)
+            Positioned.fill(
+              child: FullscreenPlayerView(
+                active: _fullscreen,
+                lyricsPanel: TickerMode(
+                  enabled: true,
+                  // Embebido: sin margen/sombra/fondo — las letras flotan
+                  // sobre las olas del fondo fullscreen.
+                  child: LyricsView(key: _fsLyricsKey, embedded: true),
+                ),
+                onRequestClose: () => unawaited(_setFullscreen(false)),
+                onExited: () => setState(() => _showFsOverlay = false),
+              ),
+            ),
         ],
       ),
     );
   }
 }
-

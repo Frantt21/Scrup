@@ -27,9 +27,14 @@ class Track {
     String? thumb;
     if (thumbnails != null && thumbnails.isNotEmpty) {
       // Preferir la última (suele ser la de mayor resolución)
-      final sorted = List<Map<String, dynamic>>.from(
-        thumbnails.whereType<Map<String, dynamic>>(),
-      )..sort((a, b) => ((b['width'] as num?) ?? 0).compareTo((a['width'] as num?) ?? 0));
+      final sorted =
+          List<Map<String, dynamic>>.from(
+            thumbnails.whereType<Map<String, dynamic>>(),
+          )..sort(
+            (a, b) => ((b['width'] as num?) ?? 0).compareTo(
+              (a['width'] as num?) ?? 0,
+            ),
+          );
       thumb = sorted.isNotEmpty ? sorted.first['url'] as String? : null;
     }
 
@@ -37,7 +42,9 @@ class Track {
       id: json['id'] as String? ?? '',
       // Limpia tags como "(Official Video)", " | Lyrics", etc.
       title: TitleCleaner.clean(json['title'] as String? ?? 'Sin título'),
-      artist: (json['channel'] ?? json['uploader'] ?? json['artist'] ?? '') as String? ??
+      artist:
+          (json['channel'] ?? json['uploader'] ?? json['artist'] ?? '')
+              as String? ??
           '',
       duration: durationSec is num && durationSec > 0
           ? Duration(seconds: durationSec.toInt())
@@ -49,6 +56,18 @@ class Track {
 
   /// URL de YouTube canónica para yt-dlp.
   String get youtubeUrl => 'https://www.youtube.com/watch?v=$id';
+
+  /// Variante de MÁXIMA resolución para thumbnails de YouTube:
+  /// `i.ytimg.com/vi/<id>/<variante>.jpg` → `maxresdefault.jpg` (1280px).
+  /// Las URLs que no son de ytimg (Deezer, archivos locales…) se devuelven
+  /// tal cual. Puede devolver una URL que responda 404 si el vídeo no tiene
+  /// maxres: el llamador debe degradar al original en ese caso.
+  static String? hiResThumbnail(String? url) {
+    if (url == null || url.isEmpty) return null;
+    final m = RegExp(r'i\.ytimg\.com/vi/([\w-]+)').firstMatch(url);
+    if (m == null) return url;
+    return 'https://i.ytimg.com/vi/${m.group(1)!}/maxresdefault.jpg';
+  }
 
   Track copyWith({
     String? title,

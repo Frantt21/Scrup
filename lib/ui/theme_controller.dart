@@ -41,6 +41,26 @@ class ThemeController extends ChangeNotifier {
   Color? _accentColor;
   Color? get accentColor => _accentColor;
 
+  /// Acento "de transporte": el mismo tono que usa TODO el tema (play,
+  /// sliders, botones activos), generado sembrando el ColorScheme con el
+  /// color del artwork igual que hace `_buildTheme`. El color crudo de la
+  /// paleta suele ser darkVibrant (oscuro a propósito) y desentonaba más
+  /// oscuro frente al resto. Se cachea: solo se recalcula al cambiar.
+  Color? _seededPrimary;
+  Color? _seededFor;
+
+  Color get seededPrimary {
+    final seed = _accentColor ?? kDefaultAccent;
+    if (_seededFor != seed) {
+      _seededPrimary = ColorScheme.fromSeed(
+        seedColor: seed,
+        brightness: Brightness.dark,
+      ).primary;
+      _seededFor = seed;
+    }
+    return _seededPrimary!;
+  }
+
   /// Token anti-carrera: si el usuario cambia de pista mientras se analiza
   /// una portada, se descarta el resultado obsoleto.
   int _token = 0;
