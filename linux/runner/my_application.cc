@@ -58,6 +58,12 @@ static void my_application_activate(GApplication* application) {
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);
 
+  // Impeller (default en Linux desde Flutter 3.47) dibuja los círculos con
+  // SDFs y su anti-aliasing está roto: bordes de sierra visibles en
+  // ClipOval/CircleBorder/borders redondeados (flutter#183083, #183418).
+  // Volver a Skia, que rasteriza curvas con AA analítico sin dientes.
+  fl_dart_project_set_enable_impeller(project, FALSE);
+
   // Icono de la ventana: se carga desde los assets de Flutter (app-logo.png)
   // y se reduce a 256px para que la carga sea ligera. Best-effort: si el
   // archivo no existe, el gestor de ventanas usa su icono por defecto.
