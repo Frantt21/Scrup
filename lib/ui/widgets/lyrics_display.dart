@@ -237,7 +237,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
 
     if (key?.currentContext == null) {
       _controller.jumpTo(
-        (di * 70.0).clamp(0.0, _controller.position.maxScrollExtent),
+        (di * 74.0).clamp(0.0, _controller.position.maxScrollExtent),
       );
       WidgetsBinding.instance.addPostFrameCallback((_) => scroll());
     } else {
@@ -281,7 +281,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
       if (!mounted || !_controller.hasClients || di < 0) return;
       // Salto estimado primero: acerca el ítem al rango construido del
       // ListView; el ensureVisible posterior centra con las métricas reales.
-      final est = (di * 70.0).clamp(0.0, _controller.position.maxScrollExtent);
+      final est = (di * 74.0).clamp(0.0, _controller.position.maxScrollExtent);
       if ((_controller.offset - est).abs() > 400) {
         _controller.jumpTo(est);
       }
@@ -316,7 +316,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
           alignment: 0.5,
         );
       } else {
-        final est = (di * 70.0).clamp(
+        final est = (di * 74.0).clamp(
           0.0,
           _controller.position.maxScrollExtent,
         );
@@ -527,7 +527,7 @@ class _KaraokeLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const baseStyle = TextStyle(
-      fontSize: 30,
+      fontSize: 38,
       fontWeight: FontWeight.bold,
       height: 1.3,
       fontFamily: 'Roboto',

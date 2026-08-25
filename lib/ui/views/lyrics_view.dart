@@ -1695,10 +1695,10 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     );
   }
 
-  /// Estilo EXACTO de las letras en pantalla (lyrics_display): 30 px bold,
+  /// Estilo EXACTO de las letras en pantalla (lyrics_display): 38 px bold,
   /// height 1.3, Roboto; activa en acento legible, inactivas al 30%.
   TextStyle _lyricStyle(Color color) => const TextStyle(
-    fontSize: 30,
+    fontSize: 38,
     fontWeight: FontWeight.bold,
     height: 1.3,
     fontFamily: 'Roboto',

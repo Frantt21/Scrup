@@ -6,6 +6,10 @@ import '../core/track.dart';
 import 'deezer_service.dart';
 import 'ytmusic_service.dart';
 
+/// Un candidato de metadatos junto al servicio que lo devolvió (se muestra
+/// como badge en la lista de resultados del editor).
+typedef MetadataHit = ({Track track, String source});
+
 /// Búsqueda de metadatos MULTI-FUENTE para el editor de metadatos:
 ///
 /// - **Deezer** (API pública, sin key): título/artista/álbum limpios y
@@ -42,40 +46,33 @@ class MetadataLookupService {
   final DeezerService _deezer;
 
   /// Busca en todas las fuentes públicas. [query] puede ser texto libre
-  /// ("artista título") o contener una URL de Spotify.
-  Future<List<Track>> search(String query) async {
+  /// ("artista título") o contener una URL de Spotify. Devuelve TODOS los
+  /// hits, duplicados incluidos: cada uno lleva su [MetadataHit.source] para
+  /// que el usuario compare el mismo tema según el servicio en el badge.
+  Future<List<MetadataHit>> search(String query) async {
     final spotifyLink = _spotifyUrlRe.firstMatch(query);
     final textQuery = query.replaceFirst(_spotifyUrlRe, '').trim();
     final effective = textQuery.isEmpty ? query : textQuery;
 
-    final futures = await Future.wait([
+    final futures = await Future.wait<List<MetadataHit>>([
       _searchDeezer(effective),
       _searchItunes(effective),
       _searchInnerTube(effective),
       if (spotifyLink != null) _fromSpotifyUrl(spotifyLink.group(0)!),
     ]);
 
-    final seen = <String>{};
-    final out = <Track>[];
-    for (final list in futures) {
-      for (final t in list) {
-        final key = '${t.artist.trim()}::${t.title.trim()}'.toLowerCase();
-        if (key == '::' || !seen.add(key)) continue;
-        out.add(t);
-      }
-    }
-    return out;
+    return [for (final list in futures) ...list];
   }
 
   // ── Deezer ──────────────────────────────────────────────────────────────
 
   /// Delega en el servicio existente (API pública, con su propia lógica de
   /// coincidencia fiable). El texto libre va como título, sin artista.
-  Future<List<Track>> _searchDeezer(String query) async {
+  Future<List<MetadataHit>> _searchDeezer(String query) async {
     if (query.trim().isEmpty) return const [];
     try {
       final t = await _deezer.searchManual(query.trim(), '');
-      return t == null ? const [] : [t];
+      return t == null ? const [] : [(track: t, source: 'Deezer')];
     } catch (_) {
       return const [];
     }
@@ -83,7 +80,7 @@ class MetadataLookupService {
 
   // ── Apple Music / iTunes Search ────────────────────────────────────────
 
-  Future<List<Track>> _searchItunes(String query) async {
+  Future<List<MetadataHit>> _searchItunes(String query) async {
     if (query.trim().isEmpty) return const [];
     try {
       final uri = Uri.parse('https://itunes.apple.com/search').replace(
@@ -96,7 +93,7 @@ class MetadataLookupService {
       final node = jsonDecode(resp.body);
       final list = (node is Map ? node['results'] : null) as List?;
       if (list == null) return const [];
-      final out = <Track>[];
+      final out = <MetadataHit>[];
       for (final raw in list.whereType<Map>()) {
         final title = (raw['trackName'] ?? '') as String;
         if (title.trim().isEmpty) continue;
@@ -105,15 +102,16 @@ class MetadataLookupService {
           '600x600',
         );
         final album = (raw['collectionName'] as String?)?.trim();
-        out.add(
-          Track(
+        out.add((
+          track: Track(
             id: '__itunes__',
             title: title,
             artist: (raw['artistName'] ?? '') as String,
             album: (album != null && album.isNotEmpty) ? album : null,
             thumbnailUrl: art.isEmpty ? null : art,
           ),
-        );
+          source: 'Apple Music',
+        ));
       }
       return out;
     } catch (_) {
@@ -123,16 +121,19 @@ class MetadataLookupService {
 
   // ── InnerTube / YT Music ────────────────────────────────────────────────
 
-  Future<List<Track>> _searchInnerTube(String query) async {
+  Future<List<MetadataHit>> _searchInnerTube(String query) async {
     try {
       final res = await _ytmusic.search(query, limit: 6);
       return [
         for (final r in res)
-          Track(
-            id: '__ytmusic__',
-            title: r.title,
-            artist: r.artist,
-            thumbnailUrl: r.thumbnailUrl,
+          (
+            track: Track(
+              id: '__ytmusic__',
+              title: r.title,
+              artist: r.artist,
+              thumbnailUrl: r.thumbnailUrl,
+            ),
+            source: 'YT Music',
           ),
       ];
     } catch (_) {
@@ -142,7 +143,7 @@ class MetadataLookupService {
 
   // ── Spotify oEmbed (público, solo URL de track) ────────────────────────
 
-  Future<List<Track>> _fromSpotifyUrl(String url) async {
+  Future<List<MetadataHit>> _fromSpotifyUrl(String url) async {
     try {
       final uri = Uri.parse(
         'https://open.spotify.com/oembed',
@@ -157,11 +158,14 @@ class MetadataLookupService {
       if (title.trim().isEmpty) return const [];
       final thumb = (node['thumbnail_url'] ?? '') as String?;
       return [
-        Track(
-          id: '__spotify__',
-          title: title,
-          artist: '',
-          thumbnailUrl: (thumb == null || thumb.isEmpty) ? null : thumb,
+        (
+          track: Track(
+            id: '__spotify__',
+            title: title,
+            artist: '',
+            thumbnailUrl: (thumb == null || thumb.isEmpty) ? null : thumb,
+          ),
+          source: 'Spotify',
         ),
       ];
     } catch (_) {

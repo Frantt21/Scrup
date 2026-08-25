@@ -45,10 +45,10 @@ void main() {
     );
   }
 
-  /// Une el texto visible de la línea karaoke (Texts con fontSize 30).
+  /// Une el texto visible de la línea karaoke (Texts con fontSize 38).
   String joinedLineText(WidgetTester tester) {
     final texts = tester.widgetList<Text>(
-      find.byWidgetPredicate((w) => w is Text && w.style?.fontSize == 30),
+      find.byWidgetPredicate((w) => w is Text && w.style?.fontSize == 38),
     );
     return texts.map((t) => t.data ?? '').join();
   }
@@ -126,7 +126,7 @@ void main() {
     List<Color> dotColors(WidgetTester tester) {
       return tester
           .widgetList<Text>(find.byWidgetPredicate(
-              (w) => w is Text && w.data == '•' && w.style?.fontSize == 30))
+              (w) => w is Text && w.data == '•' && w.style?.fontSize == 38))
           .map((t) => t.style!.color!)
           .toList();
     }

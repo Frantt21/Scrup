@@ -42,7 +42,7 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
         _title.text.trim(),
       ].where((s) => s.isNotEmpty).join(' '),
     );
-    List<Track>? results;
+    List<MetadataHit>? results;
     String? error;
     bool searching = false;
 
@@ -113,7 +113,9 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
                           itemCount: results!.length,
                           separatorBuilder: (_, _) => const SizedBox(height: 6),
                           itemBuilder: (context, i) {
-                            final t = results![i];
+                            final hit = results![i];
+                            final t = hit.track;
+                            final theme = Theme.of(context);
                             return ListTile(
                               dense: true,
                               leading: ClipRRect(
@@ -131,10 +133,43 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
                                   ),
                                 ),
                               ),
-                              title: Text(
-                                t.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              // Badge del servicio de origen, mismo estilo
+                              // que el de proveedor en los resultados de
+                              // lyrics.
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      t.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: theme
+                                          .colorScheme
+                                          .surfaceContainerHighest
+                                          .withValues(alpha: 0.6),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      hit.source,
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               subtitle: Text(
                                 [
