@@ -198,10 +198,14 @@ void _isolateEntry(Map<String, dynamic> args) async {
 // Firma nativa y firma Dart de las funciones de kernel32 usadas. Los
 // typedefs son OBLIGATORIOS: el parser de genéricos de este SDK no acepta
 // `Function` tipada inline en `lookupFunction<...>`.
+//
+// `desiredAccess` va como Uint32 porque GENERIC_READ|GENERIC_WRITE
+// (0xC0000000) excede el rango positivo de Int32 y algunas versiones del
+// SDK lanzan RangeError en vez de truncar.
 typedef _CreateFileWNative =
     Pointer<Void> Function(
       Pointer<Utf16>,
-      Int32,
+      Uint32,
       Int32,
       Pointer<Void>,
       Int32,
@@ -222,6 +226,24 @@ typedef _ReadWriteNative =
     Int32 Function(IntPtr, Pointer<Void>, Int32, Pointer<Int32>, Pointer<Void>);
 typedef _ReadWriteDart =
     int Function(int, Pointer<Void>, int, Pointer<Int32>, Pointer<Void>);
+typedef _PeekNative =
+    Int32 Function(
+      IntPtr,
+      Pointer<Void>,
+      Int32,
+      Pointer<Int32>,
+      Pointer<Int32>,
+      Pointer<Int32>,
+    );
+typedef _PeekDart =
+    int Function(
+      int,
+      Pointer<Void>,
+      int,
+      Pointer<Int32>,
+      Pointer<Int32>,
+      Pointer<Int32>,
+    );
 typedef _CloseHandleNative = Int32 Function(IntPtr);
 typedef _CloseHandleDart = int Function(int);
 typedef _GetLastErrorNative = Int32 Function();
@@ -250,6 +272,8 @@ class _WinPipe {
       .lookupFunction<_ReadWriteNative, _ReadWriteDart>('ReadFile');
   static final _writeFile = _kernel32
       .lookupFunction<_ReadWriteNative, _ReadWriteDart>('WriteFile');
+  static final _peekNamedPipe = _kernel32
+      .lookupFunction<_PeekNative, _PeekDart>('PeekNamedPipe');
   static final _closeHandle = _kernel32
       .lookupFunction<_CloseHandleNative, _CloseHandleDart>('CloseHandle');
   static final _getLastError = _kernel32
@@ -257,34 +281,40 @@ class _WinPipe {
 
   /// Abre el primer named pipe de Discord disponible (`discord-ipc-0..9`).
   /// Devuelve `null` si Discord no está escuchando.
+  ///
+  /// Se prueban AMBOS prefijos por índice: `\\.\pipe\` (el canónico de
+  /// Win32) y `\\?\pipe\` (device path sin normalizar). Algunas builds de
+  /// Discord/Windows solo responden a uno de los dos.
   static _WinPipe? openAnyDiscordPipe() {
     const desiredAccess = 0xC0000000; // GENERIC_READ | GENERIC_WRITE
     const shareMode = 0x3; // FILE_SHARE_READ | FILE_SHARE_WRITE
     const openExisting = 3; // OPEN_EXISTING
 
     for (var i = 0; i < 10; i++) {
-      // Prefijo \\?\pipe\: el path extendido de Win32 (el que usa Discord).
-      final name = '\\\\?\\pipe\\discord-ipc-$i';
-      final namePtr = name.toNativeUtf16();
-      try {
-        final handle = _createFileW(
-          namePtr,
-          desiredAccess,
-          shareMode,
-          nullptr,
-          openExisting,
-          0,
-          nullptr,
-        );
-        // INVALID_HANDLE_VALUE en Win32 es -1, aunque en algunas plataformas
-        // el puntero puede llegar también como 0xFFFFFFFFFFFFFFFF.
-        final invalid = handle.address == -1 || handle.address == 0xFFFFFFFFFFFFFFFF;
-        if (!invalid) {
-          return _WinPipe._(handle.address);
+      for (final prefix in const [r'\\.\pipe\', r'\\?\pipe\']) {
+        final name = '$prefix discord-ipc-$i';
+        final namePtr = name.toNativeUtf16();
+        try {
+          final handle = _createFileW(
+            namePtr,
+            desiredAccess,
+            shareMode,
+            nullptr,
+            openExisting,
+            0,
+            nullptr,
+          );
+          // INVALID_HANDLE_VALUE en Win32 es -1, aunque en algunas plataformas
+          // el puntero puede llegar también como 0xFFFFFFFFFFFFFFFF.
+          final invalid =
+              handle.address == -1 || handle.address == 0xFFFFFFFFFFFFFFFF;
+          if (!invalid) {
+            return _WinPipe._(handle.address);
+          }
+        } finally {
+          // Liberar el buffer del nombre (malloc interno de toNativeUtf16).
+          malloc.free(namePtr);
         }
-      } finally {
-        // Liberar el buffer del nombre (malloc interno de toNativeUtf16).
-        malloc.free(namePtr);
       }
     }
     return null;
@@ -349,9 +379,35 @@ class _WinPipe {
     return (opcode: DiscordOpcode.fromValue(opcode), payload: payload);
   }
 
-  /// Una llamada ReadFile no bloqueante con poll: devuelve `null` si el
-  /// pipe se cerró, `0` si no hay datos, o el número de bytes leídos.
+  /// Una lectura NO BLOQUEANTE: devuelve `null` si el pipe se cerró, `0` si
+  /// no hay datos aún, o el número de bytes leídos.
+  ///
+  /// POR QUÉ PeekNamedPipe: un `ReadFile` directo sobre un handle síncrono
+  /// se QUEDA BLOQUEADO cuando el pipe está vacío (los modos no bloqueantes
+  /// tipo `ERROR_NO_DATA` solo existen en pipes de mensaje con readmode
+  /// message, que aquí no controlamos). Con el peek sabemos cuántos bytes
+  /// hay disponibles SIN bloquear y solo entonces leemos; el timeout del
+  /// bucle superior hace polling real. Esto es lo que hacía que el RPC
+  /// nunca conectara en Windows: la primera lectura del handshake se
+  /// colgaba para siempre dentro de ReadFile.
   int? _readSome(Uint8List buffer, int offset, int maxBytes) {
+    final avail = malloc<Int32>();
+    try {
+      final ok = _peekNamedPipe(_handle, nullptr, 0, nullptr, avail, nullptr);
+      if (ok == 0) {
+        final err = _getLastError();
+        // ERROR_BROKEN_PIPE (109): Discord cerró el extremo.
+        if (err == 109) {
+          closedByPeer = true;
+          return null;
+        }
+        return null;
+      }
+      if (avail.value <= 0) return 0;
+    } finally {
+      malloc.free(avail);
+    }
+
     final ptr = malloc<Uint8>(maxBytes);
     final bytesRead = malloc<Int32>();
     try {
@@ -364,6 +420,16 @@ class _WinPipe {
       );
       if (ok == 0) {
         final err = _getLastError();
+        // ERROR_MORE_DATA (234): el mensaje excede el buffer pero los bytes
+        // leídos son válidos (pipe de mensaje); NO es un pipe roto.
+        if (err == 234 && bytesRead.value > 0) {
+          buffer.setRange(
+            offset,
+            offset + bytesRead.value,
+            ptr.asTypedList(bytesRead.value),
+          );
+          return bytesRead.value;
+        }
         // ERROR_NO_DATA (232) / ERROR_PIPE_LISTENING (536) → sin datos.
         if (err == 232 || err == 536) return 0;
         return null; // pipe roto
