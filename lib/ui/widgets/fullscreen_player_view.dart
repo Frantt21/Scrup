@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show listEquals, Uint8List;
@@ -148,7 +149,23 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     if (bytes != null && trio != null) return (bytes, trio);
 
     if (bytes == null) {
-      // Cadena de respaldo: maxresdefault (1280px) → URL original.
+      // Artwork LOCAL (portada propia desde metadatos): leer del disco.
+      final lower = rawUrl.toLowerCase();
+      if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+        try {
+          final f = File(rawUrl);
+          if (await f.exists()) {
+            final b = await f.readAsBytes();
+            if (b.length > 128) bytes = b;
+          }
+        } catch (_) {
+          // Archivo ilegible → sin artwork.
+        }
+        if (bytes != null) _artBytesCache[rawUrl] = bytes;
+      }
+    }
+    if (bytes == null) {
+      // Red: cadena de respaldo maxresdefault (1280px) → URL original.
       for (final url in [Track.hiResThumbnail(rawUrl) ?? rawUrl, rawUrl]) {
         try {
           final resp = await http

@@ -1,10 +1,9 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
-import '../../services/deezer_service.dart';
+import '../../services/metadata_lookup_service.dart';
 import '../../services/playlist_cover_store.dart';
 import 'cover_image.dart';
 import 'scrup_toasts.dart';
@@ -29,8 +28,158 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
   late final TextEditingController _album;
   late final TextEditingController _cover;
 
-  /// `true` mientras se busca la metadata en Deezer (spinner en el botón).
-  bool _searching = false;
+  /// Búsqueda multi-fuente (Deezer + Apple Music + InnerTube + Spotify
+  /// oEmbed), unificada en un único selector de resultados.
+  final MetadataLookupService _lookup = MetadataLookupService();
+
+  /// Abre el selector de resultados EN LÍNEA: busca en todas las fuentes
+  /// públicas y al elegir un candidato rellena título/artista/álbum/portada.
+  Future<void> _searchOnline() async {
+    final l10n = AppLocalizations.of(context);
+    final controller = TextEditingController(
+      text: [
+        _artist.text.trim(),
+        _title.text.trim(),
+      ].where((s) => s.isNotEmpty).join(' '),
+    );
+    List<Track>? results;
+    String? error;
+    bool searching = false;
+
+    Future<void> run(String query, void Function(void Function()) set) async {
+      set(() {
+        searching = true;
+        results = null;
+        error = null;
+      });
+      try {
+        final r = await _lookup.search(query);
+        if (context.mounted) set(() => results = r);
+      } catch (_) {
+        if (context.mounted) set(() => error = l10n.metadataNoResults);
+      } finally {
+        if (context.mounted) set(() => searching = false);
+      }
+    }
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: Text(l10n.metadataSearchOnline),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: l10n.metadataOnlineHint,
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onSubmitted: (_) => run(controller.text, setDialogState),
+                ),
+                const SizedBox(height: 12),
+                Flexible(
+                  child: searching
+                      ? const Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          ),
+                        )
+                      : results == null && error == null
+                      ? const SizedBox(height: 8)
+                      : error != null
+                      ? Text(error!)
+                      : (results?.isEmpty ?? true)
+                      ? Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Text(l10n.metadataNoResults),
+                        )
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: results!.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 6),
+                          itemBuilder: (context, i) {
+                            final t = results![i];
+                            return ListTile(
+                              dense: true,
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: SizedBox(
+                                  width: 40,
+                                  height: 40,
+                                  child: CoverImage(
+                                    source: t.thumbnailUrl,
+                                    fit: BoxFit.cover,
+                                    fallback: const Icon(
+                                      Icons.music_note_rounded,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                t.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                [
+                                  t.artist,
+                                  if (t.album != null &&
+                                      t.album!.trim().isNotEmpty)
+                                    t.album!,
+                                ].where((s) => s.isNotEmpty).join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () {
+                                setState(() {
+                                  _title.text = t.title;
+                                  if (t.artist.isNotEmpty) {
+                                    _artist.text = t.artist;
+                                  }
+                                  _album.text = t.album ?? '';
+                                  _cover.text = t.thumbnailUrl ?? '';
+                                });
+                                Navigator.pop(context);
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: controller.text.trim().isEmpty
+                  ? null
+                  : () => run(controller.text, setDialogState),
+              child: Text(l10n.searchTitle),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -73,32 +222,6 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
   /// resultado o un `null` para ese video, la búsqueda manual debe
   /// consultar la API igualmente). Si no hay coincidencia fiable, deja los
   /// campos intactos y avisa.
-  Future<void> _searchDeezer() async {
-    if (_searching) return;
-    final l10n = AppLocalizations.of(context);
-    final title = _title.text.trim();
-    final artist = _artist.text.trim();
-    if (title.isEmpty && artist.isEmpty) return;
-    setState(() => _searching = true);
-    try {
-      final enriched = await context
-          .read<DeezerService>()
-          .searchManual(title, artist);
-      if (!mounted) return;
-      if (enriched == null) {
-        showScrupToast(l10n.metadataNotFound, kind: ScrupToastKind.error);
-        return;
-      }
-      setState(() {
-        _title.text = enriched.title;
-        _artist.text = enriched.artist;
-        _album.text = enriched.album ?? '';
-        _cover.text = enriched.thumbnailUrl ?? '';
-      });
-    } finally {
-      if (mounted) setState(() => _searching = false);
-    }
-  }
 
   /// Abre el selector de archivos para elegir una imagen local como portada
   /// de la pista. La imagen se COPIA al directorio de portadas de la app
@@ -113,18 +236,12 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
     final file = await openFile(acceptedTypeGroups: [images]);
     if (file == null || !mounted) return;
     try {
-      final dest = await copyTrackCoverToAppDir(
-        widget.track.id,
-        file.path,
-      );
+      final dest = await copyTrackCoverToAppDir(widget.track.id, file.path);
       if (!mounted) return;
       setState(() => _cover.text = dest);
     } catch (_) {
       if (!mounted) return;
-      showScrupToast(
-        l10n.metadataCoverError,
-        kind: ScrupToastKind.error,
-      );
+      showScrupToast(l10n.metadataCoverError, kind: ScrupToastKind.error);
     }
   }
 
@@ -193,23 +310,11 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _field(
-                    l10n.metadataTitle,
-                    _title,
-                    Icons.music_note_rounded,
-                  ),
+                  _field(l10n.metadataTitle, _title, Icons.music_note_rounded),
                   const SizedBox(height: 16),
-                  _field(
-                    l10n.metadataArtist,
-                    _artist,
-                    Icons.person_rounded,
-                  ),
+                  _field(l10n.metadataArtist, _artist, Icons.person_rounded),
                   const SizedBox(height: 16),
-                  _field(
-                    l10n.metadataAlbum,
-                    _album,
-                    Icons.album_rounded,
-                  ),
+                  _field(l10n.metadataAlbum, _album, Icons.album_rounded),
                   const SizedBox(height: 16),
                   // Portada: miniatura en vivo + campo de URL + botón para
                   // elegir una imagen local (se copia al dir de la app).
@@ -247,21 +352,18 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  // Buscar en Deezer (autocompleta los campos) junto a
-                  // Cancelar/Guardar.
+                  // Buscar en línea (Deezer + Apple Music + YT Music +
+                  // Spotify oEmbed) junto a Cancelar/Guardar.
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       TextButton.icon(
-                        onPressed: _searching ? null : _searchDeezer,
-                        icon: _searching
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.auto_awesome_rounded, size: 16),
-                        label: Text(l10n.metadataSearchDeezer),
+                        onPressed: _searchOnline,
+                        icon: const Icon(
+                          Icons.travel_explore_rounded,
+                          size: 16,
+                        ),
+                        label: Text(l10n.metadataSearchOnline),
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,

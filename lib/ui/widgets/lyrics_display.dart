@@ -43,11 +43,19 @@ class LyricsDisplay extends StatefulWidget {
 
 class _LyricsDisplayState extends State<LyricsDisplay>
     with AutomaticKeepAliveClientMixin {
+  /// Controller que AVISA cuando un viewport se le (re)atacha: al reparentar
+  /// el widget (fullscreen↔normal), reabrir el panel u ocultarlo vía
+  /// IndexedStack/Offstage, la posición de scroll se conserva PERO los
+  /// cambios de línea que ocurrieron mientras no había viewport se
+  /// perdieron. En cada attach re-anclamos al instante a la línea actual.
   late ScrollController _controller;
   final Map<int, GlobalKey> _itemKeys = {};
   bool _showSyncButton = false;
   int _lastAutoScrolledIndex = -1;
   bool _userHasScrolled = false;
+
+  /// Hay un snap pendiente programado en post-frame (evita duplicarlos).
+  bool _pendingSnap = false;
   List<LyricLine> _processedLines = [];
   SyncedLyrics? _lastLyrics;
   bool _isSweepEnabled = false;
@@ -132,7 +140,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
   @override
   void initState() {
     super.initState();
-    _controller = ScrollController();
+    _controller = ScrollController(onAttach: _onViewportAttached);
     _controller.addListener(_checkButtonVisibility);
     widget.positionNotifier.addListener(_onPositionChanged);
     _onPositionChanged();
@@ -160,8 +168,9 @@ class _LyricsDisplayState extends State<LyricsDisplay>
   void didUpdateWidget(LyricsDisplay oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.sweepEnabled != widget.sweepEnabled) _loadSweepSetting();
-    if (oldWidget.lyrics != widget.lyrics ||
-        oldWidget.audioPath != widget.audioPath) {
+    if (oldWidget.lyrics != widget.lyrics) {
+      // Cambió la letra (otra pista u otra fuente): reinicio completo del
+      // listado, de las claves y del scroll.
       _itemKeys.clear();
       for (var i = 0; i < _lines.length; i++) _itemKeys[i] = GlobalKey();
       _showSyncButton = false;
@@ -172,10 +181,12 @@ class _LyricsDisplayState extends State<LyricsDisplay>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_controller.hasClients) _controller.jumpTo(0);
       });
-    } else if (oldWidget.lyricsOffset != widget.lyricsOffset) {
-      // Ajuste en caliente desde el diálogo de sincronización: recalcular el
-      // índice activo AL INSTANTE (sin esperar al próximo tick de posición,
-      // que con la canción pausada podría no llegar nunca).
+    } else if (oldWidget.audioPath != widget.audioPath ||
+        oldWidget.lyricsOffset != widget.lyricsOffset) {
+      // audioPath/offset cambiaron sin cambiar la letra (p. ej. el future
+      // del path de audio resolviendo tarde, o el ajuste en caliente desde
+      // el diálogo de sincronización): recalcular el índice activo AL
+      // INSTANTE pero SIN tocar scroll ni flags — no es un cambio de pista.
       _onPositionChanged();
     }
   }
@@ -234,6 +245,55 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     }
     _lastAutoScrolledIndex = di;
     _userHasScrolled = false;
+    setState(() => _showSyncButton = false);
+  }
+
+  /// Se dispara cuando un viewport se (re)atacha al controller (`onAttach`):
+  /// apertura del panel, reparenting fullscreen↔normal, remonte tras
+  /// Offstage, etc. Difiere el snap a post-frame porque en el momento del
+  /// attach la posición aún no tiene dimensiones de viewport.
+  void _onViewportAttached(ScrollPosition position) {
+    if (_pendingSnap) return;
+    _pendingSnap = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _snapToCurrentLine();
+    });
+  }
+
+  /// Re-ancla el scroll a la línea ACTUAL de forma INSTANTÁNEA (sin
+  /// animación). Se ejecuta al (re)atacharse un viewport — abrir el panel,
+  /// volver del fullscreen, remontar tras un Offstage — y también en el
+  /// primer montaje, para que las letras aparezcan SIEMPRE centradas en la
+  /// línea que suena, aunque mientras estuvo oculta no se renderizara nada.
+  ///
+  /// Recalcula el índice activo con la posición vigente (no confía en el
+  /// último valor notificado), resetea el modo "usuario navegando" y deja
+  /// `_lastAutoScrolledIndex` sincronizado para que el seguimiento normal
+  /// continúe sin saltos desde la posición recién anclada.
+  void _snapToCurrentLine() {
+    _pendingSnap = false;
+    final di = _computeActiveDisplayIndex(widget.positionNotifier.value);
+    _activeIndex.value = di;
+    _lastAutoScrolledIndex = di;
+    _userHasScrolled = false;
+    if (!_controller.hasClients) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_controller.hasClients || di < 0) return;
+      // Salto estimado primero: acerca el ítem al rango construido del
+      // ListView; el ensureVisible posterior centra con las métricas reales.
+      final est = (di * 70.0).clamp(0.0, _controller.position.maxScrollExtent);
+      if ((_controller.offset - est).abs() > 400) {
+        _controller.jumpTo(est);
+      }
+      final key = _itemKeys[di];
+      if (key?.currentContext != null) {
+        Scrollable.ensureVisible(
+          key!.currentContext!,
+          duration: Duration.zero,
+          alignment: 0.5,
+        );
+      }
+    });
     setState(() => _showSyncButton = false);
   }
 
@@ -301,71 +361,78 @@ class _LyricsDisplayState extends State<LyricsDisplay>
               if (n.direction != ScrollDirection.idle) _userHasScrolled = true;
               return false;
             },
-            child: ListView.builder(
-              controller: _controller,
-              // Embebido: primer renglón a la altura del top del artwork
-              // (aire inferior solo para el anclaje de auto-scroll);
-              // normal: 200px arriba y abajo para centrar la línea activa.
-              padding: widget.embedded
-                  ? const EdgeInsets.only(top: 4, bottom: 72)
-                  : const EdgeInsets.symmetric(vertical: 200),
-              itemCount: _lines.length,
-              itemBuilder: (context, index) {
-                return ValueListenableBuilder<int>(
-                  valueListenable: _activeIndex,
-                  builder: (context, activeIndex, _) {
-                    final isCurrent = index == activeIndex;
-                    final line = _lines[index];
-                    final isGap = line.text == kGapMarker;
-                    // Fin de la línea para el sweep:
-                    //  · Gap activo → la siguiente línea del listado es el
-                    //    fin del silencio (ventana de los puntos).
-                    //  · Línea real activa → saltar los '•••' intercalados
-                    //    (su timestamp estimado recortaría el barrido) y usar
-                    //    la siguiente línea REAL.
-                    //  · Resto → la siguiente del listado (solo cosmético).
-                    final Duration endTime;
-                    if (isGap || !isCurrent) {
-                      endTime = index < _lines.length - 1
-                          ? _lines[index + 1].timestamp
-                          : _totalDuration;
-                    } else {
-                      var j = index + 1;
-                      while (j < _lines.length &&
-                          _lines[j].text == kGapMarker) {
-                        j++;
+            // Sin scrollbar: en desktop Flutter lo añade por defecto y aquí
+            // rompe la estética del karaoke.
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(scrollbars: false),
+              child: ListView.builder(
+                controller: _controller,
+                // Embebido: primer renglón a la altura del top del artwork
+                // (aire inferior solo para el anclaje de auto-scroll);
+                // normal: 200px arriba y abajo para centrar la línea activa.
+                padding: widget.embedded
+                    ? const EdgeInsets.only(top: 4, bottom: 72)
+                    : const EdgeInsets.symmetric(vertical: 200),
+                itemCount: _lines.length,
+                itemBuilder: (context, index) {
+                  return ValueListenableBuilder<int>(
+                    valueListenable: _activeIndex,
+                    builder: (context, activeIndex, _) {
+                      final isCurrent = index == activeIndex;
+                      final line = _lines[index];
+                      final isGap = line.text == kGapMarker;
+                      // Fin de la línea para el sweep:
+                      //  · Gap activo → la siguiente línea del listado es el
+                      //    fin del silencio (ventana de los puntos).
+                      //  · Línea real activa → saltar los '•••' intercalados
+                      //    (su timestamp estimado recortaría el barrido) y usar
+                      //    la siguiente línea REAL.
+                      //  · Resto → la siguiente del listado (solo cosmético).
+                      final Duration endTime;
+                      if (isGap || !isCurrent) {
+                        endTime = index < _lines.length - 1
+                            ? _lines[index + 1].timestamp
+                            : _totalDuration;
+                      } else {
+                        var j = index + 1;
+                        while (j < _lines.length &&
+                            _lines[j].text == kGapMarker) {
+                          j++;
+                        }
+                        endTime = j < _lines.length
+                            ? _lines[j].timestamp
+                            : _totalDuration;
                       }
-                      endTime = j < _lines.length
-                          ? _lines[j].timestamp
-                          : _totalDuration;
-                    }
-                    return GestureDetector(
-                      onTap: widget.onTap != null
-                          ? () => widget.onTap!(line.timestamp)
-                          : null,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        key: _itemKeys[index],
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
+                      return GestureDetector(
+                        onTap: widget.onTap != null
+                            ? () => widget.onTap!(line.timestamp)
+                            : null,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          key: _itemKeys[index],
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                          child: _KaraokeLine(
+                            line: line,
+                            isCurrent: isCurrent,
+                            isGap: isGap,
+                            startTime: line.timestamp,
+                            endTime: endTime,
+                            positionNotifier: widget.positionNotifier,
+                            offset: widget.lyricsOffset,
+                            accentColor: widget.accentColor,
+                            isSweepEnabled: _isSweepEnabled,
+                          ),
                         ),
-                        child: _KaraokeLine(
-                          line: line,
-                          isCurrent: isCurrent,
-                          isGap: isGap,
-                          startTime: line.timestamp,
-                          endTime: endTime,
-                          positionNotifier: widget.positionNotifier,
-                          offset: widget.lyricsOffset,
-                          accentColor: widget.accentColor,
-                          isSweepEnabled: _isSweepEnabled,
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -422,8 +489,9 @@ class _LyricsDisplayState extends State<LyricsDisplay>
   }
 }
 
-// ─── _KaraokeLine ─────────────────────────────────────────────────────
+// ─── _ResyncScrollController ──────────────────────────────────────────
 
+// ─── _KaraokeLine ─────────────────────────────────────────────────────
 class _KaraokeLine extends StatelessWidget {
   final LyricLine line;
   final bool isCurrent;

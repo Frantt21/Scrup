@@ -1,0 +1,171 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import '../core/track.dart';
+import 'deezer_service.dart';
+import 'ytmusic_service.dart';
+
+/// Búsqueda de metadatos MULTI-FUENTE para el editor de metadatos:
+///
+/// - **Deezer** (API pública, sin key): título/artista/álbum limpios y
+///   portada del álbum en alta resolución.
+/// - **Apple Music / iTunes Search API** (pública, sin key): título,
+///   artista, álbum y portada del álbum en alta resolución (600×600).
+/// - **InnerTube (YT Music)**: título, artista y thumbnail; reutiliza el
+///   mismo cliente que la búsqueda de la app.
+/// - **Spotify**: su API de búsqueda requiere OAuth, pero el endpoint
+///   **oEmbed es público** — permite resolver título + portada a partir de
+///   una URL de track pegada por el usuario.
+///
+/// Devuelve candidatos DEDUPLICADOS (artista+título) para que el usuario
+/// elija el mejor en el diálogo del editor.
+class MetadataLookupService {
+  MetadataLookupService({
+    http.Client? client,
+    String? userAgent,
+    DeezerService? deezer,
+  }) : _client = client ?? http.Client(),
+       userAgent = userAgent ?? _ua,
+       _deezer = deezer ?? DeezerService();
+
+  static const _ua = 'Scrup/0.1 (music player)';
+  static final _spotifyUrlRe = RegExp(
+    r'https?://open\.spotify\.com/(?:intl-[a-z]{2}/)?track/([A-Za-z0-9]+)',
+  );
+
+  final http.Client _client;
+
+  /// User-Agent para las peticiones HTTP.
+  final String userAgent;
+  final YtMusicService _ytmusic = YtMusicService();
+  final DeezerService _deezer;
+
+  /// Busca en todas las fuentes públicas. [query] puede ser texto libre
+  /// ("artista título") o contener una URL de Spotify.
+  Future<List<Track>> search(String query) async {
+    final spotifyLink = _spotifyUrlRe.firstMatch(query);
+    final textQuery = query.replaceFirst(_spotifyUrlRe, '').trim();
+    final effective = textQuery.isEmpty ? query : textQuery;
+
+    final futures = await Future.wait([
+      _searchDeezer(effective),
+      _searchItunes(effective),
+      _searchInnerTube(effective),
+      if (spotifyLink != null) _fromSpotifyUrl(spotifyLink.group(0)!),
+    ]);
+
+    final seen = <String>{};
+    final out = <Track>[];
+    for (final list in futures) {
+      for (final t in list) {
+        final key = '${t.artist.trim()}::${t.title.trim()}'.toLowerCase();
+        if (key == '::' || !seen.add(key)) continue;
+        out.add(t);
+      }
+    }
+    return out;
+  }
+
+  // ── Deezer ──────────────────────────────────────────────────────────────
+
+  /// Delega en el servicio existente (API pública, con su propia lógica de
+  /// coincidencia fiable). El texto libre va como título, sin artista.
+  Future<List<Track>> _searchDeezer(String query) async {
+    if (query.trim().isEmpty) return const [];
+    try {
+      final t = await _deezer.searchManual(query.trim(), '');
+      return t == null ? const [] : [t];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  // ── Apple Music / iTunes Search ────────────────────────────────────────
+
+  Future<List<Track>> _searchItunes(String query) async {
+    if (query.trim().isEmpty) return const [];
+    try {
+      final uri = Uri.parse('https://itunes.apple.com/search').replace(
+        queryParameters: {'term': query, 'entity': 'song', 'limit': '6'},
+      );
+      final resp = await _client
+          .get(uri, headers: {'User-Agent': userAgent})
+          .timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return const [];
+      final node = jsonDecode(resp.body);
+      final list = (node is Map ? node['results'] : null) as List?;
+      if (list == null) return const [];
+      final out = <Track>[];
+      for (final raw in list.whereType<Map>()) {
+        final title = (raw['trackName'] ?? '') as String;
+        if (title.trim().isEmpty) continue;
+        final art = ((raw['artworkUrl100'] ?? '') as String).replaceFirst(
+          '100x100',
+          '600x600',
+        );
+        final album = (raw['collectionName'] as String?)?.trim();
+        out.add(
+          Track(
+            id: '__itunes__',
+            title: title,
+            artist: (raw['artistName'] ?? '') as String,
+            album: (album != null && album.isNotEmpty) ? album : null,
+            thumbnailUrl: art.isEmpty ? null : art,
+          ),
+        );
+      }
+      return out;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  // ── InnerTube / YT Music ────────────────────────────────────────────────
+
+  Future<List<Track>> _searchInnerTube(String query) async {
+    try {
+      final res = await _ytmusic.search(query, limit: 6);
+      return [
+        for (final r in res)
+          Track(
+            id: '__ytmusic__',
+            title: r.title,
+            artist: r.artist,
+            thumbnailUrl: r.thumbnailUrl,
+          ),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  // ── Spotify oEmbed (público, solo URL de track) ────────────────────────
+
+  Future<List<Track>> _fromSpotifyUrl(String url) async {
+    try {
+      final uri = Uri.parse(
+        'https://open.spotify.com/oembed',
+      ).replace(queryParameters: {'url': url});
+      final resp = await _client
+          .get(uri, headers: {'User-Agent': userAgent})
+          .timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return const [];
+      final node = jsonDecode(resp.body);
+      if (node is! Map) return const [];
+      final title = (node['title'] ?? '') as String;
+      if (title.trim().isEmpty) return const [];
+      final thumb = (node['thumbnail_url'] ?? '') as String?;
+      return [
+        Track(
+          id: '__spotify__',
+          title: title,
+          artist: '',
+          thumbnailUrl: (thumb == null || thumb.isEmpty) ? null : thumb,
+        ),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+}

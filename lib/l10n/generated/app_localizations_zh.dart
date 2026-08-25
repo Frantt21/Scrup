@@ -408,6 +408,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get metadataCoverError => '无法复制图片';
 
   @override
+  String get metadataSearchOnline => '在线搜索';
+
+  @override
+  String get metadataOnlineHint => '标题和艺术家（或粘贴 Spotify 链接）';
+
+  @override
+  String get metadataNoResults => '无结果';
+
+  @override
+  String get metadataApply => '应用';
+
+  @override
   String get metadataSearchHint => 'Deezer 将使用此表单中的标题和艺术家进行搜索';
 
   @override

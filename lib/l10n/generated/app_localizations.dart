@@ -835,6 +835,30 @@ abstract class AppLocalizations {
   /// **'No se pudo copiar la imagen'**
   String get metadataCoverError;
 
+  /// No description provided for @metadataSearchOnline.
+  ///
+  /// In es, this message translates to:
+  /// **'Buscar en línea'**
+  String get metadataSearchOnline;
+
+  /// No description provided for @metadataOnlineHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Título y artista (o pega una URL de Spotify)'**
+  String get metadataOnlineHint;
+
+  /// No description provided for @metadataNoResults.
+  ///
+  /// In es, this message translates to:
+  /// **'Sin resultados'**
+  String get metadataNoResults;
+
+  /// No description provided for @metadataApply.
+  ///
+  /// In es, this message translates to:
+  /// **'Aplicar'**
+  String get metadataApply;
+
   /// No description provided for @metadataSearchHint.
   ///
   /// In es, this message translates to:

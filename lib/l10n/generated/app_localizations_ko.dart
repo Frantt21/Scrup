@@ -409,6 +409,18 @@ class AppLocalizationsKo extends AppLocalizations {
   String get metadataCoverError => '이미지를 복사할 수 없습니다';
 
   @override
+  String get metadataSearchOnline => '온라인 검색';
+
+  @override
+  String get metadataOnlineHint => '제목과 아티스트(또는 Spotify URL 붙여넣기)';
+
+  @override
+  String get metadataNoResults => '결과 없음';
+
+  @override
+  String get metadataApply => '적용';
+
+  @override
   String get metadataSearchHint => 'Deezer는 이 양식의 제목과 아티스트로 검색합니다';
 
   @override

@@ -415,6 +415,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get metadataCoverError => 'Could not copy the image';
 
   @override
+  String get metadataSearchOnline => 'Search online';
+
+  @override
+  String get metadataOnlineHint => 'Title and artist (or paste a Spotify URL)';
+
+  @override
+  String get metadataNoResults => 'No results';
+
+  @override
+  String get metadataApply => 'Apply';
+
+  @override
   String get metadataSearchHint =>
       'Deezer will search using the title and artist from this form';
 

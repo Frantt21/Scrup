@@ -286,6 +286,24 @@ class _LyricsViewState extends State<LyricsView>
     }
   }
 
+  /// Future del audio path CACHEADO por pista (identidad). Un FutureBuilder
+  /// se resetea a `ConnectionState.waiting` (data: null) cada vez que cambia
+  /// la INSTANCIA del future — y aquí se reconstruye en cada rebuild, p. ej.
+  /// al alternar fullscreen↔normal (cambia `embedded`). Ese parpadeo
+  /// null→path hacía que LyricsDisplay creyera que cambió la pista y
+  /// reiniciara el scroll al inicio. Con el future cacheado, el snapshot se
+  /// mantiene estable entre rebuilds.
+  Track? _audioPathTrack;
+  Future<String?>? _audioPathFuture;
+
+  Future<String?> _audioPathFutureFor(Track track) {
+    if (!identical(_audioPathTrack, track)) {
+      _audioPathTrack = track;
+      _audioPathFuture = _audioPathOf(track);
+    }
+    return _audioPathFuture!;
+  }
+
   /// Diálogo de búsqueda manual en LRCLIB (con resultados y edición).
   Future<void> _showSearchDialog() async {
     final track = _track;
@@ -631,7 +649,7 @@ class _LyricsViewState extends State<LyricsView>
     }
 
     return FutureBuilder<String?>(
-      future: _audioPathOf(track),
+      future: _audioPathFutureFor(track),
       builder: (context, snapshot) {
         return LyricsDisplay(
           lyrics: lyrics,

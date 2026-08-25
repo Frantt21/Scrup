@@ -409,6 +409,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String get metadataCoverError => '画像をコピーできませんでした';
 
   @override
+  String get metadataSearchOnline => 'オンラインで検索';
+
+  @override
+  String get metadataOnlineHint => 'タイトルとアーティスト（またはSpotifyのURL）';
+
+  @override
+  String get metadataNoResults => '結果なし';
+
+  @override
+  String get metadataApply => '適用';
+
+  @override
   String get metadataSearchHint => 'Deezerはこのフォームのタイトルとアーティストで検索します';
 
   @override

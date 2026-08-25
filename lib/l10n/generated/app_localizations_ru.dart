@@ -420,6 +420,19 @@ class AppLocalizationsRu extends AppLocalizations {
   String get metadataCoverError => 'Не удалось скопировать изображение';
 
   @override
+  String get metadataSearchOnline => 'Искать в интернете';
+
+  @override
+  String get metadataOnlineHint =>
+      'Название и исполнитель (или ссылка Spotify)';
+
+  @override
+  String get metadataNoResults => 'Нет результатов';
+
+  @override
+  String get metadataApply => 'Применить';
+
+  @override
   String get metadataSearchHint =>
       'Deezer выполнит поиск по названию и исполнителю из этой формы';
 
