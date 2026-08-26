@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -405,6 +405,21 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                             ? _lines[j].timestamp
                             : _totalDuration;
                       }
+                      // Ventana de RECORRIDO extendida: si el proveedor
+                      // extiende las últimas palabras más allá del inicio
+                      // de la línea siguiente, esta línea sigue barriendo
+                      // (máximo: fin de línea o último start + 800ms).
+                      int? sweepUntilMs;
+                      if (!isGap &&
+                          line.words != null &&
+                          line.words!.isNotEmpty) {
+                        final lastStart =
+                            line.words!.last.timestamp.inMilliseconds;
+                        sweepUntilMs = math.max(
+                          endTime.inMilliseconds,
+                          lastStart + 800,
+                        );
+                      }
                       return GestureDetector(
                         onTap: widget.onTap != null
                             ? () => widget.onTap!(line.timestamp)
@@ -426,6 +441,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                             offset: widget.lyricsOffset,
                             accentColor: widget.accentColor,
                             isSweepEnabled: _isSweepEnabled,
+                            sweepUntilMs: sweepUntilMs,
                           ),
                         ),
                       );
@@ -503,6 +519,13 @@ class _KaraokeLine extends StatelessWidget {
   final Color? accentColor;
   final bool isSweepEnabled;
 
+  /// Hasta qué posición (ms absolutos de canción) esta línea sigue
+  /// BARRIENDO aunque haya perdido el foco. Null = solo barre siendo
+  /// actual. Permite que la línea anterior TERMINE su recorrido cuando el
+  /// proveedor extiende las últimas palabras más allá del inicio de la
+  /// línea siguiente (timestamps word-by-word reales).
+  final int? sweepUntilMs;
+
   const _KaraokeLine({
     required this.line,
     required this.isCurrent,
@@ -513,6 +536,7 @@ class _KaraokeLine extends StatelessWidget {
     required this.offset,
     this.accentColor,
     this.isSweepEnabled = true,
+    this.sweepUntilMs,
   });
 
   Color get _activeColor =>
@@ -534,8 +558,10 @@ class _KaraokeLine extends StatelessWidget {
     );
 
     final tokens = computeTokens();
-    final shouldAnimate = isCurrent && isSweepEnabled && tokens.karaoke;
 
+    // Un solo listener de posición decide el estado: RESALTADA (isCurrent,
+    // salta a la línea siguiente a tiempo) es independiente de BARRIENDO
+    // (esta línea termina su recorrido aunque ya no sea la actual).
     return AnimatedScale(
       scale: isCurrent ? 1.05 : 1.0,
       duration: const Duration(milliseconds: 500),
@@ -543,15 +569,26 @@ class _KaraokeLine extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: SizedBox(
         width: double.infinity,
-        child: isGap
-            ? _buildDots(baseStyle)
-            : shouldAnimate
-            ? _buildSweep(baseStyle, tokens.list)
-            : _buildStatic(
-                baseStyle,
-                tokens.list,
-                isCurrent ? _activeColor : _inactiveColor,
-              ),
+        child: ValueListenableBuilder<Duration>(
+          valueListenable: positionNotifier,
+          builder: (context, position, _) {
+            final currentMs = (position - offset).inMilliseconds;
+            final sweeping =
+                isCurrent ||
+                (sweepUntilMs != null &&
+                    currentMs >= startTime.inMilliseconds &&
+                    currentMs < sweepUntilMs!);
+            if (isGap) return _buildDots(baseStyle, currentMs);
+            if (sweeping && isSweepEnabled && tokens.karaoke) {
+              return _buildSweep(baseStyle, tokens.list, currentMs);
+            }
+            return _buildStatic(
+              baseStyle,
+              tokens.list,
+              isCurrent ? _activeColor : _inactiveColor,
+            );
+          },
+        ),
       ),
     );
   }
@@ -561,60 +598,56 @@ class _KaraokeLine extends StatelessWidget {
   /// cada punto cubre un tercio del hueco y se llena con el mismo gradiente
   /// del sweep de palabras, como indicador de cuánto queda de intro o
   /// instrumental.
-  Widget _buildDots(TextStyle baseStyle) {
+  Widget _buildDots(TextStyle baseStyle, int currentMs) {
     const dots = ['•', '•', '•'];
     final startMs = startTime.inMilliseconds;
-    final endMs = max(startMs + 1, endTime.inMilliseconds);
-    final window = max(1, (endMs - startMs) ~/ dots.length);
+    final endMs = math.max(startMs + 1, endTime.inMilliseconds);
+    final window = math.max(1, (endMs - startMs) ~/ dots.length);
 
-    return ValueListenableBuilder<Duration>(
-      valueListenable: positionNotifier,
-      builder: (context, position, _) {
-        final currentMs = (position - offset).inMilliseconds;
-        final children = <Widget>[];
-        for (var i = 0; i < dots.length; i++) {
-          final dot = dots[i];
-          if (!isCurrent) {
-            children.add(
-              Text(dot, style: baseStyle.copyWith(color: _inactiveColor)),
-            );
-            continue;
-          }
-          if (!isSweepEnabled) {
-            children.add(
-              Text(dot, style: baseStyle.copyWith(color: _activeColor)),
-            );
-            continue;
-          }
-          final wStart = startMs + i * window;
-          final wEnd = min(endMs, wStart + window);
-          double progress;
-          if (currentMs >= wEnd) {
-            progress = 1.0;
-          } else if (currentMs <= wStart) {
-            progress = 0.0;
-          } else {
-            progress = (currentMs - wStart) / max(1, wEnd - wStart);
-          }
+    {
+      final children = <Widget>[];
+      for (var i = 0; i < dots.length; i++) {
+        final dot = dots[i];
+        if (!isCurrent) {
           children.add(
-            _KaraokeWord(
-              word: dot,
-              progress: progress.clamp(0.0, 1.0),
-              style: baseStyle,
-              activeColor: _activeColor,
-              inactiveColor: _inactiveColor,
-            ),
+            Text(dot, style: baseStyle.copyWith(color: _inactiveColor)),
           );
+          continue;
         }
-        return Wrap(
-          alignment: WrapAlignment.start,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 6.0,
-          runSpacing: 4.0,
-          children: children,
+        if (!isSweepEnabled) {
+          children.add(
+            Text(dot, style: baseStyle.copyWith(color: _activeColor)),
+          );
+          continue;
+        }
+        final wStart = startMs + i * window;
+        final wEnd = math.min(endMs, wStart + window);
+        double progress;
+        if (currentMs >= wEnd) {
+          progress = 1.0;
+        } else if (currentMs <= wStart) {
+          progress = 0.0;
+        } else {
+          progress = (currentMs - wStart) / math.max(1, wEnd - wStart);
+        }
+        children.add(
+          _KaraokeWord(
+            word: dot,
+            progress: progress.clamp(0.0, 1.0),
+            style: baseStyle,
+            activeColor: _activeColor,
+            inactiveColor: _inactiveColor,
+          ),
         );
-      },
-    );
+      }
+      return Wrap(
+        alignment: WrapAlignment.start,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 6.0,
+        runSpacing: 4.0,
+        children: children,
+      );
+    }
   }
 
   /// Tokens visuales de la línea, calculados por `build` y compartidos por
@@ -629,19 +662,42 @@ class _KaraokeLine extends StatelessWidget {
   /// línea activa.
   _LineTokens computeTokens() {
     final words = line.words;
-    if (words != null && words.isNotEmpty) {
-      final lineEndMs = endTime.inMilliseconds;
+    final lineStartMs = startTime.inMilliseconds;
+    final lineEndMs = endTime.inMilliseconds;
+
+    if (words != null && words.isNotEmpty && lineEndMs > lineStartMs) {
+      final n = words.length;
+
+      // ── NORMALIZACIÓN mínima y segura ──────────────────────────────────
+      // Timestamps IGUALES entre palabras son LEGÍTIMOS (frases que se
+      // repiten en la canción): solo se corrige el DESORDEN grosero — una
+      // palabra nunca empieza antes que la anterior (monotonicidad no
+      // decreciente). NADA se recorta contra el fin de línea: si el
+      // proveedor extiende las últimas palabras más allá, ese tiempo es
+      // real y el barrido debe poder terminarlo (ver sweepUntilMs).
+      final starts = List<int>.filled(n, lineStartMs);
+      var prev = lineStartMs;
+      for (var i = 0; i < n; i++) {
+        var ws = words[i].timestamp.inMilliseconds;
+        if (ws < prev) ws = prev;
+        starts[i] = ws;
+        prev = ws;
+      }
+
+      // Ends: el start de la siguiente palabra; la ÚLTIMA cierra en el fin
+      // de la línea o con una gracia de 600ms tras su start (lo que sea
+      // mayor) — así la última palabra siempre termina de pintarse aunque
+      // su timestamp quede pasado el inicio de la línea siguiente. Cada
+      // ventana dura ≥1ms (palabras simultáneas se completan al instante).
       final toks = <_LineToken>[];
-      for (var i = 0; i < words.length; i++) {
-        final wStartMs = words[i].timestamp.inMilliseconds;
-        // End of this word = start of next word, or line end for last word
-        var wEndMs = i < words.length - 1
-            ? words[i + 1].timestamp.inMilliseconds
-            : max(wStartMs + 1, lineEndMs);
-        wEndMs = max(wStartMs + 1, wEndMs);
+      for (var i = 0; i < n; i++) {
+        final rawEnd = i < n - 1
+            ? starts[i + 1]
+            : math.max(lineEndMs, starts[i] + 600);
+        final we = math.max(rawEnd, starts[i] + 1);
         for (final piece in words[i].text.trim().split(RegExp(r'\s+'))) {
           if (piece.isEmpty) continue;
-          toks.add(_LineToken(piece, wStartMs, wEndMs));
+          toks.add(_LineToken(piece, starts[i], we));
         }
       }
       if (toks.isNotEmpty) return _LineTokens(toks, true);
@@ -661,53 +717,52 @@ class _KaraokeLine extends StatelessWidget {
   /// adelanto: para líneas karaoke el índice cambia de línea de forma
   /// exacta (ver getCurrentLineIndex), así que la palabra tiene su ventana
   /// completa y siempre llega a pintarse.
-  Widget _buildSweep(TextStyle baseStyle, List<_LineToken> tokens) {
-    return ValueListenableBuilder<Duration>(
-      valueListenable: positionNotifier,
-      builder: (context, position, _) {
-        final currentMs = (position - offset).inMilliseconds;
+  Widget _buildSweep(
+    TextStyle baseStyle,
+    List<_LineToken> tokens,
+    int currentMs,
+  ) {
+    {
+      final List<Widget> wordWidgets = [];
+      for (var i = 0; i < tokens.length; i++) {
+        // Mismo espaciado que las líneas estáticas: token + espacio.
+        // Sin él, la línea activa se ve apretada frente a las demás.
+        final label = tokens[i].text + (i < tokens.length - 1 ? ' ' : '');
+        final wStartMs = tokens[i].startMs;
+        final wEndMs = tokens[i].endMs;
+        final wordDuration = math.max(1, wEndMs - wStartMs);
 
-        final List<Widget> wordWidgets = [];
-        for (var i = 0; i < tokens.length; i++) {
-          // Mismo espaciado que las líneas estáticas: token + espacio.
-          // Sin él, la línea activa se ve apretada frente a las demás.
-          final label = tokens[i].text + (i < tokens.length - 1 ? ' ' : '');
-          final wStartMs = tokens[i].startMs;
-          final wEndMs = tokens[i].endMs;
-          final wordDuration = max(1, wEndMs - wStartMs);
-
-          // Progress through this specific token using real timestamps
-          double wordProgress;
-          if (currentMs >= wEndMs) {
-            wordProgress = 1.0;
-          } else if (currentMs <= wStartMs) {
-            wordProgress = 0.0;
-          } else {
-            wordProgress = (currentMs - wStartMs) / wordDuration;
-          }
-
-          wordWidgets.add(
-            _KaraokeWord(
-              word: label,
-              progress: wordProgress.clamp(0.0, 1.0),
-              style: baseStyle,
-              activeColor: _activeColor,
-              inactiveColor: _inactiveColor,
-            ),
-          );
+        // Progress through this specific token using real timestamps
+        double wordProgress;
+        if (currentMs >= wEndMs) {
+          wordProgress = 1.0;
+        } else if (currentMs <= wStartMs) {
+          wordProgress = 0.0;
+        } else {
+          wordProgress = (currentMs - wStartMs) / wordDuration;
         }
 
-        return Wrap(
-          alignment: WrapAlignment.start,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          // El hueco entre palabras es SOLO el espacio dentro del Text:
-          // un espaciado extra aquí las hacía verse separadas.
-          spacing: 0.0,
-          runSpacing: 4.0,
-          children: wordWidgets,
+        wordWidgets.add(
+          _KaraokeWord(
+            word: label,
+            progress: wordProgress.clamp(0.0, 1.0),
+            style: baseStyle,
+            activeColor: _activeColor,
+            inactiveColor: _inactiveColor,
+          ),
         );
-      },
-    );
+      }
+
+      return Wrap(
+        alignment: WrapAlignment.start,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        // El hueco entre palabras es SOLO el espacio dentro del Text:
+        // un espaciado extra aquí las hacía verse separadas.
+        spacing: 0.0,
+        runSpacing: 4.0,
+        children: wordWidgets,
+      );
+    }
   }
 
   Widget _buildStatic(
@@ -788,9 +843,9 @@ class _KaraokeWord extends StatelessWidget {
           ],
           stops: [
             0.0,
-            max(0.0, progress - 0.15),
+            math.max(0.0, progress - 0.15),
             progress.clamp(0.0, 1.0),
-            min(1.0, progress + 0.15),
+            math.min(1.0, progress + 0.15),
           ],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,

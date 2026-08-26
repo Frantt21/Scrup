@@ -811,42 +811,55 @@ class _ArtworkState extends State<_Artwork> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedScale(
-      scale: _playing ? 1.0 : 0.955,
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeOutCubic,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: SizedBox(
-          width: widget.artSide,
-          height: widget.artSide,
-          child: AnimatedSwitcher(
+    // ORDEN DE LAS CAPAS (importa): el AnimatedSwitcher del CAMBIO de
+    // canción va FUERA y escala el CONTENEDOR completo (marco redondeado
+    // incluido); el AnimatedScale de PAUSA va DENTRO. Así el scale-down de
+    // pausa persiste como estado del contenedor y el crossfade de cambio
+    // nunca deja esquinas vacías dentro del marco.
+    //
+    // El switcher necesita SU PROPIO tamaño explícito: su Stack interno con
+    // StackFit.expand sin cotas colapsaba según las constraints del padre y
+    // el contenedor del artwork desaparecía.
+    return SizedBox(
+      width: widget.artSide,
+      height: widget.artSide,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 450),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, anim) => FadeTransition(
+          opacity: anim,
+          child: ScaleTransition(
+            scale: Tween(begin: 0.94, end: 1.0).animate(anim),
+            child: child,
+          ),
+        ),
+        layoutBuilder: (currentChild, previousChildren) => Stack(
+          fit: StackFit.expand,
+          alignment: Alignment.center,
+          children: [...previousChildren, ?currentChild],
+        ),
+        child: KeyedSubtree(
+          key: ValueKey(widget.bytes),
+          child: AnimatedScale(
+            scale: _playing ? 1.0 : 0.955,
             duration: const Duration(milliseconds: 450),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: anim,
-              child: ScaleTransition(
-                scale: Tween(begin: 0.94, end: 1.0).animate(anim),
-                child: child,
+            curve: Curves.easeOutCubic,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: SizedBox(
+                width: widget.artSide,
+                height: widget.artSide,
+                child: widget.bytes != null
+                    ? Image.memory(
+                        widget.bytes!,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                        filterQuality: FilterQuality.high,
+                      )
+                    : widget.fallback,
               ),
             ),
-            layoutBuilder: (currentChild, previousChildren) => Stack(
-              fit: StackFit.expand,
-              alignment: Alignment.center,
-              children: [...previousChildren, ?currentChild],
-            ),
-            child: widget.bytes != null
-                ? KeyedSubtree(
-                    key: ValueKey(widget.bytes),
-                    child: Image.memory(
-                      widget.bytes!,
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                      filterQuality: FilterQuality.high,
-                    ),
-                  )
-                : widget.fallback,
           ),
         ),
       ),
