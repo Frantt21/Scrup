@@ -191,6 +191,18 @@
   "languageHint": "El idioma de la interfaz se guarda entre sesiones",
   "cache": "Caché",
   "cacheHint": "Las canciones descargadas se guardan localmente para reproducir más rápido y sin conexión",
+  "paletteCacheTitle": "Colores de portadas",
+  "paletteCacheHint": "Cada portada guarda 3 colores para el fondo fullscreen; el acento de controles y lyrics se deriva de ellos.",
+  "paletteCacheEntries": "Portadas en caché: {n}",
+  "@paletteCacheEntries": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "paletteRecalc": "Recalcular",
+  "playlistLabel": "Playlist",
   "cacheUsed": "{used} de {limit}",
   "@cacheUsed": {
     "placeholders": {

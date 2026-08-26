@@ -78,7 +78,8 @@ class LyricLine {
             ? Duration(
                 minutes: int.parse(wMatch.group(1)!),
                 seconds: int.parse(wMatch.group(2)!),
-                milliseconds: int.parse(wMatch.group(3)!) *
+                milliseconds:
+                    int.parse(wMatch.group(3)!) *
                     (wMatch.group(3)!.length == 3 ? 1 : 10),
               )
             : timestamp;
@@ -87,7 +88,11 @@ class LyricLine {
           // engorda la del último token real.
           if (tokens.isNotEmpty) {
             final p = tokens.removeLast();
-            tokens.add((ts: p.ts, text: p.text, sepAfter: p.sepAfter + sepAfter));
+            tokens.add((
+              ts: p.ts,
+              text: p.text,
+              sepAfter: p.sepAfter + sepAfter,
+            ));
           }
           continue;
         }
@@ -97,7 +102,8 @@ class LyricLine {
       // Fusionar sílabas SOLO con la convención acreditada (por esta línea
       // o forzada a nivel de canción): una fuente que separa palabras
       // normales con un único espacio queda intacta.
-      evidence = tokens.length >= 2 &&
+      evidence =
+          tokens.length >= 2 &&
           tokens
               .take(tokens.length - 1)
               .any((t) => t.sepAfter >= 2 || t.sepAfter == 0);
@@ -107,7 +113,9 @@ class LyricLine {
         final t = tokens[i];
         if (conventional && i > 0 && tokens[i - 1].sepAfter <= 1) {
           final p = merged.removeLast();
-          merged.add(KaraokeWord(timestamp: p.timestamp, text: p.text + t.text));
+          merged.add(
+            KaraokeWord(timestamp: p.timestamp, text: p.text + t.text),
+          );
         } else {
           merged.add(KaraokeWord(timestamp: t.ts, text: t.text));
         }
@@ -122,10 +130,7 @@ class LyricLine {
     if (words != null && words.isNotEmpty && (evidence || forceWordGlue)) {
       text = words.map((w) => w.text).join(' ');
     } else {
-      text = fullText.replaceAll(
-        RegExp(r'<\d{2}:\d{2}\.\d{2,3}>'),
-        '',
-      );
+      text = fullText.replaceAll(RegExp(r'<\d{2}:\d{2}\.\d{2,3}>'), '');
       text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     }
 
@@ -151,8 +156,9 @@ class LyricLine {
       for (final w in words!) {
         final wmins = w.timestamp.inMinutes.toString().padLeft(2, '0');
         final wsecs = (w.timestamp.inSeconds % 60).toString().padLeft(2, '0');
-        final wcs =
-            ((w.timestamp.inMilliseconds % 1000) ~/ 10).toString().padLeft(2, '0');
+        final wcs = ((w.timestamp.inMilliseconds % 1000) ~/ 10)
+            .toString()
+            .padLeft(2, '0');
         parts.add('<$wmins:$wsecs.$wcs>${w.text}');
       }
       return '$prefix ${parts.join(' ')}';
@@ -213,30 +219,32 @@ class SyncedLyrics {
           final clean = _unescapeXml(rawText).replaceAll('\u200b', '').trim();
           if (clean.isEmpty) continue;
           final rawWordBegin = s.group(1);
-          words.add(KaraokeWord(
-            timestamp: rawWordBegin != null
-                ? _parseTtmlClock(rawWordBegin)
-                : begin,
-            text: clean,
-          ));
+          words.add(
+            KaraokeWord(
+              timestamp: rawWordBegin != null
+                  ? _parseTtmlClock(rawWordBegin)
+                  : begin,
+              text: clean,
+            ),
+          );
           buf.write(clean);
           buf.write(' ');
         }
         text = buf.toString().trim();
         if (words.isEmpty) {
           words = null;
-          text = _unescapeXml(inner.replaceAll(tagRegex, ''))
-              .replaceAll('\u200b', '')
-              .trim();
+          text = _unescapeXml(
+            inner.replaceAll(tagRegex, ''),
+          ).replaceAll('\u200b', '').trim();
         } else {
           // Los coros de fondo (spans anidados) pueden quedar fuera de
           // orden respecto a los spans principales.
           words.sort((a, b) => a.timestamp.compareTo(b.timestamp));
         }
       } else {
-        text = _unescapeXml(inner.replaceAll(tagRegex, ''))
-            .replaceAll('\u200b', '')
-            .trim();
+        text = _unescapeXml(
+          inner.replaceAll(tagRegex, ''),
+        ).replaceAll('\u200b', '').trim();
       }
 
       if (text.isEmpty) continue;
@@ -255,7 +263,8 @@ class SyncedLyrics {
     try {
       double seconds;
       if (parts.length >= 3) {
-        seconds = int.parse(parts[0]) * 3600 +
+        seconds =
+            int.parse(parts[0]) * 3600 +
             int.parse(parts[1]) * 60 +
             double.parse(parts[2]);
       } else if (parts.length == 2) {
@@ -298,18 +307,16 @@ class SyncedLyrics {
     if (lines.any((l) => l.conventionEvidence) &&
         lines.any((l) => !l.conventionEvidence && l.hasWords)) {
       final glued = _parseLrc(lrcContent, forceWordGlue: true);
-      return SyncedLyrics(
-        songTitle: songTitle,
-        artist: artist,
-        lines: glued,
-      );
+      return SyncedLyrics(songTitle: songTitle, artist: artist, lines: glued);
     }
 
     return SyncedLyrics(songTitle: songTitle, artist: artist, lines: lines);
   }
 
-  static List<LyricLine> _parseLrc(String lrcContent,
-      {bool forceWordGlue = false}) {
+  static List<LyricLine> _parseLrc(
+    String lrcContent, {
+    bool forceWordGlue = false,
+  }) {
     final lines = <LyricLine>[];
 
     for (final line in lrcContent.split('\n')) {

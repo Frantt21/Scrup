@@ -101,6 +101,18 @@
   "languageHint": "Язык интерфейса сохраняется между сеансами",
   "cache": "Кэш",
   "cacheHint": "Скачанные песни хранятся локально для более быстрого воспроизведения",
+  "paletteCacheTitle": "Цвета обложек",
+  "paletteCacheHint": "Каждая обложка хранит 3 цвета для фона на весь экран; акцент элементов и текстов выводится из них.",
+  "paletteCacheEntries": "Обложек в кэше: {n}",
+  "@paletteCacheEntries": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "paletteRecalc": "Пересчитать",
+  "playlistLabel": "Плейлист",
   "cacheUsed": "{used} из {limit}",
   "cacheFiles": "{count, plural, one{{count} файл} few{{count} файла} many{{count} файлов} other{{count} файлов}}",
   "refresh": "Обновить",

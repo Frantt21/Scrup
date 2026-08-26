@@ -344,6 +344,24 @@ class AppLocalizationsEs extends AppLocalizations {
       'Las canciones descargadas se guardan localmente para reproducir más rápido y sin conexión';
 
   @override
+  String get paletteCacheTitle => 'Colores de portadas';
+
+  @override
+  String get paletteCacheHint =>
+      'Cada portada guarda 3 colores para el fondo fullscreen; el acento de controles y lyrics se deriva de ellos.';
+
+  @override
+  String paletteCacheEntries(int n) {
+    return 'Portadas en caché: $n';
+  }
+
+  @override
+  String get paletteRecalc => 'Recalcular';
+
+  @override
+  String get playlistLabel => 'Playlist';
+
+  @override
   String cacheUsed(String used, String limit) {
     return '$used de $limit';
   }

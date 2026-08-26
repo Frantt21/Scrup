@@ -101,6 +101,18 @@
   "languageHint": "인터페이스 언어는 세션 간에 저장됩니다",
   "cache": "캐시",
   "cacheHint": "다운로드한 노래는 더 빠른 재생을 위해 로컬에 저장됩니다",
+  "paletteCacheTitle": "아트워크 색상",
+  "paletteCacheHint": "각 커버는 전체 화면 배경에 3색을 저장하며, 컨트롤과 가사의 강조색은 여기서 파생됩니다.",
+  "paletteCacheEntries": "캐시된 커버: {n}",
+  "@paletteCacheEntries": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "paletteRecalc": "재계산",
+  "playlistLabel": "재생목록",
   "cacheUsed": "{used} / {limit}",
   "cacheFiles": "{count, plural, other{파일 {count}개}}",
   "refresh": "새로 고침",

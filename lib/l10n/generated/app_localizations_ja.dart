@@ -339,6 +339,24 @@ class AppLocalizationsJa extends AppLocalizations {
   String get cacheHint => 'ダウンロードした曲は高速再生のためにローカルに保存されます';
 
   @override
+  String get paletteCacheTitle => 'アートワークの色';
+
+  @override
+  String get paletteCacheHint =>
+      '各カバーはフルスクリーン背景用に3色を保存し、コントロールと歌詞のアクセントはそこから派生します。';
+
+  @override
+  String paletteCacheEntries(int n) {
+    return 'キャッシュ済みカバー: $n';
+  }
+
+  @override
+  String get paletteRecalc => '再計算';
+
+  @override
+  String get playlistLabel => 'プレイリスト';
+
+  @override
   String cacheUsed(String used, String limit) {
     return '$used / $limit';
   }

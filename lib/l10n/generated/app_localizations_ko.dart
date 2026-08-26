@@ -339,6 +339,24 @@ class AppLocalizationsKo extends AppLocalizations {
   String get cacheHint => '다운로드한 노래는 더 빠른 재생을 위해 로컬에 저장됩니다';
 
   @override
+  String get paletteCacheTitle => '아트워크 색상';
+
+  @override
+  String get paletteCacheHint =>
+      '각 커버는 전체 화면 배경에 3색을 저장하며, 컨트롤과 가사의 강조색은 여기서 파생됩니다.';
+
+  @override
+  String paletteCacheEntries(int n) {
+    return '캐시된 커버: $n';
+  }
+
+  @override
+  String get paletteRecalc => '재계산';
+
+  @override
+  String get playlistLabel => '재생목록';
+
+  @override
   String cacheUsed(String used, String limit) {
     return '$used / $limit';
   }

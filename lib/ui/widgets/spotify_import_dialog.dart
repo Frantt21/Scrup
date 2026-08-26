@@ -221,8 +221,7 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
               child: switch (_phase) {
                 _Phase.url || _Phase.fetching => _buildUrlInput(theme, l10n),
-                _Phase.matching || _Phase.done =>
-                  _buildProgress(theme, l10n),
+                _Phase.matching || _Phase.done => _buildProgress(theme, l10n),
               },
             ),
           ],
@@ -303,8 +302,9 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
           _playlistName ?? '',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style:
-              theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 2),
         Text(

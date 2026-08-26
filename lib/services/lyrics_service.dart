@@ -45,9 +45,9 @@ class LyricsService {
       for (final server in _kpoeServers) {
         for (final cand in candidates) {
           try {
-            final uri = Uri.parse('$server/v2/lyrics/get').replace(
-              queryParameters: {'title': cand.$1, 'artist': cand.$2},
-            );
+            final uri = Uri.parse(
+              '$server/v2/lyrics/get',
+            ).replace(queryParameters: {'title': cand.$1, 'artist': cand.$2});
             final response = await http
                 .get(uri)
                 .timeout(const Duration(seconds: 8));
@@ -55,8 +55,7 @@ class LyricsService {
               final data = json.decode(response.body) as Map<String, dynamic>;
               final lyricsList = data['lyrics'] as List?;
               if (lyricsList != null && lyricsList.isNotEmpty) {
-                final metaTitle =
-                    (data['metadata']?['title'] as String?) ?? '';
+                final metaTitle = (data['metadata']?['title'] as String?) ?? '';
                 final metaArtist =
                     (data['metadata']?['artist'] as String?) ?? '';
                 // LRC con tags <mm:ss.xx> por sílaba: preserva el modo
@@ -88,17 +87,19 @@ class LyricsService {
                   lrcLines.add(line);
                   plainLines.add(text);
                 }
-                results.add(LyricsSearchResult(
-                  id: 0,
-                  trackName: metaTitle.isNotEmpty ? metaTitle : cand.$1,
-                  artistName: metaArtist.isNotEmpty ? metaArtist : cand.$2,
-                  albumName: '',
-                  duration: 0.0,
-                  synced: true,
-                  syncedLyrics: lrcLines.join('\n'),
-                  plainLyrics: plainLines.join('\n'),
-                  provider: 'KPoe',
-                ));
+                results.add(
+                  LyricsSearchResult(
+                    id: 0,
+                    trackName: metaTitle.isNotEmpty ? metaTitle : cand.$1,
+                    artistName: metaArtist.isNotEmpty ? metaArtist : cand.$2,
+                    albumName: '',
+                    duration: 0.0,
+                    synced: true,
+                    syncedLyrics: lrcLines.join('\n'),
+                    plainLyrics: plainLines.join('\n'),
+                    provider: 'KPoe',
+                  ),
+                );
                 break outerKpoe;
               }
             }
@@ -139,10 +140,12 @@ class LyricsService {
         if (response.statusCode == 200) {
           final List lrclibResults = json.decode(response.body);
           for (final e in lrclibResults) {
-            results.add(LyricsSearchResult.fromJson(
-              e as Map<String, dynamic>,
-              provider: 'LRCLIB',
-            ));
+            results.add(
+              LyricsSearchResult.fromJson(
+                e as Map<String, dynamic>,
+                provider: 'LRCLIB',
+              ),
+            );
           }
         }
       } catch (_) {}
@@ -219,8 +222,9 @@ class LyricsService {
         artist: artist,
         lrcContent: lrcContent,
       );
-      final hasWords =
-          lyrics.lines.any((l) => l.words != null && l.words!.isNotEmpty);
+      final hasWords = lyrics.lines.any(
+        (l) => l.words != null && l.words!.isNotEmpty,
+      );
       await _db.storeLyrics(
         songTitle,
         artist,
@@ -258,7 +262,12 @@ class LyricsService {
       final cleanArtist = _cleanArtist(artist);
 
       // ── Try KPoe (word-by-word) ──
-      final kpoeResult = await _fetchKpoe(cleanTrack, cleanArtist, title, artist);
+      final kpoeResult = await _fetchKpoe(
+        cleanTrack,
+        cleanArtist,
+        title,
+        artist,
+      );
       if (kpoeResult != null) {
         // Save as JSON to preserve word-by-word timestamps
         final karaokeJson = _syncedLyricsToJson(kpoeResult);
@@ -268,14 +277,24 @@ class LyricsService {
       }
 
       // ── Try Unison (word-by-word or line) ──
-      final unisonResult = await _fetchUnison(cleanTrack, cleanArtist, title, artist);
+      final unisonResult = await _fetchUnison(
+        cleanTrack,
+        cleanArtist,
+        title,
+        artist,
+      );
       if (unisonResult != null) {
         _cache[cacheKey] = unisonResult;
         return unisonResult;
       }
 
       // ── Fallback: LRCLIB (line-by-line) ──
-      final lrclibResult = await _fetchLrclib(cleanTrack, cleanArtist, title, artist);
+      final lrclibResult = await _fetchLrclib(
+        cleanTrack,
+        cleanArtist,
+        title,
+        artist,
+      );
       if (lrclibResult != null) {
         _cache[cacheKey] = lrclibResult;
         return lrclibResult;
@@ -299,13 +318,12 @@ class LyricsService {
   ];
 
   Future<SyncedLyrics?> _fetchKpoe(
-    String cleanTrack, String cleanArtist,
-    String originalTitle, String originalArtist,
+    String cleanTrack,
+    String cleanArtist,
+    String originalTitle,
+    String originalArtist,
   ) async {
-    final params = {
-      'title': cleanTrack,
-      'artist': cleanArtist,
-    };
+    final params = {'title': cleanTrack, 'artist': cleanArtist};
     final queryStr = params.entries
         .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
         .join('&');
@@ -321,11 +339,16 @@ class LyricsService {
           final data = json.decode(response.body) as Map<String, dynamic>;
           final lyrics = data['lyrics'] as List?;
           if (lyrics != null && lyrics.isNotEmpty) {
-            final result = _parseKpoeResponse(data, originalTitle, originalArtist);
+            final result = _parseKpoeResponse(
+              data,
+              originalTitle,
+              originalArtist,
+            );
             if (result != null && result.lines.isNotEmpty) {
               // Store as LRC for cache
               await _db.storeLyrics(
-                originalTitle, originalArtist,
+                originalTitle,
+                originalArtist,
                 result.toLRC(),
                 notFound: false,
               );
@@ -363,20 +386,24 @@ class LyricsService {
             final sylText = (sylData['text'] as String?) ?? '';
             final sylTimeMs = (sylData['time'] as num?)?.toInt() ?? 0;
             if (sylText.isNotEmpty) {
-              words.add(KaraokeWord(
-                timestamp: Duration(milliseconds: sylTimeMs),
-                text: sylText,
-              ));
+              words.add(
+                KaraokeWord(
+                  timestamp: Duration(milliseconds: sylTimeMs),
+                  text: sylText,
+                ),
+              );
             }
           }
         }
 
         if (lineText.trim().isNotEmpty) {
-          lines.add(LyricLine(
-            timestamp: Duration(milliseconds: lineTimeMs),
-            text: lineText.trim(),
-            words: words,
-          ));
+          lines.add(
+            LyricLine(
+              timestamp: Duration(milliseconds: lineTimeMs),
+              text: lineText.trim(),
+              words: words,
+            ),
+          );
         }
       }
 
@@ -390,22 +417,19 @@ class LyricsService {
   // ── Unison API (word-by-word or line) ──────────────────────────────
 
   Future<SyncedLyrics?> _fetchUnison(
-    String cleanTrack, String cleanArtist,
-    String originalTitle, String originalArtist,
+    String cleanTrack,
+    String cleanArtist,
+    String originalTitle,
+    String originalArtist,
   ) async {
     try {
-      final params = {
-        'song': cleanTrack,
-        'artist': cleanArtist,
-      };
+      final params = {'song': cleanTrack, 'artist': cleanArtist};
       final queryStr = params.entries
           .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
           .join('&');
 
       final uri = Uri.parse('https://unison.boidu.dev/lyrics?$queryStr');
-      final response = await http
-          .get(uri)
-          .timeout(const Duration(seconds: 8));
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
@@ -413,8 +437,7 @@ class LyricsService {
           final record = data['data'] as Map<String, dynamic>;
           final lyricsText = record['lyrics'] as String?;
           if (lyricsText != null && lyricsText.isNotEmpty) {
-            final format =
-                ((record['format'] as String?) ?? '').toLowerCase();
+            final format = ((record['format'] as String?) ?? '').toLowerCase();
             final parsed = format == 'ttml'
                 ? SyncedLyrics.fromTtml(
                     songTitle: originalTitle,
@@ -452,9 +475,9 @@ class LyricsService {
     String artist,
   ) async {
     try {
-      final uri = Uri.parse('https://unison.boidu.dev/lyrics').replace(
-        queryParameters: {'song': song, 'artist': artist},
-      );
+      final uri = Uri.parse(
+        'https://unison.boidu.dev/lyrics',
+      ).replace(queryParameters: {'song': song, 'artist': artist});
       final response = await http.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
       final data = json.decode(response.body) as Map<String, dynamic>;
@@ -470,9 +493,9 @@ class LyricsService {
   /// por id hasta encontrar uno parseable.
   Future<LyricsSearchResult?> _unisonSearchLookup(String query) async {
     try {
-      final uri = Uri.parse('https://unison.boidu.dev/lyrics/search').replace(
-        queryParameters: {'q': query, 'limit': '3'},
-      );
+      final uri = Uri.parse(
+        'https://unison.boidu.dev/lyrics/search',
+      ).replace(queryParameters: {'q': query, 'limit': '3'});
       final response = await http.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
       final data = json.decode(response.body) as Map<String, dynamic>;
@@ -483,13 +506,15 @@ class LyricsService {
         if (id == null) continue;
         try {
           final recUri = Uri.parse('https://unison.boidu.dev/lyrics/$id');
-          final recResponse =
-              await http.get(recUri).timeout(const Duration(seconds: 8));
+          final recResponse = await http
+              .get(recUri)
+              .timeout(const Duration(seconds: 8));
           if (recResponse.statusCode != 200) continue;
           final recData = json.decode(recResponse.body) as Map<String, dynamic>;
           if (recData['success'] != true || recData['data'] is! Map) continue;
-          final result =
-              _unisonRecordToResult(recData['data'] as Map<String, dynamic>);
+          final result = _unisonRecordToResult(
+            recData['data'] as Map<String, dynamic>,
+          );
           if (result != null) return result;
         } catch (_) {
           continue;
@@ -558,8 +583,10 @@ class LyricsService {
   // ── LRCLIB API (line-by-line fallback) ─────────────────────────────
 
   Future<SyncedLyrics?> _fetchLrclib(
-    String cleanTrack, String cleanArtist,
-    String originalTitle, String originalArtist,
+    String cleanTrack,
+    String cleanArtist,
+    String originalTitle,
+    String originalArtist,
   ) async {
     try {
       final query = '$cleanTrack $cleanArtist';
@@ -588,13 +615,17 @@ class LyricsService {
             final searchTrack = cleanTrack.toLowerCase();
             final searchArtist = cleanArtist.toLowerCase();
 
-            final trackMatches = resultTrackName == searchTrack ||
+            final trackMatches =
+                resultTrackName == searchTrack ||
                 _calculateSimilarity(resultTrackName, searchTrack) > 0.5;
-            final artistMatches = resultArtistName == searchArtist ||
+            final artistMatches =
+                resultArtistName == searchArtist ||
                 _calculateSimilarity(resultArtistName, searchArtist) > 0.5;
 
             if (!trackMatches || !artistMatches) continue;
-            if (syncedLyricsRaw == null || syncedLyricsRaw.trim().isEmpty) continue;
+            if (syncedLyricsRaw == null || syncedLyricsRaw.trim().isEmpty) {
+              continue;
+            }
 
             final lyrics = SyncedLyrics.fromLRC(
               songTitle: originalTitle,
@@ -603,7 +634,8 @@ class LyricsService {
             );
 
             await _db.storeLyrics(
-              originalTitle, originalArtist,
+              originalTitle,
+              originalArtist,
               syncedLyricsRaw,
               notFound: false,
             );
@@ -688,10 +720,9 @@ class LyricsService {
         'text': line.text,
       };
       if (line.words != null && line.words!.isNotEmpty) {
-        lineMap['words'] = line.words!.map((w) => {
-          'time': w.timestamp.inMilliseconds,
-          'text': w.text,
-        }).toList();
+        lineMap['words'] = line.words!
+            .map((w) => {'time': w.timestamp.inMilliseconds, 'text': w.text})
+            .toList();
       }
       return lineMap;
     }).toList();
@@ -716,7 +747,9 @@ class LyricsService {
               words = wordsData.map((w) {
                 final wd = w as Map<String, dynamic>;
                 return KaraokeWord(
-                  timestamp: Duration(milliseconds: (wd['time'] as num?)?.toInt() ?? 0),
+                  timestamp: Duration(
+                    milliseconds: (wd['time'] as num?)?.toInt() ?? 0,
+                  ),
                   text: (wd['text'] as String?) ?? '',
                 );
               }).toList();

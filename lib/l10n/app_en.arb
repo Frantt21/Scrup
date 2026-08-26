@@ -191,6 +191,18 @@
   "languageHint": "The interface language is saved between sessions",
   "cache": "Cache",
   "cacheHint": "Downloaded songs are stored locally for faster playback",
+  "paletteCacheTitle": "Artwork colors",
+  "paletteCacheHint": "Each cover stores 3 colors for the fullscreen background; controls and lyrics accent is derived from them.",
+  "paletteCacheEntries": "Cached covers: {n}",
+  "@paletteCacheEntries": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "paletteRecalc": "Recalculate",
+  "playlistLabel": "Playlist",
   "cacheUsed": "{used} of {limit}",
   "@cacheUsed": {
     "placeholders": {

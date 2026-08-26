@@ -343,6 +343,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'Downloaded songs are stored locally for faster playback';
 
   @override
+  String get paletteCacheTitle => 'Artwork colors';
+
+  @override
+  String get paletteCacheHint =>
+      'Each cover stores 3 colors for the fullscreen background; controls and lyrics accent is derived from them.';
+
+  @override
+  String paletteCacheEntries(int n) {
+    return 'Cached covers: $n';
+  }
+
+  @override
+  String get paletteRecalc => 'Recalculate';
+
+  @override
+  String get playlistLabel => 'Playlist';
+
+  @override
   String cacheUsed(String used, String limit) {
     return '$used of $limit';
   }

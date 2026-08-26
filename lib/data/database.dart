@@ -115,6 +115,27 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// Elimina una entrada de paleta (recálculo manual).
+  Future<void> deletePalette(String url) async {
+    await (delete(paletteCache)..where((r) => r.id.equals(url))).go();
+  }
+
+  /// URLs de artwork DISTINTAS de una playlist (para recalcular paletas).
+  Future<List<String>> distinctPlaylistArtworks(int playlistId) async {
+    final query = selectOnly(
+      playlistTracks,
+    ).join([innerJoin(tracks, tracks.id.equalsExp(playlistTracks.trackId))]);
+    query.addColumns([tracks.thumbnailUrl]);
+    query.where(playlistTracks.playlistId.equals(playlistId));
+    query.groupBy([tracks.thumbnailUrl]);
+    final rows = await query.get();
+    return [
+      for (final row in rows)
+        if (row.read(tracks.thumbnailUrl) case final url? when url.isNotEmpty)
+          url,
+    ];
+  }
+
   // -------------------------------------------------------------- lyrics
   String _lyricsKey(String title, String artist) =>
       '${title.toLowerCase().trim()}_${artist.toLowerCase().trim()}';

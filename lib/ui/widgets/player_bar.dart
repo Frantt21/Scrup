@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -545,82 +545,84 @@ class _PlayerBarState extends State<PlayerBar>
               ),
             ),
           ),
-        const SizedBox(width: 10),
-        // Flexible (no Expanded): el texto ocupa solo su ancho natural y el
-        // corazón queda PEGADO al título/artista en vez de tirado al borde
-        // de la sección. Con títulos largos el texto se recorta igual
-        // (ellipsis) y el botón conserva su sitio.
-        Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ValueListenableBuilder<double?>(
-                valueListenable: cache.progress,
-                builder: (context, downloadPct, _) {
-                  return ValueListenableBuilder<String?>(
-                    valueListenable: player.preparingTrackId,
-                    builder: (context, preparingId, _) {
-                      // Solo mostrar el % si la descarga es de la pista que
-                      // se está preparando (si el usuario saltó de pista, la
-                      // descarga sigue en segundo plano).
-                      final downloadingCurrent =
-                          cache.downloadingId.value == preparingId;
-                      final String label;
-                      if (downloadPct != null &&
-                          downloadPct < 1 &&
-                          downloadingCurrent) {
-                        label = AppLocalizations.of(
-                          context,
-                        ).downloadingPercent((downloadPct * 100).round());
-                      } else if (preparingId != null) {
-                        label = AppLocalizations.of(context).preparing;
-                      } else {
-                        label = _track!.title;
-                      }
-                      return Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall,
-                      );
-                    },
-                  );
-                },
-              ),
-              Text(
-                _track!.artist,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+          const SizedBox(width: 10),
+          // Flexible (no Expanded): el texto ocupa solo su ancho natural y el
+          // corazón queda PEGADO al título/artista en vez de tirado al borde
+          // de la sección. Con títulos largos el texto se recorta igual
+          // (ellipsis) y el botón conserva su sitio.
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ValueListenableBuilder<double?>(
+                  valueListenable: cache.progress,
+                  builder: (context, downloadPct, _) {
+                    return ValueListenableBuilder<String?>(
+                      valueListenable: player.preparingTrackId,
+                      builder: (context, preparingId, _) {
+                        // Solo mostrar el % si la descarga es de la pista que
+                        // se está preparando (si el usuario saltó de pista, la
+                        // descarga sigue en segundo plano).
+                        final downloadingCurrent =
+                            cache.downloadingId.value == preparingId;
+                        final String label;
+                        if (downloadPct != null &&
+                            downloadPct < 1 &&
+                            downloadingCurrent) {
+                          label = AppLocalizations.of(
+                            context,
+                          ).downloadingPercent((downloadPct * 100).round());
+                        } else if (preparingId != null) {
+                          label = AppLocalizations.of(context).preparing;
+                        } else {
+                          label = _track!.title;
+                        }
+                        return Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall,
+                        );
+                      },
+                    );
+                  },
                 ),
-              ),
-            ],
+                Text(
+                  _track!.artist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        // Favorito: añade/quita la pista actual de la playlist de Favoritos
-        // (corazón lleno en lila cuando está guardada). Vive DENTRO de la
-        // sección izquierda: las tres secciones de la barra son `Expanded`
-        // de igual peso, así que añadir/quitar el botón aquí NO desplaza a
-        // los controles centrales — el centro queda siempre centrado.
-        const SizedBox(width: 6),
-        IconButton(
-          icon: Icon(
-            _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            size: 18,
+          // Favorito: añade/quita la pista actual de la playlist de Favoritos
+          // (corazón lleno en lila cuando está guardada). Vive DENTRO de la
+          // sección izquierda: las tres secciones de la barra son `Expanded`
+          // de igual peso, así que añadir/quitar el botón aquí NO desplaza a
+          // los controles centrales — el centro queda siempre centrado.
+          const SizedBox(width: 6),
+          IconButton(
+            icon: Icon(
+              _isFavorite
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+              size: 18,
+            ),
+            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            tooltip: _isFavorite
+                ? AppLocalizations.of(context).removeFromFavorites
+                : AppLocalizations.of(context).addToFavorites,
+            color: _isFavorite
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+            onPressed: _toggleFavorite,
           ),
-          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-          padding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-          tooltip: _isFavorite
-              ? AppLocalizations.of(context).removeFromFavorites
-              : AppLocalizations.of(context).addToFavorites,
-          color: _isFavorite
-              ? theme.colorScheme.primary
-              : theme.colorScheme.onSurfaceVariant,
-          onPressed: _toggleFavorite,
-        ),
         ],
       ),
     );
@@ -729,7 +731,9 @@ class _PlayerBarState extends State<PlayerBar>
                 final active = mode != LoopMode.off;
                 return IconButton(
                   icon: Icon(
-                    mode == LoopMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
+                    mode == LoopMode.one
+                        ? Icons.repeat_one_rounded
+                        : Icons.repeat_rounded,
                     size: iconSize,
                   ),
                   constraints: btnConstraints,
@@ -790,7 +794,11 @@ class _PlayerBarState extends State<PlayerBar>
         ValueListenableBuilder<bool>(
           valueListenable: player.radio,
           builder: (context, on, _) => IconButton(
-            icon: Icon(Icons.radio_rounded, size: 20, color: on ? primary : muted),
+            icon: Icon(
+              Icons.radio_rounded,
+              size: 20,
+              color: on ? primary : muted,
+            ),
             constraints: const BoxConstraints.tightFor(width: 34, height: 40),
             padding: EdgeInsets.zero,
             tooltip: on ? l10n.radioOn : l10n.radioOff,
@@ -812,7 +820,9 @@ class _PlayerBarState extends State<PlayerBar>
           builder: (context, vol, _) {
             final icon = vol <= 0
                 ? Icons.volume_off_rounded
-                : (vol < 0.5 ? Icons.volume_down_rounded : Icons.volume_up_rounded);
+                : (vol < 0.5
+                      ? Icons.volume_down_rounded
+                      : Icons.volume_up_rounded);
             return Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -853,4 +863,3 @@ class _PlayerBarState extends State<PlayerBar>
     );
   }
 }
-

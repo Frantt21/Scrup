@@ -101,6 +101,18 @@
   "languageHint": "界面语言会在会话之间保存",
   "cache": "缓存",
   "cacheHint": "已下载的歌曲会保存在本地，以便更快播放",
+  "paletteCacheTitle": "封面颜色",
+  "paletteCacheHint": "每张封面存储 3 种颜色用于全屏背景；控件和歌词的强调色由它们派生。",
+  "paletteCacheEntries": "已缓存封面：{n}",
+  "@paletteCacheEntries": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "paletteRecalc": "重新计算",
+  "playlistLabel": "播放列表",
   "cacheUsed": "{used} / {limit}",
   "cacheFiles": "{count, plural, other{{count} 个文件}}",
   "refresh": "刷新",

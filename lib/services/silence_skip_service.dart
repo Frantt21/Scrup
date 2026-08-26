@@ -375,8 +375,7 @@ class SilenceSkipService extends ChangeNotifier {
         final secs = double.parse(s.group(1)!);
         start = Duration(
           microseconds:
-              ((secs <= 0 ? 0 : secs) * Duration.microsecondsPerSecond)
-                  .round(),
+              ((secs <= 0 ? 0 : secs) * Duration.microsecondsPerSecond).round(),
         );
         continue;
       }
@@ -415,8 +414,12 @@ class SilenceSkipService extends ChangeNotifier {
         if (e - s < 0.5) continue;
         gaps.add(
           SilenceGap(
-            Duration(microseconds: (s * Duration.microsecondsPerSecond).round()),
-            Duration(microseconds: (e * Duration.microsecondsPerSecond).round()),
+            Duration(
+              microseconds: (s * Duration.microsecondsPerSecond).round(),
+            ),
+            Duration(
+              microseconds: (e * Duration.microsecondsPerSecond).round(),
+            ),
           ),
         );
       }

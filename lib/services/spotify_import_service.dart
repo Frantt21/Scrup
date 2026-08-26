@@ -37,7 +37,12 @@ class SpotifyPlaylist {
 
 /// Resultado de emparejar UNA pista de la playlist contra YouTube.
 class SpotifyMatchResult {
-  const SpotifyMatchResult(this.index, this.requested, {this.match, this.error});
+  const SpotifyMatchResult(
+    this.index,
+    this.requested, {
+    this.match,
+    this.error,
+  });
 
   /// Posición dentro de la playlist original.
   final int index;
@@ -64,7 +69,8 @@ class SpotifyImportException implements Exception {
 /// pista contra YouTube con yt-dlp para poder crear la playlist en Scrup,
 /// donde la fuente siempre es YouTube.
 class SpotifyImportService {
-  SpotifyImportService({http.Client? client}) : _client = client ?? http.Client();
+  SpotifyImportService({http.Client? client})
+    : _client = client ?? http.Client();
 
   static final _nextDataRe = RegExp(
     r'id="__NEXT_DATA__"[^>]*>(.*?)</script>',
@@ -76,9 +82,7 @@ class SpotifyImportService {
   static String? extractPlaylistId(String input) {
     final s = input.trim();
     if (s.isEmpty) return null;
-    final uriMatch = RegExp(
-      r'spotify:playlist:([A-Za-z0-9]+)',
-    ).firstMatch(s);
+    final uriMatch = RegExp(r'spotify:playlist:([A-Za-z0-9]+)').firstMatch(s);
     if (uriMatch != null) return uriMatch.group(1);
     final urlMatch = RegExp(
       r'open\.spotify\.com/(?:intl-[a-z]{2}(?:-[a-z]{2})?/)?playlist/([A-Za-z0-9]+)',
@@ -96,9 +100,9 @@ class SpotifyImportService {
     final uri = Uri.parse('https://open.spotify.com/embed/playlist/$id');
     http.Response res;
     try {
-      res = await _client.get(uri, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(
-        const Duration(seconds: 20),
-      );
+      res = await _client
+          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+          .timeout(const Duration(seconds: 20));
     } on TimeoutException {
       rethrow;
     } catch (_) {
@@ -146,7 +150,11 @@ class SpotifyImportService {
       final d = item['duration'];
       final durationMs = d is num && d > 0 ? d.round() : 0;
       tracks.add(
-        SpotifyPlaylistTrack(title: title, artists: artists, durationMs: durationMs),
+        SpotifyPlaylistTrack(
+          title: title,
+          artists: artists,
+          durationMs: durationMs,
+        ),
       );
     }
     if (tracks.isEmpty) throw const SpotifyImportException('empty');
@@ -235,7 +243,10 @@ class SpotifyImportService {
   /// similitud de título (70%), cercanía de duración (25%) y bonus si el
   /// artista aparece en el candidato (5%). Devuelve null si ninguno supera
   /// el umbral mínimo (mejor omitir que meter basura).
-  static Track? pickBestMatch(List<Track> candidates, SpotifyPlaylistTrack target) {
+  static Track? pickBestMatch(
+    List<Track> candidates,
+    SpotifyPlaylistTrack target,
+  ) {
     Track? best;
     var bestScore = 0.0;
     for (final c in candidates) {
@@ -298,7 +309,10 @@ class SpotifyImportService {
     int concurrency = 2,
     int limitPerSearch = 5,
   }) async {
-    final results = List<SpotifyMatchResult?>.filled(playlist.tracks.length, null);
+    final results = List<SpotifyMatchResult?>.filled(
+      playlist.tracks.length,
+      null,
+    );
     var next = 0;
 
     Future<void> worker() async {
@@ -313,7 +327,11 @@ class SpotifyImportService {
             ytMusic: ytMusic,
             limitPerSearch: limitPerSearch,
           );
-          results[i] = SpotifyMatchResult(i, t, match: pickBestMatch(candidates, t));
+          results[i] = SpotifyMatchResult(
+            i,
+            t,
+            match: pickBestMatch(candidates, t),
+          );
         } catch (e) {
           results[i] = SpotifyMatchResult(i, t, error: e.toString());
         }

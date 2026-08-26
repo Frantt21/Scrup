@@ -101,6 +101,18 @@
   "languageHint": "O idioma da interface é salvo entre sessões",
   "cache": "Cache",
   "cacheHint": "As músicas baixadas são armazenadas localmente para reprodução mais rápida",
+  "paletteCacheTitle": "Cores das capas",
+  "paletteCacheHint": "Cada capa guarda 3 cores para o fundo em tela cheia; o acento dos controles e letras é derivado delas.",
+  "paletteCacheEntries": "Capas em cache: {n}",
+  "@paletteCacheEntries": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "paletteRecalc": "Recalcular",
+  "playlistLabel": "Playlist",
   "cacheUsed": "{used} de {limit}",
   "cacheFiles": "{count, plural, =1{1 arquivo} other{{count} arquivos}}",
   "refresh": "Atualizar",

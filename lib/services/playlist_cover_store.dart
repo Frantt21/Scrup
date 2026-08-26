@@ -31,10 +31,7 @@ Future<String> copyPlaylistCoverToAppDir(
 /// que la portada sobreviva aunque el archivo original se mueva o borre, y
 /// el nombre se deriva del id de la pista para que sea estable entre
 /// sesiones (la metadata editada persiste en la DB con esta ruta local).
-Future<String> copyTrackCoverToAppDir(
-  String trackId,
-  String sourcePath,
-) async {
+Future<String> copyTrackCoverToAppDir(String trackId, String sourcePath) async {
   final base = await getApplicationSupportDirectory();
   final coversDir = Directory(p.join(base.path, 'track_covers'));
   await coversDir.create(recursive: true);

@@ -2,9 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:drift/drift.dart' show OrderingTerm;
+
+import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/artwork_palette_service.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/discord/discord_presence_service.dart';
+import '../../services/palette_cache_store.dart';
 import '../../services/settings_store.dart';
 import '../locale_controller.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
@@ -23,6 +28,13 @@ class SettingsView extends StatefulWidget {
 class _SettingsViewState extends State<SettingsView> {
   CacheStats? _stats;
   bool _clearing = false;
+
+  // ── Recalculo de paletas de artwork ────────────────────────────────────
+  List<Playlist>? _playlists;
+  Playlist? _selectedPlaylist;
+  bool _recalculating = false;
+  int _recalcDone = 0;
+  int _recalcTotal = 0;
 
   /// Estado de la presencia de Discord (cargado desde el store al abrir).
   bool _discordEnabled = false;
@@ -55,6 +67,60 @@ class _SettingsViewState extends State<SettingsView> {
     _refreshStats();
     _loadDiscordPrefs();
     _loadPlayerPrefs();
+    _loadPlaylists();
+  }
+
+  /// Carga las playlists (para el selector de recálculo de paletas).
+  Future<void> _loadPlaylists() async {
+    try {
+      final db = context.read<AppDatabase>();
+      final rows = await (db.select(
+        db.playlists,
+      )..orderBy([(p) => OrderingTerm.asc(p.name)])).get();
+      if (!mounted) return;
+      setState(() {
+        _playlists = [
+          for (final r in rows)
+            Playlist(
+              id: r.id,
+              name: r.name,
+              createdAt: r.createdAt,
+              coverUrl: r.coverUrl,
+              description: r.description,
+              isFavorites: r.isFavorites,
+            ),
+        ];
+        _selectedPlaylist ??= _playlists!.firstOrNull;
+      });
+    } catch (_) {}
+  }
+
+  /// Recalcula el trío (+ acento derivado) de cada portada distinta de la
+  /// playlist seleccionada, con progreso visible.
+  Future<void> _recalculatePalettes() async {
+    final playlist = _selectedPlaylist;
+    if (playlist == null || _recalculating) return;
+    final db = context.read<AppDatabase>();
+    final store = context.read<PaletteCacheStore>();
+    setState(() {
+      _recalculating = true;
+      _recalcDone = 0;
+      _recalcTotal = 0;
+    });
+    try {
+      final urls = await db.distinctPlaylistArtworks(playlist.id);
+      if (!mounted) return;
+      setState(() => _recalcTotal = urls.length);
+      var done = 0;
+      for (final url in urls) {
+        await ArtworkPaletteService.trioFor(url, store, force: true);
+        done++;
+        if (mounted) setState(() => _recalcDone = done);
+      }
+    } catch (_) {
+      // Best-effort: los fallos individuales ya se ignoran en el servicio.
+    }
+    if (mounted) setState(() => _recalculating = false);
   }
 
   /// Carga las preferencias del reproductor (karaoke + omitir silencios;
@@ -200,6 +266,7 @@ class _SettingsViewState extends State<SettingsView> {
                 _buildPlayerSection(theme),
                 const SizedBox(height: 16),
                 _buildCacheSection(theme),
+                _buildPaletteCacheSection(theme),
                 const SizedBox(height: 16),
                 _buildAboutSection(theme),
               ],
@@ -531,6 +598,93 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   /// Acerca de: nombre y versión de la app.
+  /// Sección de caché de PALETAS: cuántas portadas tienen colores
+  /// calculados (trío fullscreen + acento derivado) y recálculo manual por
+  /// playlist con progreso.
+  Widget _buildPaletteCacheSection(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
+    final db = context.read<AppDatabase>();
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    return _SectionCard(
+      icon: Icons.palette_rounded,
+      title: l10n.paletteCacheTitle,
+      caption: l10n.paletteCacheHint,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 4),
+          FutureBuilder<int>(
+            future: db.allPalettes().then((r) => r.length),
+            builder: (context, snap) {
+              final n = snap.data;
+              return Text(
+                n == null ? '…' : l10n.paletteCacheEntries(n),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<Playlist>(
+                  initialValue: _selectedPlaylist,
+                  isDense: true,
+                  decoration: InputDecoration(
+                    labelText: l10n.playlistLabel,
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                  ),
+                  items: [
+                    for (final p in _playlists ?? const <Playlist>[])
+                      DropdownMenuItem(value: p, child: Text(p.name)),
+                  ],
+                  onChanged: _recalculating
+                      ? null
+                      : (p) => setState(() => _selectedPlaylist = p),
+                ),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.icon(
+                onPressed: (_recalculating || _selectedPlaylist == null)
+                    ? null
+                    : _recalculatePalettes,
+                icon: _recalculating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(l10n.paletteRecalc),
+              ),
+            ],
+          ),
+          if (_recalculating) ...[
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: _recalcTotal == 0 ? null : _recalcDone / _recalcTotal,
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(3),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '$_recalcDone / $_recalcTotal',
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildAboutSection(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
     return _SectionCard(

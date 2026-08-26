@@ -339,6 +339,23 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cacheHint => '已下载的歌曲会保存在本地，以便更快播放';
 
   @override
+  String get paletteCacheTitle => '封面颜色';
+
+  @override
+  String get paletteCacheHint => '每张封面存储 3 种颜色用于全屏背景；控件和歌词的强调色由它们派生。';
+
+  @override
+  String paletteCacheEntries(int n) {
+    return '已缓存封面：$n';
+  }
+
+  @override
+  String get paletteRecalc => '重新计算';
+
+  @override
+  String get playlistLabel => '播放列表';
+
+  @override
   String cacheUsed(String used, String limit) {
     return '$used / $limit';
   }

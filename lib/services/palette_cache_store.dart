@@ -124,6 +124,15 @@ class PaletteCacheStore {
     }
   }
 
+  /// Elimina una entrada (memoria + DB): para recálculos manuales.
+  Future<void> invalidate(String url) async {
+    _colors.remove(url);
+    _dirty.remove(url);
+    try {
+      await _db.deletePalette(url);
+    } catch (_) {}
+  }
+
   /// `true` si la URL ya se intentó extraer y falló en esta sesión (por este
   /// u otro consumidor).
   bool isFailed(String url) => _failed.contains(url);

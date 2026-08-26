@@ -343,6 +343,24 @@ class AppLocalizationsPt extends AppLocalizations {
       'As músicas baixadas são armazenadas localmente para reprodução mais rápida';
 
   @override
+  String get paletteCacheTitle => 'Cores das capas';
+
+  @override
+  String get paletteCacheHint =>
+      'Cada capa guarda 3 cores para o fundo em tela cheia; o acento dos controles e letras é derivado delas.';
+
+  @override
+  String paletteCacheEntries(int n) {
+    return 'Capas em cache: $n';
+  }
+
+  @override
+  String get paletteRecalc => 'Recalcular';
+
+  @override
+  String get playlistLabel => 'Playlist';
+
+  @override
   String cacheUsed(String used, String limit) {
     return '$used de $limit';
   }
@@ -893,6 +911,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get cacheHint =>
       'As músicas baixadas são armazenadas localmente para reprodução mais rápida';
+
+  @override
+  String get paletteCacheTitle => 'Cores das capas';
+
+  @override
+  String get paletteCacheHint =>
+      'Cada capa guarda 3 cores para o fundo em tela cheia; o acento dos controles e letras é derivado delas.';
+
+  @override
+  String paletteCacheEntries(int n) {
+    return 'Capas em cache: $n';
+  }
+
+  @override
+  String get paletteRecalc => 'Recalcular';
+
+  @override
+  String get playlistLabel => 'Playlist';
 
   @override
   String cacheUsed(String used, String limit) {

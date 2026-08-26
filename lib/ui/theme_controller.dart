@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:palette_generator/palette_generator.dart';
 
 import '../core/track.dart';
+import '../services/artwork_palette_service.dart';
 import '../services/palette_cache_store.dart';
 import '../services/player_service.dart';
 
@@ -144,18 +145,32 @@ class ThemeController extends ChangeNotifier {
   Future<void> _loadPalette(String url, int token) async {
     Color? color;
     try {
-      final resp = await http
-          .get(
-            Uri.parse(url),
-            headers: const {'User-Agent': 'Scrup/0.1 (music player)'},
-          )
-          .timeout(const Duration(seconds: 10));
-      if (resp.statusCode != 200) throw Exception('HTTP ${resp.statusCode}');
-      final palette = await PaletteGenerator.fromImageProvider(
-        MemoryImage(resp.bodyBytes),
-        maximumColorCount: 16,
-      );
-      color = pickAccent(palette);
+      // Delegación al servicio unificado: el trío (y su acento derivado)
+      // quedan en la caché SQLite compartida con fullscreen/Ajustes. Si el
+      // fullscreen ya extrajo esta portada, aquí NO hay descarga ni
+      // análisis — era el origen del lag al cambiar de canción tras un
+      // reinicio de sesión.
+      final store = paletteCache;
+      if (store != null) {
+        await ArtworkPaletteService.trioFor(url, store);
+        color = store.get(url);
+      } else {
+        // Sin store (entornos mínimos/tests): extracción directa ligera,
+        // también fuera del hilo de UI.
+        final resp = await http
+            .get(
+              Uri.parse(url),
+              headers: const {'User-Agent': 'Scrup/0.1 (music player)'},
+            )
+            .timeout(const Duration(seconds: 10));
+        if (resp.statusCode != 200) throw Exception('HTTP ${resp.statusCode}');
+        final trio = await ArtworkPaletteService.extractSwatches(
+          resp.bodyBytes,
+        );
+        color = ArtworkPaletteService.accentFromTrio(
+          ArtworkPaletteService.pickTrio(trio),
+        );
+      }
     } catch (_) {
       color = null;
     }

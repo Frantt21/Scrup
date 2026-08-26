@@ -114,7 +114,9 @@ class _HomeViewState extends State<HomeView> {
             borderRadius: BorderRadius.circular(18),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.72,
+                ),
               ),
               child: CustomScrollView(
                 slivers: [
@@ -133,7 +135,9 @@ class _HomeViewState extends State<HomeView> {
                             borderRadius: BorderRadius.circular(28),
                             borderSide: BorderSide.none,
                           ),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                          ),
                         ),
                       ),
                     ),

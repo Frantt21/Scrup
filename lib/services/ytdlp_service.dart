@@ -20,7 +20,7 @@ class YtDlpException implements Exception {
 /// Reintenta una operación que puede fallar por un archivo bloqueado
 /// temporalmente (p. ej. Windows Defender escaneando un .exe recién
 /// descargado → ERROR_SHARING_VIOLATION / process_win.cc:577).
-/// 
+///
 /// Si la excepción contiene "sharing violation", "being used by another
 /// process" o "process_win.cc", espera [delay] y reintenta hasta
 /// [maxRetries] veces. Otras excepciones se propagan de inmediato.

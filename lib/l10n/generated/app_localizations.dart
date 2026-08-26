@@ -715,6 +715,36 @@ abstract class AppLocalizations {
   /// **'Las canciones descargadas se guardan localmente para reproducir más rápido y sin conexión'**
   String get cacheHint;
 
+  /// No description provided for @paletteCacheTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Colores de portadas'**
+  String get paletteCacheTitle;
+
+  /// No description provided for @paletteCacheHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Cada portada guarda 3 colores para el fondo fullscreen; el acento de controles y lyrics se deriva de ellos.'**
+  String get paletteCacheHint;
+
+  /// No description provided for @paletteCacheEntries.
+  ///
+  /// In es, this message translates to:
+  /// **'Portadas en caché: {n}'**
+  String paletteCacheEntries(int n);
+
+  /// No description provided for @paletteRecalc.
+  ///
+  /// In es, this message translates to:
+  /// **'Recalcular'**
+  String get paletteRecalc;
+
+  /// No description provided for @playlistLabel.
+  ///
+  /// In es, this message translates to:
+  /// **'Playlist'**
+  String get playlistLabel;
+
   /// No description provided for @cacheUsed.
   ///
   /// In es, this message translates to:

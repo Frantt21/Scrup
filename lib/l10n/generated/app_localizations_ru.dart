@@ -346,6 +346,24 @@ class AppLocalizationsRu extends AppLocalizations {
       'Скачанные песни хранятся локально для более быстрого воспроизведения';
 
   @override
+  String get paletteCacheTitle => 'Цвета обложек';
+
+  @override
+  String get paletteCacheHint =>
+      'Каждая обложка хранит 3 цвета для фона на весь экран; акцент элементов и текстов выводится из них.';
+
+  @override
+  String paletteCacheEntries(int n) {
+    return 'Обложек в кэше: $n';
+  }
+
+  @override
+  String get paletteRecalc => 'Пересчитать';
+
+  @override
+  String get playlistLabel => 'Плейлист';
+
+  @override
   String cacheUsed(String used, String limit) {
     return '$used из $limit';
   }

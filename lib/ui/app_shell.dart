@@ -106,7 +106,8 @@ class _AppShellState extends State<AppShell> {
       final ff = Binaries.ffmpegPath;
       if (yt == null || ff == null) {
         if (!mounted) return;
-        final initial = 'Descargando binarios de audio… Esto puede tardar unos segundos.';
+        final initial =
+            'Descargando binarios de audio… Esto puede tardar unos segundos.';
         showScrupToast(
           initial,
           kind: ScrupToastKind.info,
@@ -379,9 +380,9 @@ class _AppShellState extends State<AppShell> {
                                   final next = !_queueOpen;
                                   setState(() => _queueOpen = next);
                                   unawaited(
-                                    context
-                                        .read<SettingsStore>()
-                                        .saveQueueOpen(next),
+                                    context.read<SettingsStore>().saveQueueOpen(
+                                      next,
+                                    ),
                                   );
                                 },
                               ),

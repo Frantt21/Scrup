@@ -7,11 +7,11 @@ import 'package:flutter/foundation.dart' show listEquals, Uint8List;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:http/http.dart' as http;
-import 'package:palette_generator/palette_generator.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import '../theme_controller.dart';
@@ -198,19 +198,15 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     if (bytes == null) return (null, const <Color>[]);
 
     if (trio == null) {
-      try {
-        final palette = await PaletteGenerator.fromImageProvider(
-          MemoryImage(bytes),
-          maximumColorCount: 16,
-        );
-        trio = _pickTrio(palette);
-      } catch (_) {
-        trio = const [];
-      }
-      _trioCache[rawUrl] = trio;
-      if (trio.isNotEmpty) {
-        paletteStore.putTrio(rawUrl, trio);
-      }
+      // Extracción DELEGADA al servicio unificado: decodifica reducido y
+      // cuantiza en un ISOLATE (cero jank en el hilo de UI), con guardia
+      // monocroma. Misma ruta que Ajustes y ThemeController.
+      trio = await ArtworkPaletteService.trioFromBytes(
+        rawUrl,
+        bytes,
+        paletteStore,
+      );
+      if (trio.isNotEmpty) _trioCache[rawUrl] = trio;
     }
     return (bytes, trio);
   }
@@ -252,47 +248,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
       return;
     }
     await _ensureVisuals(url);
-  }
-
-  /// Tres colores diferenciados: prioriza vivaces y exige distancia de tono
-  /// entre elegidos; si la imagen es monocroma, deriva variaciones de
-  /// luminancia del dominante (criterio coherente con ThemeController).
-  static List<Color> _pickTrio(PaletteGenerator palette) {
-    double score(Color c) {
-      final hsl = HSLColor.fromColor(c);
-      return hsl.saturation * (1 - (hsl.lightness - 0.5).abs() * 2);
-    }
-
-    final swatches = <Color>[for (final c in palette.paletteColors) c.color]
-      ..sort((a, b) => score(b).compareTo(score(a)));
-    if (swatches.isEmpty) return const [];
-
-    double hueOf(Color c) => HSLColor.fromColor(c).hue;
-    bool sat(Color c) => HSLColor.fromColor(c).saturation >= 0.15;
-
-    final picked = <Color>[swatches.first];
-    for (final c in swatches.skip(1)) {
-      if (picked.length >= 3) break;
-      // Distancia de tono SOLO entre colores con saturación real: dos grises
-      // comparten "hue" pero son compatibles como blobs distintos.
-      final farEnough = picked.every((p) {
-        if (!sat(p) || !sat(c)) return true;
-        final d = (hueOf(p) - hueOf(c)).abs() % 360;
-        return math.min(d, 360 - d) >= 25;
-      });
-      if (farEnough) picked.add(c);
-    }
-    // Relleno por luminancia si faltaron matices distintos (monocromos).
-    while (picked.length < 3) {
-      final base = HSLColor.fromColor(picked.first);
-      final shift = picked.length == 1 ? 0.22 : -0.18;
-      picked.add(
-        base
-            .withLightness((base.lightness + shift).clamp(0.08, 0.85))
-            .toColor(),
-      );
-    }
-    return picked;
   }
 
   // ── Build ────────────────────────────────────────────────────────────────

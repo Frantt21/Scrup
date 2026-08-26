@@ -101,6 +101,18 @@
   "languageHint": "インターフェース言語はセッション間で保存されます",
   "cache": "キャッシュ",
   "cacheHint": "ダウンロードした曲は高速再生のためにローカルに保存されます",
+  "paletteCacheTitle": "アートワークの色",
+  "paletteCacheHint": "各カバーはフルスクリーン背景用に3色を保存し、コントロールと歌詞のアクセントはそこから派生します。",
+  "paletteCacheEntries": "キャッシュ済みカバー: {n}",
+  "@paletteCacheEntries": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "paletteRecalc": "再計算",
+  "playlistLabel": "プレイリスト",
   "cacheUsed": "{used} / {limit}",
   "cacheFiles": "{count, plural, other{{count}ファイル}}",
   "refresh": "更新",

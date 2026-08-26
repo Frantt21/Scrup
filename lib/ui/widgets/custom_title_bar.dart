@@ -99,8 +99,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
       child: Row(
         children: [
           // Espacio para los traffic lights nativos en macOS
-          if (_macTrafficLightInset > 0)
-            SizedBox(width: _macTrafficLightInset),
+          if (_macTrafficLightInset > 0) SizedBox(width: _macTrafficLightInset),
           const SizedBox(width: 8),
           // Logo del app a la izquierda: envuelto en DragToMoveArea para que
           // la ventana también se pueda arrastrar desde él.
@@ -150,7 +149,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
               hoverColor: onSurface.withValues(alpha: 0.08),
             ),
             _WindowButton(
-              icon: _maximized ? Icons.filter_none_rounded : Icons.crop_square_rounded,
+              icon: _maximized
+                  ? Icons.filter_none_rounded
+                  : Icons.crop_square_rounded,
               tooltip: _maximized
                   ? AppLocalizations.of(context).restore
                   : AppLocalizations.of(context).maximize,

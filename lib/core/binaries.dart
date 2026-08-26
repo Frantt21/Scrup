@@ -111,18 +111,11 @@ class Binaries {
   static void _ensureExecutable(String path) {
     if (Platform.isWindows) return;
     try {
-      Process.runSync(
-        'chmod',
-        ['+x', path],
-        environment: Platform.environment,
-      );
+      Process.runSync('chmod', ['+x', path], environment: Platform.environment);
     } catch (_) {}
   }
 
-  static BinaryDownloadStatus? _parseDownloadStatus(
-    String line,
-    String name,
-  ) {
+  static BinaryDownloadStatus? _parseDownloadStatus(String line, String name) {
     final percentMatch = RegExp(r'(\d{1,3})\s*%').firstMatch(line);
     final speedMatch = RegExp(
       r'(\d+(?:\.\d+)?\s*(?:[KMG]i?B|B)/s)',
@@ -131,8 +124,9 @@ class Binaries {
     final double percent = percentMatch != null
         ? (double.tryParse(percentMatch.group(1)!) ?? 0.0)
         : 0.0;
-    final String speed =
-        speedMatch != null ? speedMatch.group(1)!.trim() : '0 KB/s';
+    final String speed = speedMatch != null
+        ? speedMatch.group(1)!.trim()
+        : '0 KB/s';
     return BinaryDownloadStatus(name: name, percent: percent, speed: speed);
   }
 
@@ -193,7 +187,11 @@ class Binaries {
       final cmd = _downloadCommand(url, zip);
       if (cmd == null) return false;
       final (exe, args) = cmd;
-      final res = await Process.run(exe, args, environment: Platform.environment);
+      final res = await Process.run(
+        exe,
+        args,
+        environment: Platform.environment,
+      );
       if (res.exitCode != 0) {
         debugPrint('[Scrup] ffmpeg download failed: ${res.stderr}');
         return false;
@@ -233,27 +231,27 @@ class Binaries {
       final cmd = _downloadCommand(url, tarPath);
       if (cmd == null) return false;
       final (exe, args) = cmd;
-      final res = await Process.run(exe, args, environment: Platform.environment);
+      final res = await Process.run(
+        exe,
+        args,
+        environment: Platform.environment,
+      );
       if (res.exitCode != 0) {
         debugPrint('[Scrup] ffmpeg download failed: ${res.stderr}');
         return false;
       }
       final tar = _which('tar');
       if (tar == null) return false;
-      final extract = await _runDownloadWithProgress(
-        tar,
-        [
-          '-xJf',
-          tarPath,
-          '-C',
-          ffmpegDir,
-          '--strip-components=1',
-          '--wildcards',
-          '*/ffmpeg',
-          '*/ffprobe',
-        ],
-        label: 'ffmpeg',
-      );
+      final extract = await _runDownloadWithProgress(tar, [
+        '-xJf',
+        tarPath,
+        '-C',
+        ffmpegDir,
+        '--strip-components=1',
+        '--wildcards',
+        '*/ffmpeg',
+        '*/ffprobe',
+      ], label: 'ffmpeg');
       if (extract.exitCode != 0) {
         debugPrint('[Scrup] ffmpeg tar extract failed: ${extract.stderr}');
         return false;

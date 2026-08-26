@@ -896,11 +896,7 @@ class _CreatePlaylistTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                   color: theme.colorScheme.primary.withValues(alpha: 0.10),
                 ),
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: theme.colorScheme.primary,
-                ),
+                child: Icon(icon, size: 20, color: theme.colorScheme.primary),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -946,44 +942,40 @@ class _CreateGridCell extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Mismo bloque que la portada de las celdas de playlist
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                color: theme.colorScheme.primary.withValues(alpha: 0.08),
-              ),
-              child: Center(
-                child: Icon(
-                  icon,
-                  size: 32,
-                  color: theme.colorScheme.primary,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Mismo bloque que la portada de las celdas de playlist
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                ),
+                child: Center(
+                  child: Icon(icon, size: 32, color: theme.colorScheme.primary),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label ?? AppLocalizations.of(context).newPlaylist,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.primary,
+            const SizedBox(height: 6),
+            Text(
+              label ?? AppLocalizations.of(context).newPlaylist,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.primary,
+              ),
             ),
-          ),
-          Text(
-            AppLocalizations.of(context).newPlaylistHint,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontSize: 11,
+            Text(
+              AppLocalizations.of(context).newPlaylistHint,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 11,
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -1113,7 +1105,8 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                               ? Image.file(
                                   File(_imagePath!),
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => _placeholder(theme),
+                                  errorBuilder: (_, _, _) =>
+                                      _placeholder(theme),
                                 )
                               : _placeholder(theme),
                         ),
@@ -1162,7 +1155,10 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                         child: Text(l10n.cancel),
                       ),
                       const SizedBox(width: 8),
-                      FilledButton(onPressed: _submit, child: Text(l10n.create)),
+                      FilledButton(
+                        onPressed: _submit,
+                        child: Text(l10n.create),
+                      ),
                     ],
                   ),
                 ],
