@@ -15,6 +15,8 @@ import '../widgets/context_menu_item.dart';
 import 'cover_image.dart';
 import 'edit_metadata_dialog.dart';
 import 'scrup_toasts.dart';
+import '../../services/artwork_palette_service.dart';
+import '../../services/palette_cache_store.dart';
 
 /// Espacio vertical que ocupa el player flotante en la parte inferior de la
 /// ventana (barra + márgenes). Los scrollables de las vistas lo usan como
@@ -223,6 +225,11 @@ class _PlayerBarState extends State<PlayerBar>
           icon: Icons.playlist_add_rounded,
           label: l10n.addToPlaylist,
         ),
+        ContextMenuItem(
+          value: 'recalc',
+          icon: Icons.palette_rounded,
+          label: l10n.recalcColors,
+        ),
       ],
     );
     if (!mounted || action == null) return;
@@ -230,6 +237,8 @@ class _PlayerBarState extends State<PlayerBar>
       await _showEditMetadataDialog(track);
     } else if (action == 'add') {
       await showAddToPlaylistDialog(context, track);
+    } else if (action == 'recalc') {
+      await _recalcTrackColors(track);
     }
   }
 
@@ -246,6 +255,20 @@ class _PlayerBarState extends State<PlayerBar>
     final savedMsg = AppLocalizations.of(context).metadataSaved;
     await player.updateCurrentMetadata(saved);
     showScrupToast(savedMsg, kind: ScrupToastKind.success);
+  }
+
+  /// Recalcula el trío de colores de la portada de [track] (menú
+  /// contextual → Recalcular colores): fuerza re-extracción fuera del hilo
+  /// de UI y persiste trío + acento derivado.
+  Future<void> _recalcTrackColors(Track track) async {
+    final url = track.thumbnailUrl;
+    final l10n = AppLocalizations.of(context);
+    if (url == null || url.isEmpty) return;
+    final store = context.read<PaletteCacheStore>();
+    await ArtworkPaletteService.trioFor(url, store, force: true);
+    if (mounted) {
+      showScrupToast(l10n.colorsUpdated, kind: ScrupToastKind.success);
+    }
   }
 
   /// Añade o quita la pista actual de la playlist de Favoritos.

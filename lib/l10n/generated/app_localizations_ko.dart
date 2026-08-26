@@ -354,6 +354,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get paletteRecalc => '재계산';
 
   @override
+  String get recalcColors => '색상 재계산';
+
+  @override
+  String get colorsUpdated => '색상이 업데이트되었습니다';
+
+  @override
   String get playlistLabel => '재생목록';
 
   @override

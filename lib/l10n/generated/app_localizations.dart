@@ -739,6 +739,18 @@ abstract class AppLocalizations {
   /// **'Recalcular'**
   String get paletteRecalc;
 
+  /// No description provided for @recalcColors.
+  ///
+  /// In es, this message translates to:
+  /// **'Recalcular colores'**
+  String get recalcColors;
+
+  /// No description provided for @colorsUpdated.
+  ///
+  /// In es, this message translates to:
+  /// **'Colores actualizados'**
+  String get colorsUpdated;
+
   /// No description provided for @playlistLabel.
   ///
   /// In es, this message translates to:

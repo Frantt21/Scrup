@@ -358,6 +358,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get paletteRecalc => 'Recalcular';
 
   @override
+  String get recalcColors => 'Recalcular cores';
+
+  @override
+  String get colorsUpdated => 'Cores atualizados';
+
+  @override
   String get playlistLabel => 'Playlist';
 
   @override
@@ -926,6 +932,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get paletteRecalc => 'Recalcular';
+
+  @override
+  String get recalcColors => 'Recalcular cores';
+
+  @override
+  String get colorsUpdated => 'Cores atualizados';
 
   @override
   String get playlistLabel => 'Playlist';

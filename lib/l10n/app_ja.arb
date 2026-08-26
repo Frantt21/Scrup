@@ -112,6 +112,8 @@
     }
   },
   "paletteRecalc": "再計算",
+  "recalcColors": "色を再計算",
+  "colorsUpdated": "色を更新しました",
   "playlistLabel": "プレイリスト",
   "cacheUsed": "{used} / {limit}",
   "cacheFiles": "{count, plural, other{{count}ファイル}}",

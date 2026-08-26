@@ -354,6 +354,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get paletteRecalc => '再計算';
 
   @override
+  String get recalcColors => '色を再計算';
+
+  @override
+  String get colorsUpdated => '色を更新しました';
+
+  @override
   String get playlistLabel => 'プレイリスト';
 
   @override

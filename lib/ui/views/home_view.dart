@@ -3,12 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../services/artwork_palette_service.dart';
+import '../../services/palette_cache_store.dart';
+
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/player_service.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
+import '../widgets/scrup_toasts.dart';
 import '../widgets/context_menu_item.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/now_playing_bars.dart';
@@ -245,11 +249,25 @@ class _RecentCardState extends State<_RecentCard> {
           icon: Icons.playlist_add_rounded,
           label: l10n.addToPlaylist,
         ),
+        ContextMenuItem(
+          value: 'recalc',
+          icon: Icons.palette_rounded,
+          label: l10n.recalcColors,
+        ),
       ],
     );
     if (!mounted || action == null) return;
     if (action == 'add') {
       await showAddToPlaylistDialog(context, widget.track);
+    } else if (action == 'recalc') {
+      final url = widget.track.thumbnailUrl;
+      if (url != null && url.isNotEmpty) {
+        final store = context.read<PaletteCacheStore>();
+        await ArtworkPaletteService.trioFor(url, store, force: true);
+        if (mounted) {
+          showScrupToast(l10n.colorsUpdated, kind: ScrupToastKind.success);
+        }
+      }
     }
   }
 
@@ -367,11 +385,12 @@ class _RecentCardState extends State<_RecentCard> {
   }
 
   Widget _artwork(ThemeData theme) {
-    // Decodificar a un tamaño moderado: el grid muestra miniaturas de
-    // ~200px, no hace falta la resolución completa. CoverImage soporta URLs
-    // de red y rutas locales (portadas elegidas por el usuario).
+    // HI-RES: el grid muestra ~200px (×DPR); la miniatura por defecto de
+    // InnerTube se ve borrosa. hiResThumbnail remapea ytimg→maxres y las
+    // URLs de googleusercontent a su variante 1200px; rutas locales pasan
+    // tal cual. cacheWidth limita el decode al tamaño real necesario.
     return CoverImage(
-      source: widget.track.thumbnailUrl,
+      source: Track.hiResThumbnail(widget.track.thumbnailUrl),
       fit: BoxFit.cover,
       cacheWidth: 500,
       fallback: Container(

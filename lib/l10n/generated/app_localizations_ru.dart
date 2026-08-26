@@ -361,6 +361,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get paletteRecalc => 'Пересчитать';
 
   @override
+  String get recalcColors => 'Пересчитать цвета';
+
+  @override
+  String get colorsUpdated => 'Цвета обновлены';
+
+  @override
   String get playlistLabel => 'Плейлист';
 
   @override

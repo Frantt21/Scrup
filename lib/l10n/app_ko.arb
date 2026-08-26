@@ -112,6 +112,8 @@
     }
   },
   "paletteRecalc": "재계산",
+  "recalcColors": "색상 재계산",
+  "colorsUpdated": "색상이 업데이트되었습니다",
   "playlistLabel": "재생목록",
   "cacheUsed": "{used} / {limit}",
   "cacheFiles": "{count, plural, other{파일 {count}개}}",

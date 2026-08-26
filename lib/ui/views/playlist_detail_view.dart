@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/player_service.dart';
@@ -444,6 +445,12 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
           label: l10n.removeFromPlaylist,
           color: _menuTrackColor(track) ?? _ambientColor,
         ),
+        ContextMenuItem(
+          value: 'recalc',
+          icon: Icons.palette_rounded,
+          label: l10n.recalcColors,
+          color: _menuTrackColor(track) ?? _ambientColor,
+        ),
       ],
     );
     if (!mounted) return;
@@ -464,6 +471,8 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         await _editTrackMetadata(track);
       case 'remove':
         await _removeTrack(track);
+      case 'recalc':
+        await _recalcTrackColors(track);
     }
   }
 
@@ -1000,6 +1009,21 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         ),
       ),
     );
+  }
+
+  /// Recalcula el trío de colores de la portada de [track] (clic derecho →
+  /// Recalcular colores).
+  Future<void> _recalcTrackColors(Track track) async {
+    final url = track.thumbnailUrl;
+    if (url == null || url.isEmpty) return;
+    final store = context.read<PaletteCacheStore>();
+    await ArtworkPaletteService.trioFor(url, store, force: true);
+    if (mounted) {
+      showScrupToast(
+        AppLocalizations.of(context).colorsUpdated,
+        kind: ScrupToastKind.success,
+      );
+    }
   }
 
   /// Portada grande del hero con overlay de edición al hacer hover (y un

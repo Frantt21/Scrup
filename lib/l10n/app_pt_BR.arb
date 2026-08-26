@@ -112,6 +112,8 @@
     }
   },
   "paletteRecalc": "Recalcular",
+  "recalcColors": "Recalcular cores",
+  "colorsUpdated": "Cores atualizados",
   "playlistLabel": "Playlist",
   "cacheUsed": "{used} de {limit}",
   "cacheFiles": "{count, plural, =1{1 arquivo} other{{count} arquivos}}",

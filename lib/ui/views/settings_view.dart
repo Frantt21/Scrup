@@ -266,7 +266,6 @@ class _SettingsViewState extends State<SettingsView> {
                 _buildPlayerSection(theme),
                 const SizedBox(height: 16),
                 _buildCacheSection(theme),
-                _buildPaletteCacheSection(theme),
                 const SizedBox(height: 16),
                 _buildAboutSection(theme),
               ],
@@ -592,97 +591,162 @@ class _SettingsViewState extends State<SettingsView> {
               ),
             ],
           ),
+          // Colores de portadas (mismo dominio de caché): trío fullscreen
+          // + acento derivado, con recálculo manual por playlist.
+          ..._buildPaletteControls(theme),
         ],
       ),
     );
   }
 
   /// Acerca de: nombre y versión de la app.
-  /// Sección de caché de PALETAS: cuántas portadas tienen colores
-  /// calculados (trío fullscreen + acento derivado) y recálculo manual por
-  /// playlist con progreso.
-  Widget _buildPaletteCacheSection(ThemeData theme) {
+  /// Controles de PALETAS (embebidos en la card de caché): cuántas
+  /// portadas tienen colores calculados (trío fullscreen + acento derivado)
+  /// y recálculo manual por playlist con progreso.
+  List<Widget> _buildPaletteControls(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
     final db = context.read<AppDatabase>();
     final muted = theme.colorScheme.onSurfaceVariant;
 
-    return _SectionCard(
-      icon: Icons.palette_rounded,
-      title: l10n.paletteCacheTitle,
-      caption: l10n.paletteCacheHint,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return [
+      Row(
         children: [
-          const SizedBox(height: 4),
-          FutureBuilder<int>(
-            future: db.allPalettes().then((r) => r.length),
-            builder: (context, snap) {
-              final n = snap.data;
-              return Text(
-                n == null ? '…' : l10n.paletteCacheEntries(n),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<Playlist>(
-                  initialValue: _selectedPlaylist,
-                  isDense: true,
-                  decoration: InputDecoration(
-                    labelText: l10n.playlistLabel,
-                    isDense: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                  ),
-                  items: [
-                    for (final p in _playlists ?? const <Playlist>[])
-                      DropdownMenuItem(value: p, child: Text(p.name)),
-                  ],
-                  onChanged: _recalculating
-                      ? null
-                      : (p) => setState(() => _selectedPlaylist = p),
-                ),
-              ),
-              const SizedBox(width: 10),
-              FilledButton.icon(
-                onPressed: (_recalculating || _selectedPlaylist == null)
-                    ? null
-                    : _recalculatePalettes,
-                icon: _recalculating
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh_rounded, size: 18),
-                label: Text(l10n.paletteRecalc),
-              ),
-            ],
-          ),
-          if (_recalculating) ...[
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
-              value: _recalcTotal == 0 ? null : _recalcDone / _recalcTotal,
-              minHeight: 6,
-              borderRadius: BorderRadius.circular(3),
+          const Icon(Icons.palette_rounded, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            l10n.paletteCacheTitle,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 6),
-            Text(
-              '$_recalcDone / $_recalcTotal',
-              style: theme.textTheme.bodySmall?.copyWith(color: muted),
-            ),
-          ],
+          ),
         ],
       ),
+      const SizedBox(height: 6),
+      Text(
+        l10n.paletteCacheHint,
+        style: theme.textTheme.bodySmall?.copyWith(color: muted),
+      ),
+      const SizedBox(height: 14),
+      FutureBuilder<int>(
+        future: db.allPalettes().then((r) => r.length),
+        builder: (context, snap) {
+          final n = snap.data;
+          return Text(
+            n == null ? '…' : l10n.paletteCacheEntries(n),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          );
+        },
+      ),
+      const SizedBox(height: 14),
+      Row(
+        children: [
+          // Campo estilo selector de idioma: rectangular, ancho fijo y menú
+          // propio vía showMenu (hover full-bleed, sin padding forzado).
+          Builder(
+            builder: (fieldContext) => InkWell(
+              borderRadius: BorderRadius.circular(14),
+              focusColor: Colors.transparent,
+              hoverColor: Colors.white.withValues(alpha: 0.04),
+              onTap: _recalculating
+                  ? null
+                  : () => _openPlaylistMenu(fieldContext),
+              child: Container(
+                width: 240,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.35,
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _selectedPlaylist?.name ?? '—',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    const Icon(Icons.expand_more_rounded, size: 20),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton.icon(
+            onPressed: (_recalculating || _selectedPlaylist == null)
+                ? null
+                : _recalculatePalettes,
+            icon: _recalculating
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh_rounded, size: 18),
+            label: Text(l10n.paletteRecalc),
+          ),
+        ],
+      ),
+      if (_recalculating) ...[
+        const SizedBox(height: 12),
+        LinearProgressIndicator(
+          value: _recalcTotal == 0 ? null : _recalcDone / _recalcTotal,
+          minHeight: 6,
+          borderRadius: BorderRadius.circular(3),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '$_recalcDone / $_recalcTotal',
+          style: theme.textTheme.bodySmall?.copyWith(color: muted),
+        ),
+      ],
+    ];
+  }
+
+  /// Menú del selector de playlist (mismo patrón que el de idioma).
+  Future<void> _openPlaylistMenu(BuildContext fieldContext) async {
+    final box = fieldContext.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(fieldContext).context.findRenderObject()! as RenderBox;
+    final playlist = await showMenu<Playlist>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(
+          box.localToGlobal(Offset.zero, ancestor: overlay),
+          box.localToGlobal(
+            box.size.bottomRight(Offset.zero),
+            ancestor: overlay,
+          ),
+        ),
+        Offset.zero & overlay.size,
+      ),
+      constraints: const BoxConstraints(minWidth: 240, maxHeight: 380),
+      clipBehavior: Clip.antiAlias,
+      items: [
+        for (final p in _playlists ?? const <Playlist>[])
+          PopupMenuItem<Playlist>(
+            value: p,
+            height: 44,
+            child: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+      ],
     );
+    if (playlist == null || !mounted) return;
+    setState(() => _selectedPlaylist = playlist);
   }
 
   Widget _buildAboutSection(ThemeData theme) {

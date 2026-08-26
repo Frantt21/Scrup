@@ -358,6 +358,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get paletteRecalc => 'Recalculate';
 
   @override
+  String get recalcColors => 'Recalculate colors';
+
+  @override
+  String get colorsUpdated => 'Colors updated';
+
+  @override
   String get playlistLabel => 'Playlist';
 
   @override

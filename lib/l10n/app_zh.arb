@@ -112,6 +112,8 @@
     }
   },
   "paletteRecalc": "重新计算",
+  "recalcColors": "重新计算颜色",
+  "colorsUpdated": "颜色已更新",
   "playlistLabel": "播放列表",
   "cacheUsed": "{used} / {limit}",
   "cacheFiles": "{count, plural, other{{count} 个文件}}",

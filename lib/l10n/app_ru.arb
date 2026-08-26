@@ -112,6 +112,8 @@
     }
   },
   "paletteRecalc": "Пересчитать",
+  "recalcColors": "Пересчитать цвета",
+  "colorsUpdated": "Цвета обновлены",
   "playlistLabel": "Плейлист",
   "cacheUsed": "{used} из {limit}",
   "cacheFiles": "{count, plural, one{{count} файл} few{{count} файла} many{{count} файлов} other{{count} файлов}}",

@@ -353,6 +353,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get paletteRecalc => '重新计算';
 
   @override
+  String get recalcColors => '重新计算颜色';
+
+  @override
+  String get colorsUpdated => '颜色已更新';
+
+  @override
   String get playlistLabel => '播放列表';
 
   @override
