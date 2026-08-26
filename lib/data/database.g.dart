@@ -1821,6 +1821,341 @@ class LyricsCompanion extends UpdateCompanion<LyricsRow> {
   }
 }
 
+class $PaletteCacheTable extends PaletteCache
+    with TableInfo<$PaletteCacheTable, PaletteRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PaletteCacheTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _c1Meta = const VerificationMeta('c1');
+  @override
+  late final GeneratedColumn<int> c1 = GeneratedColumn<int>(
+    'c1',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _c2Meta = const VerificationMeta('c2');
+  @override
+  late final GeneratedColumn<int> c2 = GeneratedColumn<int>(
+    'c2',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _c3Meta = const VerificationMeta('c3');
+  @override
+  late final GeneratedColumn<int> c3 = GeneratedColumn<int>(
+    'c3',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _usedAtMeta = const VerificationMeta('usedAt');
+  @override
+  late final GeneratedColumn<DateTime> usedAt = GeneratedColumn<DateTime>(
+    'used_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, c1, c2, c3, usedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'palette_cache';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PaletteRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('c1')) {
+      context.handle(_c1Meta, c1.isAcceptableOrUnknown(data['c1']!, _c1Meta));
+    } else if (isInserting) {
+      context.missing(_c1Meta);
+    }
+    if (data.containsKey('c2')) {
+      context.handle(_c2Meta, c2.isAcceptableOrUnknown(data['c2']!, _c2Meta));
+    }
+    if (data.containsKey('c3')) {
+      context.handle(_c3Meta, c3.isAcceptableOrUnknown(data['c3']!, _c3Meta));
+    }
+    if (data.containsKey('used_at')) {
+      context.handle(
+        _usedAtMeta,
+        usedAt.isAcceptableOrUnknown(data['used_at']!, _usedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PaletteRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PaletteRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      c1: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}c1'],
+      )!,
+      c2: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}c2'],
+      ),
+      c3: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}c3'],
+      ),
+      usedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}used_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PaletteCacheTable createAlias(String alias) {
+    return $PaletteCacheTable(attachedDatabase, alias);
+  }
+}
+
+class PaletteRow extends DataClass implements Insertable<PaletteRow> {
+  final String id;
+  final int c1;
+  final int? c2;
+  final int? c3;
+  final DateTime usedAt;
+  const PaletteRow({
+    required this.id,
+    required this.c1,
+    this.c2,
+    this.c3,
+    required this.usedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['c1'] = Variable<int>(c1);
+    if (!nullToAbsent || c2 != null) {
+      map['c2'] = Variable<int>(c2);
+    }
+    if (!nullToAbsent || c3 != null) {
+      map['c3'] = Variable<int>(c3);
+    }
+    map['used_at'] = Variable<DateTime>(usedAt);
+    return map;
+  }
+
+  PaletteCacheCompanion toCompanion(bool nullToAbsent) {
+    return PaletteCacheCompanion(
+      id: Value(id),
+      c1: Value(c1),
+      c2: c2 == null && nullToAbsent ? const Value.absent() : Value(c2),
+      c3: c3 == null && nullToAbsent ? const Value.absent() : Value(c3),
+      usedAt: Value(usedAt),
+    );
+  }
+
+  factory PaletteRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PaletteRow(
+      id: serializer.fromJson<String>(json['id']),
+      c1: serializer.fromJson<int>(json['c1']),
+      c2: serializer.fromJson<int?>(json['c2']),
+      c3: serializer.fromJson<int?>(json['c3']),
+      usedAt: serializer.fromJson<DateTime>(json['usedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'c1': serializer.toJson<int>(c1),
+      'c2': serializer.toJson<int?>(c2),
+      'c3': serializer.toJson<int?>(c3),
+      'usedAt': serializer.toJson<DateTime>(usedAt),
+    };
+  }
+
+  PaletteRow copyWith({
+    String? id,
+    int? c1,
+    Value<int?> c2 = const Value.absent(),
+    Value<int?> c3 = const Value.absent(),
+    DateTime? usedAt,
+  }) => PaletteRow(
+    id: id ?? this.id,
+    c1: c1 ?? this.c1,
+    c2: c2.present ? c2.value : this.c2,
+    c3: c3.present ? c3.value : this.c3,
+    usedAt: usedAt ?? this.usedAt,
+  );
+  PaletteRow copyWithCompanion(PaletteCacheCompanion data) {
+    return PaletteRow(
+      id: data.id.present ? data.id.value : this.id,
+      c1: data.c1.present ? data.c1.value : this.c1,
+      c2: data.c2.present ? data.c2.value : this.c2,
+      c3: data.c3.present ? data.c3.value : this.c3,
+      usedAt: data.usedAt.present ? data.usedAt.value : this.usedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PaletteRow(')
+          ..write('id: $id, ')
+          ..write('c1: $c1, ')
+          ..write('c2: $c2, ')
+          ..write('c3: $c3, ')
+          ..write('usedAt: $usedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, c1, c2, c3, usedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PaletteRow &&
+          other.id == this.id &&
+          other.c1 == this.c1 &&
+          other.c2 == this.c2 &&
+          other.c3 == this.c3 &&
+          other.usedAt == this.usedAt);
+}
+
+class PaletteCacheCompanion extends UpdateCompanion<PaletteRow> {
+  final Value<String> id;
+  final Value<int> c1;
+  final Value<int?> c2;
+  final Value<int?> c3;
+  final Value<DateTime> usedAt;
+  final Value<int> rowid;
+  const PaletteCacheCompanion({
+    this.id = const Value.absent(),
+    this.c1 = const Value.absent(),
+    this.c2 = const Value.absent(),
+    this.c3 = const Value.absent(),
+    this.usedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PaletteCacheCompanion.insert({
+    required String id,
+    required int c1,
+    this.c2 = const Value.absent(),
+    this.c3 = const Value.absent(),
+    this.usedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       c1 = Value(c1);
+  static Insertable<PaletteRow> custom({
+    Expression<String>? id,
+    Expression<int>? c1,
+    Expression<int>? c2,
+    Expression<int>? c3,
+    Expression<DateTime>? usedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (c1 != null) 'c1': c1,
+      if (c2 != null) 'c2': c2,
+      if (c3 != null) 'c3': c3,
+      if (usedAt != null) 'used_at': usedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PaletteCacheCompanion copyWith({
+    Value<String>? id,
+    Value<int>? c1,
+    Value<int?>? c2,
+    Value<int?>? c3,
+    Value<DateTime>? usedAt,
+    Value<int>? rowid,
+  }) {
+    return PaletteCacheCompanion(
+      id: id ?? this.id,
+      c1: c1 ?? this.c1,
+      c2: c2 ?? this.c2,
+      c3: c3 ?? this.c3,
+      usedAt: usedAt ?? this.usedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (c1.present) {
+      map['c1'] = Variable<int>(c1.value);
+    }
+    if (c2.present) {
+      map['c2'] = Variable<int>(c2.value);
+    }
+    if (c3.present) {
+      map['c3'] = Variable<int>(c3.value);
+    }
+    if (usedAt.present) {
+      map['used_at'] = Variable<DateTime>(usedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PaletteCacheCompanion(')
+          ..write('id: $id, ')
+          ..write('c1: $c1, ')
+          ..write('c2: $c2, ')
+          ..write('c3: $c3, ')
+          ..write('usedAt: $usedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1829,6 +2164,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $PlaylistsTable playlists = $PlaylistsTable(this);
   late final $PlaylistTracksTable playlistTracks = $PlaylistTracksTable(this);
   late final $LyricsTable lyrics = $LyricsTable(this);
+  late final $PaletteCacheTable paletteCache = $PaletteCacheTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1839,6 +2175,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     playlists,
     playlistTracks,
     lyrics,
+    paletteCache,
   ];
 }
 
@@ -3459,6 +3796,206 @@ typedef $$LyricsTableProcessedTableManager =
       LyricsRow,
       PrefetchHooks Function()
     >;
+typedef $$PaletteCacheTableCreateCompanionBuilder =
+    PaletteCacheCompanion Function({
+      required String id,
+      required int c1,
+      Value<int?> c2,
+      Value<int?> c3,
+      Value<DateTime> usedAt,
+      Value<int> rowid,
+    });
+typedef $$PaletteCacheTableUpdateCompanionBuilder =
+    PaletteCacheCompanion Function({
+      Value<String> id,
+      Value<int> c1,
+      Value<int?> c2,
+      Value<int?> c3,
+      Value<DateTime> usedAt,
+      Value<int> rowid,
+    });
+
+class $$PaletteCacheTableFilterComposer
+    extends Composer<_$AppDatabase, $PaletteCacheTable> {
+  $$PaletteCacheTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get c1 => $composableBuilder(
+    column: $table.c1,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get c2 => $composableBuilder(
+    column: $table.c2,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get c3 => $composableBuilder(
+    column: $table.c3,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get usedAt => $composableBuilder(
+    column: $table.usedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PaletteCacheTableOrderingComposer
+    extends Composer<_$AppDatabase, $PaletteCacheTable> {
+  $$PaletteCacheTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get c1 => $composableBuilder(
+    column: $table.c1,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get c2 => $composableBuilder(
+    column: $table.c2,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get c3 => $composableBuilder(
+    column: $table.c3,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get usedAt => $composableBuilder(
+    column: $table.usedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PaletteCacheTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PaletteCacheTable> {
+  $$PaletteCacheTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get c1 =>
+      $composableBuilder(column: $table.c1, builder: (column) => column);
+
+  GeneratedColumn<int> get c2 =>
+      $composableBuilder(column: $table.c2, builder: (column) => column);
+
+  GeneratedColumn<int> get c3 =>
+      $composableBuilder(column: $table.c3, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get usedAt =>
+      $composableBuilder(column: $table.usedAt, builder: (column) => column);
+}
+
+class $$PaletteCacheTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PaletteCacheTable,
+          PaletteRow,
+          $$PaletteCacheTableFilterComposer,
+          $$PaletteCacheTableOrderingComposer,
+          $$PaletteCacheTableAnnotationComposer,
+          $$PaletteCacheTableCreateCompanionBuilder,
+          $$PaletteCacheTableUpdateCompanionBuilder,
+          (
+            PaletteRow,
+            BaseReferences<_$AppDatabase, $PaletteCacheTable, PaletteRow>,
+          ),
+          PaletteRow,
+          PrefetchHooks Function()
+        > {
+  $$PaletteCacheTableTableManager(_$AppDatabase db, $PaletteCacheTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PaletteCacheTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PaletteCacheTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PaletteCacheTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int> c1 = const Value.absent(),
+                Value<int?> c2 = const Value.absent(),
+                Value<int?> c3 = const Value.absent(),
+                Value<DateTime> usedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PaletteCacheCompanion(
+                id: id,
+                c1: c1,
+                c2: c2,
+                c3: c3,
+                usedAt: usedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required int c1,
+                Value<int?> c2 = const Value.absent(),
+                Value<int?> c3 = const Value.absent(),
+                Value<DateTime> usedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PaletteCacheCompanion.insert(
+                id: id,
+                c1: c1,
+                c2: c2,
+                c3: c3,
+                usedAt: usedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PaletteCacheTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PaletteCacheTable,
+      PaletteRow,
+      $$PaletteCacheTableFilterComposer,
+      $$PaletteCacheTableOrderingComposer,
+      $$PaletteCacheTableAnnotationComposer,
+      $$PaletteCacheTableCreateCompanionBuilder,
+      $$PaletteCacheTableUpdateCompanionBuilder,
+      (
+        PaletteRow,
+        BaseReferences<_$AppDatabase, $PaletteCacheTable, PaletteRow>,
+      ),
+      PaletteRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3473,4 +4010,6 @@ class $AppDatabaseManager {
       $$PlaylistTracksTableTableManager(_db, _db.playlistTracks);
   $$LyricsTableTableManager get lyrics =>
       $$LyricsTableTableManager(_db, _db.lyrics);
+  $$PaletteCacheTableTableManager get paletteCache =>
+      $$PaletteCacheTableTableManager(_db, _db.paletteCache);
 }

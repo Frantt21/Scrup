@@ -1,34 +1,43 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// Caché de colores extraídos de artworks en disco (JSON en el directorio de
-/// soporte de la app): evita re-descargar miniaturas para volver a extraer
-/// la paleta entre sesiones (portadas de playlist, portadas de canciones y
-/// el acento del reproductor).
-///
-/// - Solo persiste colores EXITOSOS: un fallo de extracción no se guarda,
-///   así la próxima sesión puede reintentarlo (p. ej. si el artwork apareció).
-/// - Escritura con debounce: las ráfagas de extracción (scroll en una
-///   playlist) no machacan el disco; se escribe una sola vez al terminar.
-/// - Escritura atómica (temp + rename): nunca deja un JSON a medias.
-/// - Acotado a [_maxEntries] colores (LRU simple por orden de inserción).
-class PaletteCacheStore {
-  PaletteCacheStore._();
+import '../data/database.dart';
 
-  /// Límite de entradas para que el archivo no crezca sin control.
+/// Caché de paletas de artwork: acento del reproductor (1 color) y trío del
+/// fondo fullscreen (3 colores), por URL de portada.
+///
+/// PERSISTENCIA EN SQLITE (tabla palette_cache, migrado desde JSON): escrituras
+/// incrementales por entrada, sin reescritura completa del archivo ni carga
+/// total que crezca sin límite. El recorte LRU lo hace SQL.
+///
+/// ARQUITECTURA: el mapa en memoria es AUTORITATIVO para las lecturas
+/// (get/getTrio son SÍNCRONOS y O(1)); la base es solo el almacén duradero.
+/// Las escrituras van al mapa al instante y a la DB con debounce (las ráfagas
+/// de extracción, p. ej. scroll en una playlist, terminan en UNA tanda).
+///
+/// - Solo persiste colores EXITOSOS: un fallo no se guarda, así la próxima
+///   sesión puede reintentarlo (p. ej. si el artwork apareció).
+/// - Acotado a [_maxEntries] colores (recorte LRU por usedAt en SQL).
+class PaletteCacheStore {
+  PaletteCacheStore._(this._db);
+
+  final AppDatabase _db;
+
+  /// Límite de entradas (el recorte real lo hace trimPalettes en SQL).
   static const int _maxEntries = 1500;
 
-  /// Límite de URLs fallidas recordadas en la sesión (mismas razones que
-  /// [_maxEntries]: no dejar que el set crezca sin control).
+  /// Límite de URLs fallidas recordadas en la sesión.
   static const int _maxFailedEntries = 1000;
 
-  /// URL de artwork → color ARGB (int). LinkedHashMap: orden de inserción.
-  final Map<String, int> _colors = {};
+  /// URL → int ARGB (acento) o lista de 3 ARGB (trío).
+  final Map<String, Object> _colors = {};
+
+  /// Entradas nuevas/cambiadas pendientes de volcar a la DB.
+  final Set<String> _dirty = {};
 
   /// URLs que fallaron al extraer el color EN ESTA SESIÓN: compartidas entre
   /// todos los consumidores (playlist, reproductor) para que nadie vuelva a
@@ -36,38 +45,42 @@ class PaletteCacheStore {
   /// se reintentan en la próxima sesión (por si el artwork apareció).
   final Set<String> _failed = {};
 
-  File? _file;
   Timer? _saveDebounce;
 
-  /// Guarda en vuelo + datos pendientes: serializa las escrituras para que
-  /// dos `_save()` (p. ej. debounce y flush al cerrar) no pisen el mismo
-  /// `.tmp` a la vez (en Windows fallaría por sharing violation).
   bool _saving = false;
   bool _savePending = false;
 
-  /// Lee el archivo de disco y devuelve el caché. Best-effort: si el archivo
-  /// no existe o está corrupto, arranca vacío sin romper nada.
-  static Future<PaletteCacheStore> load() async {
-    final store = PaletteCacheStore._();
+  /// Carga las entradas desde SQLite. Best-effort: si la DB falla, arranca
+  /// vacío sin romper nada. Elimina el JSON legacy si aún existe (migración
+  /// ya cubierta por la tabla).
+  static Future<PaletteCacheStore> load(AppDatabase db) async {
+    final store = PaletteCacheStore._(db);
     try {
-      final base = await getApplicationSupportDirectory();
-      store._file = File(p.join(base.path, 'palette_cache.json'));
-      if (await store._file!.exists()) {
-        final raw = await store._file!.readAsString();
-        final decoded = jsonDecode(raw);
-        if (decoded is Map<String, dynamic>) {
-          for (final entry in decoded.entries) {
-            final value = int.tryParse(entry.value.toString());
-            if (value != null) {
-              // Enmascarar a 32 bits: un archivo corrupto/ajeno con un valor
-              // fuera de rango rompería `Color(argb)` (assert en debug).
-              store._colors[entry.key] = value & 0xFFFFFFFF;
-            }
-          }
+      final rows = await db.allPalettes();
+      for (final row in rows) {
+        if (row.c2 == null || row.c3 == null) {
+          store._colors[row.id] = row.c1 & 0xFFFFFFFF;
+        } else {
+          // Enmascarar a 32 bits: un dato corrupto rompería Color(argb).
+          store._colors[row.id] = [
+            row.c1 & 0xFFFFFFFF,
+            row.c2! & 0xFFFFFFFF,
+            row.c3! & 0xFFFFFFFF,
+          ];
         }
       }
     } catch (_) {
-      // Archivo ausente/corrupto: arrancar vacío.
+      store._colors.clear();
+    }
+    // Limpieza best-effort del caché JSON anterior.
+    try {
+      final base = await getApplicationSupportDirectory();
+      final legacy = File(p.join(base.path, 'palette_cache.json'));
+      if (await legacy.exists()) {
+        await legacy.delete();
+      }
+    } catch (_) {
+      // Si no se puede borrar, queda inofensivo en disco.
     }
     return store;
   }
@@ -75,7 +88,15 @@ class PaletteCacheStore {
   /// Color cacheado para una URL, o null si nunca se extrajo con éxito.
   Color? get(String url) {
     final argb = _colors[url];
-    return argb == null ? null : Color(argb);
+    if (argb is! int) return null;
+    return Color(argb);
+  }
+
+  /// Trío de colores cacheado para una URL (fondo fullscreen), o null.
+  List<Color>? getTrio(String url) {
+    final v = _colors[url];
+    if (v is! List) return null;
+    return [for (final argb in v) Color(argb as int)];
   }
 
   /// Guarda el color extraído de una URL (solo valores no nulos: un fallo
@@ -83,8 +104,15 @@ class PaletteCacheStore {
   void put(String url, Color color) {
     _colors[url] = color.toARGB32();
     _failed.remove(url);
-    _trim();
-    _scheduleSave();
+    _scheduleSave(url);
+  }
+
+  /// Guarda el trío extraído de una URL.
+  void putTrio(String url, List<Color> trio) {
+    assert(trio.length == 3);
+    _colors[url] = [for (final c in trio) c.toARGB32()];
+    _failed.remove(url);
+    _scheduleSave(url);
   }
 
   /// Marca una URL como fallida en esta sesión: los demás consumidores la
@@ -100,14 +128,14 @@ class PaletteCacheStore {
   /// u otro consumidor).
   bool isFailed(String url) => _failed.contains(url);
 
-  /// Recorta al máximo de entradas quitando las más antiguas.
-  void _trim() {
+  void _scheduleSave(String url) {
+    _dirty.add(url);
     while (_colors.length > _maxEntries) {
-      _colors.remove(_colors.keys.first);
+      // El recorte REAL es SQL (LRU por used_at); esto solo acota memoria.
+      final oldest = _colors.keys.first;
+      _colors.remove(oldest);
+      _dirty.remove(oldest);
     }
-  }
-
-  void _scheduleSave() {
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 700), () {
       unawaited(_save());
@@ -123,20 +151,23 @@ class PaletteCacheStore {
   }
 
   Future<void> _save() async {
+    if (_dirty.isEmpty && !_saving) return;
     if (_saving) {
       // Una escritura está en vuelo: marcar pendiente y volver a guardar al
-      // terminar (así nunca se pierde lo que se añadió mientras se escribía).
+      // terminar (así nunca se pierde lo añadido mientras se escribía).
       _savePending = true;
       return;
     }
     _saving = true;
     try {
-      final file = _file;
-      if (file != null) {
-        final tmp = File('${file.path}.tmp');
-        await tmp.writeAsString(jsonEncode(_colors), flush: true);
-        await tmp.rename(file.path);
+      for (final url in _dirty.toList()) {
+        final v = _colors[url];
+        if (v == null) continue;
+        final colors = v is int ? [v] : List<int>.from(v as List);
+        await _db.upsertPalette(url, colors);
       }
+      _dirty.clear();
+      await _db.trimPalettes(_maxEntries);
     } catch (_) {
       // Best-effort: el caché en memoria sigue sirviendo en esta sesión.
     }

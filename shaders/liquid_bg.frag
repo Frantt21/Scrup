@@ -1,19 +1,17 @@
-// Fondo "líquido cromado" del fullscreen (inspirado en LiquidChrome).
+// Fondo "iridiscente" del fullscreen (adaptado del componente LiquidChrome/
+// Iridescence de React+ogl).
 //
-// Dos ingredientes:
-//  1. WARP ITERATIVO: 9 pasadas de `amp/i * cos(i·f·coord + t)` sobre las
-//     coordenadas — cada pasada añade una frecuencia superior con menos
-//     amplitud, generando el flujo orgánico en capas.
-//  2. CAMPO CROMO: `1 / |sin(t - x - y)|` — vetas brillantes donde el seno
-//     cruza cero, oscuridad entre ellas. Es lo que da el aspecto metálico
-//     líquido.
+// TRUCO CENTRAL — FEEDBACK LOOP: dos acumuladores (`a`, `d`) se
+// retroalimentan durante 8 iteraciones: `a` integra cosenos de la posición
+// X deformada por `d`, y `d` integra senos de Y deformado por `a`. El
+// resultado es un patrón orgánico tipo aceite sobre agua imposible de
+// lograr con ruido plano.
 //
-// La paleta tricolor del artwork llega por uniforms (ya interpolada en Dart
-// durante las transiciones de canción) y tiñe las vetas. El brillo queda
-// TECHADO para que los lyrics conserven contraste pase lo que pase.
-//
-// Cubre TODO el lienzo borde a borde (sin viñeta ni anclas) y el tiempo es
-// continuo: nunca se congela.
+// El tinte sale de una PALETA DE COSENOS (patrón → fase → cos) modulada
+// por la paleta tricolor del artwork (uniforms ya interpolados en Dart).
+// Un factor de atenuación global mantiene el fondo lo bastante oscuro para
+// los lyrics; cubre todo el lienzo borde a borde y el tiempo nunca se
+// detiene.
 #version 460 core
 
 #include <flutter/runtime_effect.glsl>
@@ -26,50 +24,39 @@ uniform vec3 uColorC;      // índices 9-11
 
 out vec4 fragColor;
 
-// Parámetros del efecto (ajustables a ojo).
-const float kSpeed = 0.55;      // velocidad global del flujo
-const float kAmplitude = 0.28;  // cuánto se deforma el espacio
-const float kFreqX = 2.6;       // densidad de ondas horizontales
-const float kFreqY = 3.4;       // densidad de ondas verticales
+// Parámetros ajustables.
+const float kSpeed = 0.45;    // velocidad del flujo
+const float kDim = 0.80;      // atenuación global (contraste lyrics)
 
 void main() {
-  vec2 frag = FlutterFragCoord().xy;
-
-  // Coordenadas centradas, normalizadas al lado menor (aspecto correcto).
-  vec2 uv = (2.0 * frag - uResolution) / min(uResolution.x, uResolution.y);
+  // Coordenadas centradas escaladas por el lado menor (como el original).
+  float mr = min(uResolution.x, uResolution.y);
+  vec2 uv = (FlutterFragCoord().xy * 2.0 - uResolution) / mr;
 
   float t = uTime * kSpeed;
 
-  // 1. Warp iterativo: frecuencias crecientes con amplitud decreciente.
-  vec2 p = uv;
-  for (float i = 1.0; i < 10.0; i++) {
-    p.x += kAmplitude / i * cos(i * kFreqX * uv.y + t + i * 0.7);
-    p.y += kAmplitude / i * cos(i * kFreqY * uv.x + t - i * 0.5);
+  // Feedback loop: cada iteración alimenta la siguiente con su propia salida.
+  float d = -t * 0.5;
+  float a = 0.0;
+  for (float i = 0.0; i < 8.0; ++i) {
+    a += cos(i - d - a * uv.x);
+    d += sin(uv.y * i + a);
   }
+  d += t * 0.5;
 
-  // 2. Campo cromo: vetas donde sin(t - x - y) ≈ 0. El +0.35 techa el
-  //    máximo (evita divisiones hacia infinito = píxeles calientes) y el
-  //    pow afina la veta.
-  float band = abs(sin(t - p.x - p.y));
-  float ridge = pow(1.0 / (band + 0.35), 1.5);
-
-  // Luminancia mayormente OSCURA con vetas luminosas: contraste seguro
-  // para el texto del reproductor. El piso (0.18) deja ver el TONO del
-  // color en las zonas bajas en vez de caer a negro puro.
-  float lum = 0.18 + 0.17 * ridge;
-
-  // Paleta TRICOLOR: tres regiones que fluyen con el campo deformado, cada
-  // una con fase y dirección PROPIAS para que los tres colores del artwork
-  // sean visibles (antes las mezclas eran tan anchas/oscuras que parecía
-  // monocromo). Los smoothstep marcan fronteras nítidas entre zonas.
-  float mAB = clamp(0.5 + 0.5 * sin(p.x * 0.75 + t * 0.18), 0.0, 1.0);
-  vec3 col = mix(uColorA, uColorB, smoothstep(0.15, 0.85, mAB));
-  float mC = clamp(
-    0.5 + 0.5 * sin(p.y * 0.85 - p.x * 0.45 + t * 0.24),
-    0.0,
-    1.0
+  // Patrón iridiscente: canal R/G desde el campo deformado, B del par (a,d).
+  vec3 pat = vec3(
+    cos(uv * vec2(d, a)) * 0.6 + 0.4,
+    cos(a + d) * 0.5 + 0.5
   );
-  col = mix(col, uColorC, smoothstep(0.35, 0.90, mC));
+  // Paleta de cosenos: patrón → fase → cos (los negativos caen a negro al
+  // escribir el framebuffer, como en el original WebGL).
+  vec3 wave = cos(pat * cos(vec3(d, a, 2.5)) * 0.5 + 0.5);
 
-  fragColor = vec4(col * lum, 1.0);
+  // Tinte tricolor: A/B se reparten según la fase `d`, C entra con `a` —
+  // los tres colores fluyen por zonas distintas del patrón.
+  vec3 base = mix(uColorA, uColorB, clamp(0.5 + 0.5 * sin(d * 0.7), 0.0, 1.0));
+  base = mix(base, uColorC, clamp(0.5 + 0.5 * cos(a * 0.6), 0.0, 1.0));
+
+  fragColor = vec4(max(wave, 0.0) * base * kDim, 1.0);
 }

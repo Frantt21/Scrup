@@ -57,6 +57,24 @@ class Lyrics extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Caché de paletas de artwork: el acento del reproductor (1 color) y el
+/// trío del fondo fullscreen (3 colores), por URL de portada.
+///
+/// Sustituye al JSON plano anterior: escrituras incrementales (INSERT OR
+/// REPLACE por entrada), sin reescritura completa ni carga total creciendo
+/// sin límite. [usedAt] ordena el recorte LRU.
+@DataClassName('PaletteRow')
+class PaletteCache extends Table {
+  TextColumn get id => text()(); // URL del artwork
+  IntColumn get c1 => integer()(); // ARGB acento / primer color
+  IntColumn get c2 => integer().nullable()(); // ARGB (trío)
+  IntColumn get c3 => integer().nullable()(); // ARGB (trío)
+  DateTimeColumn get usedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// Relación N:M entre playlists y canciones, con posición de orden.
 @DataClassName('PlaylistTrackRow')
 class PlaylistTracks extends Table {

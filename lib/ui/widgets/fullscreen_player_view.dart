@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import '../theme_controller.dart';
 
@@ -137,10 +138,25 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
   /// Asegura bytes hi-res + trío para una URL. Idempotente y seguro de
   /// llamar en paralelo: sirve tanto al track actual como a la PRECARGA
   /// del siguiente (así el cambio de canción no tiene intermedios).
+  ///
+  /// El trío se PERSISTE en PaletteCacheStore (mismo caché JSON-LRU que el
+  /// acento): reabrir la app ya no re-descarga el artwork ni re-extrae la
+  /// paleta para portadas vistas antes.
   Future<(Uint8List?, List<Color>)> _ensureVisuals(String rawUrl) async {
+    final paletteStore = context.read<PaletteCacheStore>();
     var bytes = _artBytesCache[rawUrl];
     var trio = _trioCache[rawUrl];
     if (bytes != null && trio != null) return (bytes, trio);
+
+    if (trio == null && bytes == null) {
+      // Persistente primero: si esta portada ya se procesó en una sesión
+      // anterior, el trío está disponible SIN red NI extracción.
+      final saved = paletteStore.getTrio(rawUrl);
+      if (saved != null) {
+        trio = saved;
+        _trioCache[rawUrl] = trio;
+      }
+    }
 
     if (bytes == null) {
       // Artwork LOCAL (portada propia desde metadatos): leer del disco.
@@ -192,6 +208,9 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
         trio = const [];
       }
       _trioCache[rawUrl] = trio;
+      if (trio.isNotEmpty) {
+        paletteStore.putTrio(rawUrl, trio);
+      }
     }
     return (bytes, trio);
   }
@@ -281,10 +300,10 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = context.read<ThemeController>().seededPrimary;
-    final palette = _palette.isEmpty
-        ? [accent, accent.withValues(alpha: 0.65), kDefaultAccent]
-        : _palette;
+    // SIN acento de respaldo: el fondo usa SOLO los colores reales del
+    // artwork; si aún no hay paleta, _padded rellena con negro (nada de
+    // lilas/azules por defecto colándose).
+    final palette = _palette;
 
     return AnimatedBuilder(
       animation: _transition,
@@ -492,8 +511,13 @@ class _AnimatedBackdropState extends State<_AnimatedBackdrop>
     }
   }
 
+  /// Negro base del fondo: rellena los huecos del trío (portadas con menos
+  /// de 3 colores extraíbles). NUNCA un color por defecto — el usuario ve
+  /// negro donde no hay color real, no lilas/azules inventados.
+  static const Color _backdropBlack = Color(0xFF050505);
+
   List<Color> _padded(List<Color> src) => [
-    for (var i = 0; i < 3; i++) i < src.length ? src[i] : kDefaultAccent,
+    for (var i = 0; i < 3; i++) i < src.length ? src[i] : _backdropBlack,
   ];
 
   /// Colores mostrados ahora mismo (lerp curvado origen→destino).

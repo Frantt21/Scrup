@@ -119,11 +119,11 @@ Future<void> main() async {
     await database.ensureFavoritesPlaylist();
   } catch (_) {}
 
-  // Caché de colores de artworks en disco (best-effort): evita re-descargar
+  // Caché de colores de artworks en SQLite (best-effort): evita re-descargar
   // miniaturas entre sesiones solo para re-extraer la paleta. El flush al
   // cerrar lo hace el mismo _AppCloseHandler que la cola (registrado al
   // crear el PlayerService).
-  final paletteCache = await PaletteCacheStore.load();
+  final paletteCache = await PaletteCacheStore.load(database);
 
   // Instancia única de preferencias: se comparte entre los providers y la
   // carga del idioma inicial (restaurado entre sesiones).

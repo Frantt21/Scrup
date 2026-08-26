@@ -33,14 +33,16 @@ class Playlist {
   });
 }
 
-@DriftDatabase(tables: [Tracks, History, Playlists, PlaylistTracks, Lyrics])
+@DriftDatabase(
+  tables: [Tracks, History, Playlists, PlaylistTracks, Lyrics, PaletteCache],
+)
 class AppDatabase extends _$AppDatabase {
   /// [executor] permite inyectar una base en memoria en los tests.
   AppDatabase({QueryExecutor? executor})
     : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -74,8 +76,44 @@ class AppDatabase extends _$AppDatabase {
         // Migrar lyrics viejas de SharedPreferences a SQLite (una sola vez).
         await _migrateSharedPrefsLyrics();
       }
+      if (from < 8) {
+        // Caché de paletas de artwork (acento + trío fullscreen), antes en
+        // palette_cache.json. El JSON viejo se elimina best-effort al
+        // arrancar (ver PaletteCacheStore.load).
+        await m.createTable(paletteCache);
+      }
     },
   );
+
+  // -------------------------------------------------- paletas de artwork
+
+  /// Inserta o actualiza una entrada de paleta (acento único: [colors] con
+  /// 1 elemento; trío fullscreen: 3). Actualiza `usedAt` para el LRU.
+  Future<void> upsertPalette(String url, List<int> colors) async {
+    assert(colors.isNotEmpty && colors.length <= 3);
+    await into(paletteCache).insertOnConflictUpdate(
+      // Columnas NO anulables sin default: valor crudo (no Value).
+      PaletteCacheCompanion.insert(
+        id: url,
+        c1: colors[0],
+        c2: Value(colors.length > 1 ? colors[1] : null),
+        c3: Value(colors.length > 2 ? colors[2] : null),
+      ),
+    );
+  }
+
+  /// Todas las entradas persistidas (para poblar la caché en memoria al
+  /// arrancar).
+  Future<List<PaletteRow>> allPalettes() => select(paletteCache).get();
+
+  /// Recorte LRU: deja solo las [keep] entradas usadas más recientemente.
+  Future<void> trimPalettes(int keep) async {
+    await customStatement(
+      'DELETE FROM palette_cache WHERE id NOT IN '
+      '(SELECT id FROM palette_cache ORDER BY used_at DESC LIMIT ?)',
+      [keep],
+    );
+  }
 
   // -------------------------------------------------------------- lyrics
   String _lyricsKey(String title, String artist) =>
@@ -475,8 +513,7 @@ class AppDatabase extends _$AppDatabase {
           playlistTracks,
           PlaylistTracksCompanion(position: Value(i + 1)),
           where: (pt) =>
-              pt.playlistId.equals(playlistId) &
-              pt.trackId.equals(trackIds[i]),
+              pt.playlistId.equals(playlistId) & pt.trackId.equals(trackIds[i]),
         );
       }
     });
