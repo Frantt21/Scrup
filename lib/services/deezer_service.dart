@@ -31,7 +31,12 @@ class DeezerService {
 
   /// Busca metadatos en Deezer para [track] y devuelve una versión
   /// enriquecida, o `null` si no encuentra una coincidencia fiable.
+  ///
+  /// Las pistas con `cleanMetadata` (YT Music/InnerTube, que ya traen
+  /// título/artista canónicos) se devuelven SIN tocar: ni consulta, ni
+  /// caché — su matching difuso solo puede empeorarlas.
   Future<Track?> enrich(Track track) async {
+    if (track.cleanMetadata) return null;
     if (_cache.containsKey(track.id)) return _cache[track.id];
     final inFlight = _inflight[track.id];
     if (inFlight != null) return inFlight;
@@ -78,16 +83,14 @@ class DeezerService {
         if (i >= tracks.length) return;
         final original = tracks[i];
         final deezer = await enrich(original);
-        enriched[i] =
-            deezer == null ? original : apply(original, deezer) ?? original;
+        enriched[i] = deezer == null
+            ? original
+            : apply(original, deezer) ?? original;
       }
     }
 
     await Future.wait(
-      List.generate(
-        concurrency.clamp(1, tracks.length),
-        (_) => worker(),
-      ),
+      List.generate(concurrency.clamp(1, tracks.length), (_) => worker()),
     );
     return enriched.whereType<Track>().toList();
   }

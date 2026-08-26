@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
-import '../../services/deezer_service.dart';
 import '../../services/player_service.dart';
 import '../../services/search_service.dart';
 import '../playback.dart';
@@ -92,19 +91,12 @@ class _SearchViewState extends State<SearchView> {
     try {
       final tracks = await context.read<SearchService>().search(q);
       if (!mounted || token != _searchToken) return; // búsqueda obsoleta
-      // Mostrar ya los resultados de YouTube (rápido, sin spinner) y, en
-      // segundo plano, enriquecerlos con la metadata de Deezer (título/
-      // artista/álbum/portada limpios): cuando llega, la lista se reemplaza
-      // en su lugar sin bloquear la interacción.
+      // SIN enriquecimiento automático: InnerTube ya devuelve metadatos
+      // limpios (y Deezer solo vive en el editor manual de metadatos).
       setState(() {
         _results = tracks;
         _searching = false;
       });
-      final enriched = await context
-          .read<DeezerService>()
-          .enrichAll(tracks);
-      if (!mounted || token != _searchToken) return;
-      setState(() => _results = enriched);
     } catch (e) {
       if (!mounted || token != _searchToken) return;
       setState(() {
@@ -150,7 +142,9 @@ class _SearchViewState extends State<SearchView> {
         borderRadius: BorderRadius.circular(18),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.72,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,7 +183,9 @@ class _SearchViewState extends State<SearchView> {
                                 child: SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
                               )
                             : null,
@@ -198,7 +194,9 @@ class _SearchViewState extends State<SearchView> {
                           borderRadius: BorderRadius.circular(28),
                           borderSide: BorderSide.none,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),

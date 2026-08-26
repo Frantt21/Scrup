@@ -10,6 +10,10 @@ import 'ytmusic_service.dart';
 /// como badge en la lista de resultados del editor).
 typedef MetadataHit = ({Track track, String source});
 
+/// Límite de resultados que devuelve [MetadataLookupService.search] tras
+/// mezclar todas las fuentes.
+const int kMaxLookupResults = 20;
+
 /// Búsqueda de metadatos MULTI-FUENTE para el editor de metadatos:
 ///
 /// - **Deezer** (API pública, sin key): título/artista/álbum limpios y
@@ -61,7 +65,9 @@ class MetadataLookupService {
       if (spotifyLink != null) _fromSpotifyUrl(spotifyLink.group(0)!),
     ]);
 
-    return [for (final list in futures) ...list];
+    return [
+      for (final list in futures) ...list,
+    ].take(kMaxLookupResults).toList();
   }
 
   // ── Deezer ──────────────────────────────────────────────────────────────
@@ -84,7 +90,7 @@ class MetadataLookupService {
     if (query.trim().isEmpty) return const [];
     try {
       final uri = Uri.parse('https://itunes.apple.com/search').replace(
-        queryParameters: {'term': query, 'entity': 'song', 'limit': '6'},
+        queryParameters: {'term': query, 'entity': 'song', 'limit': '10'},
       );
       final resp = await _client
           .get(uri, headers: {'User-Agent': userAgent})
@@ -123,7 +129,7 @@ class MetadataLookupService {
 
   Future<List<MetadataHit>> _searchInnerTube(String query) async {
     try {
-      final res = await _ytmusic.search(query, limit: 6);
+      final res = await _ytmusic.search(query, limit: 10);
       return [
         for (final r in res)
           (

@@ -22,18 +22,20 @@ class YtMusicResult {
   final int? durationSeconds;
   final String? thumbnailUrl;
 
-  Duration? get duration => durationSeconds == null
-      ? null
-      : Duration(seconds: durationSeconds!);
+  Duration? get duration =>
+      durationSeconds == null ? null : Duration(seconds: durationSeconds!);
 
   /// Conversión a Track del pipeline normal (cache/reproducción/deezer).
+  /// Marca `cleanMetadata`: InnerTube con filtro Songs ya devuelve
+  /// título/artista canónicos — Deezer no debe sobreescribirlos.
   Track toTrack() => Track(
-        id: videoId,
-        title: title,
-        artist: artist.isEmpty ? 'YouTube Music' : artist,
-        duration: duration,
-        thumbnailUrl: thumbnailUrl,
-      );
+    id: videoId,
+    title: title,
+    artist: artist.isEmpty ? 'YouTube Music' : artist,
+    duration: duration,
+    thumbnailUrl: thumbnailUrl,
+    cleanMetadata: true,
+  );
 }
 
 class YtMusicException implements Exception {
@@ -46,7 +48,11 @@ class YtMusicException implements Exception {
 
 /// Playlist pública de YouTube / YouTube Music leída vía InnerTube browse.
 class YtmPlaylist {
-  const YtmPlaylist({required this.id, required this.name, required this.tracks});
+  const YtmPlaylist({
+    required this.id,
+    required this.name,
+    required this.tracks,
+  });
 
   final String id;
   final String name;
@@ -65,29 +71,27 @@ class YtmPlaylist {
 class YtMusicService {
   YtMusicService({http.Client? client}) : _client = client ?? http.Client();
 
-  static const _endpoint =
-      'https://music.youtube.com/youtubei/v1/search';
-  static const _browseEndpoint =
-      'https://music.youtube.com/youtubei/v1/browse';
+  static const _endpoint = 'https://music.youtube.com/youtubei/v1/search';
+  static const _browseEndpoint = 'https://music.youtube.com/youtubei/v1/browse';
   static const _clientName = 'WEB_REMIX';
   static const _clientVersion = '1.20240403.01.00';
+
   /// Filtro InnerTube "Songs": solo canciones canónicas, sin vídeos sueltos.
   static const _songsFilterParam = 'EgWKAQIIAWoKEAkQBRAKEAMQBA==';
   static final _clockRe = RegExp(r'^\d{1,2}:\d{2}(?::\d{2})?$');
   static final _ytListParamRe = RegExp(r'[?&]list=([A-Za-z0-9_-]+)');
-  static final _ytBareIdRe =
-      RegExp(r'^(PL|UU|OL|FL|RD|LL)[A-Za-z0-9_-]{10,}$');
+  static final _ytBareIdRe = RegExp(r'^(PL|UU|OL|FL|RD|LL)[A-Za-z0-9_-]{10,}$');
 
   final http.Client _client;
 
   Map<String, Object> _context() => {
-        'client': {
-          'clientName': _clientName,
-          'clientVersion': _clientVersion,
-          'hl': 'en',
-          'gl': 'US',
-        },
-      };
+    'client': {
+      'clientName': _clientName,
+      'clientVersion': _clientVersion,
+      'hl': 'en',
+      'gl': 'US',
+    },
+  };
 
   Future<List<YtMusicResult>> search(String query, {int limit = 8}) async {
     if (query.trim().isEmpty) return const [];
@@ -166,8 +170,9 @@ class YtMusicService {
   static YtMusicResult? resultFromListItem(Map item) {
     final videoId =
         (item['playlistItemData'] as Map?)?['videoId'] as String? ??
-            (((item['navigationEndpoint'] as Map?)?['watchEndpoint'] as Map?)
-                ?['videoId'] as String?);
+        (((item['navigationEndpoint'] as Map?)?['watchEndpoint']
+                as Map?)?['videoId']
+            as String?);
     if (videoId == null || videoId.isEmpty) return null;
     final columns = (item['flexColumns'] as List?) ?? const [];
     String? title;
@@ -175,10 +180,12 @@ class YtMusicService {
     int? seconds;
     // Miniatura: elegir la de mayor resolución disponible.
     String? thumbUrl;
-    final thumbs = ((((item['thumbnail'] as Map?)?['musicThumbnailRenderer']
-                        as Map?)
-                    ?['thumbnail'] as Map?)?['thumbnails'] as List?)
-        ?.whereType<Map>();
+    final thumbs =
+        ((((item['thumbnail'] as Map?)?['musicThumbnailRenderer']
+                        as Map?)?['thumbnail']
+                    as Map?)?['thumbnails']
+                as List?)
+            ?.whereType<Map>();
     if (thumbs != null && thumbs.isNotEmpty) {
       Map best = thumbs.first;
       var bestW = (best['width'] as num?) ?? 0;
@@ -191,12 +198,13 @@ class YtMusicService {
       if (best['url'] is String) thumbUrl = best['url'] as String;
     }
     for (var i = 0; i < columns.length; i++) {
-      final runs = ((((columns[i] as Map?)?[
-                      'musicResponsiveListItemFlexColumnRenderer'] as Map?)
-                  ?['text'] as Map?)
-              ?['runs'] as List?)
-          ?.whereType<Map>()
-          .toList();
+      final runs =
+          ((((columns[i] as Map?)?['musicResponsiveListItemFlexColumnRenderer']
+                          as Map?)?['text']
+                      as Map?)?['runs']
+                  as List?)
+              ?.whereType<Map>()
+              .toList();
       if (runs == null || runs.isEmpty) continue;
       final texts = [
         for (final r in runs)
@@ -220,11 +228,13 @@ class YtMusicService {
     if (seconds == null) {
       final fixed = (item['fixedColumns'] as List?)?.whereType<Map>();
       for (final col in fixed ?? const <Map>[]) {
-        final runs = ((((col['musicResponsiveListItemFixedColumnRenderer']
-                            as Map?)
-                        ?['text'] as Map?)?['runs'] as List?)
-            ?.whereType<Map>()
-            .toList());
+        final runs =
+            ((((col['musicResponsiveListItemFixedColumnRenderer']
+                            as Map?)?['text']
+                        as Map?)?['runs']
+                    as List?)
+                ?.whereType<Map>()
+                .toList());
         if (runs == null) continue;
         for (final r in runs) {
           final t = (r['text'] as String?)?.trim();
@@ -262,7 +272,10 @@ class YtMusicService {
   /// Lee una playlist PÚBLICA de YouTube / YouTube Music paginando el
   /// endpoint InnerTube browse (sin límite práctico; [maxTracks] es solo un
   /// seguro). Los videoIds vienen exactos: no hay búsqueda ni matching.
-  Future<YtmPlaylist> fetchPlaylist(String urlOrId, {int maxTracks = 2000}) async {
+  Future<YtmPlaylist> fetchPlaylist(
+    String urlOrId, {
+    int maxTracks = 2000,
+  }) async {
     final id = extractYoutubePlaylistId(urlOrId);
     if (id == null) throw const YtMusicException('invalid-id');
     final tracks = <Track>[];
@@ -274,7 +287,10 @@ class YtMusicService {
     for (var page = 0; page < 50 && tracks.length < maxTracks; page++) {
       final body = jsonEncode({
         'context': _context(),
-        if (continuation == null) 'browseId': 'VL$id' else 'continuation': continuation,
+        if (continuation == null)
+          'browseId': 'VL$id'
+        else
+          'continuation': continuation,
       });
       http.Response res;
       try {
@@ -295,7 +311,9 @@ class YtMusicService {
       } catch (e) {
         throw YtMusicException(e.toString());
       }
-      if (res.statusCode != 200) throw YtMusicException('http-${res.statusCode}');
+      if (res.statusCode != 200) {
+        throw YtMusicException('http-${res.statusCode}');
+      }
       Object? data;
       try {
         data = jsonDecode(utf8.decode(res.bodyBytes));

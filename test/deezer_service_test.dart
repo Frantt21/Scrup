@@ -31,6 +31,28 @@ Map<String, dynamic> _dzTrack({
 void main() {
   group('DeezerService.enrich', () {
     test(
+      'pistas con cleanMetadata (YT Music) NO se tocan ni cachean',
+      () async {
+        var calls = 0;
+        final client = MockClient((_) async {
+          calls++;
+          return _deezerResponse([_dzTrack()]);
+        });
+        final service = DeezerService(client: client);
+
+        final clean = Track(
+          id: 'yt1',
+          title: 'One More Time',
+          artist: 'Daft Punk',
+          cleanMetadata: true,
+        );
+        expect(await service.enrich(clean), isNull);
+        expect(await service.enrich(clean), isNull); // tampoco cachea
+        expect(calls, 0);
+      },
+    );
+
+    test(
       'enriquece con título, artista, álbum y portada en alta resolución',
       () async {
         final client = MockClient((_) async => _deezerResponse([_dzTrack()]));
@@ -179,42 +201,40 @@ void main() {
       expect(result!.title, 'Música');
     });
 
-    test('enrichAll enriquece la lista y conserva las sin coincidencia',
-        () async {
-      var calls = 0;
-      final client = MockClient((_) async {
-        calls++;
-        return _deezerResponse([_dzTrack()]);
-      });
-      final service = DeezerService(client: client);
+    test(
+      'enrichAll enriquece la lista y conserva las sin coincidencia',
+      () async {
+        var calls = 0;
+        final client = MockClient((_) async {
+          calls++;
+          return _deezerResponse([_dzTrack()]);
+        });
+        final service = DeezerService(client: client);
 
-      final results = await service.enrichAll([
-        Track(
-          id: 'yt10',
-          title: 'One More Time (Official Video)',
-          artist: 'Daft Punk',
-        ),
-        Track(id: 'yt11', title: 'Mi Canción Rara', artist: 'Artista X'),
-        Track(
-          id: 'yt12',
-          title: 'One More Time',
-          artist: 'Daft Punk',
-        ),
-      ]);
+        final results = await service.enrichAll([
+          Track(
+            id: 'yt10',
+            title: 'One More Time (Official Video)',
+            artist: 'Daft Punk',
+          ),
+          Track(id: 'yt11', title: 'Mi Canción Rara', artist: 'Artista X'),
+          Track(id: 'yt12', title: 'One More Time', artist: 'Daft Punk'),
+        ]);
 
-      expect(results, hasLength(3));
-      // Los que coinciden con Deezer quedan enriquecidos (mismo videoId).
-      expect(results[0].id, 'yt10');
-      expect(results[0].title, 'One More Time');
-      expect(results[0].album, 'Discovery');
-      // El que no coincide conserva la metadata original.
-      expect(results[1].id, 'yt11');
-      expect(results[1].title, 'Mi Canción Rara');
-      expect(results[2].id, 'yt12');
-      expect(results[2].title, 'One More Time');
-      // Un request por video sin caché (cada track consulta su query).
-      expect(calls, 3);
-    });
+        expect(results, hasLength(3));
+        // Los que coinciden con Deezer quedan enriquecidos (mismo videoId).
+        expect(results[0].id, 'yt10');
+        expect(results[0].title, 'One More Time');
+        expect(results[0].album, 'Discovery');
+        // El que no coincide conserva la metadata original.
+        expect(results[1].id, 'yt11');
+        expect(results[1].title, 'Mi Canción Rara');
+        expect(results[2].id, 'yt12');
+        expect(results[2].title, 'One More Time');
+        // Un request por video sin caché (cada track consulta su query).
+        expect(calls, 3);
+      },
+    );
 
     test('searchManual busca con datos escritos aunque el video ya esté '
         'cacheado como null', () async {

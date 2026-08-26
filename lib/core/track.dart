@@ -12,6 +12,11 @@ class Track {
   /// metadatos vía Deezer; los resultados de YouTube no lo traen).
   final String? album;
 
+  /// `true` si los metadatos ya vienen limpios de origen (YT Music/InnerTube
+  /// con filtro Songs): el enriquecimiento Deezer NO debe sobreescribirlos
+  /// con su matching difuso. No se serializa: es proveniencia en memoria.
+  final bool cleanMetadata;
+
   const Track({
     required this.id,
     required this.title,
@@ -19,6 +24,7 @@ class Track {
     this.duration,
     this.thumbnailUrl,
     this.album,
+    this.cleanMetadata = false,
   });
 
   factory Track.fromYtDlp(Map<String, dynamic> json) {
@@ -75,6 +81,7 @@ class Track {
     Duration? duration,
     String? thumbnailUrl,
     String? album,
+    bool? cleanMetadata,
   }) {
     return Track(
       id: id,
@@ -83,6 +90,7 @@ class Track {
       duration: duration ?? this.duration,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       album: album ?? this.album,
+      cleanMetadata: cleanMetadata ?? this.cleanMetadata,
     );
   }
 }

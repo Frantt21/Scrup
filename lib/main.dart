@@ -14,7 +14,6 @@ import 'core/track.dart';
 import 'data/database.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'services/audio_cache_service.dart';
-import 'services/deezer_service.dart';
 import 'services/search_service.dart';
 import 'services/discord/discord_presence_service.dart';
 import 'services/lyrics_service.dart';
@@ -289,23 +288,24 @@ class ScrupApp extends StatelessWidget {
           create: (context) =>
               AudioCacheService(ytdlp: context.read<YtDlpService>()),
         ),
-        Provider<DeezerService>(create: (_) => DeezerService()),
         Provider<SearchService>(
-          create: (context) => SearchService(
-            ytDlp: context.read<YtDlpService>(),
-          ),
+          create: (context) =>
+              SearchService(ytDlp: context.read<YtDlpService>()),
         ),
-        Provider<LyricsService>(create: (context) => LyricsService(context.read<AppDatabase>())),
+        Provider<LyricsService>(
+          create: (context) => LyricsService(context.read<AppDatabase>()),
+        ),
         Provider<SettingsStore>(create: (_) => settings),
         Provider<PaletteCacheStore>(create: (_) => paletteCache),
         Provider<ScrupAudioHandler>(create: (_) => audioHandler),
         Provider<PlayerService>(
-          // Inyecta la resolución de fuente (cache-first con yt-dlp), la
-          // búsqueda de radio y el enriquecimiento de metadatos (Deezer).
+          // Inyecta la resolución de fuente (cache-first con yt-dlp) y la
+          // búsqueda de radio. SIN enriquecimiento automático: InnerTube
+          // (YT Music, filtro Songs) ya devuelve metadatos limpios y es la
+          // fuente principal; Deezer queda solo para el editor manual.
           create: (context) {
             final searchService = context.read<SearchService>();
             final cache = context.read<AudioCacheService>();
-            final deezer = context.read<DeezerService>();
             final db = context.read<AppDatabase>();
             final settings = context.read<SettingsStore>();
             // Debounce de la persistencia de la cola (ver onQueueChanged):
@@ -342,11 +342,8 @@ class ScrupApp extends StatelessWidget {
               // plano (recursos limitados por el caché) para que el salto de
               // canción sea instantáneo.
               preload: (track) => cache.preload(track.id, title: track.title),
-              // Metadatos: Deezer aporta título/álbum/portada limpios
-              enrich: (track) async =>
-                  deezer.apply(track, await deezer.enrich(track)),
-              // Persistir el enriquecimiento cuando llega (sin bloquear la
-              // reproducción): así las recientes muestran el artwork real.
+              // Persistir ediciones de metadatos del usuario (editor manual)
+              // y cualquier actualización de la pista actual.
               onEnriched: (track) async => db.updateTrackMetadata(track),
               // Historial: registra cada pista que realmente empieza a sonar
               // (manual, auto-advance o radio)
