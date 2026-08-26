@@ -14,6 +14,7 @@ import 'core/track.dart';
 import 'data/database.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'services/audio_cache_service.dart';
+import 'services/artwork_cache_service.dart';
 import 'services/search_service.dart';
 import 'services/discord/discord_presence_service.dart';
 import 'services/lyrics_service.dart';
@@ -288,6 +289,9 @@ class ScrupApp extends StatelessWidget {
           create: (context) =>
               AudioCacheService(ytdlp: context.read<YtDlpService>()),
         ),
+        Provider<ArtworkCacheService>(
+          create: (_) => ArtworkCacheService(),
+        ),
         Provider<SearchService>(
           create: (context) =>
               SearchService(ytDlp: context.read<YtDlpService>()),
@@ -456,6 +460,7 @@ class ScrupApp extends StatelessWidget {
           create: (context) => ThemeController(
             context.read<PlayerService>(),
             paletteCache: context.read<PaletteCacheStore>(),
+            artworkCache: context.read<ArtworkCacheService>(),
           ),
         ),
         // Presencia de Discord (Rich Presence): se conecta al IPC local de
@@ -478,13 +483,12 @@ class ScrupApp extends StatelessWidget {
         // muerta. Debe ir DESPUÉS del provider de PlayerService: con
         // lazy:false el create corre al montar su propio nodo, y un provider
         // declarado antes no encontraría a PlayerService ("not found").
-        Provider<SilenceSkipService>(
+        ChangeNotifierProvider<SilenceSkipService>(
           create: (context) => SilenceSkipService(
             context.read<PlayerService>(),
             context.read<AudioCacheService>(),
             context.read<SettingsStore>(),
           ),
-          dispose: (_, service) => service.dispose(),
           lazy: false,
         ),
         // Idioma de la interfaz: al cambiar, el MaterialApp se reconstruye

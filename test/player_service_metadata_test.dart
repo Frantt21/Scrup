@@ -64,42 +64,47 @@ void main() {
   });
 
   group('PlayerService.updateCurrentMetadata', () {
-    test('actualiza la cola y la pista actual, y persiste vía onEnriched',
-        () async {
-      final t1 = Track(id: 'a', title: 'Uno', artist: 'Artista A');
-      final t2 = Track(id: 'b', title: 'Dos', artist: 'Artista B');
-      await player.playQueue([t1, t2]);
-      expect(player.currentTrackValue?.id, 'a');
+    test(
+      'actualiza la cola y la pista actual, y persiste vía onEnriched',
+      () async {
+        final t1 = Track(id: 'a', title: 'Uno', artist: 'Artista A');
+        final t2 = Track(id: 'b', title: 'Dos', artist: 'Artista B');
+        await player.playQueue([t1, t2]);
+        expect(player.currentTrackValue?.id, 'a');
 
-      final updated = t1.copyWith(
-        title: 'Uno Editado',
-        artist: 'Artista A2',
-        album: 'Álbum Nuevo',
-        thumbnailUrl: 'https://example.com/cover.jpg',
-      );
-      await player.updateCurrentMetadata(updated);
+        final updated = t1.copyWith(
+          title: 'Uno Editado',
+          artist: 'Artista A2',
+          album: 'Álbum Nuevo',
+          thumbnailUrl: 'https://example.com/cover.jpg',
+        );
+        await player.updateCurrentMetadata(updated);
 
-      // Cola: la entrada con el mismo id se reemplazó en su lugar.
-      expect(player.queue.value.length, 2);
-      expect(player.queue.value[0].id, 'a');
-      expect(player.queue.value[0].title, 'Uno Editado');
-      expect(player.queue.value[0].album, 'Álbum Nuevo');
-      expect(player.queue.value[0].thumbnailUrl, 'https://example.com/cover.jpg');
-      // La otra pista no se toca.
-      expect(player.queue.value[1].id, 'b');
-      expect(player.queue.value[1].title, 'Dos');
+        // Cola: la entrada con el mismo id se reemplazó en su lugar.
+        expect(player.queue.value.length, 2);
+        expect(player.queue.value[0].id, 'a');
+        expect(player.queue.value[0].title, 'Uno Editado');
+        expect(player.queue.value[0].album, 'Álbum Nuevo');
+        expect(
+          player.queue.value[0].thumbnailUrl,
+          'https://example.com/cover.jpg',
+        );
+        // La otra pista no se toca.
+        expect(player.queue.value[1].id, 'b');
+        expect(player.queue.value[1].title, 'Dos');
 
-      // UI: la pista en reproducción se republica con la metadata nueva.
-      expect(player.currentTrackValue?.id, 'a');
-      expect(player.currentTrackValue?.title, 'Uno Editado');
-      expect(player.currentTrackValue?.artist, 'Artista A2');
+        // UI: la pista en reproducción se republica con la metadata nueva.
+        expect(player.currentTrackValue?.id, 'a');
+        expect(player.currentTrackValue?.title, 'Uno Editado');
+        expect(player.currentTrackValue?.artist, 'Artista A2');
 
-      // Persistencia: onEnriched recibió el track actualizado (mismo id).
-      expect(enriched, hasLength(1));
-      expect(enriched.single.id, 'a');
-      expect(enriched.single.title, 'Uno Editado');
-      expect(enriched.single.album, 'Álbum Nuevo');
-    });
+        // Persistencia: onEnriched recibió el track actualizado (mismo id).
+        expect(enriched, hasLength(1));
+        expect(enriched.single.id, 'a');
+        expect(enriched.single.title, 'Uno Editado');
+        expect(enriched.single.album, 'Álbum Nuevo');
+      },
+    );
 
     test('no toca la cola si la pista no está en ella', () async {
       await player.playQueue([

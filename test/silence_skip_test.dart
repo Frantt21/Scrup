@@ -49,10 +49,7 @@ frame= 1234 fps=0.0 q=-0.0 Lsize=   12345kB
     });
 
     test('los huecos reportan contains correctamente', () {
-      const gap = SilenceGap(
-        Duration(seconds: 10),
-        Duration(seconds: 14),
-      );
+      const gap = SilenceGap(Duration(seconds: 10), Duration(seconds: 14));
       expect(gap.contains(const Duration(seconds: 9)), isFalse);
       expect(gap.contains(const Duration(seconds: 10)), isTrue);
       expect(gap.contains(const Duration(seconds: 13)), isTrue);

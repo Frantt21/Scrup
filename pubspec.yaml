@@ -10,6 +10,7 @@ dependencies:
   audio_service: ^0.18.18
   audio_service_mpris: ^0.2.0
   audio_service_win: 0.0.3
+  crypto: ^3.0.3
   drift: ^2.34.3
   drift_flutter: ^0.3.1
   file_selector: ^1.1.0
@@ -19,6 +20,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   http: ^1.6.0
+  image: ^4.5.3
   intl: ^0.20.2
   media_kit: ^1.2.6
   media_kit_libs_audio: ^1.0.7

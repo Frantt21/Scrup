@@ -27,8 +27,7 @@ void main() {
       expect(line.words![2].timestamp.inMilliseconds, 2000);
     });
 
-    test(
-        'fusiona sílabas de una misma palabra (convención Apple: 1 espacio '
+    test('fusiona sílabas de una misma palabra (convención Apple: 1 espacio '
         'intra-palabra, ≥2 entre palabras)', () {
       // Ejemplo real: «stalkeándote» viene partida en «stalkeándo» + «te.»
       final line = LyricLine.fromLRC(
@@ -48,27 +47,36 @@ void main() {
       final lyrics = SyncedLyrics.fromLRC(
         songTitle: 'Tema',
         artist: 'Artista',
-        lrcContent: '[00:20.00] <00:20.00>Una  <00:20.50>vez  <00:21.00>más\n'
+        lrcContent:
+            '[00:20.00] <00:20.00>Una  <00:20.50>vez  <00:21.00>más\n'
             '[00:41.70] <00:41.70>dar <00:42.67>te?',
       );
-      expect(lyrics.lines[0].words!.map((w) => w.text).toList(),
-          ['Una', 'vez', 'más']);
+      expect(lyrics.lines[0].words!.map((w) => w.text).toList(), [
+        'Una',
+        'vez',
+        'más',
+      ]);
       expect(lyrics.lines[1].text, 'darte?');
       expect(lyrics.lines[1].words, hasLength(1));
       expect(lyrics.lines[1].words!.single.text, 'darte?');
       expect(lyrics.lines[1].words!.single.timestamp.inMilliseconds, 41700);
     });
 
-    test('sin convención en el archivo, los espacios simples separan palabras',
-        () {
-      final lyrics = SyncedLyrics.fromLRC(
-        songTitle: 'Tema',
-        artist: 'Artista',
-        lrcContent: '[00:01.00]<00:01.00>One <00:01.50>More <00:02.00>Time',
-      );
-      expect(lyrics.lines.single.words!.map((w) => w.text).toList(),
-          ['One', 'More', 'Time']);
-    });
+    test(
+      'sin convención en el archivo, los espacios simples separan palabras',
+      () {
+        final lyrics = SyncedLyrics.fromLRC(
+          songTitle: 'Tema',
+          artist: 'Artista',
+          lrcContent: '[00:01.00]<00:01.00>One <00:01.50>More <00:02.00>Time',
+        );
+        expect(lyrics.lines.single.words!.map((w) => w.text).toList(), [
+          'One',
+          'More',
+          'Time',
+        ]);
+      },
+    );
 
     test('tags pegados sin espacio también se fusionan', () {
       final line = LyricLine.fromLRC(
@@ -132,7 +140,8 @@ Línea sin timestamp
 
   group('SyncedLyrics.fromTtml', () {
     test('parsea líneas y palabras de Unison richsync', () {
-      const ttml = '<tt xmlns="http://www.w3.org/ns/ttml"><body><div>'
+      const ttml =
+          '<tt xmlns="http://www.w3.org/ns/ttml"><body><div>'
           '<p begin="0:13.532" end="0:20.172">'
           '<span begin="0:13.532">I</span> '
           '<span begin="0:13.930">know</span> '
@@ -159,7 +168,8 @@ Línea sin timestamp
     });
 
     test('ordenar palabras desordenadas (coros de fondo anidados)', () {
-      const ttml = '<tt><body><div>'
+      const ttml =
+          '<tt><body><div>'
           '<p begin="0:10.000" end="0:14.000">'
           '<span begin="0:12.000">main</span>'
           '<span ttm:role="x-bg"><span begin="0:10.500">bg</span></span>'
@@ -171,19 +181,25 @@ Línea sin timestamp
         ttmlContent: ttml,
       );
       expect(lyrics.lines, hasLength(1));
-      expect(lyrics.lines[0].words!.map((w) => w.text).toList(), ['bg', 'main']);
+      expect(lyrics.lines[0].words!.map((w) => w.text).toList(), [
+        'bg',
+        'main',
+      ]);
     });
   });
 
   group('getCurrentLineIndex con líneas karaoke', () {
     SyncedLyrics buildKaraoke() {
       LyricLine line(int seconds) => LyricLine(
+        timestamp: Duration(seconds: seconds),
+        text: 'l$seconds',
+        words: [
+          KaraokeWord(
             timestamp: Duration(seconds: seconds),
-            text: 'l$seconds',
-            words: [
-              KaraokeWord(timestamp: Duration(seconds: seconds), text: 'l'),
-            ],
-          );
+            text: 'l',
+          ),
+        ],
+      );
       return SyncedLyrics(
         songTitle: 'Tema',
         artist: 'Artista',
@@ -191,17 +207,20 @@ Línea sin timestamp
       );
     }
 
-    test('sin adelanto entre líneas karaoke (la palabra termina de pintarse)', () {
-      final lyrics = buildKaraoke();
-      // A 9.7s la línea actual SIGUE siendo la primera: el adelanto de
-      // 500ms no aplica a líneas con timestamps por palabra.
-      expect(
-        lyrics.getCurrentLineIndex(const Duration(milliseconds: 9700)),
-        0,
-      );
-      // A los 10s exactos pasa a la segunda.
-      expect(lyrics.getCurrentLineIndex(const Duration(seconds: 10)), 1);
-    });
+    test(
+      'sin adelanto entre líneas karaoke (la palabra termina de pintarse)',
+      () {
+        final lyrics = buildKaraoke();
+        // A 9.7s la línea actual SIGUE siendo la primera: el adelanto de
+        // 500ms no aplica a líneas con timestamps por palabra.
+        expect(
+          lyrics.getCurrentLineIndex(const Duration(milliseconds: 9700)),
+          0,
+        );
+        // A los 10s exactos pasa a la segunda.
+        expect(lyrics.getCurrentLineIndex(const Duration(seconds: 10)), 1);
+      },
+    );
 
     test('el adelanto se mantiene en líneas solo de línea', () {
       final lyrics = SyncedLyrics.fromLRC(
@@ -210,10 +229,7 @@ Línea sin timestamp
         lrcContent: '[00:05.00] A\n[00:10.00] B',
       );
       // A 9.7s ya apunta a B (9.7 + 0.5 >= 10).
-      expect(
-        lyrics.getCurrentLineIndex(const Duration(milliseconds: 9700)),
-        1,
-      );
+      expect(lyrics.getCurrentLineIndex(const Duration(milliseconds: 9700)), 1);
     });
   });
 }

@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
@@ -69,8 +70,8 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
   /// Paleta TRÍO del artwork actual para el fondo.
   List<Color> _palette = const [];
 
-  /// Bytes del artwork ACTUAL (máxima resolución) para pintar la portada.
-  Uint8List? _artBytes;
+  /// Ruta del archivo en disco del artwork ACTUAL.
+  String? _artPath;
 
   StreamSubscription<Track?>? _trackSub;
   int _visualToken = 0;
@@ -92,7 +93,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     }
     _trackSub = _player.currentTrack.listen((t) {
       if (!mounted || t?.id == _track?.id) return;
-      setState(() => _track = t);
       _loadTrackVisuals(t);
     });
     // Precarga al moverse la cola también (no solo tras cada carga).
@@ -121,6 +121,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
   @override
   void dispose() {
     _trackSub?.cancel();
+    _prefetchTimer?.cancel();
     _player.queueIndex.removeListener(_prefetchNextListener);
     _player.queue.removeListener(_prefetchNextListener);
     _transition.dispose();
@@ -129,28 +130,21 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
 
   // ── Artwork hi-res + paleta (una sola descarga, con precarga) ────────────
 
-  /// Bytes de artworks ya descargados esta sesión (clave: URL original).
-  static final Map<String, Uint8List> _artBytesCache = {};
+  /// URLs de artworks cuyo archivo ya está en disco (evita re-download).
+  static final Set<String> _ensuredUrls = {};
 
   /// Tríos de color ya calculados (clave: URL original).
   static final Map<String, List<Color>> _trioCache = {};
 
-  /// Asegura bytes hi-res + trío para una URL. Idempotente y seguro de
-  /// llamar en paralelo: sirve tanto al track actual como a la PRECARGA
-  /// del siguiente (así el cambio de canción no tiene intermedios).
-  ///
-  /// El trío se PERSISTE en PaletteCacheStore (mismo caché JSON-LRU que el
-  /// acento): reabrir la app ya no re-descarga el artwork ni re-extrae la
-  /// paleta para portadas vistas antes.
-  Future<(Uint8List?, List<Color>)> _ensureVisuals(String rawUrl) async {
+  /// Asegura archivo de artwork en disco + trío de colores para una URL.
+  /// Devuelve la ruta del archivo (para `Image.file`) + trío.
+  Future<(String?, List<Color>)> _ensureVisuals(String rawUrl) async {
     final paletteStore = context.read<PaletteCacheStore>();
-    var bytes = _artBytesCache[rawUrl];
-    var trio = _trioCache[rawUrl];
-    if (bytes != null && trio != null) return (bytes, trio);
+    final artworkCache = context.read<ArtworkCacheService>();
 
-    if (trio == null && bytes == null) {
-      // Persistente primero: si esta portada ya se procesó en una sesión
-      // anterior, el trío está disponible SIN red NI extracción.
+    // 1) Trio: memoria → SQLite
+    var trio = _trioCache[rawUrl];
+    if (trio == null) {
       final saved = paletteStore.getTrio(rawUrl);
       if (saved != null) {
         trio = saved;
@@ -158,24 +152,29 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
       }
     }
 
-    if (bytes == null) {
-      // Artwork LOCAL (portada propia desde metadatos): leer del disco.
-      final lower = rawUrl.toLowerCase();
-      if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
-        try {
-          final f = File(rawUrl);
-          if (await f.exists()) {
-            final b = await f.readAsBytes();
-            if (b.length > 128) bytes = b;
-          }
-        } catch (_) {
-          // Archivo ilegible → sin artwork.
-        }
-        if (bytes != null) _artBytesCache[rawUrl] = bytes;
-      }
+    // 2) Archivo en disco
+    if (_ensuredUrls.contains(rawUrl)) {
+      final path = await artworkCache.filePathFor(rawUrl);
+      if (path != null) return (path, trio ?? const []);
     }
-    if (bytes == null) {
-      // Red: cadena de respaldo maxresdefault (1280px) → URL original.
+
+    // Local
+    final lower = rawUrl.toLowerCase();
+    if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+      try {
+        final f = File(rawUrl);
+        if (await f.exists()) {
+          _ensuredUrls.add(rawUrl);
+          return (rawUrl, trio ?? const []);
+        }
+      } catch (_) {}
+    }
+
+    // Disco caché
+    String? path = await artworkCache.filePathFor(rawUrl);
+    if (path == null) {
+      // Red
+      Uint8List? bytes;
       for (final url in [Track.hiResThumbnail(rawUrl) ?? rawUrl, rawUrl]) {
         try {
           final resp = await http
@@ -184,32 +183,37 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
                 headers: const {'User-Agent': 'Scrup/0.1 (music player)'},
               )
               .timeout(const Duration(seconds: 10));
-          // >1KB: descarta placeholders grises de YouTube (404 disfrazado).
           if (resp.statusCode == 200 && resp.bodyBytes.length > 1024) {
             bytes = resp.bodyBytes;
             break;
           }
-        } catch (_) {
-          // Siguiente eslabón.
-        }
+        } catch (_) {}
       }
-      if (bytes != null) _artBytesCache[rawUrl] = bytes;
+      if (bytes != null) {
+        await artworkCache.save(rawUrl, bytes);
+        path = await artworkCache.filePathFor(rawUrl);
+      }
     }
-    if (bytes == null) return (null, const <Color>[]);
 
+    if (path == null) return (null, trio ?? const []);
+    _ensuredUrls.add(rawUrl);
+
+    // 3) Trio: extraer si no existe
     if (trio == null) {
-      // Extracción DELEGADA al servicio unificado: decodifica reducido y
-      // cuantiza en un ISOLATE (cero jank en el hilo de UI), con guardia
-      // monocroma. Misma ruta que Ajustes y ThemeController.
-      trio = await ArtworkPaletteService.trioFromBytes(
-        rawUrl,
-        bytes,
-        paletteStore,
-      );
-      if (trio.isNotEmpty) _trioCache[rawUrl] = trio;
+      final bytes = await artworkCache.load(rawUrl);
+      if (bytes != null) {
+        trio = await ArtworkPaletteService.trioFromBytes(
+          rawUrl,
+          bytes,
+          paletteStore,
+        );
+        if (trio.isNotEmpty) _trioCache[rawUrl] = trio;
+      }
     }
-    return (bytes, trio);
+    return (path, trio ?? const []);
   }
+
+  Timer? _prefetchTimer;
 
   Future<void> _loadTrackVisuals(Track? track) async {
     final token = ++_visualToken;
@@ -217,20 +221,25 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     if (rawUrl == null || rawUrl.isEmpty) {
       if (mounted) {
         setState(() {
-          _artBytes = null;
+          _track = track;
+          _artPath = null;
           _palette = const [];
         });
       }
       return;
     }
 
-    final (bytes, colors) = await _ensureVisuals(rawUrl);
+    final (path, colors) = await _ensureVisuals(rawUrl);
     if (!mounted || token != _visualToken) return;
     setState(() {
-      _artBytes = bytes;
+      _track = track;
+      _artPath = path;
       _palette = colors;
     });
-    unawaited(_prefetchNext());
+    _prefetchTimer?.cancel();
+    _prefetchTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) unawaited(_prefetchNext());
+    });
   }
 
   /// Precarga bytes+paleta del SIGUIENTE track de la cola: cuando cambie la
@@ -244,7 +253,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     final url = q[i].thumbnailUrl;
     if (url == null ||
         url.isEmpty ||
-        (_artBytesCache.containsKey(url) && _trioCache.containsKey(url))) {
+        (_ensuredUrls.contains(url) && _trioCache.containsKey(url))) {
       return;
     }
     await _ensureVisuals(url);
@@ -316,7 +325,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
                                 child: _LeftColumn(
                                   artSide: artSide,
                                   track: _track,
-                                  bytes: _artBytes,
+                                  artPath: _artPath,
                                 ),
                               ),
                             ),
@@ -406,7 +415,7 @@ class _AnimatedBackdrop extends StatefulWidget {
 }
 
 class _AnimatedBackdropState extends State<_AnimatedBackdrop>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   /// Transición de paleta (mismo criterio que el gradiente del player bar):
   /// al cambiar de canción se anima del trío mostrado al nuevo en ~700ms.
   late final AnimationController _fade;
@@ -699,24 +708,21 @@ class _LeftColumn extends StatelessWidget {
   final double artSide;
   final Track? track;
 
-  /// Bytes hi-res de la portada (null mientras cargan).
-  final Uint8List? bytes;
+  /// Ruta del archivo de artwork en disco (null mientras carga).
+  final String? artPath;
 
   const _LeftColumn({
     required this.artSide,
     required this.track,
-    required this.bytes,
+    required this.artPath,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // SOLO artwork: crossfade cuando llegan píxeles nuevos (key por bytes),
-    // sin estado vacío entre canciones. Los controles viven aparte, en el
-    // contenedor flotante del stack raíz.
     return _Artwork(
       artSide: artSide,
-      bytes: bytes,
+      artPath: artPath,
       fallback: Container(
         color: theme.colorScheme.surfaceContainerHigh,
         child: Icon(
@@ -733,12 +739,12 @@ class _LeftColumn extends StatelessWidget {
 /// (0.955) con animación suave; al reproducir vuelve a 1.0.
 class _Artwork extends StatefulWidget {
   final double artSide;
-  final Uint8List? bytes;
+  final String? artPath;
   final Widget fallback;
 
   const _Artwork({
     required this.artSide,
-    required this.bytes,
+    required this.artPath,
     required this.fallback,
   });
 
@@ -766,55 +772,29 @@ class _ArtworkState extends State<_Artwork> {
 
   @override
   Widget build(BuildContext context) {
-    // ORDEN DE LAS CAPAS (importa): el AnimatedSwitcher del CAMBIO de
-    // canción va FUERA y escala el CONTENEDOR completo (marco redondeado
-    // incluido); el AnimatedScale de PAUSA va DENTRO. Así el scale-down de
-    // pausa persiste como estado del contenedor y el crossfade de cambio
-    // nunca deja esquinas vacías dentro del marco.
-    //
-    // El switcher necesita SU PROPIO tamaño explícito: su Stack interno con
-    // StackFit.expand sin cotas colapsaba según las constraints del padre y
-    // el contenedor del artwork desaparecía.
+    // Sin AnimatedSwitcher: el crossfade forzaba decodificar 2 imágenes
+    // en GPU simultáneamente. Swap directo + scale de pausa.
     return SizedBox(
       width: widget.artSide,
       height: widget.artSide,
-      child: AnimatedSwitcher(
+      child: AnimatedScale(
+        scale: _playing ? 1.0 : 0.955,
         duration: const Duration(milliseconds: 450),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, anim) => FadeTransition(
-          opacity: anim,
-          child: ScaleTransition(
-            scale: Tween(begin: 0.94, end: 1.0).animate(anim),
-            child: child,
-          ),
-        ),
-        layoutBuilder: (currentChild, previousChildren) => Stack(
-          fit: StackFit.expand,
-          alignment: Alignment.center,
-          children: [...previousChildren, ?currentChild],
-        ),
-        child: KeyedSubtree(
-          key: ValueKey(widget.bytes),
-          child: AnimatedScale(
-            scale: _playing ? 1.0 : 0.955,
-            duration: const Duration(milliseconds: 450),
-            curve: Curves.easeOutCubic,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: SizedBox(
-                width: widget.artSide,
-                height: widget.artSide,
-                child: widget.bytes != null
-                    ? Image.memory(
-                        widget.bytes!,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
-                        filterQuality: FilterQuality.high,
-                      )
-                    : widget.fallback,
-              ),
-            ),
+        curve: Curves.easeOutCubic,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            width: widget.artSide,
+            height: widget.artSide,
+            child: widget.artPath != null
+                ? Image.file(
+                    File(widget.artPath!),
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.high,
+                    cacheWidth: widget.artSide.round(),
+                  )
+                : widget.fallback,
           ),
         ),
       ),

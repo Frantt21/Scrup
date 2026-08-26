@@ -1,23 +1,20 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:palette_generator/palette_generator.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/player_service.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
-import '../theme_controller.dart';
 import '../widgets/context_menu_item.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/edit_metadata_dialog.dart';
@@ -193,42 +190,23 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   Future<void> _loadTrackColor(String url) async {
     Color? color;
     try {
-      final bytes =
-          (await http
-                  .get(
-                    Uri.parse(url),
-                    headers: const {'User-Agent': 'Scrup/0.1 (music player)'},
-                  )
-                  .timeout(const Duration(seconds: 8)))
-              .bodyBytes;
-      color = await _extractColorFromBytes(bytes);
+      final artworkCache = context.read<ArtworkCacheService>();
+      final trio = await ArtworkPaletteService.trioFor(
+        url,
+        _store,
+        artworkCache: artworkCache,
+      );
+      if (trio.isNotEmpty) {
+        color = ArtworkPaletteService.accentFromTrio(trio) ?? trio.first;
+      } else {
+        color = _store.get(url);
+      }
     } catch (_) {
       color = null;
     }
     _pendingTrackColors.remove(url);
-    // Guardar aunque sea null: no reintentar miniaturas fallidas (en esta
-    // sesión); solo los éxitos se persisten en disco.
     _trackPaletteCache[url] = color;
-    if (color != null) {
-      _store.put(url, color);
-    } else {
-      _store.markFailed(url);
-    }
     if (mounted) setState(() {});
-  }
-
-  /// Extrae el color de acento de unos bytes de imagen (misma paleta y
-  /// selección que el reproductor). `null` si no se pudo analizar.
-  Future<Color?> _extractColorFromBytes(Uint8List bytes) async {
-    try {
-      final palette = await PaletteGenerator.fromImageProvider(
-        MemoryImage(bytes),
-        maximumColorCount: 16,
-      );
-      return ThemeController.pickAccent(palette);
-    } catch (_) {
-      return null;
-    }
   }
 
   /// Extrae el color de la portada solo cuando cambia (evita re-analizar en
@@ -263,26 +241,21 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   Future<void> _extractAmbient(String source, int token) async {
     Color? color;
     try {
-      final bytes = CoverImage.isLocalPath(source)
-          ? await File(source).readAsBytes()
-          : (await http
-                    .get(
-                      Uri.parse(source),
-                      headers: const {'User-Agent': 'Scrup/0.1 (music player)'},
-                    )
-                    .timeout(const Duration(seconds: 10)))
-                .bodyBytes;
-      color = await _extractColorFromBytes(bytes);
+      final artworkCache = context.read<ArtworkCacheService>();
+      final trio = await ArtworkPaletteService.trioFor(
+        source,
+        _store,
+        artworkCache: artworkCache,
+      );
+      if (trio.isNotEmpty) {
+        color = ArtworkPaletteService.accentFromTrio(trio) ?? trio.first;
+      } else {
+        color = _store.get(source);
+      }
     } catch (_) {
       color = null;
     }
     _paletteCache[source] = color;
-    if (color != null) {
-      // Persistir solo los éxitos (los fallos se reintentan en otra sesión).
-      _store.put(source, color);
-    } else {
-      _store.markFailed(source);
-    }
     if (!mounted || token != _ambientToken) return;
     setState(() => _ambientColor = color);
   }
@@ -1017,7 +990,12 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     final url = track.thumbnailUrl;
     if (url == null || url.isEmpty) return;
     final store = context.read<PaletteCacheStore>();
-    await ArtworkPaletteService.trioFor(url, store, force: true);
+    await ArtworkPaletteService.trioFor(
+      url,
+      store,
+      force: true,
+      artworkCache: context.read<ArtworkCacheService>(),
+    );
     if (mounted) {
       showScrupToast(
         AppLocalizations.of(context).colorsUpdated,

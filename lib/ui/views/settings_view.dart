@@ -7,6 +7,7 @@ import 'package:drift/drift.dart' show OrderingTerm;
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/artwork_palette_service.dart';
+import '../../services/artwork_cache_service.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/discord/discord_presence_service.dart';
 import '../../services/palette_cache_store.dart';
@@ -113,7 +114,12 @@ class _SettingsViewState extends State<SettingsView> {
       setState(() => _recalcTotal = urls.length);
       var done = 0;
       for (final url in urls) {
-        await ArtworkPaletteService.trioFor(url, store, force: true);
+        await ArtworkPaletteService.trioFor(
+          url,
+          store,
+          force: true,
+          artworkCache: context.read<ArtworkCacheService>(),
+        );
         done++;
         if (mounted) setState(() => _recalcDone = done);
       }
@@ -591,6 +597,7 @@ class _SettingsViewState extends State<SettingsView> {
               ),
             ],
           ),
+          const SizedBox(height: 28),
           // Colores de portadas (mismo dominio de caché): trío fullscreen
           // + acento derivado, con recálculo manual por playlist.
           ..._buildPaletteControls(theme),

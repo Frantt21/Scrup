@@ -21,7 +21,9 @@ void main() {
           // datos tal cual llegan de KPoe/LRCLIB/TTML.
           KaraokeWord(timestamp: Duration.zero, text: 'Hola  '),
           KaraokeWord(
-              timestamp: const Duration(milliseconds: 500), text: ' mundo'),
+            timestamp: const Duration(milliseconds: 500),
+            text: ' mundo',
+          ),
         ],
       ),
     ],
@@ -54,44 +56,52 @@ void main() {
   }
 
   testWidgets('línea estática renderiza tokens limpios', (tester) async {
-    await tester.pumpWidget(buildDisplay(
-      currentIndex: null,
-      sweep: true,
-      position: ValueNotifier<Duration>(Duration.zero),
-    ));
+    await tester.pumpWidget(
+      buildDisplay(
+        currentIndex: null,
+        sweep: true,
+        position: ValueNotifier<Duration>(Duration.zero),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(joinedLineText(tester), 'Hola mundo');
   });
 
-  testWidgets('línea activa con sweep usa los mismos tokens que la estática',
-      (tester) async {
-    await tester.pumpWidget(buildDisplay(
-      currentIndex: 0,
-      sweep: true,
-      position: ValueNotifier<Duration>(const Duration(milliseconds: 250)),
-    ));
+  testWidgets('línea activa con sweep usa los mismos tokens que la estática', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      buildDisplay(
+        currentIndex: 0,
+        sweep: true,
+        position: ValueNotifier<Duration>(const Duration(milliseconds: 250)),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(joinedLineText(tester), 'Hola mundo');
   });
 
-  testWidgets('sin palabras karaoke cae al texto plano sin huecos',
-      (tester) async {
+  testWidgets('sin palabras karaoke cae al texto plano sin huecos', (
+    tester,
+  ) async {
     final plain = SyncedLyrics(
       songTitle: 'Tema',
       artist: 'Artista',
       lines: [LyricLine(timestamp: Duration.zero, text: 'Solo texto')],
     );
-    await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(
-        body: LyricsDisplay(
-          lyrics: plain,
-          positionNotifier: ValueNotifier<Duration>(Duration.zero),
-          sweepEnabled: true,
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: LyricsDisplay(
+            lyrics: plain,
+            positionNotifier: ValueNotifier<Duration>(Duration.zero),
+            sweepEnabled: true,
+          ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(joinedLineText(tester), 'Solo texto');
   });
@@ -125,19 +135,25 @@ void main() {
 
     List<Color> dotColors(WidgetTester tester) {
       return tester
-          .widgetList<Text>(find.byWidgetPredicate(
-              (w) => w is Text && w.data == '•' && w.style?.fontSize == 38))
+          .widgetList<Text>(
+            find.byWidgetPredicate(
+              (w) => w is Text && w.data == '•' && w.style?.fontSize == 38,
+            ),
+          )
           .map((t) => t.style!.color!)
           .toList();
     }
 
-    testWidgets('gap activo con karaoke: barrido parcial sobre los puntos',
-        (tester) async {
+    testWidgets('gap activo con karaoke: barrido parcial sobre los puntos', (
+      tester,
+    ) async {
       // Mitad del hueco [0..12 s]: primer punto lleno, último sin empezar.
-      await tester.pumpWidget(introDisplay(
-        sweep: true,
-        position: ValueNotifier<Duration>(const Duration(seconds: 6)),
-      ));
+      await tester.pumpWidget(
+        introDisplay(
+          sweep: true,
+          position: ValueNotifier<Duration>(const Duration(seconds: 6)),
+        ),
+      );
       await tester.pumpAndSettle();
 
       final colors = dotColors(tester);
@@ -146,27 +162,35 @@ void main() {
       expect(colors.last, Colors.white.withValues(alpha: 0.3)); // pendiente
     });
 
-    testWidgets('gap activo sin karaoke: puntos encendidos en fijo',
-        (tester) async {
-      await tester.pumpWidget(introDisplay(
-        sweep: false,
-        position: ValueNotifier<Duration>(const Duration(seconds: 6)),
-      ));
+    testWidgets('gap activo sin karaoke: puntos encendidos en fijo', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        introDisplay(
+          sweep: false,
+          position: ValueNotifier<Duration>(const Duration(seconds: 6)),
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(dotColors(tester), everyElement(Colors.white));
     });
 
-    testWidgets('fuera del gap: puntos apagados y línea activa encendida',
-        (tester) async {
-      await tester.pumpWidget(introDisplay(
-        sweep: true,
-        position: ValueNotifier<Duration>(const Duration(seconds: 20)),
-      ));
+    testWidgets('fuera del gap: puntos apagados y línea activa encendida', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        introDisplay(
+          sweep: true,
+          position: ValueNotifier<Duration>(const Duration(seconds: 20)),
+        ),
+      );
       await tester.pumpAndSettle();
 
-      expect(dotColors(tester),
-          everyElement(Colors.white.withValues(alpha: 0.3)));
+      expect(
+        dotColors(tester),
+        everyElement(Colors.white.withValues(alpha: 0.3)),
+      );
     });
   });
 }

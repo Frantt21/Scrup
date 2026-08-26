@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -34,7 +35,13 @@ class PaletteCacheStore {
   static const int _maxFailedEntries = 1000;
 
   /// URL → int ARGB (acento) o lista de 3 ARGB (trío).
+  /// El trío se almacena con clave "$url:t" para que `put` (acento) no lo
+  /// sobreescriba — era el bug que hacía que `getTrio` siempre devolviera
+  /// null y cada canción re-descargara/re-analizara la portada.
   final Map<String, Object> _colors = {};
+
+  /// Prefijo para entradas de trío (3 colores fullscreen).
+  static const String _trioPrefix = '\x00trio:';
 
   /// Entradas nuevas/cambiadas pendientes de volcar a la DB.
   final Set<String> _dirty = {};
@@ -58,11 +65,24 @@ class PaletteCacheStore {
     try {
       final rows = await db.allPalettes();
       for (final row in rows) {
-        if (row.c2 == null || row.c3 == null) {
-          store._colors[row.id] = row.c1 & 0xFFFFFFFF;
+        final id = row.id;
+        if (row.c2 == null && row.c3 == null) {
+          // Un solo valor: puede ser acento nuevo (con prefijo) o legacy (sin
+          // prefijo). Migrar legacy al formato nuevo para que `get()` lo
+          // encuentre en `_accentSuffix$url`.
+          if (id.startsWith(_trioPrefix) || id.startsWith(_accentSuffix)) {
+            store._colors[id] = row.c1 & 0xFFFFFFFF;
+          } else {
+            // Legacy: acento guardado directamente en url → migrar.
+            store._colors['$_accentSuffix$id'] = row.c1 & 0xFFFFFFFF;
+          }
         } else {
-          // Enmascarar a 32 bits: un dato corrupto rompería Color(argb).
-          store._colors[row.id] = [
+          // 2-3 valores: trío. Si viene sin prefijo (legacy), migrar.
+          final key =
+              (id.startsWith(_trioPrefix) || id.startsWith(_accentSuffix))
+              ? id
+              : '$_trioPrefix$id';
+          store._colors[key] = [
             row.c1 & 0xFFFFFFFF,
             row.c2! & 0xFFFFFFFF,
             row.c3! & 0xFFFFFFFF,
@@ -87,33 +107,50 @@ class PaletteCacheStore {
 
   /// Color cacheado para una URL, o null si nunca se extrajo con éxito.
   Color? get(String url) {
-    final argb = _colors[url];
-    if (argb is! int) return null;
-    return Color(argb);
+    final key = '$_accentSuffix$url';
+    final argb = _colors[key];
+    if (argb is! int) {
+      print('[SCRUP] PaletteStore.get: MISS ${url.substring(0, math.min(50, url.length))}… (key=$key)');
+      return null;
+    }
+    final color = Color(argb);
+    print('[SCRUP] PaletteStore.get: HIT #${color.toARGB32().toRadixString(16).padLeft(8, '0')} for ${url.substring(0, math.min(50, url.length))}…');
+    return color;
   }
 
   /// Trío de colores cacheado para una URL (fondo fullscreen), o null.
   List<Color>? getTrio(String url) {
-    final v = _colors[url];
-    if (v is! List) return null;
-    return [for (final argb in v) Color(argb as int)];
+    final key = '$_trioPrefix$url';
+    final v = _colors[key];
+    if (v is! List) {
+      print('[SCRUP] PaletteStore.getTrio: MISS ${url.substring(0, math.min(50, url.length))}… (key=$key)');
+      return null;
+    }
+    final trio = [for (final argb in v) Color(argb as int)];
+    print('[SCRUP] PaletteStore.getTrio: HIT [${trio.map((c) => '#${c.toARGB32().toRadixString(16).padLeft(8, '0')}').join(', ')}]');
+    return trio;
   }
 
   /// Guarda el color extraído de una URL (solo valores no nulos: un fallo
   /// no se persiste para poder reintentarlo en la próxima sesión).
   void put(String url, Color color) {
-    _colors[url] = color.toARGB32();
+    final key = '$_accentSuffix$url';
+    print('[SCRUP] PaletteStore.put: ACCENT #${color.toARGB32().toRadixString(16).padLeft(8, '0')} → $key');
+    _colors[key] = color.toARGB32();
     _failed.remove(url);
-    _scheduleSave(url);
+    _scheduleSave(key);
   }
 
   /// Guarda el trío extraído de una URL.
   void putTrio(String url, List<Color> trio) {
     assert(trio.length == 3);
-    _colors[url] = [for (final c in trio) c.toARGB32()];
+    _colors['$_trioPrefix$url'] = [for (final c in trio) c.toARGB32()];
     _failed.remove(url);
-    _scheduleSave(url);
+    _scheduleSave('$_trioPrefix$url');
   }
+
+  /// Clave separada para el acento: evita que `put` sobreescriba el trío.
+  static const String _accentSuffix = '\x01accent:';
 
   /// Marca una URL como fallida en esta sesión: los demás consumidores la
   /// verán vía [isFailed] y no volverán a descargarla.
@@ -127,9 +164,15 @@ class PaletteCacheStore {
   /// Elimina una entrada (memoria + DB): para recálculos manuales.
   Future<void> invalidate(String url) async {
     _colors.remove(url);
+    _colors.remove('$_trioPrefix$url');
+    _colors.remove('$_accentSuffix$url');
     _dirty.remove(url);
+    _dirty.remove('$_trioPrefix$url');
+    _dirty.remove('$_accentSuffix$url');
     try {
       await _db.deletePalette(url);
+      await _db.deletePalette('$_trioPrefix$url');
+      await _db.deletePalette('$_accentSuffix$url');
     } catch (_) {}
   }
 

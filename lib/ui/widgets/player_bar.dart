@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/artwork_cache_service.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
@@ -265,7 +266,12 @@ class _PlayerBarState extends State<PlayerBar>
     final l10n = AppLocalizations.of(context);
     if (url == null || url.isEmpty) return;
     final store = context.read<PaletteCacheStore>();
-    await ArtworkPaletteService.trioFor(url, store, force: true);
+    await ArtworkPaletteService.trioFor(
+      url,
+      store,
+      force: true,
+      artworkCache: context.read<ArtworkCacheService>(),
+    );
     if (mounted) {
       showScrupToast(l10n.colorsUpdated, kind: ScrupToastKind.success);
     }

@@ -56,6 +56,12 @@ class _LyricsDisplayState extends State<LyricsDisplay>
 
   /// Hay un snap pendiente programado en post-frame (evita duplicarlos).
   bool _pendingSnap = false;
+
+  /// `true` cuando `_snapToCurrentLine` se disparó desde `_onViewportAttached`
+  /// (reparenting fullscreen↔normal): fuerza el `jumpTo` sin el gate de
+  /// 400px porque el viewport es distinto aunque el offset heredado sea
+  /// parecido.
+  bool _snapFromAttach = false;
   List<LyricLine> _processedLines = [];
   SyncedLyrics? _lastLyrics;
   bool _isSweepEnabled = false;
@@ -255,6 +261,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
   void _onViewportAttached(ScrollPosition position) {
     if (_pendingSnap) return;
     _pendingSnap = true;
+    _snapFromAttach = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _snapToCurrentLine();
     });
@@ -282,9 +289,12 @@ class _LyricsDisplayState extends State<LyricsDisplay>
       // Salto estimado primero: acerca el ítem al rango construido del
       // ListView; el ensureVisible posterior centra con las métricas reales.
       final est = (di * 74.0).clamp(0.0, _controller.position.maxScrollExtent);
-      if ((_controller.offset - est).abs() > 400) {
+      // En reparenting (fullscreen↔normal) el viewport es distinto aunque
+      // el offset heredado sea parecido: forzar jumpTo siempre.
+      if (_snapFromAttach || (_controller.offset - est).abs() > 400) {
         _controller.jumpTo(est);
       }
+      _snapFromAttach = false;
       final key = _itemKeys[di];
       if (key?.currentContext != null) {
         Scrollable.ensureVisible(
@@ -469,12 +479,10 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                       vertical: 12,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color:
+                          widget.accentColor ??
+                          Theme.of(context).colorScheme.primary,
                       borderRadius: BorderRadius.circular(30),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.3),
-                        width: 1,
-                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,

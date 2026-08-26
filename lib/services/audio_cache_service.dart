@@ -48,8 +48,8 @@ class AudioCacheService {
     this.directoryOverride,
   }) : maxSizeBytes = maxSizeBytes ?? _maxFromEnv();
 
-  /// Tamaño máximo por defecto del caché: 2 GiB.
-  static const int defaultMaxSize = 2 * 1024 * 1024 * 1024;
+  /// Tamaño máximo por defecto del caché: 40 GiB.
+  static const int defaultMaxSize = 40 * 1024 * 1024 * 1024;
 
   /// Límite del caché desde la variable de entorno `SCRUP_CACHE_MAX_MB`
   /// (en MiB), o el [defaultMaxSize] si no está definida o es inválida.

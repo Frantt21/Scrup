@@ -1,13 +1,14 @@
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img_pkg;
 
 import '../core/track.dart';
+import 'artwork_cache_service.dart';
 import 'palette_cache_store.dart';
 
 /// Extracción de paletas de artwork — FUENTE ÚNICA para toda la app.
@@ -32,22 +33,39 @@ class ArtworkPaletteService {
 
   /// Devuelve el trío para [url], desde caché o extrayéndolo.
   ///
-  /// [force] ignora la caché (recalculo manual desde Ajustes).
+  /// [force] ignora la caché de paleta (recalculo manual desde Ajustes).
+  /// [artworkCache] si se provee, almacena/carga bytes de artwork en disco
+  /// para evitar re-descargas de red.
   static Future<List<Color>> trioFor(
     String url,
     PaletteCacheStore store, {
     bool force = false,
+    ArtworkCacheService? artworkCache,
   }) async {
+    print('[SCRUP] trioFor: url=${url.substring(0, math.min(80, url.length))}… force=$force');
     if (!force) {
       final cached = store.getTrio(url);
-      if (cached != null) return cached;
+      if (cached != null) {
+        print('[SCRUP] trioFor: TRIO CACHE HIT → [${cached.map((c) => '#${c.toARGB32().toRadixString(16).padLeft(8, '0')}').join(', ')}]');
+        return cached;
+      }
+      print('[SCRUP] trioFor: TRIO cache miss');
     } else {
       store.invalidate(url);
+      print('[SCRUP] trioFor: FORCE invalidate + re-extract');
     }
 
-    final bytes = await _fetchBytes(url);
-    if (bytes == null) return const [];
-    return trioFromBytes(url, bytes, store);
+    final bytes = await _fetchBytes(url, artworkCache: artworkCache);
+    if (bytes == null) {
+      print('[SCRUP] trioFor: NO BYTES fetched → empty');
+      return const [];
+    }
+    print('[SCRUP] trioFor: got ${bytes.length} bytes → extracting trio');
+    final trio = await trioFromBytes(url, bytes, store);
+    print('[SCRUP] trioFor: RESULT → [${trio.map((c) => '#${c.toARGB32().toRadixString(16).padLeft(8, '0')}').join(', ')}]');
+    final accent = store.get(url);
+    print('[SCRUP] trioFor: ACCENT stored → #${accent?.toARGB32().toRadixString(16).padLeft(8, '0')}');
+    return trio;
   }
 
   /// Extrae el trío desde bytes YA descargados (p. ej. los que el
@@ -64,38 +82,41 @@ class ArtworkPaletteService {
   ) async {
     try {
       final swatches = await extractSwatches(bytes);
+      print('[SCRUP] trioFromBytes: ${swatches.length} swatches extracted');
+      if (swatches.isNotEmpty) {
+        final domHsl = HSLColor.fromColor(swatches.first);
+        print('[SCRUP] trioFromBytes: dominant=#${swatches.first.toARGB32().toRadixString(16).padLeft(8, '0')} sat=${domHsl.saturation.toStringAsFixed(3)} light=${domHsl.lightness.toStringAsFixed(3)}');
+      }
       final trio = pickTrio(swatches);
+      print('[SCRUP] trioFromBytes: pickTrio → [${trio.map((c) => '#${c.toARGB32().toRadixString(16).padLeft(8, '0')}').join(', ')}]');
       if (trio.isNotEmpty) {
         store.putTrio(url, trio);
-        // Derivar y persistir TAMBIÉN el acento único: los consumidores
-        // antiguos (ThemeController) lo encuentran al instante y no vuelven
-        // a descargar/analizar la portada por su cuenta.
-        store.put(url, accentFromTrio(trio) ?? trio.first);
+        final accent = accentFromTrio(trio) ?? trio.first;
+        print('[SCRUP] trioFromBytes: accentFromTrio → #${accent.toARGB32().toRadixString(16).padLeft(8, '0')} (dominantSat=${HSLColor.fromColor(trio.first).saturation.toStringAsFixed(3)})');
+        store.put(url, accent);
       }
       return trio;
-    } catch (_) {
+    } catch (e) {
+      print('[SCRUP] trioFromBytes: ERROR $e');
       return const [];
     }
   }
 
-  /// Decodifica [bytes] REDUCIDO (96px vía engine, fuera del hilo UI) y
-  /// cuantiza los píxeles en un isolate aparte → colores candidatos con
-  /// población suficiente para el scoring del trío.
+  /// Decodifica [bytes] y cuantiza los píxeles — TODO el trabajo pesado
+  /// (decode JPEG + resize + quantize) corre en UN solo isolate,
+  /// eliminando `ui.instantiateImageCodec` del hilo de UI.
   static Future<List<Color>> extractSwatches(Uint8List bytes) async {
-    final codec = await ui.instantiateImageCodec(
-      bytes,
-      targetWidth: 96,
-      targetHeight: 96,
-    );
-    final frame = await codec.getNextFrame();
-    final data = await frame.image.toByteData(
-      format: ui.ImageByteFormat.rawStraightRgba,
-    );
-    frame.image.dispose();
-    codec.dispose();
-    if (data == null) return const [];
-    final rgba = data.buffer.asUint8List();
-    return Isolate.run(() => _quantize(rgba));
+    return Isolate.run(() => _decodeAndQuantize(bytes));
+  }
+
+  /// Toda la pipeline pesada: decode → resize 96px → RGBA → quantize.
+  /// Corre 100% fuera del hilo de UI.
+  static List<Color> _decodeAndQuantize(Uint8List bytes) {
+    final img = img_pkg.decodeImage(bytes);
+    if (img == null) return const [];
+    final resized = img_pkg.copyResize(img, width: 96, height: 96);
+    final rgba = resized.getBytes(order: img_pkg.ChannelOrder.rgba);
+    return _quantize(rgba);
   }
 
   /// Cuantización simple por cubos RGB de 4 bits por canal: promedia el
@@ -134,9 +155,12 @@ class ArtworkPaletteService {
     ];
   }
 
-  /// Bytes del artwork: archivo local (portadas propias) o red con cadena
-  /// de respaldo maxresdefault (1280px) → URL original.
-  static Future<Uint8List?> _fetchBytes(String url) async {
+  /// Bytes del artwork: disco local → caché → red con cadena de respaldo
+  /// maxresdefault (1280px) → URL original.
+  static Future<Uint8List?> _fetchBytes(
+    String url, {
+    ArtworkCacheService? artworkCache,
+  }) async {
     final lower = url.toLowerCase();
     if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
       try {
@@ -148,19 +172,43 @@ class ArtworkPaletteService {
       } catch (_) {}
       return null;
     }
+
+    // 1) Caché de artwork en disco: evita re-descargar portadas conocidas.
+    if (artworkCache != null) {
+      try {
+        final cached = await artworkCache.load(url);
+        if (cached != null && cached.length > 1024) {
+          print('[SCRUP] _fetchBytes: ARTWORK DISK HIT (${cached.length} bytes)');
+          return cached;
+        }
+        print('[SCRUP] _fetchBytes: artwork cache miss');
+      } catch (_) {}
+    }
+
+    // 2) Red: cadena de respaldo maxresdefault → URL original.
+    print('[SCRUP] _fetchBytes: fetching from network');
     for (final candidate in [Track.hiResThumbnail(url) ?? url, url]) {
       try {
         final resp = await http
             .get(Uri.parse(candidate), headers: {'User-Agent': _userAgent})
             .timeout(const Duration(seconds: 10));
-        // >1KB: descarta placeholders grises de YouTube (404 disfrazado).
         if (resp.statusCode == 200 && resp.bodyBytes.length > 1024) {
-          return resp.bodyBytes;
+          final bytes = resp.bodyBytes;
+          print('[SCRUP] _fetchBytes: network OK ${bytes.length} bytes from ${candidate.length > 60 ? candidate.substring(0, 60) : candidate}…');
+          // Persistir en disco para próximas sesiones.
+          if (artworkCache != null) {
+            try {
+              await artworkCache.save(url, bytes);
+              print('[SCRUP] _fetchBytes: saved to artwork disk cache');
+            } catch (_) {}
+          }
+          return bytes;
         }
       } catch (_) {
         // Siguiente eslabón.
       }
     }
+    print('[SCRUP] _fetchBytes: ALL network candidates FAILED');
     return null;
   }
 
@@ -178,16 +226,15 @@ class ArtworkPaletteService {
     if (swatches.isEmpty) return const [];
 
     // ── Guardia monocroma ────────────────────────────────────────────────
-    // El MÁXIMO de saturación de toda la paleta define si hay color real.
-    // Evita que el ruido azul/morado de JPEGs B/N o casi negros tiña el
-    // fondo fullscreen.
-    final maxSat = swatches.fold<double>(
-      0,
-      (acc, c) => math.max(acc, HSLColor.fromColor(c).saturation),
-    );
-    if (maxSat < kMinSaturation) {
-      // Rampa de grises OSCUROS sobre el negro base (lyrics siempre
-      // legibles), independiente de la luminancia dominante.
+    // El color DOMINANTE (más poblado por _quantize) define si la imagen
+    // tiene color real. Antes se usaba maxSat de TODOS los bins, pero el
+    // ruido JPEG (azul/morado en baja población) inflaba ese máximo y
+    // hacía pasar portadas B/N como "con color" → acento azulado.
+    final dominant = candidates.first;
+    final domSat = HSLColor.fromColor(dominant).saturation;
+    print('[SCRUP] pickTrio: dominant=#${dominant.toARGB32().toRadixString(16).padLeft(8, '0')} sat=${domSat.toStringAsFixed(3)}');
+    if (domSat < kMinSaturation) {
+      print('[SCRUP] pickTrio: MONOCHROME GUARD (sat $domSat < $kMinSaturation) → grays');
       return const [Color(0xFF5A5A5A), Color(0xFF3C3C3C), Color(0xFF242424)];
     }
 
@@ -219,14 +266,17 @@ class ArtworkPaletteService {
     return picked;
   }
 
-  /// Deriva el acento único (controles/lyrics) del trío: el primer color
-  /// con saturación real; en trío monocromo, plata neutra legible.
+  /// Deriva el acento único (controles/lyrics) del trío: el color dominante
+  /// (más poblado) define si hay color real; los secundarios con ruido JPEG
+  /// no deben secuestrar el acento. En trío monocromo, plata neutra legible.
   static Color? accentFromTrio(List<Color> trio) {
     if (trio.isEmpty) return null;
-    for (final c in trio) {
-      if (HSLColor.fromColor(c).saturation >= kMinSaturation) return c;
+    // Solo el dominante define: si tiene saturación real, hay color.
+    if (HSLColor.fromColor(trio.first).saturation >= kMinSaturation) {
+      return trio.first;
     }
-    final hsl = HSLColor.fromColor(trio.first);
-    return hsl.withSaturation(0).withLightness(0.72).toColor();
+    return HSLColor.fromColor(
+      trio.first,
+    ).withSaturation(0).withLightness(0.72).toColor();
   }
 }

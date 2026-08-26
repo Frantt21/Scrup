@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 
@@ -263,7 +264,12 @@ class _RecentCardState extends State<_RecentCard> {
       final url = widget.track.thumbnailUrl;
       if (url != null && url.isNotEmpty) {
         final store = context.read<PaletteCacheStore>();
-        await ArtworkPaletteService.trioFor(url, store, force: true);
+        await ArtworkPaletteService.trioFor(
+          url,
+          store,
+          force: true,
+          artworkCache: context.read<ArtworkCacheService>(),
+        );
         if (mounted) {
           showScrupToast(l10n.colorsUpdated, kind: ScrupToastKind.success);
         }
