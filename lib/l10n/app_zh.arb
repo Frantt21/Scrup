@@ -66,6 +66,8 @@
   "preparing": "准备中…",
   "shuffleOn": "随机播放：已开启",
   "shuffle": "随机播放",
+  "playlistFilterHint": "筛选歌曲",
+  "playlistNoResults": "没有匹配的歌曲",
   "previous": "上一首",
   "pause": "暂停",
   "next": "下一首",

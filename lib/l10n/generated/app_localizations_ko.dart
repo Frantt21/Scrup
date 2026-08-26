@@ -232,6 +232,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get shuffle => '셔플';
 
   @override
+  String get playlistFilterHint => '곡 필터링';
+
+  @override
+  String get playlistNoResults => '일치하는 곡이 없습니다';
+
+  @override
   String get previous => '이전';
 
   @override

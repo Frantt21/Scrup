@@ -233,6 +233,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shuffle => 'Shuffle';
 
   @override
+  String get playlistFilterHint => 'Filter songs';
+
+  @override
+  String get playlistNoResults => 'No matching songs';
+
+  @override
   String get previous => 'Previous';
 
   @override

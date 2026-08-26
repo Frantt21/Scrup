@@ -232,6 +232,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shuffle => '随机播放';
 
   @override
+  String get playlistFilterHint => '筛选歌曲';
+
+  @override
+  String get playlistNoResults => '没有匹配的歌曲';
+
+  @override
   String get previous => '上一首';
 
   @override

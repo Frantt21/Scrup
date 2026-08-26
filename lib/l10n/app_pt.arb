@@ -66,6 +66,8 @@
   "preparing": "Preparando…",
   "shuffleOn": "Embaralhar: ativado",
   "shuffle": "Embaralhar",
+  "playlistFilterHint": "Filtrar músicas",
+  "playlistNoResults": "Nenhuma música corresponde",
   "previous": "Anterior",
   "pause": "Pausar",
   "next": "Próxima",

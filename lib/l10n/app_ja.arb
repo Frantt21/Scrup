@@ -66,6 +66,8 @@
   "preparing": "準備中…",
   "shuffleOn": "シャッフル: オン",
   "shuffle": "シャッフル",
+  "playlistFilterHint": "曲を絞り込む",
+  "playlistNoResults": "一致する曲がありません",
   "previous": "前へ",
   "pause": "一時停止",
   "next": "次へ",

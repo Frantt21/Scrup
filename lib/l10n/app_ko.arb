@@ -66,6 +66,8 @@
   "preparing": "준비 중…",
   "shuffleOn": "셔플: 켜짐",
   "shuffle": "셔플",
+  "playlistFilterHint": "곡 필터링",
+  "playlistNoResults": "일치하는 곡이 없습니다",
   "previous": "이전",
   "pause": "일시 정지",
   "next": "다음",

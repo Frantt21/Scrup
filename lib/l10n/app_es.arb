@@ -149,6 +149,8 @@
   "preparing": "Preparando…",
   "shuffleOn": "Aleatorio: activo",
   "shuffle": "Aleatorio",
+  "playlistFilterHint": "Filtrar canciones",
+  "playlistNoResults": "Ninguna canción coincide",
   "previous": "Anterior",
   "pause": "Pausar",
   "next": "Siguiente",

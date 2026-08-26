@@ -505,6 +505,18 @@ abstract class AppLocalizations {
   /// **'Aleatorio'**
   String get shuffle;
 
+  /// No description provided for @playlistFilterHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Filtrar canciones'**
+  String get playlistFilterHint;
+
+  /// No description provided for @playlistNoResults.
+  ///
+  /// In es, this message translates to:
+  /// **'Ninguna canción coincide'**
+  String get playlistNoResults;
+
   /// No description provided for @previous.
   ///
   /// In es, this message translates to:

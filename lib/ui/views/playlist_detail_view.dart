@@ -50,6 +50,9 @@ class PlaylistDetailView extends StatefulWidget {
 }
 
 class _PlaylistDetailViewState extends State<PlaylistDetailView> {
+  /// Altura común de los controles del hero (play, shuffle y el campo de
+  /// filtro expandido): fijada explícitamente para que los tres midan igual.
+  static const double _heroControlHeight = 44.0;
   late final Stream<List<Track>> _tracksStream;
   late final Stream<Playlist?> _playlistStream;
   StreamSubscription<List<Track>>? _tracksSub;
@@ -101,6 +104,12 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   /// Hover sobre la portada (muestra las acciones de edición).
   bool _coverHovered = false;
 
+  /// Filtrado local de la lista: el botón de búsqueda del hero se expande
+  /// en este campo y filtra por título/artista SIN tocar la playlist.
+  bool _filterOpen = false;
+  final TextEditingController _filterCtrl = TextEditingController();
+  final FocusNode _filterFocus = FocusNode();
+
   @override
   void initState() {
     super.initState();
@@ -144,6 +153,8 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     _trackSub?.cancel();
     _playingSub?.cancel();
     _player.activePlaylistId.removeListener(_onActivePlaylistChanged);
+    _filterCtrl.dispose();
+    _filterFocus.dispose();
     super.dispose();
   }
 
@@ -295,6 +306,53 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     await playQueue(context, _tracks, playlistId: widget.playlist.id);
   }
 
+  /// `true` mientras el campo del filtro tiene texto: la lista pasa a modo
+  /// lectura (sin drag, los índices de reordenar apuntan a la lista completa).
+  bool get _filterActive => _filterCtrl.text.trim().isNotEmpty;
+
+  /// Normaliza para filtrar: minúsculas y sin acentos comunes ("café" →
+  /// "cafe"), así buscar sin tildes también encuentra la canción.
+  static String _normQuery(String s) {
+    var out = s.toLowerCase();
+    const accents = {
+      'á': 'a',
+      'à': 'a',
+      'é': 'e',
+      'è': 'e',
+      'í': 'i',
+      'ó': 'o',
+      'ú': 'u',
+      'ü': 'u',
+      'ñ': 'n',
+    };
+    accents.forEach((k, v) => out = out.replaceAll(k, v));
+    return out;
+  }
+
+  /// Lista visible tras aplicar el filtro del hero (título o artista).
+  List<Track> get _visibleTracks {
+    final q = _normQuery(_filterCtrl.text.trim());
+    if (q.isEmpty) return _tracks;
+    return [
+      for (final t in _tracks)
+        if (_normQuery(t.title).contains(q) || _normQuery(t.artist).contains(q))
+          t,
+    ];
+  }
+
+  void _openFilter() {
+    setState(() => _filterOpen = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _filterFocus.requestFocus();
+    });
+  }
+
+  void _closeFilter() {
+    _filterFocus.unfocus();
+    _filterCtrl.clear();
+    setState(() => _filterOpen = false);
+  }
+
   /// Quita una canción del playlist, previa confirmación (el borrado es
   /// destructivo y un clic derecho distraído no debería costar la canción).
   Future<void> _removeTrack(Track track) async {
@@ -333,11 +391,10 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     updated.insert(newIndex, moved);
     setState(() => _tracks = updated);
     try {
-      await context
-          .read<AppDatabase>()
-          .reorderPlaylistTracks(widget.playlist.id, [
-            for (final t in updated) t.id,
-          ]);
+      await context.read<AppDatabase>().reorderPlaylistTracks(
+        widget.playlist.id,
+        [for (final t in updated) t.id],
+      );
     } catch (_) {
       // Best-effort: el stream restaurará el orden persistido.
     }
@@ -587,6 +644,44 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     final count = _tracks.length;
     final currentId = _currentTrack?.id;
 
+    /// Fila de canción compartida por la lista normal (Reorderable, con
+    /// drag para reordenar) y la lista filtrada (plana, solo lectura). El
+    /// índice [i] apunta a la lista que corresponda en cada modo.
+    Widget rowFor(BuildContext context, int i) {
+      final track = _visibleTracks[i];
+      return _SortableTrackRow(
+        key: ValueKey(track.id),
+        index: i,
+        accentColor: _trackColorFor(track) ?? playlistColor,
+        child: GestureDetector(
+          onSecondaryTapUp: (details) =>
+              _showTrackMenu(track, details.globalPosition),
+          child: TrackTile(
+            track: track,
+            // La cola es LA PLAYLIST: al tocar una canción, el
+            // siguiente/anterior (y el auto-advance) recorren la playlist,
+            // no caen en radio. El índice se recalcula al tocar (por si la
+            // lista cambió desde el build).
+            onPlay: () {
+              final start = _tracks.indexWhere((t) => t.id == track.id);
+              playQueue(
+                context,
+                _tracks,
+                startIndex: start < 0 ? 0 : start,
+                playlistId: widget.playlist.id,
+              );
+            },
+            isCurrent: track.id == currentId,
+            isPlaying: _playing,
+            // Texto e iconos con el color del artwork de SU canción
+            // (extraído de forma perezosa por fila); mientras se extrae,
+            // fallback al color de la playlist
+            accentColor: _trackColorFor(track) ?? playlistColor,
+          ),
+        ),
+      );
+    }
+
     return Theme(
       data: theme,
       child: Container(
@@ -615,17 +710,18 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
               // tono, sin degradado), pero en el detalle se le añade un
               // matiz sutil del color de la portada de la playlist (solo
               // aquí; el sidebar se queda neutro).
-              color: (playlistColor != null
-                      // Tinte SOLO del tono: se mezclan los colores opacos
-                      // (sin alpha) y luego se aplica el mismo alpha del
-                      // sidebar, para que la translucidez coincida exactamente.
-                      ? Color.lerp(
-                          theme.colorScheme.surfaceContainerHighest,
-                          playlistColor,
-                          0.30,
-                        )!
-                      : theme.colorScheme.surfaceContainerHighest)
-                  .withValues(alpha: 0.72),
+              color:
+                  (playlistColor != null
+                          // Tinte SOLO del tono: se mezclan los colores opacos
+                          // (sin alpha) y luego se aplica el mismo alpha del
+                          // sidebar, para que la translucidez coincida exactamente.
+                          ? Color.lerp(
+                              theme.colorScheme.surfaceContainerHighest,
+                              playlistColor,
+                              0.30,
+                            )!
+                          : theme.colorScheme.surfaceContainerHighest)
+                      .withValues(alpha: 0.72),
             ),
             child: Material(
               color: Colors.transparent,
@@ -671,7 +767,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                 ),
                               ],
                               const SizedBox(height: 16),
-                              // Reproducir + shuffle + conteo/duración
+                              // Reproducir + shuffle + búsqueda + conteo
                               Wrap(
                                 spacing: 10,
                                 runSpacing: 8,
@@ -679,6 +775,15 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                 children: [
                                   FilledButton.icon(
                                     onPressed: count == 0 ? null : _playAll,
+                                    style: FilledButton.styleFrom(
+                                      // Altura EXPLÍCITA compartida por los
+                                      // tres controles del hero (play, shuffle
+                                      // y el campo de filtro): nunca divergen.
+                                      minimumSize: const Size(
+                                        0,
+                                        _heroControlHeight,
+                                      ),
+                                    ),
                                     icon: const Icon(Icons.play_arrow_rounded),
                                     label: Text(l10n.play),
                                   ),
@@ -693,12 +798,89 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                       backgroundColor: Colors.white,
                                       foregroundColor:
                                           theme.colorScheme.primary,
+                                      minimumSize: const Size(
+                                        0,
+                                        _heroControlHeight,
+                                      ),
                                     ),
                                     // Label corto: solo "Aleatorio"; el
                                     // texto largo anterior agrandaba el
                                     // botón respecto al de play.
                                     icon: const Icon(Icons.shuffle_rounded),
                                     label: Text(l10n.shuffle),
+                                  ),
+                                  // Búsqueda/filtrado local: botón que se
+                                  // EXPANDE hacia la derecha en un campo
+                                  // para filtrar por título/artista. El
+                                  // crossfade evita que el icono "salte"
+                                  // al centro mientras el ancho anima.
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeOutCubic,
+                                    width: _filterOpen
+                                        ? 260
+                                        : _heroControlHeight,
+                                    height: _heroControlHeight,
+                                    child: ClipRect(
+                                      child: AnimatedSwitcher(
+                                        duration: const Duration(
+                                          milliseconds: 180,
+                                        ),
+                                        child: _filterOpen
+                                            ? TextField(
+                                                key: const ValueKey('field'),
+                                                controller: _filterCtrl,
+                                                focusNode: _filterFocus,
+                                                onChanged: (_) =>
+                                                    setState(() {}),
+                                                style:
+                                                    theme.textTheme.bodyMedium,
+                                                decoration: InputDecoration(
+                                                  hintText:
+                                                      l10n.playlistFilterHint,
+                                                  prefixIcon: const Icon(
+                                                    Icons.search_rounded,
+                                                    size: 18,
+                                                  ),
+                                                  prefixIconConstraints:
+                                                      const BoxConstraints(
+                                                        minWidth: 36,
+                                                      ),
+                                                  suffixIcon: IconButton(
+                                                    onPressed: _closeFilter,
+                                                    icon: const Icon(
+                                                      Icons.close_rounded,
+                                                      size: 18,
+                                                    ),
+                                                    visualDensity:
+                                                        VisualDensity.compact,
+                                                  ),
+                                                  isDense: true,
+                                                  filled: true,
+                                                  contentPadding:
+                                                      EdgeInsets.zero,
+                                                  border: OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          20,
+                                                        ),
+                                                    borderSide: BorderSide.none,
+                                                  ),
+                                                ),
+                                              )
+                                            : IconButton(
+                                                key: const ValueKey('icon'),
+                                                onPressed: count == 0
+                                                    ? null
+                                                    : _openFilter,
+                                                tooltip:
+                                                    l10n.playlistFilterHint,
+                                                icon: const Icon(
+                                                  Icons.search_rounded,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
                                   ),
                                   Text(
                                     _countAndDuration,
@@ -761,73 +943,55 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                               ],
                             ),
                           )
-                         : ReorderableListView.builder(
-                             // El contenedor ya termina por encima del
-                             // player (margen inferior), así que aquí solo
-                             // hace falta un respiro pequeño.
-                             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                             // Sin asas automáticas: cada fila trae su grip
-                             // propio (visible al hover) para no robar ancho
-                             // al contenido ni chocar con el scroll.
-                             buildDefaultDragHandles: false,
-                             proxyDecorator: (child, index, animation) =>
-                                 AnimatedBuilder(
-                                   animation: animation,
-                                   builder: (_, child) => Transform.scale(
-                                     scale: 1 + animation.value * 0.02,
-                                     child: child,
-                                   ),
-                                   child: child,
-                                 ),
-                             itemCount: _tracks.length,
-                             onReorderItem: _onReorderItem,
-                             itemBuilder: (context, i) {
-                               final track = _tracks[i];
-                               return _SortableTrackRow(
-                                 key: ValueKey(track.id),
-                                 index: i,
-                                 accentColor:
-                                     _trackColorFor(track) ?? playlistColor,
-                                 child: GestureDetector(
-                                   onSecondaryTapUp: (details) =>
-                                       _showTrackMenu(
-                                         track,
-                                         details.globalPosition,
-                                       ),
-                                   child: TrackTile(
-                                     track: track,
-                                     // La cola es LA PLAYLIST: al tocar una
-                                     // canción, el siguiente/anterior (y el
-                                     // auto-advance) recorren la playlist,
-                                     // no caen en radio. El índice se
-                                     // recalcula al tocar (por si la lista
-                                     // cambió desde el build).
-                                     onPlay: () {
-                                       final start = _tracks.indexWhere(
-                                         (t) => t.id == track.id,
-                                       );
-                                       playQueue(
-                                         context,
-                                         _tracks,
-                                         startIndex: start < 0 ? 0 : start,
-                                         playlistId: widget.playlist.id,
-                                       );
-                                     },
-                                     isCurrent: track.id == currentId,
-                                     isPlaying: _playing,
-                                     // Texto e iconos con el color del
-                                     // artwork de SU canción (extraído de
-                                     // forma perezosa por fila); mientras se
-                                     // extrae, fallback al color de la
-                                     // playlist
-                                     accentColor:
-                                         _trackColorFor(track) ??
-                                         playlistColor,
-                                   ),
-                                 ),
-                               );
-                             },
-                           ),
+                        : _visibleTracks.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.search_off_rounded,
+                                  size: 56,
+                                  color: theme.colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.5),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  l10n.playlistNoResults,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : _filterActive
+                        ? ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                            itemCount: _visibleTracks.length,
+                            itemBuilder: rowFor,
+                          )
+                        : ReorderableListView.builder(
+                            // El contenedor ya termina por encima del
+                            // player (margen inferior), así que aquí solo
+                            // hace falta un respiro pequeño.
+                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                            // Sin asas automáticas: cada fila trae su grip
+                            // propio (visible al hover) para no robar ancho
+                            // al contenido ni chocar con el scroll.
+                            buildDefaultDragHandles: false,
+                            proxyDecorator: (child, index, animation) =>
+                                AnimatedBuilder(
+                                  animation: animation,
+                                  builder: (_, child) => Transform.scale(
+                                    scale: 1 + animation.value * 0.02,
+                                    child: child,
+                                  ),
+                                  child: child,
+                                ),
+                            itemCount: _tracks.length,
+                            onReorderItem: _onReorderItem,
+                            itemBuilder: rowFor,
+                          ),
                   ),
                 ],
               ),
@@ -938,10 +1102,12 @@ class _SortableTrackRowState extends State<_SortableTrackRow> {
                 child: Icon(
                   Icons.drag_indicator_rounded,
                   size: 18,
-                  color: (_hovered
-                          ? (widget.accentColor ?? theme.colorScheme.primary)
-                          : theme.colorScheme.outlineVariant)
-                      .withValues(alpha: _hovered ? 0.85 : 0.45),
+                  color:
+                      (_hovered
+                              ? (widget.accentColor ??
+                                    theme.colorScheme.primary)
+                              : theme.colorScheme.outlineVariant)
+                          .withValues(alpha: _hovered ? 0.85 : 0.45),
                 ),
               ),
             ),

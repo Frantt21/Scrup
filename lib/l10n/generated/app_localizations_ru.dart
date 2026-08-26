@@ -236,6 +236,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get shuffle => 'Перемешать';
 
   @override
+  String get playlistFilterHint => 'Фильтр песен';
+
+  @override
+  String get playlistNoResults => 'Нет подходящих песен';
+
+  @override
   String get previous => 'Предыдущая';
 
   @override

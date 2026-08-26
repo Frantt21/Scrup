@@ -89,4 +89,42 @@ void main() {
       expect(original.album, isNull);
     });
   });
+
+  group('Track.hiResThumbnail', () {
+    test('ytimg → maxresdefault 1280px', () {
+      expect(
+        Track.hiResThumbnail('https://i.ytimg.com/vi/abc123/mqdefault.jpg'),
+        'https://i.ytimg.com/vi/abc123/maxresdefault.jpg',
+      );
+    });
+
+    test('googleusercontent (YT Music) → variante a 1200px', () {
+      expect(
+        Track.hiResThumbnail(
+          'https://lh3.googleusercontent.com/XyZ=w544-h544-l90-rj',
+        ),
+        'https://lh3.googleusercontent.com/XyZ=w1200-h1200',
+      );
+      expect(
+        Track.hiResThumbnail(
+          'https://lh5.googleusercontent.com/AbC=s60-fcrop64=1',
+        ),
+        'https://lh5.googleusercontent.com/AbC=w1200-h1200',
+      );
+    });
+
+    test('URLs sin variante conocida pasan intactas; null/ vacío → null', () {
+      expect(Track.hiResThumbnail(null), isNull);
+      expect(Track.hiResThumbnail(''), isNull);
+      expect(
+        Track.hiResThumbnail('https://example.com/cover.jpg'),
+        'https://example.com/cover.jpg',
+      );
+      // googleusercontent SIN sufijo de tamaño: no tocar.
+      expect(
+        Track.hiResThumbnail('https://lh3.googleusercontent.com/Raw'),
+        'https://lh3.googleusercontent.com/Raw',
+      );
+    });
+  });
 }

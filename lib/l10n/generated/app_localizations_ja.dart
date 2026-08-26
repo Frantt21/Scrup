@@ -232,6 +232,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get shuffle => 'シャッフル';
 
   @override
+  String get playlistFilterHint => '曲を絞り込む';
+
+  @override
+  String get playlistNoResults => '一致する曲がありません';
+
+  @override
   String get previous => '前へ';
 
   @override

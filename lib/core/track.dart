@@ -64,15 +64,22 @@ class Track {
   String get youtubeUrl => 'https://www.youtube.com/watch?v=$id';
 
   /// Variante de MÁXIMA resolución para thumbnails de YouTube:
-  /// `i.ytimg.com/vi/<id>/<variante>.jpg` → `maxresdefault.jpg` (1280px).
-  /// Las URLs que no son de ytimg (Deezer, archivos locales…) se devuelven
-  /// tal cual. Puede devolver una URL que responda 404 si el vídeo no tiene
-  /// maxres: el llamador debe degradar al original en ese caso.
+  /// - `i.ytimg.com/vi/<id>/<variante>.jpg` → `maxresdefault.jpg` (1280px).
+  /// - Miniaturas de YT Music (`googleusercontent.com`): traen el tamaño en
+  ///   el sufijo (`=w544-h544-l90-rj`); pedir la variante a 1200px — la
+  ///   imagen base suele ser ≥1200 y a ese tamaño se ve nítida en fullscreen.
+  /// Puede devolver una URL que responda 404 si no existe esa resolución: el
+  /// llamador debe degradar al original (la cadena de respaldo del player).
   static String? hiResThumbnail(String? url) {
     if (url == null || url.isEmpty) return null;
     final m = RegExp(r'i\.ytimg\.com/vi/([\w-]+)').firstMatch(url);
-    if (m == null) return url;
-    return 'https://i.ytimg.com/vi/${m.group(1)!}/maxresdefault.jpg';
+    if (m != null) {
+      return 'https://i.ytimg.com/vi/${m.group(1)!}/maxresdefault.jpg';
+    }
+    if (url.contains('googleusercontent.com')) {
+      return url.replaceFirst(RegExp(r'=(w|s)\d+.*$'), '=w1200-h1200');
+    }
+    return url;
   }
 
   Track copyWith({

@@ -233,6 +233,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shuffle => 'Embaralhar';
 
   @override
+  String get playlistFilterHint => 'Filtrar músicas';
+
+  @override
+  String get playlistNoResults => 'Nenhuma música corresponde';
+
+  @override
   String get previous => 'Anterior';
 
   @override
@@ -777,6 +783,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shuffle => 'Embaralhar';
+
+  @override
+  String get playlistFilterHint => 'Filtrar músicas';
+
+  @override
+  String get playlistNoResults => 'Nenhuma música corresponde';
 
   @override
   String get previous => 'Anterior';

@@ -66,6 +66,8 @@
   "preparing": "Подготовка…",
   "shuffleOn": "Перемешать: вкл",
   "shuffle": "Перемешать",
+  "playlistFilterHint": "Фильтр песен",
+  "playlistNoResults": "Нет подходящих песен",
   "previous": "Предыдущая",
   "pause": "Пауза",
   "next": "Следующая",
