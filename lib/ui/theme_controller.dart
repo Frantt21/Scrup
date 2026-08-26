@@ -183,7 +183,18 @@ class ThemeController extends ChangeNotifier {
   /// real), devuelve un plata neutro derivado de la luminancia en vez de
   /// arrastrar el ruido de croma del JPEG (que daba azulados/verdosos
   /// pastel sin relación con la imagen).
+  ///
+  /// CASO PORTADA BLANCA (antes mal resuelto): si el swatch DOMINANTE dice
+  /// "imagen clara y poco saturada", el acento es blanco-plata NEUTRO —
+  /// aunque existan vibrantes (un logo o texto pequeño de color no debe
+  /// secuestrar el acento de una portada que se ve blanca). Y si el blanco
+  /// trae ruido JPEG con saturación apenas sobre el umbral monocromo,
+  /// tampoco escapa por ahí: se consulta el dominante ANTES del primer pase.
   static Color? pickAccent(PaletteGenerator palette) {
+    final dominant = palette.dominantColor?.color;
+    if (dominant != null && isLightNeutralArtwork(dominant)) {
+      return neutralSilver(dominant, minLightness: 0.72, maxLightness: 0.88);
+    }
     return accentFromSwatches([
       palette.darkVibrantColor?.color,
       palette.vibrantColor?.color,
@@ -199,6 +210,37 @@ class ThemeController extends ChangeNotifier {
   @visibleForTesting
   static const double kMonochromeSaturationThreshold = 0.22;
 
+  /// Umbrales para clasificar una portada como BLANCA/CLARA neutra: el
+  /// swatch dominante debe ser muy luminoso y poco saturado.
+  @visibleForTesting
+  static const double kWhiteCoverLightness = 0.80;
+  @visibleForTesting
+  static const double kWhiteCoverMaxSaturation = 0.30;
+
+  /// `true` si el swatch dominante representa una imagen esencialmente
+  /// blanca/clara y sin color real.
+  @visibleForTesting
+  static bool isLightNeutralArtwork(Color dominant) {
+    final hsl = HSLColor.fromColor(dominant);
+    return hsl.lightness >= kWhiteCoverLightness &&
+        hsl.saturation <= kWhiteCoverMaxSaturation;
+  }
+
+  /// Plata/blanco neutro derivado de [src]: saturación a CERO (sin ruido de
+  /// croma) y luminancia elevada al rango [minLightness, maxLightness].
+  @visibleForTesting
+  static Color neutralSilver(
+    Color src, {
+    required double minLightness,
+    required double maxLightness,
+  }) {
+    final hsl = HSLColor.fromColor(src);
+    return hsl
+        .withSaturation(0)
+        .withLightness(hsl.lightness.clamp(minLightness, maxLightness))
+        .toColor();
+  }
+
   /// Selección pura de acento sobre una lista priorizada de swatches.
   /// Expuesta para tests (no depende de PaletteGenerator/imágenes).
   @visibleForTesting
@@ -208,8 +250,7 @@ class ThemeController extends ChangeNotifier {
 
     // 1er pase: el primer swatch prioritario con saturación de verdad.
     for (final c in candidates) {
-      if (HSLColor.fromColor(c).saturation >=
-          kMonochromeSaturationThreshold) {
+      if (HSLColor.fromColor(c).saturation >= kMonochromeSaturationThreshold) {
         return c;
       }
     }
@@ -217,11 +258,11 @@ class ThemeController extends ChangeNotifier {
     // 2º pase: artwork monocromo. Plata neutro legible sobre UI oscura:
     // saturación a CERO (sin ruido de croma) y luminancia elevada desde la
     // del swatch dominante (clamp para que ni desaparezca ni deslumbre).
-    final hsl = HSLColor.fromColor(candidates.first);
-    return hsl
-        .withSaturation(0)
-        .withLightness(hsl.lightness.clamp(0.60, 0.82))
-        .toColor();
+    return neutralSilver(
+      candidates.first,
+      minLightness: 0.60,
+      maxLightness: 0.82,
+    );
   }
 
   @override

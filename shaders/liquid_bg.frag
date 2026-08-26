@@ -54,13 +54,22 @@ void main() {
   float ridge = pow(1.0 / (band + 0.35), 1.5);
 
   // Luminancia mayormente OSCURA con vetas luminosas: contraste seguro
-  // para el texto del reproductor.
-  float lum = 0.14 + 0.17 * ridge;
+  // para el texto del reproductor. El piso (0.18) deja ver el TONO del
+  // color en las zonas bajas en vez de caer a negro puro.
+  float lum = 0.18 + 0.17 * ridge;
 
-  // Paleta tricolor guiada por el espacio DEFORMADO (p, no uv): las vetas
-  // cambian de color al fluir.
-  vec3 col = mix(uColorA, uColorB, clamp(0.5 + 0.5 * sin(p.x * 0.7), 0.0, 1.0));
-  col = mix(col, uColorC, clamp(0.5 + 0.5 * cos(p.y * 0.6), 0.0, 1.0));
+  // Paleta TRICOLOR: tres regiones que fluyen con el campo deformado, cada
+  // una con fase y dirección PROPIAS para que los tres colores del artwork
+  // sean visibles (antes las mezclas eran tan anchas/oscuras que parecía
+  // monocromo). Los smoothstep marcan fronteras nítidas entre zonas.
+  float mAB = clamp(0.5 + 0.5 * sin(p.x * 0.75 + t * 0.18), 0.0, 1.0);
+  vec3 col = mix(uColorA, uColorB, smoothstep(0.15, 0.85, mAB));
+  float mC = clamp(
+    0.5 + 0.5 * sin(p.y * 0.85 - p.x * 0.45 + t * 0.24),
+    0.0,
+    1.0
+  );
+  col = mix(col, uColorC, smoothstep(0.35, 0.90, mC));
 
   fragColor = vec4(col * lum, 1.0);
 }
