@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show listEquals, Uint8List;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:http/http.dart' as http;
 import 'package:palette_generator/palette_generator.dart';
 import 'package:provider/provider.dart';
@@ -58,9 +60,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
   /// Entrada/salida del overlay completo.
   late final AnimationController _transition;
 
-  /// Deriva lenta de los blobs de fondo (loop continuo).
-  late final AnimationController _drift;
-
   Track? _track;
 
   /// PlayerService (para listeners de cola y streams).
@@ -90,10 +89,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
         if (mounted) _transition.forward();
       });
     }
-    _drift = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 30),
-    )..repeat();
     _trackSub = _player.currentTrack.listen((t) {
       if (!mounted || t?.id == _track?.id) return;
       setState(() => _track = t);
@@ -128,7 +123,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     _player.queueIndex.removeListener(_prefetchNextListener);
     _player.queue.removeListener(_prefetchNextListener);
     _transition.dispose();
-    _drift.dispose();
     super.dispose();
   }
 
@@ -305,7 +299,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
               Opacity(
                 opacity: t,
                 child: RepaintBoundary(
-                  child: _AnimatedBackdrop(drift: _drift, colors: palette),
+                  child: _AnimatedBackdrop(colors: palette),
                 ),
               ),
               LayoutBuilder(
@@ -429,10 +423,9 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
 /// los colores se interpolan exponencialmente frame a frame, así que al
 /// cambiar de canción el fondo MUTA suavemente en vez de saltar.
 class _AnimatedBackdrop extends StatefulWidget {
-  final Animation<double> drift;
   final List<Color> colors;
 
-  const _AnimatedBackdrop({required this.drift, required this.colors});
+  const _AnimatedBackdrop({required this.colors});
 
   @override
   State<_AnimatedBackdrop> createState() => _AnimatedBackdropState();
@@ -443,6 +436,16 @@ class _AnimatedBackdropState extends State<_AnimatedBackdrop>
   /// Transición de paleta (mismo criterio que el gradiente del player bar):
   /// al cambiar de canción se anima del trío mostrado al nuevo en ~700ms.
   late final AnimationController _fade;
+
+  /// Reloj PROPIO del fondo: tiempo continuo en segundos (nunca se resetea).
+  /// Un loop que repite (como el drift anterior) hacía que el fluido
+  /// "pareciera estático" en los tramos lentos; esto fluye siempre.
+  final ValueNotifier<double> _clock = ValueNotifier(0);
+  late final Ticker _ticker;
+
+  /// Programa GLSL del fondo líquido; `null` si no se pudo cargar →
+  /// fallback a las manchas de acuarela en Dart.
+  ui.FragmentProgram? _program;
 
   List<Color> _from = const [];
   List<Color> _target = const [];
@@ -457,6 +460,23 @@ class _AnimatedBackdropState extends State<_AnimatedBackdrop>
     );
     _target = _padded(widget.colors);
     _from = _target;
+    _ticker = createTicker((elapsed) {
+      _clock.value = elapsed.inMicroseconds / 1e6;
+    });
+    _ticker.start();
+    _loadShader();
+  }
+
+  Future<void> _loadShader() async {
+    try {
+      final program = await ui.FragmentProgram.fromAsset(
+        'shaders/liquid_bg.frag',
+      );
+      if (!mounted) return;
+      setState(() => _program = program);
+    } catch (_) {
+      // Sin shader (compilación ausente, GPU sin SPIR-V…): acuarela Dart.
+    }
   }
 
   @override
@@ -484,18 +504,25 @@ class _AnimatedBackdropState extends State<_AnimatedBackdrop>
 
   @override
   Widget build(BuildContext context) {
+    final program = _program;
     return ColoredBox(
-      color: const Color(0xFF060606),
+      color: const Color(0xFF050505),
       child: RepaintBoundary(
         child: AnimatedBuilder(
-          animation: Listenable.merge([widget.drift, _fade]),
-          builder: (context, _) => CustomPaint(
-            size: Size.infinite,
-            painter: _WavePainter(
-              t: widget.drift.value * 2 * math.pi,
-              colors: _shown(),
-            ),
-          ),
+          animation: Listenable.merge([_clock, _fade]),
+          builder: (context, _) {
+            final colors = _shown();
+            if (program != null) {
+              return CustomPaint(
+                size: Size.infinite,
+                painter: _LiquidPainter(program, _clock.value, colors),
+              );
+            }
+            return CustomPaint(
+              size: Size.infinite,
+              painter: _WatercolorPainter(t: _clock.value, colors: colors),
+            );
+          },
         ),
       ),
     );
@@ -503,75 +530,137 @@ class _AnimatedBackdropState extends State<_AnimatedBackdrop>
 
   @override
   void dispose() {
+    _ticker.dispose();
+    _clock.dispose();
     _fade.dispose();
     super.dispose();
   }
 }
 
-class _WavePainter extends CustomPainter {
-  final double t;
+/// Fondo LÍQUIDO vía fragment shader (shaders/liquid_bg.frag): fbm con
+/// doble domain warping — flujo continuo, borde a borde, sin viñeta. Los
+/// colores llegan ya interpolados desde [_AnimatedBackdropState._shown].
+class _LiquidPainter extends CustomPainter {
+  final ui.FragmentProgram program;
+  final double time;
   final List<Color> colors;
 
-  _WavePainter({required this.t, required this.colors});
-
-  Color _darken(Color c, double factor) {
-    final hsl = HSLColor.fromColor(c);
-    return hsl.withLightness((hsl.lightness * factor).clamp(0.02, 1)).toColor();
-  }
+  _LiquidPainter(this.program, this.time, this.colors);
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Base: primer color oscurecido, cobertura total garantizada.
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = _darken(colors.first, 0.45),
-    );
-
-    final blur = Paint()
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 46);
-
-    for (var i = 0; i < colors.length; i++) {
-      final c = colors[i];
-      final baseX = size.width * (0.16 + 0.34 * i);
-      final amp = size.width * (0.055 + 0.02 * i);
-      // Velocidades ENTERAS en múltiplos del ciclo de `t`: al repetir el
-      // controller (t: 0→2π) las ondas retoman exactamente su fase, así el
-      // loop es infinito sin saltos.
-      final speed = i.isEven ? 1.0 : 2.0;
-      final phase = i * 2.4;
-      final freq = 2 * math.pi / size.height * (1.4 + 0.5 * i);
-
-      final path = Path()..moveTo(baseX, -60);
-      const step = 28.0;
-      for (var y = -60.0; y <= size.height + 60; y += step) {
-        // Armónico con múltiplo entero (2×) de la velocidad: también
-        // continuo en la envoltura del ciclo.
-        final x =
-            baseX +
-            amp * math.sin(y * freq + t * speed + phase) +
-            amp * 0.4 * math.sin(y * freq * 0.53 - t * speed * 2);
-        path.lineTo(x, y);
-      }
-      // Rellena hasta el borde derecho: la ola CUBRE lo que queda a su lado.
-      path.lineTo(size.width + 80, size.height + 80);
-      path.lineTo(size.width + 80, -60);
-      path.close();
-
-      final shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          c.withValues(alpha: 0.88),
-          _darken(c, 0.62).withValues(alpha: 0.92),
-        ],
-      ).createShader(Offset.zero & size);
-
-      canvas.drawPath(path, blur..shader = shader);
-    }
+    // Orden de uniforms = orden de declaración en el .frag (sin sampler).
+    // r/g/b ya vienen normalizados 0..1 (colores double en Flutter).
+    final shader = program.fragmentShader()
+      ..setFloat(0, size.width)
+      ..setFloat(1, size.height)
+      ..setFloat(2, time)
+      ..setFloat(3, colors[0].r)
+      ..setFloat(4, colors[0].g)
+      ..setFloat(5, colors[0].b)
+      ..setFloat(6, colors[1].r)
+      ..setFloat(7, colors[1].g)
+      ..setFloat(8, colors[1].b)
+      ..setFloat(9, colors[2].r)
+      ..setFloat(10, colors[2].g)
+      ..setFloat(11, colors[2].b);
+    canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
   }
 
   @override
-  bool shouldRepaint(_WavePainter old) =>
+  bool shouldRepaint(_LiquidPainter old) =>
+      old.time != time || !listEquals(old.colors, colors);
+}
+
+/// FALLBACK sin shader: manchas de acuarela sobre negro.
+class _WatercolorPainter extends CustomPainter {
+  final double t;
+  final List<Color> colors;
+
+  _WatercolorPainter({required this.t, required this.colors});
+
+  /// Anclas normalizadas de las manchas: repartidas por bordes/esquinas,
+  /// lejos del carril central donde van artwork + lyrics.
+  static const _anchors = <(double, double)>[
+    (0.14, 0.24),
+    (0.86, 0.18),
+    (0.80, 0.84),
+    (0.16, 0.86),
+    (0.52, 0.06),
+    (0.48, 0.96),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Base negra pura: el contraste de las letras manda.
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = const Color(0xFF050505),
+    );
+
+    final r = size.shortestSide;
+    var k = 0;
+    for (var i = 0; i < colors.length; i++) {
+      // Desaturar hacia negro un 30%: el color se siente sin pelear con
+      // el texto.
+      final c = Color.lerp(colors[i], Colors.black, 0.30)!;
+      // Velocidades ENTERAS en múltiplos del ciclo de `t` (y armónico 2×):
+      // al repetir el controller el fondo retoma su fase exacta → loop
+      // infinito sin saltos.
+      final speed = i.isEven ? 1.0 : 2.0;
+      for (var j = 0; j < 2; j++, k++) {
+        final (ax, ay) = _anchors[k % _anchors.length];
+        final ph = k * 2.39996; // ángulo áureo: derivas desincronizadas
+        final cx = size.width * ax + r * 0.10 * math.sin(t * speed + ph);
+        final cy = size.height * ay + r * 0.07 * math.cos(t * speed * 2 - ph);
+        _wash(
+          canvas,
+          Offset(cx, cy),
+          r * (j == 0 ? 0.46 : 0.60),
+          c.withValues(alpha: j == 0 ? 0.20 : 0.11),
+        );
+      }
+    }
+
+    // Sin viñeta: el fluido cubre TODO el lienzo borde a borde.
+  }
+
+  /// Una mancha de acuarela: tres círculos radiales superpuestos con
+  /// desfase — el solape irregular simula el borde orgánico de la acuarela
+  /// sin necesidad de blur (cada radial ya trae su caída difusa).
+  void _wash(Canvas canvas, Offset center, double r, Color color) {
+    void circle(Offset off, double radius, Color col) {
+      final c = center + off;
+      canvas.drawCircle(
+        c,
+        radius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              col,
+              col.withValues(alpha: col.a * 0.45),
+              col.withValues(alpha: 0),
+            ],
+            stops: const [0.0, 0.55, 1.0],
+          ).createShader(Rect.fromCircle(center: c, radius: radius)),
+      );
+    }
+
+    circle(Offset.zero, r, color);
+    circle(
+      Offset(r * 0.55, -r * 0.34),
+      r * 0.72,
+      color.withValues(alpha: color.a * 0.7),
+    );
+    circle(
+      Offset(-r * 0.48, r * 0.42),
+      r * 0.66,
+      color.withValues(alpha: color.a * 0.6),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_WatercolorPainter old) =>
       old.t != t || !listEquals(old.colors, colors);
 }
 

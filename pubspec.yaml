@@ -43,6 +43,12 @@ flutter:
   # assets/app-logo.png por su logo real.
   assets:
     - assets/
+  # Shaders de fragmento compilados con impellerc: el fondo líquido del
+  # fullscreen va AQUÍ, no en assets/. La sección `shaders:` es lo que
+  # dispara la compilación a IPLR/SPIR-V; en assets/ el tool solo copia
+  # el fuente crudo y FragmentProgram.fromAsset falla en runtime.
+  shaders:
+    - shaders/liquid_bg.frag
   # Genera las localizaciones (AppLocalizations) automáticamente al compilar
   # desde lib/l10n/*.arb (ver l10n.yaml).
   generate: true
