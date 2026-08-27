@@ -517,13 +517,17 @@ class _AnimatedBackdropState extends State<_AnimatedBackdrop>
     }
   }
 
-  /// Negro base del fondo: rellena los huecos del trío (portadas con menos
-  /// de 3 colores extraíbles). NUNCA un color por defecto — el usuario ve
-  /// negro donde no hay color real, no lilas/azules inventados.
-  static const Color _backdropBlack = Color(0xFF050505);
+  /// Colores de respaldo cuando no hay paleta del artwork: variaciones
+  /// de negro/gris para que el fondo animado tenga contraste suficiente
+  /// (3 colores idénticos al shader le daban "orbs" blancos sin sentido).
+  static const _fallbackPalette = [
+    Color(0xFF111111),
+    Color(0xFF1A1A1A),
+    Color(0xFF252525),
+  ];
 
   List<Color> _padded(List<Color> src) => [
-    for (var i = 0; i < 3; i++) i < src.length ? src[i] : _backdropBlack,
+    for (var i = 0; i < 3; i++) i < src.length ? src[i] : _fallbackPalette[i],
   ];
 
   /// Colores mostrados ahora mismo (lerp curvado origen→destino).

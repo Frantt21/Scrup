@@ -666,61 +666,51 @@ class _SettingsViewState extends State<SettingsView> {
           ),
           const SizedBox(height: 14),
           // Límite del caché: selector con presets.
-          Row(
-            children: [
-              Icon(
-                Icons.tune_rounded,
-                size: 18,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                l10n.cacheLimit,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+          Text(
+            l10n.cacheLimit,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Builder(
+            builder: (fieldContext) => InkWell(
+              borderRadius: BorderRadius.circular(14),
+              focusColor: Colors.transparent,
+              hoverColor: Colors.white.withValues(alpha: 0.04),
+              onTap: () => _openCacheLimitMenu(fieldContext),
+              child: Container(
+                width: 240,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
                 ),
-              ),
-              const Spacer(),
-              Builder(
-                builder: (fieldContext) => InkWell(
+                decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  focusColor: Colors.transparent,
-                  hoverColor: Colors.white.withValues(alpha: 0.04),
-                  onTap: () => _openCacheLimitMenu(fieldContext),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      color: theme.colorScheme.surfaceContainerHighest
-                          .withValues(alpha: 0.35),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.06),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _cacheLimitLabel,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          size: 18,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ],
-                    ),
+                  color: theme.colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.35),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.06),
                   ),
                 ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _cacheLimitLabel,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
           const SizedBox(height: 14),
           Row(

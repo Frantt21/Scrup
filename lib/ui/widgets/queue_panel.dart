@@ -124,25 +124,6 @@ class _QueueGlass extends StatelessWidget {
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               ),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.shuffle_rounded,
-                                  size: 17,
-                                  color: player.shuffle.value
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurfaceVariant,
-                                ),
-                                visualDensity: VisualDensity.compact,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 32,
-                                  height: 32,
-                                ),
-                                padding: EdgeInsets.zero,
-                                tooltip: player.shuffle.value
-                                    ? l10n.shuffleOn
-                                    : l10n.shuffle,
-                                onPressed: player.toggleShuffle,
-                              ),
                             ],
                           ),
                         ),
