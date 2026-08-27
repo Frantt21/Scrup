@@ -159,7 +159,12 @@ class SilenceSkipService extends ChangeNotifier {
     _retryTimer?.cancel();
     _retryCount = 0;
     if (track == null) return;
-    _prepare(track.id);
+    // Diferir 200ms para no competir con artwork load en el frame inicial.
+    Timer(const Duration(milliseconds: 200), () {
+      if (_player.currentTrackValue?.id == track.id) {
+        _prepare(track.id);
+      }
+    });
   }
 
   /// Prepara los huecos de UNA pista: primero SponsorBlock (instantáneo y

@@ -82,42 +82,50 @@ class ThemeController extends ChangeNotifier {
   /// descargar dos portadas cuando gana el enriquecimiento.
   Timer? _debounce;
 
+  /// Delay mínimo antes de aplicar el color de acento. Separa la fase 1
+  /// (artwork + track info) de la fase 2 (accent rebuild) en frames
+  /// distintos, aliviando la carga de rendering en Linux.
+  static const Duration kAccentDelay = Duration(milliseconds: 70);
+
   void _onTrackChanged(Track? track) {
     final token = ++_token;
     final url = track?.thumbnailUrl;
-    final urlPreview = url != null ? url.substring(0, math.min(60, url.length)) : 'null';
-    print('[SCRUP] _onTrackChanged: ${track?.title ?? "null"} url=$urlPreview');
+
+    // Cancelar cualquier debounce anterior: solo el ÚLTIMO color gana.
+    _debounce?.cancel();
+
     if (url == null) {
-      _debounce?.cancel();
-      _setAccent(null);
+      _debounce = Timer(kAccentDelay, () {
+        if (token == _token) _setAccent(null);
+      });
       return;
     }
 
-    // Acierto de caché → aplicar YA, sin debounce.
+    // Buscar color en caché (SQLite → memoria → failed).
     final stored = paletteCache?.get(url);
-    print('[SCRUP] _onTrackChanged: paletteCache.get=${stored != null ? '#${stored.toARGB32().toRadixString(16).padLeft(8, '0')}' : 'null'}');
     if (stored != null) {
-      _debounce?.cancel();
       _paletteCache[url] = stored;
-      _setAccent(stored);
+      _debounce = Timer(kAccentDelay, () {
+        if (token == _token) _setAccent(stored);
+      });
       return;
     }
     if (_paletteCache.containsKey(url)) {
-      _debounce?.cancel();
       final mem = _paletteCache[url];
-      print('[SCRUP] _onTrackChanged: memory cache hit=${mem != null ? '#${mem.toARGB32().toRadixString(16).padLeft(8, '0')}' : 'null'}');
-      if (mem != null) _setAccent(mem);
+      if (mem != null) {
+        _debounce = Timer(kAccentDelay, () {
+          if (token == _token) _setAccent(mem);
+        });
+      }
       return;
     }
     if (paletteCache?.isFailed(url) ?? false) {
-      print('[SCRUP] _onTrackChanged: previously FAILED, skip');
-      _debounce?.cancel();
       _paletteCache[url] = null;
       return;
     }
 
-    print('[SCRUP] _onTrackChanged: no cache → debounce 600ms → extract');
-    _debounce?.cancel();
+    // Sin caché → extraer en background (600ms debounce para Deezer
+    // enrichment). El resultado se aplica con el mismo delay mínimo.
     _debounce = Timer(const Duration(milliseconds: 600), () {
       if (token != _token) return;
       _extract(token, url);
@@ -125,31 +133,31 @@ class ThemeController extends ChangeNotifier {
   }
 
   void _extract(int token, String url) {
-    print('[SCRUP] _extract: checking store for ${url.substring(0, math.min(60, url.length))}…');
     final stored = paletteCache?.get(url);
     if (stored != null) {
-      print('[SCRUP] _extract: FOUND in store → #${stored.toARGB32().toRadixString(16).padLeft(8, '0')}');
       _paletteCache[url] = stored;
-      _setAccent(stored);
+      _debounce = Timer(kAccentDelay, () {
+        if (token == _token) _setAccent(stored);
+      });
       return;
     }
     if (paletteCache?.isFailed(url) ?? false) {
-      print('[SCRUP] _extract: previously FAILED');
       _paletteCache[url] = null;
       return;
     }
     if (_paletteCache.containsKey(url)) {
       final cached = _paletteCache[url];
-      print('[SCRUP] _extract: memory cache=${cached != null ? '#${cached.toARGB32().toRadixString(16).padLeft(8, '0')}' : 'null'}');
-      if (cached != null) _setAccent(cached);
+      if (cached != null) {
+        _debounce = Timer(kAccentDelay, () {
+          if (token == _token) _setAccent(cached);
+        });
+      }
       return;
     }
-    print('[SCRUP] _extract: not cached → _loadPalette');
     unawaited(_loadPalette(url, token));
   }
 
   Future<void> _loadPalette(String url, int token) async {
-    print('[SCRUP] _loadPalette: START for ${url.substring(0, math.min(60, url.length))}…');
     Color? color;
     try {
       final store = paletteCache;
@@ -160,7 +168,6 @@ class ThemeController extends ChangeNotifier {
           artworkCache: artworkCache,
         );
         color = store.get(url);
-        print('[SCRUP] _loadPalette: after trioFor → store.get=${color != null ? '#${color.toARGB32().toRadixString(16).padLeft(8, '0')}' : 'null'}');
       } else {
         final resp = await http
             .get(
@@ -175,33 +182,24 @@ class ThemeController extends ChangeNotifier {
         color = ArtworkPaletteService.accentFromTrio(
           ArtworkPaletteService.pickTrio(trio),
         );
-        print('[SCRUP] _loadPalette: fallback path → ${color != null ? '#${color.toARGB32().toRadixString(16).padLeft(8, '0')}' : 'null'}');
       }
-    } catch (e) {
-      print('[SCRUP] _loadPalette: ERROR $e');
+    } catch (_) {
       color = null;
     }
     _paletteCache[url] = color;
     if (color != null) {
       paletteCache?.put(url, color);
-      print('[SCRUP] _loadPalette: persisted accent #${color.toARGB32().toRadixString(16).padLeft(8, '0')}');
     } else {
       paletteCache?.markFailed(url);
-      print('[SCRUP] _loadPalette: marked FAILED');
     }
-    if (token == _token) {
-      print('[SCRUP] _loadPalette: setting accent → #${color?.toARGB32().toRadixString(16).padLeft(8, '0')}');
-      _setAccent(color);
-    } else {
-      print('[SCRUP] _loadPalette: STALE (token $token != $_token) → discarded');
-    }
+    if (token == _token) _setAccent(color);
   }
 
   void _setAccent(Color? color) {
     final prev = _accentColor;
     if (prev == color) return;
     _accentColor = color;
-    print('[SCRUP] _setAccent: #${prev?.toARGB32().toRadixString(16).padLeft(8, '0')} → #${color?.toARGB32().toRadixString(16).padLeft(8, '0')}');
+    _seededFor = null;
     notifyListeners();
   }
 
@@ -219,16 +217,12 @@ class ThemeController extends ChangeNotifier {
   ///    PaletteGenerator aún es ruido JPEG, no color real).
   static Color? pickAccent(PaletteGenerator palette) {
     final dominant = palette.dominantColor?.color;
-    print('[SCRUP] pickAccent: dominant=${dominant != null ? '#${dominant.toARGB32().toRadixString(16).padLeft(8, '0')}' : 'null'}');
     if (dominant != null) {
       final hsl = HSLColor.fromColor(dominant);
-      print('[SCRUP] pickAccent: domSat=${hsl.saturation.toStringAsFixed(3)} domLight=${hsl.lightness.toStringAsFixed(3)}');
       if (isLightNeutralArtwork(dominant)) {
-        print('[SCRUP] pickAccent: → LIGHT NEUTRAL guard → silver');
         return neutralSilver(dominant, minLightness: 0.72, maxLightness: 0.88);
       }
       if (hsl.saturation < kMonochromeSaturationThreshold) {
-        print('[SCRUP] pickAccent: → DOMINANT MONOCHROME guard (sat ${hsl.saturation.toStringAsFixed(3)} < $kMonochromeSaturationThreshold) → silver');
         return neutralSilver(dominant, minLightness: 0.60, maxLightness: 0.82);
       }
     }
@@ -241,19 +235,12 @@ class ThemeController extends ChangeNotifier {
       if (palette.darkMutedColor != null) palette.darkMutedColor!.color,
       if (palette.mutedColor != null) palette.mutedColor!.color,
     ];
-    print('[SCRUP] pickAccent: ${allColors.length} PaletteGenerator swatches');
-    for (final c in allColors) {
-      final h = HSLColor.fromColor(c);
-      print('[SCRUP] pickAccent:   #${c.toARGB32().toRadixString(16).padLeft(8, '0')} sat=${h.saturation.toStringAsFixed(3)} light=${h.lightness.toStringAsFixed(3)}');
-    }
     if (allColors.isNotEmpty) {
       final maxSat = allColors.fold<double>(
         0,
         (m, c) => math.max(m, HSLColor.fromColor(c).saturation),
       );
-      print('[SCRUP] pickAccent: maxSat=${maxSat.toStringAsFixed(3)} threshold=${(kMonochromeSaturationThreshold + 0.13).toStringAsFixed(3)}');
       if (maxSat < kMonochromeSaturationThreshold + 0.13) {
-        print('[SCRUP] pickAccent: → GLOBAL MONOCHROME guard → silver');
         return neutralSilver(
           dominant ?? allColors.first,
           minLightness: 0.60,
@@ -262,7 +249,6 @@ class ThemeController extends ChangeNotifier {
       }
     }
     final result = accentFromSwatches(allColors);
-    print('[SCRUP] pickAccent: → accentFromSwatches = ${result != null ? '#${result.toARGB32().toRadixString(16).padLeft(8, '0')}' : 'null'}');
     return result;
   }
 

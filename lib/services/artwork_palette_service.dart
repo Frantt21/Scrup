@@ -42,29 +42,20 @@ class ArtworkPaletteService {
     bool force = false,
     ArtworkCacheService? artworkCache,
   }) async {
-    print('[SCRUP] trioFor: url=${url.substring(0, math.min(80, url.length))}… force=$force');
     if (!force) {
       final cached = store.getTrio(url);
       if (cached != null) {
-        print('[SCRUP] trioFor: TRIO CACHE HIT → [${cached.map((c) => '#${c.toARGB32().toRadixString(16).padLeft(8, '0')}').join(', ')}]');
         return cached;
       }
-      print('[SCRUP] trioFor: TRIO cache miss');
     } else {
       store.invalidate(url);
-      print('[SCRUP] trioFor: FORCE invalidate + re-extract');
     }
 
     final bytes = await _fetchBytes(url, artworkCache: artworkCache);
     if (bytes == null) {
-      print('[SCRUP] trioFor: NO BYTES fetched → empty');
       return const [];
     }
-    print('[SCRUP] trioFor: got ${bytes.length} bytes → extracting trio');
     final trio = await trioFromBytes(url, bytes, store);
-    print('[SCRUP] trioFor: RESULT → [${trio.map((c) => '#${c.toARGB32().toRadixString(16).padLeft(8, '0')}').join(', ')}]');
-    final accent = store.get(url);
-    print('[SCRUP] trioFor: ACCENT stored → #${accent?.toARGB32().toRadixString(16).padLeft(8, '0')}');
     return trio;
   }
 
@@ -82,22 +73,14 @@ class ArtworkPaletteService {
   ) async {
     try {
       final swatches = await extractSwatches(bytes);
-      print('[SCRUP] trioFromBytes: ${swatches.length} swatches extracted');
-      if (swatches.isNotEmpty) {
-        final domHsl = HSLColor.fromColor(swatches.first);
-        print('[SCRUP] trioFromBytes: dominant=#${swatches.first.toARGB32().toRadixString(16).padLeft(8, '0')} sat=${domHsl.saturation.toStringAsFixed(3)} light=${domHsl.lightness.toStringAsFixed(3)}');
-      }
       final trio = pickTrio(swatches);
-      print('[SCRUP] trioFromBytes: pickTrio → [${trio.map((c) => '#${c.toARGB32().toRadixString(16).padLeft(8, '0')}').join(', ')}]');
       if (trio.isNotEmpty) {
         store.putTrio(url, trio);
         final accent = accentFromTrio(trio) ?? trio.first;
-        print('[SCRUP] trioFromBytes: accentFromTrio → #${accent.toARGB32().toRadixString(16).padLeft(8, '0')} (dominantSat=${HSLColor.fromColor(trio.first).saturation.toStringAsFixed(3)})');
         store.put(url, accent);
       }
       return trio;
-    } catch (e) {
-      print('[SCRUP] trioFromBytes: ERROR $e');
+    } catch (_) {
       return const [];
     }
   }
@@ -178,15 +161,12 @@ class ArtworkPaletteService {
       try {
         final cached = await artworkCache.load(url);
         if (cached != null && cached.length > 1024) {
-          print('[SCRUP] _fetchBytes: ARTWORK DISK HIT (${cached.length} bytes)');
           return cached;
         }
-        print('[SCRUP] _fetchBytes: artwork cache miss');
       } catch (_) {}
     }
 
     // 2) Red: cadena de respaldo maxresdefault → URL original.
-    print('[SCRUP] _fetchBytes: fetching from network');
     for (final candidate in [Track.hiResThumbnail(url) ?? url, url]) {
       try {
         final resp = await http
@@ -194,12 +174,10 @@ class ArtworkPaletteService {
             .timeout(const Duration(seconds: 10));
         if (resp.statusCode == 200 && resp.bodyBytes.length > 1024) {
           final bytes = resp.bodyBytes;
-          print('[SCRUP] _fetchBytes: network OK ${bytes.length} bytes from ${candidate.length > 60 ? candidate.substring(0, 60) : candidate}…');
           // Persistir en disco para próximas sesiones.
           if (artworkCache != null) {
             try {
               await artworkCache.save(url, bytes);
-              print('[SCRUP] _fetchBytes: saved to artwork disk cache');
             } catch (_) {}
           }
           return bytes;
@@ -208,7 +186,6 @@ class ArtworkPaletteService {
         // Siguiente eslabón.
       }
     }
-    print('[SCRUP] _fetchBytes: ALL network candidates FAILED');
     return null;
   }
 
@@ -232,9 +209,7 @@ class ArtworkPaletteService {
     // hacía pasar portadas B/N como "con color" → acento azulado.
     final dominant = candidates.first;
     final domSat = HSLColor.fromColor(dominant).saturation;
-    print('[SCRUP] pickTrio: dominant=#${dominant.toARGB32().toRadixString(16).padLeft(8, '0')} sat=${domSat.toStringAsFixed(3)}');
     if (domSat < kMinSaturation) {
-      print('[SCRUP] pickTrio: MONOCHROME GUARD (sat $domSat < $kMinSaturation) → grays');
       return const [Color(0xFF5A5A5A), Color(0xFF3C3C3C), Color(0xFF242424)];
     }
 

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:math';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart' hide Track;
@@ -62,7 +62,7 @@ class QueuePersistenceSnapshot {
 ///   descargan al caché local, eliminando los cortes por expiración/limit.
 class PlayerService {
   final Player _player = Player();
-  final Random _random = Random();
+  final math.Random _random = math.Random();
 
   /// Resuelve la fuente de audio de una pista (caché local o URL de stream),
   /// inyectado en [main].

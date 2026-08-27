@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -9,7 +8,6 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../services/artwork_cache_service.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/player_service.dart';
-import '../../services/settings_store.dart';
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
 import '../widgets/context_menu_item.dart';
@@ -108,6 +106,10 @@ class _PlayerBarState extends State<PlayerBar>
 
   final List<StreamSubscription> _subs = [];
 
+  /// Timer para filtrar null transitorio entre pistas: si llega un track
+  /// real antes de que el timer dispare, se descarta el null.
+  Timer? _nullTrackTimer;
+
   @override
   void initState() {
     super.initState();
@@ -125,8 +127,17 @@ class _PlayerBarState extends State<PlayerBar>
     _subs.addAll([
       player.currentTrack.listen((t) {
         if (!mounted) return;
-        // Swipe solo cuando CAMBIA la pista (no al restaurar sesión).
-        final changed = t?.id != _track?.id && t != null;
+        if (t == null) {
+          // Null transitorio: esperar 80ms por si llega el track real.
+          _nullTrackTimer?.cancel();
+          _nullTrackTimer = Timer(const Duration(milliseconds: 80), () {
+            if (mounted) setState(() { _track = null; _dragValue = null; });
+          });
+          return;
+        }
+        // Track real: cancelar timer de null y aplicar directamente.
+        _nullTrackTimer?.cancel();
+        final changed = t.id != _track?.id;
         setState(() {
           _track = t;
           _dragValue = null;
@@ -140,9 +151,6 @@ class _PlayerBarState extends State<PlayerBar>
       }),
       player.position.listen((p) {
         if (!mounted) return;
-        // Throttle del repintado: el valor interno se actualiza en cada tick
-        // (barato), pero la UI solo se reconstruye si pasó el intervalo
-        // mínimo (o la posición volvió a cero, p. ej. al cambiar de pista).
         final now = DateTime.now();
         if (p == Duration.zero ||
             now.difference(_lastPositionFrame) >= _positionRefreshInterval) {
@@ -292,6 +300,7 @@ class _PlayerBarState extends State<PlayerBar>
   @override
   void dispose() {
     _favSub?.cancel();
+    _nullTrackTimer?.cancel();
     for (final s in _subs) {
       s.cancel();
     }
@@ -311,7 +320,6 @@ class _PlayerBarState extends State<PlayerBar>
     final theme = Theme.of(context);
     final player = context.read<PlayerService>();
     final cache = context.read<AudioCacheService>();
-    final settings = context.read<SettingsStore>();
     final themeController = context.watch<ThemeController>();
     final hasTrack = _track != null;
     final total = _duration ?? Duration.zero;

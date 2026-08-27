@@ -41,20 +41,11 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
       player.currentTrack.listen((track) {
         if (track == null) {
           _hasTrack = false;
-          // audio_service ignora los items nulos: el SMTC conserva la
-          // metadata anterior hasta que llegue la nueva pista (el estado se
-          // publica solo cuando hay pista, ver _publishPlaybackState).
           mediaItem.add(null);
           return;
         }
         _hasTrack = true;
         mediaItem.add(_mediaItemFor(track));
-        // Publicar el estado JUNTO con la metadata: el nativo de Windows
-        // solo fija el PlaybackStatus en updateState (no en setMediaItem), y
-        // sin este publish el SMTC quedaría con un estado indefinido — p. ej.
-        // al restaurar la sesión pausada (nunca llega un evento playing) o si
-        // el evento `playing` del nuevo medio llega antes de publicar la
-        // pista (race en el cambio de canción).
         _publishPlaybackState();
       }),
       player.playing.listen((playing) {

@@ -45,6 +45,7 @@ class _HomeViewState extends State<HomeView> {
   /// Pista en reproducción (para el indicador de "en reproducción").
   Track? _currentTrack;
   bool _playing = false;
+  Timer? _nullTrackTimer;
 
   /// Tamaño fijo de las tarjetas (~200px); las columnas se deducen del ancho.
   static const _cardExtent = 200.0;
@@ -67,6 +68,14 @@ class _HomeViewState extends State<HomeView> {
     _playing = player.isPlaying;
     _trackSub = player.currentTrack.listen((t) {
       if (!mounted) return;
+      if (t == null) {
+        _nullTrackTimer?.cancel();
+        _nullTrackTimer = Timer(const Duration(milliseconds: 80), () {
+          if (mounted) setState(() => _currentTrack = null);
+        });
+        return;
+      }
+      _nullTrackTimer?.cancel();
       setState(() => _currentTrack = t);
     });
     _playingSub = player.playing.listen((p) {
@@ -80,6 +89,7 @@ class _HomeViewState extends State<HomeView> {
     _sub?.cancel();
     _trackSub?.cancel();
     _playingSub?.cancel();
+    _nullTrackTimer?.cancel();
     super.dispose();
   }
 

@@ -292,7 +292,7 @@ class _WinPipe {
 
     for (var i = 0; i < 10; i++) {
       for (final prefix in const [r'\\.\pipe\', r'\\?\pipe\']) {
-        final name = '$prefix discord-ipc-$i';
+        final name = '${prefix}discord-ipc-$i';
         final namePtr = name.toNativeUtf16();
         try {
           final handle = _createFileW(

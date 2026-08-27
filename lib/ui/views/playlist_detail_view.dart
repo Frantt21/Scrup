@@ -57,6 +57,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   StreamSubscription<Playlist?>? _playlistSub;
   StreamSubscription<Track?>? _trackSub;
   StreamSubscription<bool>? _playingSub;
+  Timer? _nullTrackTimer;
   List<Track> _tracks = const [];
 
   /// Pista en reproducción (para el indicador de "en reproducción" en las
@@ -135,6 +136,14 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     _player.activePlaylistId.addListener(_onActivePlaylistChanged);
     _trackSub = _player.currentTrack.listen((t) {
       if (!mounted) return;
+      if (t == null) {
+        _nullTrackTimer?.cancel();
+        _nullTrackTimer = Timer(const Duration(milliseconds: 80), () {
+          if (mounted) setState(() => _currentTrack = null);
+        });
+        return;
+      }
+      _nullTrackTimer?.cancel();
       setState(() => _currentTrack = t);
     });
     _playingSub = _player.playing.listen((p) {
@@ -150,6 +159,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     _playlistSub?.cancel();
     _trackSub?.cancel();
     _playingSub?.cancel();
+    _nullTrackTimer?.cancel();
     _player.activePlaylistId.removeListener(_onActivePlaylistChanged);
     _filterCtrl.dispose();
     _filterFocus.dispose();

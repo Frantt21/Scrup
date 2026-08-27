@@ -86,9 +86,6 @@ class _LyricsDisplayState extends State<LyricsDisplay>
   Duration get _totalDuration =>
       widget.durationNotifier?.value ?? const Duration(seconds: 5);
 
-  Duration _lineEnd(int i) =>
-      i < _lines.length - 1 ? _lines[i + 1].timestamp : _totalDuration;
-
   List<LyricLine> _computeLinesWithGaps(List<LyricLine> original) {
     if (original.isEmpty) return [];
     final result = <LyricLine>[];

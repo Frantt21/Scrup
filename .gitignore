@@ -49,3 +49,4 @@ app.*.map.json
 tool/gen_logo.dart
 LINUX.md
 /test
+/logs devtools

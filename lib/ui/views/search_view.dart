@@ -45,6 +45,7 @@ class _SearchViewState extends State<SearchView> {
   bool _playing = false;
   StreamSubscription<Track?>? _trackSub;
   StreamSubscription<bool>? _playingSub;
+  Timer? _nullTrackTimer;
 
   /// Contador para descartar respuestas de búsquedas obsoletas.
   int _searchToken = 0;
@@ -60,6 +61,14 @@ class _SearchViewState extends State<SearchView> {
     _playing = player.isPlaying;
     _trackSub = player.currentTrack.listen((t) {
       if (!mounted) return;
+      if (t == null) {
+        _nullTrackTimer?.cancel();
+        _nullTrackTimer = Timer(const Duration(milliseconds: 80), () {
+          if (mounted) setState(() => _currentTrack = null);
+        });
+        return;
+      }
+      _nullTrackTimer?.cancel();
       setState(() => _currentTrack = t);
     });
     _playingSub = player.playing.listen((p) {
@@ -115,6 +124,7 @@ class _SearchViewState extends State<SearchView> {
     widget.searchRequest?.removeListener(_onExternalSearch);
     _trackSub?.cancel();
     _playingSub?.cancel();
+    _nullTrackTimer?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();

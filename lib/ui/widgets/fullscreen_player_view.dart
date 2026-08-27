@@ -128,7 +128,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     super.dispose();
   }
 
-  // ── Artwork hi-res + paleta (una sola descarga, con precarga) ────────────
+  // ── Artwork hi-res + paleta (dos fases) ──────────────────────────────
 
   /// URLs de artworks cuyo archivo ya está en disco (evita re-download).
   static final Set<String> _ensuredUrls = {};
@@ -136,44 +136,42 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
   /// Tríos de color ya calculados (clave: URL original).
   static final Map<String, List<Color>> _trioCache = {};
 
-  /// Asegura archivo de artwork en disco + trío de colores para una URL.
-  /// Devuelve la ruta del archivo (para `Image.file`) + trío.
-  Future<(String?, List<Color>)> _ensureVisuals(String rawUrl) async {
-    final paletteStore = context.read<PaletteCacheStore>();
-    final artworkCache = context.read<ArtworkCacheService>();
+  Timer? _prefetchTimer;
 
-    // 1) Trio: memoria → SQLite
-    var trio = _trioCache[rawUrl];
-    if (trio == null) {
-      final saved = paletteStore.getTrio(rawUrl);
-      if (saved != null) {
-        trio = saved;
-        _trioCache[rawUrl] = trio;
+  /// Fase 1: cargar artwork en disco y mostrarlo YA (inmediato si cached).
+  /// La paleta se extrae en fase 2 (separada) para no competir en el
+  /// mismo frame de rendering.
+  Future<void> _loadTrackVisuals(Track? track) async {
+    final token = ++_visualToken;
+    final rawUrl = track?.thumbnailUrl;
+    if (rawUrl == null || rawUrl.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _track = track;
+          _artPath = null;
+          _palette = const [];
+        });
       }
+      return;
     }
 
-    // 2) Archivo en disco
-    if (_ensuredUrls.contains(rawUrl)) {
-      final path = await artworkCache.filePathFor(rawUrl);
-      if (path != null) return (path, trio ?? const []);
-    }
-
-    // Local
+    // ── Fase 1: solo artwork (ruta del archivo en disco) ──────────────
+    final artworkCache = context.read<ArtworkCacheService>();
+    String? path;
     final lower = rawUrl.toLowerCase();
     if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
       try {
         final f = File(rawUrl);
         if (await f.exists()) {
+          path = rawUrl;
           _ensuredUrls.add(rawUrl);
-          return (rawUrl, trio ?? const []);
         }
       } catch (_) {}
     }
+    path ??= await artworkCache.filePathFor(rawUrl);
 
-    // Disco caché
-    String? path = await artworkCache.filePathFor(rawUrl);
     if (path == null) {
-      // Red
+      // Necesitar descarga de red → descargar y guardar.
       Uint8List? bytes;
       for (final url in [Track.hiResThumbnail(rawUrl) ?? rawUrl, rawUrl]) {
         try {
@@ -195,10 +193,37 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
       }
     }
 
-    if (path == null) return (null, trio ?? const []);
-    _ensuredUrls.add(rawUrl);
+    if (!mounted || token != _visualToken) return;
 
-    // 3) Trio: extraer si no existe
+    // Mostrar artwork INMEDIATAMENTE (frame 1).
+    if (path != null) _ensuredUrls.add(rawUrl);
+    setState(() {
+      _track = track;
+      _artPath = path;
+    });
+
+    // ── Fase 2: paleta en background (frame 2+, diferida) ─────────────
+    _loadPalettePhase2(rawUrl, token);
+  }
+
+  /// Fase 2: extraer trío de colores sin bloquear la visualización del
+  /// artwork. Se ejecuta después de que el primer setState ya mostró la
+  /// imagen.
+  Future<void> _loadPalettePhase2(String rawUrl, int token) async {
+    final paletteStore = context.read<PaletteCacheStore>();
+    final artworkCache = context.read<ArtworkCacheService>();
+
+    // Buscar en caché primero.
+    var trio = _trioCache[rawUrl];
+    if (trio == null) {
+      final saved = paletteStore.getTrio(rawUrl);
+      if (saved != null) {
+        trio = saved;
+        _trioCache[rawUrl] = trio;
+      }
+    }
+
+    // Si no hay caché, extraer del archivo de artwork.
     if (trio == null) {
       final bytes = await artworkCache.load(rawUrl);
       if (bytes != null) {
@@ -210,53 +235,64 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
         if (trio.isNotEmpty) _trioCache[rawUrl] = trio;
       }
     }
-    return (path, trio ?? const []);
-  }
 
-  Timer? _prefetchTimer;
-
-  Future<void> _loadTrackVisuals(Track? track) async {
-    final token = ++_visualToken;
-    final rawUrl = track?.thumbnailUrl;
-    if (rawUrl == null || rawUrl.isEmpty) {
-      if (mounted) {
-        setState(() {
-          _track = track;
-          _artPath = null;
-          _palette = const [];
-        });
-      }
-      return;
-    }
-
-    final (path, colors) = await _ensureVisuals(rawUrl);
     if (!mounted || token != _visualToken) return;
-    setState(() {
-      _track = track;
-      _artPath = path;
-      _palette = colors;
-    });
+    if (trio != null && trio.isNotEmpty) {
+      setState(() => _palette = trio!);
+    }
     _prefetchTimer?.cancel();
     _prefetchTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) unawaited(_prefetchNext());
     });
   }
 
-  /// Precarga bytes+paleta del SIGUIENTE track de la cola: cuando cambie la
-  /// canción todo está listo y la transición es inmediata.
+  /// Precarga artwork + paleta de los próximos [count] tracks de la cola.
+  /// El artwork se decodifica vía `precacheImage` para que la textura GPU
+  /// ya esté caliente cuando la canción llegue (sin freeze de decode).
   Future<void> _prefetchNext() async {
     if (!mounted) return;
     final player = context.read<PlayerService>();
     final q = player.queue.value;
-    final i = player.queueIndex.value + 1;
-    if (i < 0 || i >= q.length) return;
-    final url = q[i].thumbnailUrl;
-    if (url == null ||
-        url.isEmpty ||
-        (_ensuredUrls.contains(url) && _trioCache.containsKey(url))) {
-      return;
+    final start = player.queueIndex.value + 1;
+    if (start < 0 || start >= q.length) return;
+
+    for (var offset = 0; offset < 3 && start + offset < q.length; offset++) {
+      final url = q[start + offset].thumbnailUrl;
+      if (url == null || url.isEmpty) continue;
+      if (_ensuredUrls.contains(url) && _trioCache.containsKey(url)) continue;
+
+      // Asegurar que el artwork esté en disco (sin extraer paleta).
+      if (!mounted) return;
+      final artworkCache = context.read<ArtworkCacheService>();
+      var path = await artworkCache.filePathFor(url);
+      if (path == null) {
+        // Descargar si no está en caché.
+        for (final dlUrl in [Track.hiResThumbnail(url) ?? url, url]) {
+          try {
+            final resp = await http
+                .get(
+                  Uri.parse(dlUrl),
+                  headers: const {'User-Agent': 'Scrup/0.1 (music player)'},
+                )
+                .timeout(const Duration(seconds: 10));
+            if (resp.statusCode == 200 && resp.bodyBytes.length > 1024) {
+              await artworkCache.save(url, resp.bodyBytes);
+              path = await artworkCache.filePathFor(url);
+              break;
+            }
+          } catch (_) {}
+        }
+      }
+
+      // Pre-decodificar a GPU: cuando el track llegue, Image.file ya no
+      // necesitará decode porque la textura está en ImageCache.
+      if (mounted && path != null) {
+        _ensuredUrls.add(url);
+        try {
+          await precacheImage(FileImage(File(path)), context);
+        } catch (_) {}
+      }
     }
-    await _ensureVisuals(url);
   }
 
   // ── Build ────────────────────────────────────────────────────────────────

@@ -498,43 +498,36 @@ class ScrupApp extends StatelessWidget {
         ),
       ],
       child: Consumer<ThemeController>(
-        builder: (context, themeController, _) => Consumer<LocaleController>(
-          builder: (context, localeController, _) => MaterialApp(
-            title: 'Scrup',
-            debugShowCheckedModeBanner: false,
-            // i18n: delegados + idiomas soportados (es/en). El locale activo
-            // lo decide LocaleController (persistido entre sesiones).
-            locale: localeController.locale,
-            supportedLocales: AppLocalizations.supportedLocales,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            // Transición suave cuando el color cambia de pista a pista
-            themeAnimationDuration: const Duration(milliseconds: 700),
-            themeAnimationCurve: Curves.easeInOut,
-            theme: _buildTheme(themeController.accentColor),
-            // El host de toasts vive AQUÍ (sobre el navigator raíz), no dentro
-            // del AppShell: así las notificaciones flotan por encima de los
-            // diálogos/modales (p. ej. el de "añadir a playlist").
-            builder: (context, child) {
-              final app = Stack(
-                children: [
-                  child ?? const SizedBox.shrink(),
-                  const ScrupToastHost(),
-                ],
+        builder: (context, themeController, _) {
+          return Consumer<LocaleController>(
+            builder: (context, localeController, _) {
+              final app = MaterialApp(
+                title: 'Scrup',
+                debugShowCheckedModeBanner: false,
+                locale: localeController.locale,
+                supportedLocales: AppLocalizations.supportedLocales,
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                themeAnimationDuration: const Duration(milliseconds: 700),
+                themeAnimationCurve: Curves.easeInOut,
+                theme: _buildTheme(themeController.accentColor),
+                builder: (context, child) {
+                  final app = Stack(
+                    children: [
+                      child ?? const SizedBox.shrink(),
+                      const ScrupToastHost(),
+                    ],
+                  );
+                  if (Platform.isLinux) {
+                    return _LinuxRoundedCorners(child: app);
+                  }
+                  return app;
+                },
+                home: const AppShell(),
               );
-              // En Linux la ventana es transparente y SIN marco (frameless,
-              // ver main y my_application.cc), así que aquí se recortan las
-              // CUATRO esquinas redondeadas para que combine con el escritorio
-              // redondeado (GNOME/KDE); maximizada no se recorta. Windows no
-              // se toca (ventana opaca y cuadrada), y macOS no se toca porque
-              // el propio sistema redondea la ventana.
-              if (Platform.isLinux) {
-                return _LinuxRoundedCorners(child: app);
-              }
               return app;
             },
-            home: const AppShell(),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
