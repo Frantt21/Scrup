@@ -400,6 +400,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get openFolder => 'フォルダを開く';
 
   @override
+  String get cacheLimit => 'キャッシュの上限';
+
+  @override
+  String get cacheLimitHint => 'ダウンロード曲の最大ディスク使用量';
+
+  @override
   String get about => '情報';
 
   @override

@@ -231,6 +231,8 @@
   "cacheCleared": "Cache cleared",
   "cantClearCache": "Could not clear the cache",
   "openFolder": "Open folder",
+  "cacheLimit": "Cache limit",
+  "cacheLimitHint": "Maximum disk space for downloaded songs",
   "about": "About",
   "version": "Version",
   "discordPresence": "Discord Presence",

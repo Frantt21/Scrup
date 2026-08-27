@@ -406,6 +406,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get openFolder => 'Abrir carpeta';
 
   @override
+  String get cacheLimit => 'Límite del caché';
+
+  @override
+  String get cacheLimitHint =>
+      'Espacio máximo en disco para las canciones descargadas';
+
+  @override
   String get about => 'Acerca de';
 
   @override

@@ -124,6 +124,8 @@
   "cacheCleared": "캐시 지워짐",
   "cantClearCache": "캐시를 지울 수 없습니다",
   "openFolder": "폴더 열기",
+  "cacheLimit": "캐시 한도",
+  "cacheLimitHint": "다운로드한 곡의 최대 디스크 사용량",
   "about": "정보",
   "version": "버전",
   "discordPresence": "Discord 상태 표시",

@@ -405,6 +405,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get openFolder => 'Abrir pasta';
 
   @override
+  String get cacheLimit => 'Limite da cache';
+
+  @override
+  String get cacheLimitHint => 'Espaço máximo em disco para músicas baixadas';
+
+  @override
   String get about => 'Sobre';
 
   @override
@@ -982,6 +988,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get openFolder => 'Abrir pasta';
+
+  @override
+  String get cacheLimit => 'Limite da cache';
+
+  @override
+  String get cacheLimitHint => 'Espaço máximo em disco para músicas baixadas';
 
   @override
   String get about => 'Sobre';

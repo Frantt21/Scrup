@@ -410,6 +410,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get openFolder => 'Открыть папку';
 
   @override
+  String get cacheLimit => 'Лимит кэша';
+
+  @override
+  String get cacheLimitHint =>
+      'Максимальное место на диске для скачанных песен';
+
+  @override
   String get about => 'О программе';
 
   @override

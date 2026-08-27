@@ -50,3 +50,4 @@ tool/gen_logo.dart
 LINUX.md
 /test
 /logs devtools
+lib/core/version.g.dart

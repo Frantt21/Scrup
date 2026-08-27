@@ -124,6 +124,8 @@
   "cacheCleared": "Кэш очищен",
   "cantClearCache": "Не удалось очистить кэш",
   "openFolder": "Открыть папку",
+  "cacheLimit": "Лимит кэша",
+  "cacheLimitHint": "Максимальное место на диске для скачанных песен",
   "about": "О программе",
   "version": "Версия",
   "discordPresence": "Присутствие в Discord",

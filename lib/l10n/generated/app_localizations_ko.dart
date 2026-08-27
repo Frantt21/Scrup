@@ -400,6 +400,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get openFolder => '폴더 열기';
 
   @override
+  String get cacheLimit => '캐시 한도';
+
+  @override
+  String get cacheLimitHint => '다운로드한 곡의 최대 디스크 사용량';
+
+  @override
   String get about => '정보';
 
   @override

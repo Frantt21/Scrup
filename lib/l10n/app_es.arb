@@ -231,6 +231,8 @@
   "cacheCleared": "Caché vaciada",
   "cantClearCache": "No se pudo vaciar el caché",
   "openFolder": "Abrir carpeta",
+  "cacheLimit": "Límite del caché",
+  "cacheLimitHint": "Espacio máximo en disco para las canciones descargadas",
   "about": "Acerca de",
   "version": "Versión",
   "discordPresence": "Presencia de Discord",

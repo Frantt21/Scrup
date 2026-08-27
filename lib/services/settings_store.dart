@@ -26,6 +26,10 @@ class SettingsStore {
   static const _activePlaylistIdKey = 'player.active_playlist_id';
   static const _resumeKey = 'player.resume';
 
+  // ── Cache limit ──────────────────────────────────────────────────
+
+  static const _cacheMaxSizeKey = 'cache.max_size_mb';
+
   /// Clave compartida con forawn_mobile (el widget de lyrics la lee igual).
   static const lyricsSweepKey = 'lyrics_sweep_enabled';
 
@@ -300,6 +304,26 @@ class SettingsStore {
   Future<int?> loadQueueIndex() async {
     final prefs = await _instance;
     return prefs.getInt(_queueIndexKey);
+  }
+
+  // ── Cache limit ──────────────────────────────────────────────────
+
+  /// Guarda el límite del caché de audio en MiB. `null` restablece el
+  /// valor por defecto (40 GiB).
+  Future<void> saveCacheMaxSize(int? sizeMb) async {
+    final prefs = await _instance;
+    if (sizeMb == null) {
+      await prefs.remove(_cacheMaxSizeKey);
+    } else {
+      await prefs.setInt(_cacheMaxSizeKey, sizeMb);
+    }
+  }
+
+  /// Límite del caché guardado en MiB, o `null` si nunca se cambió
+  /// (por defecto: 40 GiB).
+  Future<int?> loadCacheMaxSize() async {
+    final prefs = await _instance;
+    return prefs.getInt(_cacheMaxSizeKey);
   }
 
   /// Guarda la playlist de la que viene la cola (o limpia la clave pasando

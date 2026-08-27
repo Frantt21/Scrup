@@ -124,6 +124,8 @@
   "cacheCleared": "Cache limpo",
   "cantClearCache": "Não foi possível limpar o cache",
   "openFolder": "Abrir pasta",
+  "cacheLimit": "Limite da cache",
+  "cacheLimitHint": "Espaço máximo em disco para músicas baixadas",
   "about": "Sobre",
   "version": "Versão",
   "discordPresence": "Presença do Discord",

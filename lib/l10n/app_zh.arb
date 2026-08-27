@@ -124,6 +124,8 @@
   "cacheCleared": "缓存已清除",
   "cantClearCache": "无法清除缓存",
   "openFolder": "打开文件夹",
+  "cacheLimit": "缓存上限",
+  "cacheLimitHint": "已下载歌曲的最大磁盘使用量",
   "about": "关于",
   "version": "版本",
   "discordPresence": "Discord 状态",

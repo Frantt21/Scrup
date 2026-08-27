@@ -811,6 +811,18 @@ abstract class AppLocalizations {
   /// **'Abrir carpeta'**
   String get openFolder;
 
+  /// No description provided for @cacheLimit.
+  ///
+  /// In es, this message translates to:
+  /// **'Límite del caché'**
+  String get cacheLimit;
+
+  /// No description provided for @cacheLimitHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Espacio máximo en disco para las canciones descargadas'**
+  String get cacheLimitHint;
+
   /// No description provided for @about.
   ///
   /// In es, this message translates to:

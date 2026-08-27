@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'package:drift/drift.dart' show OrderingTerm;
 
+import '../../core/version.g.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/artwork_palette_service.dart';
@@ -48,6 +49,20 @@ class _SettingsViewState extends State<SettingsView> {
   /// Omitir silencios (saltar huecos sin música automáticamente).
   bool _skipSilenceEnabled = true;
 
+  /// Límite del caché de audio en MiB (null = por defecto, 40 GiB).
+  int? _cacheLimitMb;
+
+  /// Opciones predefinidas del límite del caché (en MiB).
+  static const List<int> _cacheLimitOptions = [
+    512,
+    1024,
+    2048,
+    5120,
+    10240,
+    20480,
+    40960,
+  ];
+
   /// Idiomas soportados: el nombre se muestra en el propio idioma (cada
   /// usuario lo reconoce aunque aún no lea la interfaz).
   ///
@@ -70,6 +85,7 @@ class _SettingsViewState extends State<SettingsView> {
     _refreshStats();
     _loadDiscordPrefs();
     _loadPlayerPrefs();
+    _loadCacheLimit();
     _loadPlaylists();
   }
 
@@ -157,6 +173,68 @@ class _SettingsViewState extends State<SettingsView> {
     } catch (_) {
       // La configuración nunca debe romper la vista.
     }
+  }
+
+  Future<void> _loadCacheLimit() async {
+    try {
+      final mb = await context.read<SettingsStore>().loadCacheMaxSize();
+      if (!mounted) return;
+      setState(() => _cacheLimitMb = mb);
+      // Aplicar el límite guardado al servicio de caché.
+      if (mb != null) {
+        context.read<AudioCacheService>().maxSizeBytes = mb * 1024 * 1024;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _setCacheLimit(int? mb) async {
+    setState(() => _cacheLimitMb = mb);
+    final settings = context.read<SettingsStore>();
+    await settings.saveCacheMaxSize(mb);
+    final cache = context.read<AudioCacheService>();
+    cache.maxSizeBytes =
+        mb != null ? mb * 1024 * 1024 : AudioCacheService.defaultMaxSize;
+    await _refreshStats();
+  }
+
+  String get _cacheLimitLabel {
+    if (_cacheLimitMb == null) return _fmtBytes(AudioCacheService.defaultMaxSize);
+    return _fmtBytes(_cacheLimitMb! * 1024 * 1024);
+  }
+
+  Future<void> _openCacheLimitMenu(BuildContext fieldContext) async {
+    final box = fieldContext.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(fieldContext).context.findRenderObject()! as RenderBox;
+    final selected = await showMenu<int?>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(
+          box.localToGlobal(Offset.zero, ancestor: overlay),
+          box.localToGlobal(
+            box.size.bottomRight(Offset.zero),
+            ancestor: overlay,
+          ),
+        ),
+        Offset.zero & overlay.size,
+      ),
+      constraints: const BoxConstraints(minWidth: 160, maxHeight: 380),
+      clipBehavior: Clip.antiAlias,
+      items: [
+        for (final mb in _cacheLimitOptions)
+          PopupMenuItem<int>(
+            value: mb,
+            child: Text(_fmtBytes(mb * 1024 * 1024)),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<int>(
+          value: -1,
+          child: Text('Sin límite'),
+        ),
+      ],
+    );
+    if (selected == null || !mounted) return;
+    await _setCacheLimit(selected == -1 ? null : selected);
   }
 
   Future<void> _refreshStats() async {
@@ -587,6 +665,64 @@ class _SettingsViewState extends State<SettingsView> {
             ],
           ),
           const SizedBox(height: 14),
+          // Límite del caché: selector con presets.
+          Row(
+            children: [
+              Icon(
+                Icons.tune_rounded,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                l10n.cacheLimit,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              Builder(
+                builder: (fieldContext) => InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  focusColor: Colors.transparent,
+                  hoverColor: Colors.white.withValues(alpha: 0.04),
+                  onTap: () => _openCacheLimitMenu(fieldContext),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.35),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.06),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _cacheLimitLabel,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 18,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           Row(
             children: [
               OutlinedButton.icon(
@@ -792,7 +928,7 @@ class _SettingsViewState extends State<SettingsView> {
           ),
           const Spacer(),
           Text(
-            '1.0.0',
+            kAppVersionFull,
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),

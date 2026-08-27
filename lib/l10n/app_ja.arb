@@ -124,6 +124,8 @@
   "cacheCleared": "キャッシュをクリアしました",
   "cantClearCache": "キャッシュをクリアできませんでした",
   "openFolder": "フォルダを開く",
+  "cacheLimit": "キャッシュの上限",
+  "cacheLimitHint": "ダウンロード曲の最大ディスク使用量",
   "about": "情報",
   "version": "バージョン",
   "discordPresence": "Discord プレゼンス",

@@ -63,7 +63,7 @@ class AudioCacheService {
   }
 
   final YtDlpService ytdlp;
-  final int maxSizeBytes;
+  int maxSizeBytes;
 
   /// Directorio a usar directamente (tests). Si es null, se resuelve el
   /// directorio de soporte de la aplicación (persistente entre sesiones).

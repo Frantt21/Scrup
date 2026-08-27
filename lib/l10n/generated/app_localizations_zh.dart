@@ -398,6 +398,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get openFolder => '打开文件夹';
 
   @override
+  String get cacheLimit => '缓存上限';
+
+  @override
+  String get cacheLimitHint => '已下载歌曲的最大磁盘使用量';
+
+  @override
   String get about => '关于';
 
   @override
