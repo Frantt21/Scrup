@@ -635,6 +635,37 @@ class PlayerService {
     return true;
   }
 
+  /// Reordena una pista dentro de la cola arrastrándola (drag & drop).
+  /// Si shuffle está activo, también actualiza [_originalQueue] para que
+  /// al desactivar shuffle se mantenga el orden nuevo.
+  void reorderQueue(int oldIndex, int newIndex) {
+    if (oldIndex < 0 ||
+        oldIndex >= _queue.length ||
+        newIndex < 0 ||
+        newIndex >= _queue.length) return;
+
+    final moved = _queue.removeAt(oldIndex);
+    _queue.insert(newIndex, moved);
+
+    // Actualizar el índice de la pista actual si se movió alrededor.
+    if (_queueIndex == oldIndex) {
+      _queueIndex = newIndex;
+    } else if (oldIndex < _queueIndex && newIndex >= _queueIndex) {
+      _queueIndex--;
+    } else if (oldIndex > _queueIndex && newIndex <= _queueIndex) {
+      _queueIndex++;
+    }
+
+    // Si hay orden original (shuffle activo), mantenerlo sincronizado.
+    if (_originalQueue != null) {
+      final origMoved = _originalQueue!.removeAt(oldIndex);
+      _originalQueue!.insert(newIndex, origMoved);
+    }
+
+    _notifyQueueChanged();
+    _schedulePreloads();
+  }
+
   /// Activa/desactiva el modo radio. Persiste la preferencia entre sesiones
   /// (best-effort).
   void toggleRadio() {

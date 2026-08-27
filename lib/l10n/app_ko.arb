@@ -123,6 +123,7 @@
   "confirmClearCacheBody": "다운로드한 모든 노래가 삭제됩니다. 재생하려면 다시 다운로드해야 합니다.",
   "cacheCleared": "캐시 지워짐",
   "cantClearCache": "캐시를 지울 수 없습니다",
+  "openFolder": "폴더 열기",
   "about": "정보",
   "version": "버전",
   "discordPresence": "Discord 상태 표시",

@@ -123,6 +123,7 @@
   "confirmClearCacheBody": "Все скачанные песни будут удалены. Чтобы снова их воспроизвести, потребуется загрузка заново.",
   "cacheCleared": "Кэш очищен",
   "cantClearCache": "Не удалось очистить кэш",
+  "openFolder": "Открыть папку",
   "about": "О программе",
   "version": "Версия",
   "discordPresence": "Присутствие в Discord",

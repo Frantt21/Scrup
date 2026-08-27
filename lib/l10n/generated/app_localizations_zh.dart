@@ -395,6 +395,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cantClearCache => '无法清除缓存';
 
   @override
+  String get openFolder => '打开文件夹';
+
+  @override
   String get about => '关于';
 
   @override

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -202,6 +204,19 @@ class _SettingsViewState extends State<SettingsView> {
     }
     // Refrescar siempre: aunque falle, el estado real puede haber cambiado.
     await _refreshStats();
+  }
+
+  Future<void> _openCacheFolder() async {
+    final cache = context.read<AudioCacheService>();
+    final dir = await cache.cacheDir();
+    final path = dir.path;
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      await Process.run('explorer', [path]);
+    } else if (defaultTargetPlatform == TargetPlatform.linux) {
+      await Process.run('xdg-open', [path]);
+    } else if (defaultTargetPlatform == TargetPlatform.macOS) {
+      await Process.run('open', [path]);
+    }
   }
 
   /// Formatea bytes en una unidad legible (B/KB/MB/GB, base 1024).
@@ -580,6 +595,12 @@ class _SettingsViewState extends State<SettingsView> {
                 label: Text(l10n.refresh),
               ),
               const SizedBox(width: 10),
+              OutlinedButton.icon(
+                onPressed: _openCacheFolder,
+                icon: const Icon(Icons.folder_open_rounded, size: 18),
+                label: Text(l10n.openFolder),
+              ),
+              const Spacer(),
               FilledButton.icon(
                 onPressed: _clearing ? null : _clearCache,
                 style: FilledButton.styleFrom(

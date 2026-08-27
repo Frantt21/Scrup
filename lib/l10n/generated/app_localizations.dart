@@ -805,6 +805,12 @@ abstract class AppLocalizations {
   /// **'No se pudo vaciar el caché'**
   String get cantClearCache;
 
+  /// No description provided for @openFolder.
+  ///
+  /// In es, this message translates to:
+  /// **'Abrir carpeta'**
+  String get openFolder;
+
   /// No description provided for @about.
   ///
   /// In es, this message translates to:

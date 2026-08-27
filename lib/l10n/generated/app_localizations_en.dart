@@ -402,6 +402,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cantClearCache => 'Could not clear the cache';
 
   @override
+  String get openFolder => 'Open folder';
+
+  @override
   String get about => 'About';
 
   @override

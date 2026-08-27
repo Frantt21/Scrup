@@ -123,6 +123,7 @@
   "confirmClearCacheBody": "Todas as músicas baixadas serão excluídas. Você precisará baixá-las novamente para reproduzi-las.",
   "cacheCleared": "Cache limpo",
   "cantClearCache": "Não foi possível limpar o cache",
+  "openFolder": "Abrir pasta",
   "about": "Sobre",
   "version": "Versão",
   "discordPresence": "Presença do Discord",

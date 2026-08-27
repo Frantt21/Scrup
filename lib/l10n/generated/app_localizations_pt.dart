@@ -402,6 +402,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get cantClearCache => 'Não foi possível limpar o cache';
 
   @override
+  String get openFolder => 'Abrir pasta';
+
+  @override
   String get about => 'Sobre';
 
   @override
@@ -976,6 +979,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get cantClearCache => 'Não foi possível limpar o cache';
+
+  @override
+  String get openFolder => 'Abrir pasta';
 
   @override
   String get about => 'Sobre';

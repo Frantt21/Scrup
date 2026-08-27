@@ -403,6 +403,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get cantClearCache => 'No se pudo vaciar el caché';
 
   @override
+  String get openFolder => 'Abrir carpeta';
+
+  @override
   String get about => 'Acerca de';
 
   @override

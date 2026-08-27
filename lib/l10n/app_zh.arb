@@ -123,6 +123,7 @@
   "confirmClearCacheBody": "所有已下载的歌曲都将被删除。再次播放需要重新下载。",
   "cacheCleared": "缓存已清除",
   "cantClearCache": "无法清除缓存",
+  "openFolder": "打开文件夹",
   "about": "关于",
   "version": "版本",
   "discordPresence": "Discord 状态",

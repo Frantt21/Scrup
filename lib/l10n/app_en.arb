@@ -230,6 +230,7 @@
   "confirmClearCacheBody": "All downloaded songs will be deleted. You'll need to download them again to play them.",
   "cacheCleared": "Cache cleared",
   "cantClearCache": "Could not clear the cache",
+  "openFolder": "Open folder",
   "about": "About",
   "version": "Version",
   "discordPresence": "Discord Presence",

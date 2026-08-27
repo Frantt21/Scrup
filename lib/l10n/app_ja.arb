@@ -123,6 +123,7 @@
   "confirmClearCacheBody": "ダウンロードした曲はすべて削除されます。再生するには再度ダウンロードが必要です。",
   "cacheCleared": "キャッシュをクリアしました",
   "cantClearCache": "キャッシュをクリアできませんでした",
+  "openFolder": "フォルダを開く",
   "about": "情報",
   "version": "バージョン",
   "discordPresence": "Discord プレゼンス",

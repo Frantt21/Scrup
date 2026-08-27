@@ -407,6 +407,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get cantClearCache => 'Не удалось очистить кэш';
 
   @override
+  String get openFolder => 'Открыть папку';
+
+  @override
   String get about => 'О программе';
 
   @override

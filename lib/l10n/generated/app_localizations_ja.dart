@@ -397,6 +397,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get cantClearCache => 'キャッシュをクリアできませんでした';
 
   @override
+  String get openFolder => 'フォルダを開く';
+
+  @override
   String get about => '情報';
 
   @override

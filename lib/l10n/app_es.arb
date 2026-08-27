@@ -230,6 +230,7 @@
   "confirmClearCacheBody": "Se eliminarán todas las canciones descargadas. Deberás volver a descargarlas para reproducirlas.",
   "cacheCleared": "Caché vaciada",
   "cantClearCache": "No se pudo vaciar el caché",
+  "openFolder": "Abrir carpeta",
   "about": "Acerca de",
   "version": "Versión",
   "discordPresence": "Presencia de Discord",

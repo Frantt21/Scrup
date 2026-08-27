@@ -397,6 +397,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get cantClearCache => '캐시를 지울 수 없습니다';
 
   @override
+  String get openFolder => '폴더 열기';
+
+  @override
   String get about => '정보';
 
   @override

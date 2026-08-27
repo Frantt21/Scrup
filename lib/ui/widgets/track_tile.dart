@@ -25,6 +25,7 @@ class TrackTile extends StatelessWidget {
   final bool isCurrent;
   final bool isPlaying;
   final Color? accentColor;
+  final bool showDuration;
 
   const TrackTile({
     super.key,
@@ -35,6 +36,7 @@ class TrackTile extends StatelessWidget {
     this.isCurrent = false,
     this.isPlaying = false,
     this.accentColor,
+    this.showDuration = true,
   });
 
   String get _durationText {
@@ -135,7 +137,7 @@ class TrackTile extends StatelessWidget {
               const SizedBox(width: 6),
             ],
             // Duración
-            if (_durationText.isNotEmpty)
+            if (showDuration && _durationText.isNotEmpty)
               Text(
                 _durationText,
                 style: theme.textTheme.labelSmall?.copyWith(
