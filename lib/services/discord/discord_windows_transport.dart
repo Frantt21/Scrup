@@ -143,23 +143,34 @@ void _isolateEntry(Map<String, dynamic> args) async {
         continue;
       }
 
-      // Handshake: se presenta con client_id y espera el READY. El evento
-      // `connected` se envía DESPUÉS del READY: el servicio publica la
-      // presencia al recibirlo, y para entonces el `ready` (port de
-      // comandos) ya llegó al main — si se enviara antes, el primer
-      // SET_ACTIVITY se perdería (send() sin port).
+      // Handshake: se presenta con client_id y espera el READY explícito.
+      // Discord puede enviar otros frames antes del READY; hay que
+      // esperar el que tenga evt=READY para confirmar que el servidor
+      // procesó el handshake antes de notificar 'connected'.
       pipe.writeFrame(DiscordOpcode.handshake, {'v': 1, 'client_id': clientId});
-      final first = pipe.readFrame(timeout: const Duration(seconds: 8));
-      if (first != null) {
+      bool readyReceived = false;
+      final deadline = DateTime.now().add(const Duration(seconds: 8));
+      while (!readyReceived && DateTime.now().isBefore(deadline)) {
+        final frame = await pipe.readFrame(
+          timeout: const Duration(seconds: 2),
+        );
+        if (frame == null) {
+          if (pipe.closedByPeer) break;
+          continue;
+        }
         mainPort.send({
           't': 'msg',
-          'opcode': first.opcode.value,
-          'payload': first.payload,
+          'opcode': frame.opcode.value,
+          'payload': frame.payload,
         });
+        if (frame.payload['evt'] == 'READY') {
+          readyReceived = true;
+        }
+      }
+      if (readyReceived) {
         mainPort.send({'t': 'connected'});
       } else {
-        // Sin READY: pipe sospechoso, se descarta.
-        throw const SocketException('Handshake sin respuesta');
+        throw const SocketException('Handshake sin READY');
       }
 
       // Bucle principal: drena escrituras y lee con timeout corto.
@@ -171,7 +182,7 @@ void _isolateEntry(Map<String, dynamic> args) async {
             pipe.writeRawBytes(bytes);
           }
         }
-        final frame = pipe.readFrame(
+        final frame = await pipe.readFrame(
           timeout: const Duration(milliseconds: 250),
         );
         if (frame == null) {
@@ -321,10 +332,12 @@ class _WinPipe {
   }
 
   /// Lee un frame completo con timeout: devuelve `null` si expiró el tiempo
-  /// o si el pipe se cerró. Usa lecturas síncronas con `ReadFile`.
-  ({DiscordOpcode opcode, Map<String, dynamic> payload})? readFrame({
+  /// o si el pipe se cerró. Usa lecturas síncronas con `ReadFile` pero cede
+  /// al event loop entre reintentos (`await Future.delayed`) para que el
+  /// isolate pueda procesar comandos del main thread (send/shutdown).
+  Future<({DiscordOpcode opcode, Map<String, dynamic> payload})?> readFrame({
     Duration timeout = const Duration(milliseconds: 250),
-  }) {
+  }) async {
     // Header (8 bytes) con deadline.
     final deadline = DateTime.now().add(timeout);
     var offset = 0;
@@ -336,9 +349,10 @@ class _WinPipe {
       }
       if (n == 0) {
         if (DateTime.now().isAfter(deadline)) return null;
-        // Poll corto: el isolate está bloqueado en FFI síncrono, no hay
-        // event loop útil; 10ms es un buen balance CPU/latencia.
-        sleep(const Duration(milliseconds: 10));
+        // Ceder al event loop: `await Future.delayed` permite que los
+        // mensajes ReceivePort (send/shutdown) se procesen mientras
+        // esperamos datos en el pipe.
+        await Future<void>.delayed(const Duration(milliseconds: 10));
         continue;
       }
       offset += n;
@@ -364,7 +378,7 @@ class _WinPipe {
       }
       if (n == 0) {
         if (DateTime.now().isAfter(payloadDeadline)) return null;
-        sleep(const Duration(milliseconds: 10));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
         continue;
       }
       pOffset += n;

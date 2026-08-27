@@ -159,8 +159,14 @@ class DiscordPresenceService {
         _connected = true;
         _connectionStatus.value = true;
         _startTimers();
-        debugPrint('[discord] conectado, publicando presencia…');
+        // Publicar de inmediato; Discord en Windows a veces "pierde" el
+        // primer SET_ACTIVITY tras un handshake nuevo. Un segundo envío
+        // 2 s después obliga a Discord a refrescar la presencia en el
+        // perfil SIN necesidad de reiniciar el cliente.
         _publishPresence();
+        Timer(const Duration(seconds: 2), () {
+          if (_connected) _publishPresence();
+        });
         // Programar la próxima reconexión: fuerza a Discord a re-validar la
         // actividad en el perfil (workaround del cacheo de Rich Presence).
         _reconnect?.cancel();
