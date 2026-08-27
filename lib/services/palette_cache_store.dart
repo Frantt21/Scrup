@@ -30,6 +30,11 @@ class PaletteCacheStore {
   /// Límite de entradas (el recorte real lo hace trimPalettes en SQL).
   static const int _maxEntries = 1500;
 
+  /// Versión del algoritmo de extracción. Cuando cambia (subimos umbrales,
+  /// cambiamos la lógica), se invalida toda la caché para que los colores
+  /// viejos (que pasaban el umbral anterior) se recalculen con el nuevo.
+  static const int _cacheVersion = 3;
+
   /// Límite de URLs fallidas recordadas en la sesión.
   static const int _maxFailedEntries = 1000;
 
@@ -58,13 +63,40 @@ class PaletteCacheStore {
 
   /// Carga las entradas desde SQLite. Best-effort: si la DB falla, arranca
   /// vacío sin romper nada. Elimina el JSON legacy si aún existe (migración
-  /// ya cubierta por la tabla).
+  /// ya cubierta por la tabla). Si la versión del caché cambió, limpia todo
+  /// para que los colores viejos se recalculen con los nuevos umbrales.
   static Future<PaletteCacheStore> load(AppDatabase db) async {
     final store = PaletteCacheStore._(db);
+
+    // ── Invalidación por versión ──────────────────────────────────────────
+    // Si el algoritmo de extracción cambió (umbrales, lógica), la caché
+    // vieja contiene colores que pasaban el umbral anterior pero no el
+    // nuevo. Limpiar todo y dejar que se recalculen.
+    try {
+      final versionRow = await db.allPalettes();
+      final hasVersion = versionRow.any((r) => r.id == _versionKey);
+      if (hasVersion) {
+        final saved = versionRow.firstWhere((r) => r.id == _versionKey);
+        if (saved.c1 != _cacheVersion) {
+          await db.customStatement('DELETE FROM palette_cache');
+          // Guardar la nueva versión.
+          await db.upsertPalette(_versionKey, [_cacheVersion]);
+        }
+      } else {
+        // Primera vez con versionado: limpiar caché vieja.
+        await db.customStatement('DELETE FROM palette_cache');
+        await db.upsertPalette(_versionKey, [_cacheVersion]);
+      }
+    } catch (_) {
+      // Si falla, sigue adelante — los colores viejos se usarán pero no
+      // rompen nada.
+    }
+
     try {
       final rows = await db.allPalettes();
       for (final row in rows) {
         final id = row.id;
+        if (id == _versionKey) continue; // metadata, no color
         if (row.c2 == null && row.c3 == null) {
           // Un solo valor: puede ser acento nuevo (con prefijo) o legacy (sin
           // prefijo). Migrar legacy al formato nuevo para que `get()` lo
@@ -143,6 +175,9 @@ class PaletteCacheStore {
 
   /// Clave separada para el acento: evita que `put` sobreescriba el trío.
   static const String _accentSuffix = '\x01accent:';
+
+  /// Clave especial para almacenar la versión del caché en la DB.
+  static const String _versionKey = '\x02cache_version';
 
   /// Marca una URL como fallida en esta sesión: los demás consumidores la
   /// verán vía [isFailed] y no volverán a descargarla.

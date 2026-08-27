@@ -536,22 +536,31 @@ class ScrupApp extends StatelessWidget {
   /// color extraído del artwork de la pista en reproducción).
   ThemeData _buildTheme(Color? accent) {
     final seed = accent ?? kDefaultAccent;
+    final fromSeed = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.dark,
+    );
+    // Semilla NEUTRA (artwork B/N → plata): M3 inventa el hue baseline
+    // azulado para semillas acromáticas y teñía todos los controles que
+    // usan `colorScheme.primary` (shuffle activo, repeat, lyrics, radio,
+    // queue, sliders, barra de tiempo). Forzar el primary al plata neutro.
+    final isNeutral = HSLColor.fromColor(seed).saturation <
+        kDefaultAccentNeutralThreshold;
+    final scheme = isNeutral
+        ? fromSeed.copyWith(primary: seed, onPrimary: const Color(0xFF1A1A1A))
+        : fromSeed;
     return ThemeData(
       useMaterial3: true,
-      colorScheme:
-          ColorScheme.fromSeed(
-            seedColor: seed,
-            brightness: Brightness.dark,
-          ).copyWith(
-            // Negro puro como color base
-            surface: const Color(0xFF000000),
-            // Paneles casi-negros escalonados para dar profundidad
-            surfaceContainerLowest: const Color(0xFF000000),
-            surfaceContainerLow: const Color(0xFF0D0D0D),
-            surfaceContainer: const Color(0xFF141414),
-            surfaceContainerHigh: const Color(0xFF1B1B1B),
-            surfaceContainerHighest: const Color(0xFF222222),
-          ),
+      colorScheme: scheme.copyWith(
+        // Negro puro como color base
+        surface: const Color(0xFF000000),
+        // Paneles casi-negros escalonados para dar profundidad
+        surfaceContainerLowest: const Color(0xFF000000),
+        surfaceContainerLow: const Color(0xFF0D0D0D),
+        surfaceContainer: const Color(0xFF141414),
+        surfaceContainerHigh: const Color(0xFF1B1B1B),
+        surfaceContainerHighest: const Color(0xFF222222),
+      ),
       scaffoldBackgroundColor: const Color(0xFF000000),
       // Sutil tinte del acento en superficies de navegación
       navigationRailTheme: NavigationRailThemeData(

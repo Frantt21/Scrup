@@ -239,6 +239,12 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     if (!mounted || token != _visualToken) return;
     if (trio != null && trio.isNotEmpty) {
       setState(() => _palette = trio!);
+    } else if (_palette.isNotEmpty) {
+      // El artwork del track NUEVO no tiene trío (descarga falló, sin
+      // bytes en disco, sin caché): NO dejar el fondo con los colores de
+      // la canción ANTERIOR — apagar a negro en vez de arrastrar el trío
+      // viejo (los usuarios lo veían como "fondo del color equivocado").
+      setState(() => _palette = const []);
     }
     _prefetchTimer?.cancel();
     _prefetchTimer = Timer(const Duration(seconds: 2), () {

@@ -14,6 +14,11 @@ import '../services/player_service.dart';
 /// Lila por defecto cuando no hay pista o el artwork no carga.
 const Color kDefaultAccent = Color(0xFFC084FC);
 
+/// Saturación por debajo de la cual una semilla se trata como NEUTRA en
+/// `seededPrimary`: pasarla por `ColorScheme.fromSeed` le inventaría el hue
+/// baseline de M3 (azulado). La plata del guard monocromo tiene sat 0.
+const double kDefaultAccentNeutralThreshold = 0.10;
+
 /// Deriva el color de acento de la app a partir del artwork de la pista
 /// actual. Escucha el reproductor y, al cambiar de pista, descarga la
 /// portada, extrae su paleta y expone el color más llamativo.
@@ -56,16 +61,25 @@ class ThemeController extends ChangeNotifier {
   /// color del artwork igual que hace `_buildTheme`. El color crudo de la
   /// paleta suele ser darkVibrant (oscuro a propósito) y desentonaba más
   /// oscuro frente al resto. Se cachea: solo se recalcula al cambiar.
+  ///
+  /// SEMILLA NEUTRA: si el acento es plata/neutro (artwork B/N), NO se pasa
+  /// por `ColorScheme.fromSeed` — Material 3 inventa el hue "baseline"
+  /// azulado para semillas acromáticas (un gris → primary azul-grisáceo) y
+  /// los controles se teñían de azul sin relación con la portada.
   Color? _seededPrimary;
   Color? _seededFor;
 
   Color get seededPrimary {
     final seed = _accentColor ?? kDefaultAccent;
     if (_seededFor != seed) {
-      _seededPrimary = ColorScheme.fromSeed(
-        seedColor: seed,
-        brightness: Brightness.dark,
-      ).primary;
+      if (HSLColor.fromColor(seed).saturation < kDefaultAccentNeutralThreshold) {
+        _seededPrimary = seed;
+      } else {
+        _seededPrimary = ColorScheme.fromSeed(
+          seedColor: seed,
+          brightness: Brightness.dark,
+        ).primary;
+      }
       _seededFor = seed;
     }
     return _seededPrimary!;

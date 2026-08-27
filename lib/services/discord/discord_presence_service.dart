@@ -35,6 +35,11 @@ class DiscordPresenceService {
   /// aplicación de Scrup.
   static const String clientId = '1536098905479970826';
 
+  /// Nombre del asset registrado en Discord Developer Portal para el
+  /// ícono redondo (small_image) que aparece en la esquina del thumbnail.
+  /// Sube 'app-logo.png' al Developer Portal como 'scrup_icon'.
+  static const String _smallImageAsset = 'scrup_icon';
+
   bool _enabled = false;
 
   /// Cada cuánto se reintenta conectar cuando Discord no está corriendo.
@@ -58,6 +63,9 @@ class DiscordPresenceService {
 
   final _events = StreamController<DiscordIpcEvent>.broadcast();
   final _connectionStatus = ValueNotifier<bool>(false);
+
+  /// Instante en que comenzó la pista actual (para timestamps).
+  DateTime _trackStartTime = DateTime.now();
 
   DiscordIpcTransport? _transport;
   StreamSubscription<DiscordIpcEvent>? _transportSub;
@@ -99,13 +107,29 @@ class DiscordPresenceService {
     _track = player.currentTrackValue;
     _playing = player.isPlaying;
     _position = player.positionValue;
+    _trackStartTime = DateTime.now().subtract(_position);
 
     _trackSub = player.currentTrack.listen(_onTrackChanged);
     _playingSub = player.playing.listen((p) {
+      final wasPlaying = _playing;
       _playing = p;
+      if (p && !wasPlaying) {
+        // Al reanudar: ajustar _trackStartTime para que el cronómetro
+        // de Discord continúe desde la posición actual.
+        _trackStartTime = DateTime.now().subtract(_position);
+      }
       _publishPresence();
     });
     _positionSub = player.position.listen((p) => _position = p);
+
+    // Publicar de inmediato si hay una pista restaurada (solo si el
+    // transporte ya está conectado o lo estará pronto).
+    if (_track != null) {
+      // Dar un instante para que la conexión IPC se establezca.
+      Timer(const Duration(seconds: 2), () {
+        if (_connected) _publishPresence();
+      });
+    }
   }
 
   /// (Re)arranca el transporte con el client id embebido. Idempotente: si
@@ -149,6 +173,9 @@ class DiscordPresenceService {
   void _onTrackChanged(Track? track) {
     _track = track;
     _position = Duration.zero;
+    // Guardar el instante en que empezó esta pista para calcular
+    // timestamps correctos tanto en play como en pausa.
+    _trackStartTime = DateTime.now();
     _publishPresence();
   }
 
@@ -220,6 +247,11 @@ class DiscordPresenceService {
   }
 
   /// Publica (o limpia) la actividad según el estado del reproductor.
+  ///
+  /// Cuando está pausado se publica SIN 'end' timestamp: Discord congela
+  /// la barra de progreso (el cronómetro se detiene porque no hay 'end' que
+  /// calcular). Al reanudar se re-publica con timestamps nuevos ajustados
+  /// a la posición actual.
   void _publishPresence() {
     final transport = _transport;
     if (transport == null || !_connected) return;
@@ -236,8 +268,9 @@ class DiscordPresenceService {
 
     final activity = buildActivity(
       track: track,
-      position: _position,
+      trackStartTime: _trackStartTime,
       total: track.duration ?? player.durationValue,
+      playing: _playing,
     );
 
     debugPrint('[discord] SET_ACTIVITY: ${track.title} — ${track.artist}');
@@ -250,49 +283,49 @@ class DiscordPresenceService {
 
   /// Construye el payload `activity` de SET_ACTIVITY.
   ///
-  /// · Tipo LISTENING (2): Discord muestra "Escuchando {details}" con el
-  ///   título de la canción. El tipo STREAMING (1) exige una URL de Twitch
-  ///   y el IPC RECHAZA el payload completo si no lo es — la presencia deja
-  ///   de aparecer aunque el socket siga conectado.
+  /// · Tipo LISTENING (2): Discord muestra "♫ Listening to Scrup" como
+  ///   header (nombre de la app del Developer Portal — no cambiable por API).
+  ///   El título de la canción se muestra en la primera línea debajo.
   /// · Portada como `large_image`: las URL remotas https funcionan sin
-  ///   subir assets al portal de desarrolladores (igual que hace Forawn).
+  ///   subir assets al portal de desarrolladores.
   /// · Barra de progreso: `timestamps.start` + `end` (solo con duración
   ///   conocida); sin `end` Discord muestra cronómetro simple.
   @visibleForTesting
   static Map<String, dynamic>? buildActivity({
     required Track track,
-    required Duration position,
+    required DateTime trackStartTime,
     Duration? total,
+    bool playing = true,
   }) {
     final title = track.title.isNotEmpty ? track.title : 'Unknown';
     final artist = track.artist.isNotEmpty ? track.artist : 'Scrup';
 
-    // Timestamps en segundos Unix: start retrocede lo ya reproducido para
-    // que el cronómetro coincida con la posición actual; end cierra la
-    // barra en el fin real de la pista.
-    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final startSec = nowSec - position.inSeconds;
-    final totalSec = total?.inSeconds ?? 0;
-    final hasEnd = totalSec > position.inSeconds;
-
     final thumb = track.thumbnailUrl;
     final album = track.album;
 
+    // Usar trackStartTime como referencia estable: Discord calcula
+    // elapsed = now - start, así que start debe ser el instante en que
+    // la pista empezó (restándole la posición actual).
+    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final startSec = trackStartTime.millisecondsSinceEpoch ~/ 1000;
+    final totalSec = total?.inSeconds ?? 0;
+    final hasEnd = totalSec > 0 && playing;
+
     return {
       'type': 2, // Listening
+      'name': title,
       'details': title,
       'state': artist,
       'timestamps': {
         'start': startSec,
-        if (hasEnd) 'end': nowSec + (totalSec - position.inSeconds),
+        if (hasEnd) 'end': startSec + totalSec,
       },
-      if (thumb != null && thumb.isNotEmpty)
-        'assets': {
-          'large_image': thumb,
-          'large_text': (album != null && album.isNotEmpty)
-              ? '$title · $album'
-              : title,
-        },
+      'assets': {
+        if (thumb != null && thumb.isNotEmpty) 'large_image': thumb,
+        if (album != null && album.isNotEmpty) 'large_text': album,
+        'small_image': _smallImageAsset,
+        'small_text': 'Scrup',
+      },
     };
   }
 

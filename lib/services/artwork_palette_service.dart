@@ -26,8 +26,14 @@ class ArtworkPaletteService {
   ArtworkPaletteService._();
 
   /// Saturación mínima (HSL) para considerar que un color es intención del
-  /// artista y no ruido de compresión.
-  static const double kMinSaturation = 0.20;
+  /// artista y no ruido de compresión. En imágenes oscuras (~90% negras),
+  /// el ruido JPEG produce colores con saturación artificial de 0.20-0.28;
+  /// 0.30 filtra ese ruido sin perder acentos reales.
+  static const double kMinSaturation = 0.30;
+
+  /// Si la luminancia es menor que esto, el color es "casi negro"
+  /// independientemente de su saturación (ruido de compresión en sombras).
+  static const double kDarknessThreshold = 0.10;
 
   static const String _userAgent = 'Scrup/0.1 (music player)';
 
@@ -203,21 +209,45 @@ class ArtworkPaletteService {
     if (swatches.isEmpty) return const [];
 
     // ── Guardia monocroma ────────────────────────────────────────────────
-    // El color DOMINANTE (más poblado por _quantize) define si la imagen
-    // tiene color real. Antes se usaba maxSat de TODOS los bins, pero el
-    // ruido JPEG (azul/morado en baja población) inflaba ese máximo y
-    // hacía pasar portadas B/N como "con color" → acento azulado.
-    final dominant = candidates.first;
-    final domSat = HSLColor.fromColor(dominant).saturation;
-    if (domSat < kMinSaturation) {
+    // Verificar los bins por POBLACIÓN (no por score): el score premia la
+    // saturación, así que en una portada B/N los bins minúsculos de RUIDO
+    // JPEG (azulados/morados) le ganan al negro/gris neutro dominante y
+    // fingen "tener color" → fondo teñido de azul sin relación con la obra.
+    // Por población, los 5 bins más llenos de una portada B/N son
+    // negros/grises/neutros: si NINGUNO alcanza saturación Y luminancia
+    // reales, la imagen es monocromática.
+    bool isMonochrome = true;
+    for (final s in candidates.take(5)) {
+      final hsl = HSLColor.fromColor(s);
+      if (hsl.saturation >= kMinSaturation &&
+          hsl.lightness >= kDarknessThreshold) {
+        isMonochrome = false;
+        break;
+      }
+    }
+    if (isMonochrome) {
       return const [Color(0xFF5A5A5A), Color(0xFF3C3C3C), Color(0xFF242424)];
     }
 
     double hueOf(Color c) => HSLColor.fromColor(c).hue;
     bool sat(Color c) => HSLColor.fromColor(c).saturation >= 0.15;
 
-    final picked = <Color>[swatches.first];
-    for (final c in swatches.skip(1)) {
+    // Los colores con saturación Y luminancia REALES van primero: el
+    // trío (y su acento derivado) nunca debe arrancar de un bin oscuro de
+    // ruido de compresión, por mucha saturación que este tenga.
+    bool realColor(Color c) {
+      final hsl = HSLColor.fromColor(c);
+      return hsl.saturation >= kMinSaturation &&
+          hsl.lightness >= kDarknessThreshold;
+    }
+
+    final ordered = [
+      ...swatches.where(realColor),
+      ...swatches.where((c) => !realColor(c)),
+    ];
+
+    final picked = <Color>[ordered.first];
+    for (final c in ordered.skip(1)) {
       if (picked.length >= 3) break;
       // Distancia de tono SOLO entre colores con saturación real.
       final farEnough = picked.every((p) {
@@ -246,12 +276,11 @@ class ArtworkPaletteService {
   /// no deben secuestrar el acento. En trío monocromo, plata neutra legible.
   static Color? accentFromTrio(List<Color> trio) {
     if (trio.isEmpty) return null;
-    // Solo el dominante define: si tiene saturación real, hay color.
-    if (HSLColor.fromColor(trio.first).saturation >= kMinSaturation) {
+    final hsl = HSLColor.fromColor(trio.first);
+    // Mismos guards que pickTrio: saturación real Y luminancia suficiente.
+    if (hsl.saturation >= kMinSaturation && hsl.lightness >= kDarknessThreshold) {
       return trio.first;
     }
-    return HSLColor.fromColor(
-      trio.first,
-    ).withSaturation(0).withLightness(0.72).toColor();
+    return hsl.withSaturation(0).withLightness(0.72).toColor();
   }
 }
