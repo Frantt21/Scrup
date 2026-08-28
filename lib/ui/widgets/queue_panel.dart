@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/artwork_cache_service.dart';
+import '../../services/artwork_palette_service.dart';
+import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import 'track_tile.dart';
 
@@ -164,7 +169,6 @@ class _QueueGlass extends StatelessWidget {
                                       isCurrent: isCurrent,
                                       isPlaying: playing && isCurrent,
                                       track: track,
-                                      accentColor: theme.colorScheme.primary,
                                     );
                                   },
                                 ),
@@ -235,7 +239,6 @@ class _QueueTrackRow extends StatefulWidget {
   final Track track;
   final bool isCurrent;
   final bool isPlaying;
-  final Color? accentColor;
 
   const _QueueTrackRow({
     super.key,
@@ -243,7 +246,6 @@ class _QueueTrackRow extends StatefulWidget {
     required this.track,
     required this.isCurrent,
     required this.isPlaying,
-    this.accentColor,
   });
 
   @override
@@ -253,10 +255,50 @@ class _QueueTrackRow extends StatefulWidget {
 class _QueueTrackRowState extends State<_QueueTrackRow> {
   bool _hovered = false;
 
+  /// Acento del artwork de esta pista, resuelto en initState (caché síncrona)
+  /// o tras extraer el trío (async). `null` = la fila usa los colores del tema.
+  Color? _accent;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_resolveAccent());
+  }
+
+  Future<void> _resolveAccent() async {
+    final url = widget.track.thumbnailUrl;
+    if (url == null || url.isEmpty) return;
+    final store = context.read<PaletteCacheStore>();
+    final cached = store.get(url);
+    if (cached != null) {
+      _accent = cached;
+      return;
+    }
+    if (store.isFailed(url)) return;
+    try {
+      final artworkCache = context.read<ArtworkCacheService>();
+      final trio = await ArtworkPaletteService.trioFor(
+        url,
+        store,
+        artworkCache: artworkCache,
+      );
+      final accent =
+          trio.isEmpty
+              ? null
+              : (ArtworkPaletteService.accentFromTrio(trio) ?? trio.first);
+      if (accent != null && mounted) {
+        setState(() => _accent = accent);
+      }
+    } catch (_) {
+      // Sin acento: la fila se queda con los colores estándar del tema.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final player = context.read<PlayerService>();
+    final accent = _accent;
     return MouseRegion(
       cursor: SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _hovered = true),
@@ -272,6 +314,7 @@ class _QueueTrackRowState extends State<_QueueTrackRow> {
                 isPlaying: widget.isPlaying,
                 onPlay: () => player.playQueueAt(widget.index),
                 showDuration: false,
+                accentColor: accent,
               ),
             ),
             ReorderableDragStartListener(
@@ -282,10 +325,9 @@ class _QueueTrackRowState extends State<_QueueTrackRow> {
                   Icons.drag_indicator_rounded,
                   size: 18,
                   color:
-                      (_hovered
-                              ? (widget.accentColor ??
-                                    theme.colorScheme.primary)
-                              : theme.colorScheme.outlineVariant)
+                      (_hovered ? (accent ?? theme.colorScheme.primary) : theme
+                              .colorScheme
+                              .outlineVariant)
                           .withValues(alpha: _hovered ? 0.85 : 0.45),
                 ),
               ),
