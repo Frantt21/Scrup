@@ -16,20 +16,11 @@ import 'now_playing_bars.dart';
 import 'scrup_toasts.dart';
 import 'spotify_import_dialog.dart';
 
-/// Ancho fijo del contenedor lateral de playlists.
 const double kSidebarWidth = 250;
 
-/// Contenedor lateral flotante tipo glass: ocupa su propio espacio a la
-/// izquierda (no se superpone al contenido) y muestra TODAS las playlists.
-/// Permite alternar entre vista de LISTA (filas) y CUADRÍCULA (grid de 2
-/// columnas). En ambos modos hay un item final que emula una playlist pero
-/// es un botón para crear una nueva.
+/// Floating glass sidebar showing all playlists with list/grid toggle.
 class PlaylistsSidebar extends StatefulWidget {
-  /// Playlist abierta actualmente (para resaltarla en la lista). `null` =
-  /// ninguna abierta.
   final int? openPlaylistId;
-
-  /// Abre (o cierra, con `null`) el detalle de una playlist.
   final ValueChanged<Playlist?> onSelectPlaylist;
 
   const PlaylistsSidebar({
@@ -51,18 +42,11 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   List<Playlist> _playlists = const [];
   Map<int, int> _counts = const {};
 
-  /// Id de la playlist que se está reproduciendo de verdad (la de la cola
-  /// activa). El ecualizador solo aparece en ELLA, no en todas las que
-  /// contienen la pista actual.
   int? _activePlaylistId;
   bool _playing = false;
   late final PlayerService _player;
 
-  /// `true` = cuadrícula (grid de 2 columnas); `false` = lista.
   bool _gridMode = false;
-
-  /// El usuario ya alternó el modo: evita que la carga asíncrona de la
-  /// preferencia sobrescriba su elección (carrera de arranque).
   bool _userToggled = false;
 
   @override
@@ -80,8 +64,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
       if (!mounted) return;
       setState(() => _counts = counts);
     });
-    // Indicador de "en reproducción": solo la playlist cuya cola es la
-    // activa (sin consultas por canción).
     _player = context.read<PlayerService>();
     _activePlaylistId = _player.activePlaylistId.value;
     _playing = _player.isPlaying;
@@ -97,15 +79,12 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
     setState(() => _activePlaylistId = _player.activePlaylistId.value);
   }
 
-  /// Restaura el modo guardado (lista/cuadrícula) de la última sesión.
   Future<void> _loadGridMode() async {
     try {
       final saved = await context.read<SettingsStore>().loadSidebarGridMode();
       if (!mounted || saved == null || _userToggled) return;
       setState(() => _gridMode = saved);
-    } catch (_) {
-      // La preferencia nunca debe romper el arranque del sidebar.
-    }
+    } catch (_) {}
   }
 
   void _toggleGridMode(bool grid) {
@@ -141,8 +120,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
       showScrupToast(l10n.cantCreatePlaylist, kind: ScrupToastKind.error);
       return;
     }
-    // Descripción y portada: best-effort (si la portada falla, la playlist
-    // ya existe y se crea igual, solo sin imagen).
     final description = data.description;
     if (description != null && description.isNotEmpty) {
       try {
@@ -154,12 +131,9 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
       try {
         final dest = await copyPlaylistCoverToAppDir(id, imagePath);
         await db.setPlaylistCover(id, dest);
-      } catch (_) {
-        // Silencioso: la playlist se crea igual sin portada.
-      }
+      } catch (_) {}
     }
     showScrupToast(l10n.playlistCreated(name), kind: ScrupToastKind.success);
-    // Abrir la recién creada directamente.
     if (!mounted) return;
     final playlist = await db.getPlaylist(id);
     if (mounted && playlist != null) {
@@ -167,8 +141,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
     }
   }
 
-  /// Importa una playlist pública de Spotify: empareja cada pista contra
-  /// YouTube y crea la playlist local con las coincidencias.
   Future<void> _importFromSpotify() async {
     final l10n = AppLocalizations.of(context);
     final db = context.read<AppDatabase>();
@@ -204,7 +176,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   Future<void> _deletePlaylist(Playlist playlist) async {
     final l10n = AppLocalizations.of(context);
     final db = context.read<AppDatabase>();
-    // Favoritos es una playlist especial: nunca se borra.
     if (playlist.isFavorites) return;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -225,20 +196,15 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
     );
     if (confirmed != true) return;
     await db.deletePlaylist(playlist.id);
-    // Si la portada era un archivo local (elegido por el usuario), borrarlo
-    // para no dejar huérfanos en playlist_covers/.
     final cover = playlist.coverUrl;
     if (cover != null && CoverImage.isLocalPath(cover)) {
       final file = File(cover);
       if (await file.exists()) {
         try {
           await file.delete();
-        } catch (_) {
-          // Silencioso: el cleanup no debe romper el borrado.
-        }
+    } catch (_) {}
       }
     }
-    // Si se eliminó la playlist abierta, cerrar el detalle.
     if (widget.openPlaylistId == playlist.id) {
       widget.onSelectPlaylist(null);
     }
@@ -253,11 +219,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
 
     return Container(
       width: kSidebarWidth,
-      // El hueco entre el sidebar y el contenido lo define cada vista (los
-      // contenedores glass usan margen izquierdo 12; Home/Buscar su padding
-      // interno), igual que el hueco del lado derecho (contenido → borde de
-      // la ventana): ambos quedan en 12. Por eso aquí no se añade margen
-      // derecho propio.
       margin: const EdgeInsets.fromLTRB(12, 12, 0, 12),
       // Sombra exterior (fuera del clip para que no se recorte)
       decoration: BoxDecoration(
@@ -275,20 +236,16 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            // Plano: un único tono oscuro, sin degradado y sin blur. El
-            // acento colorido queda solo para el player.
             color: theme.colorScheme.surfaceContainerHighest.withValues(
               alpha: 0.72,
             ),
           ),
           child: Material(
-            // Transparente para que los ripples se dibujen sobre el cristal
             color: Colors.transparent,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Cabecera: título + toggle lista/cuadrícula
-                Padding(
+              Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
                   child: Row(
                     children: [
@@ -300,8 +257,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
                           ),
                         ),
                       ),
-                      // Toggle lista/cuadrícula: chip compacto con los dos
-                      // modos siempre visibles; el activo se resalta en lila.
                       _ViewToggle(
                         gridMode: _gridMode,
                         onChanged: _toggleGridMode,
@@ -320,8 +275,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
     );
   }
 
-  /// Vista de lista: filas con miniatura + nombre + conteo y el item de
-  /// crear al final.
   Widget _buildList(ThemeData theme) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
@@ -336,7 +289,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
             onDelete: () => _deletePlaylist(playlist),
             // Favoritos: diseño especial con corazón y sin borrar.
             showDelete: !playlist.isFavorites,
-            // Indicador: solo en la playlist que se está reproduciendo.
             nowPlaying: _activePlaylistId == playlist.id,
             isPlaying: _playing,
           ),
@@ -351,8 +303,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
     );
   }
 
-  /// Vista de cuadrícula: grid de 2 columnas con tarjetas de portada y el
-  /// item de crear ocupando una celda.
   Widget _buildGrid(ThemeData theme) {
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
@@ -422,9 +372,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   }
 }
 
-/// Toggle compacto lista/cuadrícula: chip redondeado con los DOS iconos
-/// siempre visibles (sin cajas individuales). El modo activo se resalta con
-/// el color primario (lila) sobre un fondo sutil.
+/// Compact list/grid toggle chip.
 class _ViewToggle extends StatelessWidget {
   final bool gridMode;
   final ValueChanged<bool> onChanged;
@@ -500,9 +448,7 @@ class _ViewToggle extends StatelessWidget {
   }
 }
 
-/// Fila de playlist (vista lista): miniatura + nombre + nº de canciones, con
-/// borrado al hacer hover. La abierta se resalta con el tinte del color
-/// primario.
+/// Playlist row (list view) with thumbnail, name, count and delete on hover.
 class _PlaylistRow extends StatefulWidget {
   final Playlist playlist;
   final int count;
@@ -581,7 +527,6 @@ class _PlaylistRowState extends State<_PlaylistRow> {
                               ),
                             ),
                           ),
-                          // Indicador: una canción de esta playlist suena
                           if (widget.nowPlaying) ...[
                             const SizedBox(width: 6),
                             NowPlayingBars(active: widget.isPlaying, size: 11),
@@ -599,8 +544,6 @@ class _PlaylistRowState extends State<_PlaylistRow> {
                     ],
                   ),
                 ),
-                // Espacio reservado para el borrar (oculto en Favoritos):
-                // evita que el nombre \"salte\" de ancho en hover.
                 if (widget.showDelete)
                   SizedBox(
                     width: 32,
@@ -633,7 +576,6 @@ class _PlaylistRowState extends State<_PlaylistRow> {
           source: widget.playlist.coverUrl,
           cacheWidth: 120,
           fallback: favorites
-              // Favoritos: miniatura especial con corazón y degradado cálido.
               ? _favoritesFallback(theme)
               : Container(
                   decoration: BoxDecoration(
@@ -658,8 +600,6 @@ class _PlaylistRowState extends State<_PlaylistRow> {
     );
   }
 
-  /// Placeholder de Favoritos: degradado cálido con corazón, distinto del
-  /// por defecto.
   Widget _favoritesFallback(ThemeData theme) {
     final primary = theme.colorScheme.primary;
     return Container(
@@ -680,8 +620,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
   }
 }
 
-/// Tarjeta de playlist (vista cuadrícula): portada grande + nombre y conteo
-/// debajo. Hover con borde y borrar; la abierta se resalta.
+/// Playlist grid cell with cover, name, count and delete on hover.
 class _PlaylistGridCell extends StatefulWidget {
   final Playlist playlist;
   final int count;
@@ -689,13 +628,8 @@ class _PlaylistGridCell extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
-  /// `false` en Favoritos: no se muestra el botón de borrar.
   final bool showDelete;
-
-  /// Una canción de esta playlist está en el reproductor.
   final bool nowPlaying;
-
-  /// Si la canción en reproducción está sonando (para animar el indicador).
   final bool isPlaying;
 
   const _PlaylistGridCell({
@@ -716,7 +650,6 @@ class _PlaylistGridCell extends StatefulWidget {
 class _PlaylistGridCellState extends State<_PlaylistGridCell> {
   bool _hovered = false;
 
-  /// Placeholder de Favoritos: degradado cálido con corazón grande.
   Widget _favoritesFallback(ThemeData theme) {
     final primary = theme.colorScheme.primary;
     return Container(
@@ -760,8 +693,6 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                       source: playlist.coverUrl,
                       cacheWidth: 200,
                       fallback: playlist.isFavorites
-                          // Favoritos: portada especial con corazón y
-                          // degradado cálido (no el por defecto).
                           ? _favoritesFallback(theme)
                           : Container(
                               decoration: BoxDecoration(
@@ -785,7 +716,6 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                             ),
                     ),
                   ),
-                  // Resaltado: borde si está seleccionada o en hover
                   if (_hovered || widget.selected)
                     IgnorePointer(
                       child: Container(
@@ -821,8 +751,6 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                         ),
                       ),
                     ),
-                  // Indicador limpio: solo el ecualizador (la sombra del
-                  // widget lo hace legible sobre la portada)
                   if (widget.nowPlaying)
                     Positioned(
                       left: 6,
@@ -862,8 +790,7 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
   }
 }
 
-/// Item final que emula una playlist pero es un botón para crear una nueva
-/// (vista lista).
+/// Button to create or import a new playlist (list view).
 class _CreatePlaylistTile extends StatelessWidget {
   final VoidCallback onTap;
   final IconData icon;
@@ -918,10 +845,7 @@ class _CreatePlaylistTile extends StatelessWidget {
   }
 }
 
-/// Celda que emula una playlist pero es un botón para crear una nueva
-/// (vista cuadrícula). Usa EXACTAMENTE la misma estructura que las celdas de
-/// playlist (bloque de portada + dos líneas de texto) para que las
-/// dimensiones coincidan.
+/// Button to create or import a new playlist (grid view).
 class _CreateGridCell extends StatelessWidget {
   final VoidCallback onTap;
   final IconData icon;
@@ -936,7 +860,6 @@ class _CreateGridCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // GestureDetector no pinta cursor propio: MouseRegion lo pone en manita.
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
@@ -944,7 +867,6 @@ class _CreateGridCell extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Mismo bloque que la portada de las celdas de playlist
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -982,8 +904,7 @@ class _CreateGridCell extends StatelessWidget {
   }
 }
 
-/// Dialog de creación de playlist: nombre, descripción opcional y portada
-/// opcional elegida desde archivo (con vista previa).
+/// Dialog for creating a new playlist (name, description, cover).
 class _CreatePlaylistDialog extends StatefulWidget {
   const _CreatePlaylistDialog();
 
@@ -1027,9 +948,6 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    // Mismo shell glass que el resto de diálogos de la app (editar
-    // playlist/metadatos, sync de letra): Container sólido con radio 18 +
-    // sombra profunda, cabecera con X y cuerpo en padding 24.
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -1093,7 +1011,6 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                     maxLength: 300,
                   ),
                   const SizedBox(height: 20),
-                  // Portada: vista previa + selector de archivo + quitar.
                   Row(
                     children: [
                       ClipRRect(
@@ -1170,8 +1087,6 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
     );
   }
 
-  /// Campo con su label como título ENCIMA del input (mismo patrón que los
-  /// diálogos de editar metadatos/playlist).
   Widget _field(
     String label,
     TextEditingController controller,

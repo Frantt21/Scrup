@@ -20,8 +20,6 @@ class LyricsDisplay extends StatefulWidget {
   final Color? accentColor;
   final bool? sweepEnabled;
 
-  /// Modo embebido (fullscreen): menos aire vertical arriba/abajo del
-  /// listado (los anclajes de auto-scroll no necesitan tanto margen).
   final bool embedded;
 
   const LyricsDisplay({
@@ -43,33 +41,19 @@ class LyricsDisplay extends StatefulWidget {
 
 class _LyricsDisplayState extends State<LyricsDisplay>
     with AutomaticKeepAliveClientMixin {
-  /// Controller que AVISA cuando un viewport se le (re)atacha: al reparentar
-  /// el widget (fullscreen↔normal), reabrir el panel u ocultarlo vía
-  /// IndexedStack/Offstage, la posición de scroll se conserva PERO los
-  /// cambios de línea que ocurrieron mientras no había viewport se
-  /// perdieron. En cada attach re-anclamos al instante a la línea actual.
   late ScrollController _controller;
   final Map<int, GlobalKey> _itemKeys = {};
   bool _showSyncButton = false;
   int _lastAutoScrolledIndex = -1;
   bool _userHasScrolled = false;
 
-  /// Hay un snap pendiente programado en post-frame (evita duplicarlos).
   bool _pendingSnap = false;
 
-  /// `true` cuando `_snapToCurrentLine` se disparó desde `_onViewportAttached`
-  /// (reparenting fullscreen↔normal): fuerza el `jumpTo` sin el gate de
-  /// 400px porque el viewport es distinto aunque el offset heredado sea
-  /// parecido.
   bool _snapFromAttach = false;
   List<LyricLine> _processedLines = [];
   SyncedLyrics? _lastLyrics;
   bool _isSweepEnabled = false;
 
-  /// Índice ACTIVO en el listado VISUAL (incluye los gaps '•••'). Se deriva
-  /// de la posición y no del índice original del reproductor: las líneas de
-  /// gap no existen en SyncedLyrics, así que el índice original nunca las
-  /// señala y los puntos quedaban apagados durante intros/instrumentales.
   final ValueNotifier<int> _activeIndex = ValueNotifier<int>(-1);
 
   @override
@@ -109,11 +93,8 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     return result;
   }
 
-  /// Índice activo en el LISTADO VISUAL (gaps incluidos), replicando la
-  /// semántica de SyncedLyrics.getCurrentLineIndex: exacto para líneas
-  /// karaoke (el adelanto cortaría el último barrido) y con adelanto de
-  /// [kCurrentLineAdvance] para las demás — los gaps, sin palabras, usan el
-  /// adelanto como cualquier línea sincronizada por línea.
+  // Active display index (gaps included), same semantics as
+  // SyncedLyrics.getCurrentLineIndex.
   int _computeActiveDisplayIndex(Duration position) {
     final posMs = (position - widget.lyricsOffset).inMilliseconds;
     var exact = -1;
@@ -172,8 +153,6 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.sweepEnabled != widget.sweepEnabled) _loadSweepSetting();
     if (oldWidget.lyrics != widget.lyrics) {
-      // Cambió la letra (otra pista u otra fuente): reinicio completo del
-      // listado, de las claves y del scroll.
       _itemKeys.clear();
       for (var i = 0; i < _lines.length; i++) _itemKeys[i] = GlobalKey();
       _showSyncButton = false;
@@ -186,10 +165,6 @@ class _LyricsDisplayState extends State<LyricsDisplay>
       });
     } else if (oldWidget.audioPath != widget.audioPath ||
         oldWidget.lyricsOffset != widget.lyricsOffset) {
-      // audioPath/offset cambiaron sin cambiar la letra (p. ej. el future
-      // del path de audio resolviendo tarde, o el ajuste en caliente desde
-      // el diálogo de sincronización): recalcular el índice activo AL
-      // INSTANTE pero SIN tocar scroll ni flags — no es un cambio de pista.
       _onPositionChanged();
     }
   }
@@ -251,10 +226,6 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     setState(() => _showSyncButton = false);
   }
 
-  /// Se dispara cuando un viewport se (re)atacha al controller (`onAttach`):
-  /// apertura del panel, reparenting fullscreen↔normal, remonte tras
-  /// Offstage, etc. Difiere el snap a post-frame porque en el momento del
-  /// attach la posición aún no tiene dimensiones de viewport.
   void _onViewportAttached(ScrollPosition position) {
     if (_pendingSnap) return;
     _pendingSnap = true;
@@ -264,16 +235,8 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     });
   }
 
-  /// Re-ancla el scroll a la línea ACTUAL de forma INSTANTÁNEA (sin
-  /// animación). Se ejecuta al (re)atacharse un viewport — abrir el panel,
-  /// volver del fullscreen, remontar tras un Offstage — y también en el
-  /// primer montaje, para que las letras aparezcan SIEMPRE centradas en la
-  /// línea que suena, aunque mientras estuvo oculta no se renderizara nada.
-  ///
-  /// Recalcula el índice activo con la posición vigente (no confía en el
-  /// último valor notificado), resetea el modo "usuario navegando" y deja
-  /// `_lastAutoScrolledIndex` sincronizado para que el seguimiento normal
-  /// continúe sin saltos desde la posición recién anclada.
+  // Instantly snaps scroll to current line. Runs on viewport attach
+  // and initial mount to ensure lyrics always start centered.
   void _snapToCurrentLine() {
     _pendingSnap = false;
     final di = _computeActiveDisplayIndex(widget.positionNotifier.value);
@@ -283,11 +246,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     if (!_controller.hasClients) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_controller.hasClients || di < 0) return;
-      // Salto estimado primero: acerca el ítem al rango construido del
-      // ListView; el ensureVisible posterior centra con las métricas reales.
       final est = (di * 74.0).clamp(0.0, _controller.position.maxScrollExtent);
-      // En reparenting (fullscreen↔normal) el viewport es distinto aunque
-      // el offset heredado sea parecido: forzar jumpTo siempre.
       if (_snapFromAttach || (_controller.offset - est).abs() > 400) {
         _controller.jumpTo(est);
       }
@@ -304,8 +263,6 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     setState(() => _showSyncButton = false);
   }
 
-  /// Seguimiento de scroll al cambiar la línea activa (líneas reales Y gaps:
-  /// durante una intro/instrumental la vista sigue a los puntos).
   void _onActiveIndexChanged(int di) {
     if (di < 0 || !_controller.hasClients) return;
     if (_userHasScrolled) {
@@ -368,8 +325,6 @@ class _LyricsDisplayState extends State<LyricsDisplay>
               if (n.direction != ScrollDirection.idle) _userHasScrolled = true;
               return false;
             },
-            // Sin scrollbar: en desktop Flutter lo añade por defecto y aquí
-            // rompe la estética del karaoke.
             child: ScrollConfiguration(
               behavior: ScrollConfiguration.of(
                 context,
@@ -390,13 +345,6 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                       final isCurrent = index == activeIndex;
                       final line = _lines[index];
                       final isGap = line.text == kGapMarker;
-                      // Fin de la línea para el sweep:
-                      //  · Gap activo → la siguiente línea del listado es el
-                      //    fin del silencio (ventana de los puntos).
-                      //  · Línea real activa → saltar los '•••' intercalados
-                      //    (su timestamp estimado recortaría el barrido) y usar
-                      //    la siguiente línea REAL.
-                      //  · Resto → la siguiente del listado (solo cosmético).
                       final Duration endTime;
                       if (isGap || !isCurrent) {
                         endTime = index < _lines.length - 1
@@ -412,10 +360,6 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                             ? _lines[j].timestamp
                             : _totalDuration;
                       }
-                      // Ventana de RECORRIDO extendida: si el proveedor
-                      // extiende las últimas palabras más allá del inicio
-                      // de la línea siguiente, esta línea sigue barriendo
-                      // (máximo: fin de línea o último start + 800ms).
                       int? sweepUntilMs;
                       if (!isGap &&
                           line.words != null &&
@@ -527,11 +471,6 @@ class _KaraokeLine extends StatelessWidget {
   final Color? accentColor;
   final bool isSweepEnabled;
 
-  /// Hasta qué posición (ms absolutos de canción) esta línea sigue
-  /// BARRIENDO aunque haya perdido el foco. Null = solo barre siendo
-  /// actual. Permite que la línea anterior TERMINE su recorrido cuando el
-  /// proveedor extiende las últimas palabras más allá del inicio de la
-  /// línea siguiente (timestamps word-by-word reales).
   final int? sweepUntilMs;
 
   const _KaraokeLine({
@@ -567,9 +506,8 @@ class _KaraokeLine extends StatelessWidget {
 
     final tokens = computeTokens();
 
-    // Un solo listener de posición decide el estado: RESALTADA (isCurrent,
-    // salta a la línea siguiente a tiempo) es independiente de BARRIENDO
-    // (esta línea termina su recorrido aunque ya no sea la actual).
+    // Highlight (isCurrent) is independent of sweep (this line finishes
+    // even after losing focus).
     return AnimatedScale(
       scale: isCurrent ? 1.05 : 1.0,
       duration: const Duration(milliseconds: 500),
@@ -601,11 +539,7 @@ class _KaraokeLine extends StatelessWidget {
     );
   }
 
-  /// Los tres puntos de silencio ('•••'). Inactivos: tenues. Activos:
-  /// encendidos en fijo, o en BARRIDO secuencial si el karaoke está activo —
-  /// cada punto cubre un tercio del hueco y se llena con el mismo gradiente
-  /// del sweep de palabras, como indicador de cuánto queda de intro o
-  /// instrumental.
+  // Gap dots ('•••'): inactive=faint, active=sweep if karaoke on.
   Widget _buildDots(TextStyle baseStyle, int currentMs) {
     const dots = ['•', '•', '•'];
     final startMs = startTime.inMilliseconds;
@@ -658,16 +592,8 @@ class _KaraokeLine extends StatelessWidget {
     }
   }
 
-  /// Tokens visuales de la línea, calculados por `build` y compartidos por
-  /// ambos modos de render. Tanto el estático como el sweep consumen esta
-  /// MISMA lista, así el layout es idéntico al ganar/perder el foco y las
-  /// palabras no "saltan".
-  ///
-  /// Cada palabra del proveedor se trocea por sus espacios internos: los
-  /// datos word-by-word (LRCLIB/KPoe, TTML, SyncLRC) traen espacios dobles
-  /// o tabs dentro del texto de una palabra que el texto plano normalizado
-  /// no tiene, y eran los responsables de la separación visible solo en la
-  /// línea activa.
+  // Computes token list shared by static and sweep modes.
+  // Splits provider words on internal spaces to normalize layout.
   _LineTokens computeTokens() {
     final words = line.words;
     final lineStartMs = startTime.inMilliseconds;
@@ -676,13 +602,7 @@ class _KaraokeLine extends StatelessWidget {
     if (words != null && words.isNotEmpty && lineEndMs > lineStartMs) {
       final n = words.length;
 
-      // ── NORMALIZACIÓN mínima y segura ──────────────────────────────────
-      // Timestamps IGUALES entre palabras son LEGÍTIMOS (frases que se
-      // repiten en la canción): solo se corrige el DESORDEN grosero — una
-      // palabra nunca empieza antes que la anterior (monotonicidad no
-      // decreciente). NADA se recorta contra el fin de línea: si el
-      // proveedor extiende las últimas palabras más allá, ese tiempo es
-      // real y el barrido debe poder terminarlo (ver sweepUntilMs).
+      // Normalize timestamps: enforce non-decreasing order.
       final starts = List<int>.filled(n, lineStartMs);
       var prev = lineStartMs;
       for (var i = 0; i < n; i++) {
@@ -692,11 +612,7 @@ class _KaraokeLine extends StatelessWidget {
         prev = ws;
       }
 
-      // Ends: el start de la siguiente palabra; la ÚLTIMA cierra en el fin
-      // de la línea o con una gracia de 600ms tras su start (lo que sea
-      // mayor) — así la última palabra siempre termina de pintarse aunque
-      // su timestamp quede pasado el inicio de la línea siguiente. Cada
-      // ventana dura ≥1ms (palabras simultáneas se completan al instante).
+      // End times: next word's start, or 600ms grace for last word.
       final toks = <_LineToken>[];
       for (var i = 0; i < n; i++) {
         final rawEnd = i < n - 1
@@ -710,21 +626,14 @@ class _KaraokeLine extends StatelessWidget {
       }
       if (toks.isNotEmpty) return _LineTokens(toks, true);
     }
-    // Sin palabras (o todas vacías): tokens desde el texto plano, ya
-    // normalizado; las ventanas quedan en cero porque no hay sweep.
+    // No words: plain text tokens with zero time windows.
     return _LineTokens([
       for (final t in line.text.split(' '))
         if (t.isNotEmpty) _LineToken(t, 0, 0),
     ], false);
   }
 
-  /// Smooth sweep: computes progress for each token from REAL timestamps,
-  /// no TweenAnimationBuilder. The audio position drives everything.
-  ///
-  /// El fin de la última palabra es el timestamp de la línea siguiente SIN
-  /// adelanto: para líneas karaoke el índice cambia de línea de forma
-  /// exacta (ver getCurrentLineIndex), así que la palabra tiene su ventana
-  /// completa y siempre llega a pintarse.
+  // Smooth sweep driven by real timestamps (no animation builders).
   Widget _buildSweep(
     TextStyle baseStyle,
     List<_LineToken> tokens,
@@ -733,8 +642,6 @@ class _KaraokeLine extends StatelessWidget {
     {
       final List<Widget> wordWidgets = [];
       for (var i = 0; i < tokens.length; i++) {
-        // Mismo espaciado que las líneas estáticas: token + espacio.
-        // Sin él, la línea activa se ve apretada frente a las demás.
         final label = tokens[i].text + (i < tokens.length - 1 ? ' ' : '');
         final wStartMs = tokens[i].startMs;
         final wEndMs = tokens[i].endMs;
@@ -764,9 +671,7 @@ class _KaraokeLine extends StatelessWidget {
       return Wrap(
         alignment: WrapAlignment.start,
         crossAxisAlignment: WrapCrossAlignment.center,
-        // El hueco entre palabras es SOLO el espacio dentro del Text:
-        // un espaciado extra aquí las hacía verse separadas.
-        spacing: 0.0,
+      spacing: 0.0,
         runSpacing: 4.0,
         children: wordWidgets,
       );
@@ -781,7 +686,6 @@ class _KaraokeLine extends StatelessWidget {
     return Wrap(
       alignment: WrapAlignment.start,
       crossAxisAlignment: WrapCrossAlignment.center,
-      // Mismo criterio que el sweep: solo el espacio tipográfico.
       spacing: 0.0,
       runSpacing: 4.0,
       children: [
@@ -795,16 +699,14 @@ class _KaraokeLine extends StatelessWidget {
   }
 }
 
-/// Tokens de una línea karaoke + si vienen de datos word-by-word reales
-/// (`karaoke`) o del texto plano (sin ventanas de tiempo).
+/// Line tokens with word-by-word timing.
 class _LineTokens {
   final List<_LineToken> list;
   final bool karaoke;
   const _LineTokens(this.list, this.karaoke);
 }
 
-/// Trozo visual de una línea karaoke: una pieza SIN espacios con su ventana
-/// de tiempo (startMs/endMs solo relevantes para el sweep).
+/// Single token with time window.
 class _LineToken {
   final String text;
   final int startMs;
@@ -838,8 +740,6 @@ class _KaraokeWord extends StatelessWidget {
       return Text(word, style: style.copyWith(color: inactiveColor));
     }
 
-    // Smooth sweep gradient: narrow active band sweeps left→right
-    // Edge is ~15% of word width for a soft but focused transition
     return ShaderMask(
       shaderCallback: (rect) {
         return LinearGradient(

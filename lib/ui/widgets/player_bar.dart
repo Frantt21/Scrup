@@ -18,38 +18,14 @@ import 'scrup_toasts.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 
-/// Espacio vertical que ocupa el player flotante en la parte inferior de la
-/// ventana (barra + márgenes). Los scrollables de las vistas lo usan como
-/// padding inferior para que sus últimos items queden accesibles por encima
-/// del player.
 const double kPlayerOverlayInset = 104;
-
-/// Margen inferior de los contenedores principales (detalle de playlist y
-/// configuración) para que terminen POR ENCIMA del player: el borde superior
-/// del cristal del player queda a 76px del borde inferior del área (12 de
-/// padding inferior + 64 de barra; el padding superior de 8 es transparente,
-/// no suma al vidrio visible), y el contenedor debe quedar a 12px de él — el
-/// mismo hueco que separa al contenedor del sidebar y del borde derecho,
-/// para espaciados uniformes y simétricos (76 + 12 = 88).
 const double kPlayerClearance = 88;
 
-/// Player flotante tipo glass: tarjeta translúcida con blur que flota sobre
-/// el contenido. La barra de progreso (sin dot, con tiempos) queda entre la
-/// información de la canción (izquierda) y el control de volumen (derecha),
-/// con los controles de reproducción encima.
+/// Floating glass player bar with progress, controls and volume.
 class PlayerBar extends StatefulWidget {
-  /// `true` si el panel de la cola está abierto (el botón se resalta).
   final bool queueOpen;
-
-  /// `true` si la vista de lyrics está abierta (el botón se resalta).
   final bool lyricsOpen;
-
-  /// Abre/cierra la vista de lyrics (lo gestiona el AppShell, que la monta
-  /// en el IndexedStack).
   final VoidCallback onToggleLyrics;
-
-  /// Abre/cierra el panel de la cola (lo gestiona el AppShell, que monta el
-  /// panel en el Row para que empuje el contenido).
   final VoidCallback onToggleQueue;
 
   const PlayerBar({
@@ -72,43 +48,19 @@ class _PlayerBarState extends State<PlayerBar>
   bool _playing = false;
   bool _buffering = false;
 
-  /// Swipe del artwork/título/artista al cambiar de pista: controlador que
-  /// se reinicia en cada cambio y dirección del movimiento (1 = siguiente,
-  /// entra desde la derecha; -1 = anterior, desde la izquierda).
   late final AnimationController _swipeCtrl;
   int _swipeDir = 1;
-
-  /// Dirección solicitada por el ÚLTIMO botón pulsado (next/prev): el stream
-  /// de pista llega después, así que el botón deja aquí su intención.
   int _pendingSwipeDir = 1;
-
-  /// Intervalo mínimo entre repintados de la posición (throttle): el stream
-  /// de posición de media_kit emite decenas de ticks por segundo durante la
-  /// reproducción, y cada repintado compone la ventana (contribuye al
-  /// consumo de GPU aunque la animación esté desactivada). Con ~250ms (4
-  /// repintados/s) la barra de progreso se ve fluida y el coste es mínimo
-  /// (y al pausar, el stream se detiene: 0%). El throttle del origen está en
-  /// PlayerService; este es el guarda local del widget.
   static const Duration _positionRefreshInterval = Duration(milliseconds: 250);
   DateTime _lastPositionFrame = DateTime.fromMillisecondsSinceEpoch(0);
-
-  /// Posición del slider durante el arrastre: mientras se arrastra NO se
-  /// hace seek (el seek real ocurre al soltar), solo se muestra la posición
-  /// del dedo en la UI (slider y tiempo).
   double? _dragValue;
-
-  /// Id de la playlist de Favoritos (para el botón de corazón).
   int _favoritesId = -1;
-
-  /// `true` mientras la pista actual esté en Favoritos (stream reactivo).
   bool _isFavorite = false;
 
   StreamSubscription<bool>? _favSub;
 
   final List<StreamSubscription> _subs = [];
 
-  /// Timer para filtrar null transitorio entre pistas: si llega un track
-  /// real antes de que el timer dispare, se descarta el null.
   Timer? _nullTrackTimer;
 
   @override
@@ -120,23 +72,18 @@ class _PlayerBarState extends State<PlayerBar>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
-    // Valores iniciales: si la sesión se restauró antes de que este widget
-    // se construyera (los streams broadcast no re-emiten lo pasado), leer la
-    // pista/duración actuales evita la pantalla "Sin reproducción".
     _track = player.currentTrackValue;
     _duration = player.durationValue;
     _subs.addAll([
       player.currentTrack.listen((t) {
         if (!mounted) return;
         if (t == null) {
-          // Null transitorio: esperar 80ms por si llega el track real.
           _nullTrackTimer?.cancel();
           _nullTrackTimer = Timer(const Duration(milliseconds: 80), () {
             if (mounted) setState(() { _track = null; _dragValue = null; });
           });
           return;
         }
-        // Track real: cancelar timer de null y aplicar directamente.
         _nullTrackTimer?.cancel();
         final changed = t.id != _track?.id;
         setState(() {
@@ -172,11 +119,9 @@ class _PlayerBarState extends State<PlayerBar>
         setState(() => _buffering = b);
       }),
     ]);
-    // Estado de favorito reactivo: observar la playlist de Favoritos.
     unawaited(_setupFavorites(db));
   }
 
-  /// Resuelve el id de Favoritos y observa si la pista actual está dentro.
   Future<void> _setupFavorites(AppDatabase db) async {
     final id = await db.ensureFavoritesPlaylist();
     if (!mounted) return;
@@ -189,9 +134,6 @@ class _PlayerBarState extends State<PlayerBar>
     });
   }
 
-  /// Re-suscribe la observación de Favoritos cuando cambia la pista. El
-  /// corazón se resetea ANTES de re-suscribir para no mostrar el estado de la
-  /// pista anterior durante un instante (parpadeo).
   void _refreshFavoriteState() {
     if (_favoritesId < 0) return;
     final track = _track;
@@ -206,23 +148,18 @@ class _PlayerBarState extends State<PlayerBar>
     });
   }
 
-  /// Menú contextual (clic derecho) sobre el player: añadir la pista actual
-  /// a una playlist o editar sus metadatos.
   Future<void> _showContextMenu(Offset position) async {
     final track = _track;
     if (track == null) return;
     final l10n = AppLocalizations.of(context);
     final action = await showMenu<String>(
       context: context,
-      // Anclaje correcto: recta de tamaño cero en la posición del cursor.
       position: RelativeRect.fromLTRB(
         position.dx,
         position.dy,
         position.dx,
         position.dy,
       ),
-      // Recortar el menú a sus esquinas redondeadas: con el menuPadding a
-      // cero, el hover de los items queda full-bleed sin desbordar.
       clipBehavior: Clip.antiAlias,
       items: [
         ContextMenuItem(
@@ -252,9 +189,6 @@ class _PlayerBarState extends State<PlayerBar>
     }
   }
 
-  /// Editor de metadatos de la pista actual (clic derecho → Editar
-  /// metadatos): campos para título, artista, álbum y portada. Al guardar,
-  /// el track se actualiza en la cola, en la UI y en la base.
   Future<void> _showEditMetadataDialog(Track track) async {
     final saved = await showDialog<Track>(
       context: context,
@@ -267,10 +201,6 @@ class _PlayerBarState extends State<PlayerBar>
     showScrupToast(savedMsg, kind: ScrupToastKind.success);
   }
 
-  /// Recalcula el trío de colores de la portada de [track] (menú
-  /// contextual → Recalcular colores): fuerza re-extracción fuera del hilo
-  /// de UI y persiste trío + acento derivado. Invalida los caches en
-  /// memoria para que la UI refleje el color nuevo al instante.
   Future<void> _recalcTrackColors(Track track) async {
     final url = track.thumbnailUrl;
     final l10n = AppLocalizations.of(context);
@@ -282,10 +212,8 @@ class _PlayerBarState extends State<PlayerBar>
       force: true,
       artworkCache: context.read<ArtworkCacheService>(),
     );
-    // Invalidar caches en memoria para que la UI aplique el color nuevo.
     if (mounted) {
       context.read<ThemeController>().invalidateColor(url);
-      // Re-aplicar el acento si es la pista actual.
       if (_track?.thumbnailUrl == url) {
         final newAccent = store.get(url);
         context.read<ThemeController>().setAccent(newAccent);
@@ -294,7 +222,6 @@ class _PlayerBarState extends State<PlayerBar>
     }
   }
 
-  /// Añade o quita la pista actual de la playlist de Favoritos.
   Future<void> _toggleFavorite() async {
     final track = _track;
     if (track == null) return;
@@ -317,7 +244,6 @@ class _PlayerBarState extends State<PlayerBar>
     super.dispose();
   }
 
-  /// Formatea una duración como `m:ss` (dígitos tabulares para que no baile).
   static String _fmt(Duration d) {
     final m = d.inMinutes;
     final s = (d.inSeconds % 60).toString().padLeft(2, '0');
@@ -335,14 +261,11 @@ class _PlayerBarState extends State<PlayerBar>
     final progress = total.inMilliseconds > 0
         ? (_position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
         : 0.0;
-    // Durante el arrastre se muestra la posición del dedo; el seek real se
-    // hace al soltar (onChangeEnd), no en cada tick.
     final shownProgress = _dragValue ?? progress;
     final shownPosition = _dragValue != null
         ? Duration(milliseconds: (_dragValue! * total.inMilliseconds).round())
         : _position;
 
-    // Base translúcida del cristal (el blur se aplica detrás).
     final base = theme.colorScheme.surfaceContainerHighest.withValues(
       alpha: 0.55,
     );
@@ -350,9 +273,7 @@ class _PlayerBarState extends State<PlayerBar>
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onSecondaryTapUp: (details) => _showContextMenu(details.globalPosition),
-      child: Container(
-        // Sombra exterior (fuera del clip para que no se recorte)
+        onSecondaryTapUp: (details) => _showContextMenu(details.globalPosition),        child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
@@ -365,23 +286,11 @@ class _PlayerBarState extends State<PlayerBar>
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
-          // El fondo del player y el contenido interactivo viven en capas
-          // separadas: una base plana (el tinte del artwork) y, encima, el
-          // degradado animado del acento. Sin blur: los paneles son planos y
-          // reproducir no produce frames extra (el degradado solo repinta a
-          // baja frecuencia, y la barra de progreso con cada tick de
-          // posición). Positioned.fill: llena el Stack sin forzar la altura
-          // del contenido (que la fija el Material, 64px).
           child: Stack(
             children: [
-              // Base plana del player: el tinte del artwork (sin blur).
               Positioned.fill(
                 child: DecoratedBox(decoration: BoxDecoration(color: base)),
               ),
-              // Degradado del acento del artwork sobre la base. El cambio
-              // de color entre pistas se ANIMA (TweenAnimationBuilder):
-              // interpola desde el tono actual al nuevo (~700ms) en vez de
-              // saltar de golpe cuando llega la paleta nueva.
               Positioned.fill(
                 child: TweenAnimationBuilder<Color?>(
                   tween: ColorTween(
@@ -412,8 +321,6 @@ class _PlayerBarState extends State<PlayerBar>
                 ),
               ),
               Material(
-                // Material transparente para que los ripples de los botones se
-                // dibujen sobre el cristal
                 color: Colors.transparent,
                 child: SafeArea(
                   top: false,
@@ -423,13 +330,10 @@ class _PlayerBarState extends State<PlayerBar>
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: Row(
                         children: [
-                          // Izquierda: información de la canción
                           Expanded(
                             child: _buildTrackInfo(theme, cache, player),
                           ),
                           const SizedBox(width: 12),
-                          // Centro: controles y, debajo, la barra de progreso
-                          // (con tiempos), entre la info y el volumen.
                           Expanded(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -544,7 +448,6 @@ class _PlayerBarState extends State<PlayerBar>
     );
   }
 
-  /// Izquierda: artwork + título (con estado de descarga) y artista.
   Widget _buildTrackInfo(
     ThemeData theme,
     AudioCacheService cache,
@@ -563,11 +466,6 @@ class _PlayerBarState extends State<PlayerBar>
         ),
       );
     }
-    // Swipe al cambiar de pista: el bloque completo (artwork + título +
-    // artista) entra deslizándose desde la dirección del botón pulsado
-    // (next → derecha, prev → izquierda) con un fade corto. La traslación
-    // es solo de PAINT (FractionalTranslation): no mueve el layout ni las
-    // secciones vecinas.
     return AnimatedBuilder(
       animation: _swipeCtrl,
       builder: (context, child) {
@@ -595,10 +493,6 @@ class _PlayerBarState extends State<PlayerBar>
             ),
           ),
           const SizedBox(width: 10),
-          // Flexible (no Expanded): el texto ocupa solo su ancho natural y el
-          // corazón queda PEGADO al título/artista en vez de tirado al borde
-          // de la sección. Con títulos largos el texto se recorta igual
-          // (ellipsis) y el botón conserva su sitio.
           Flexible(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -610,9 +504,6 @@ class _PlayerBarState extends State<PlayerBar>
                     return ValueListenableBuilder<String?>(
                       valueListenable: player.preparingTrackId,
                       builder: (context, preparingId, _) {
-                        // Solo mostrar el % si la descarga es de la pista que
-                        // se está preparando (si el usuario saltó de pista, la
-                        // descarga sigue en segundo plano).
                         final downloadingCurrent =
                             cache.downloadingId.value == preparingId;
                         final String label;
@@ -648,11 +539,6 @@ class _PlayerBarState extends State<PlayerBar>
               ],
             ),
           ),
-          // Favorito: añade/quita la pista actual de la playlist de Favoritos
-          // (corazón lleno en lila cuando está guardada). Vive DENTRO de la
-          // sección izquierda: las tres secciones de la barra son `Expanded`
-          // de igual peso, así que añadir/quitar el botón aquí NO desplaza a
-          // los controles centrales — el centro queda siempre centrado.
           const SizedBox(width: 6),
           IconButton(
             icon: Icon(
@@ -677,9 +563,6 @@ class _PlayerBarState extends State<PlayerBar>
     );
   }
 
-  /// Centro: controles de reproducción. Todos los botones usan constraints
-  /// explícitos idénticos (34x40) con el play en su propia caja fija, para
-  /// que toda la fila quede perfectamente alineada verticalmente.
   Widget _buildControls(
     ThemeData theme,
     PlayerService player,
@@ -701,8 +584,6 @@ class _PlayerBarState extends State<PlayerBar>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Shuffle (el icono no cambia; solo se enciende en lila cuando
-            // está activo)
             ValueListenableBuilder<bool>(
               valueListenable: player.shuffle,
               builder: (context, on, _) => IconButton(
@@ -714,8 +595,6 @@ class _PlayerBarState extends State<PlayerBar>
                 onPressed: player.toggleShuffle,
               ),
             ),
-            // Anterior (el swipe entra desde la izquierda). Tinte del
-            // artwork: la fila de transporte vive en el color del álbum.
             IconButton(
               icon: const Icon(Icons.skip_previous_rounded),
               constraints: btnConstraints,
@@ -729,8 +608,6 @@ class _PlayerBarState extends State<PlayerBar>
                     }
                   : null,
             ),
-            // Play / Pausa (o loader). Footprint fijo (44x40) para que la
-            // barra no cambie de tamaño ni el botón se desalinee.
             SizedBox(
               width: 44,
               height: 40,
@@ -759,7 +636,6 @@ class _PlayerBarState extends State<PlayerBar>
                       ),
               ),
             ),
-            // Siguiente (el swipe entra desde la derecha)
             IconButton(
               icon: const Icon(Icons.skip_next_rounded),
               constraints: btnConstraints,
@@ -773,7 +649,6 @@ class _PlayerBarState extends State<PlayerBar>
                     }
                   : null,
             ),
-            // Repeat (cicla off → all → one)
             ValueListenableBuilder<LoopMode>(
               valueListenable: player.repeatMode,
               builder: (context, mode, _) {
@@ -814,8 +689,6 @@ class _PlayerBarState extends State<PlayerBar>
     );
   }
 
-  /// Derecha: botón de la COLA (abre el panel que empuja el contenido) y,
-  /// al lado, el control de volumen compacto (icono con mute + slider corto).
   Widget _buildRight(
     BuildContext context,
     ThemeData theme,
@@ -828,8 +701,6 @@ class _PlayerBarState extends State<PlayerBar>
       mainAxisAlignment: MainAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Lyrics: abre la vista de letras sincronizadas (resaltada en lila
-        // cuando está abierta).
         IconButton(
           icon: const Icon(Icons.lyrics_rounded, size: 20),
           constraints: const BoxConstraints.tightFor(width: 34, height: 40),
@@ -838,8 +709,6 @@ class _PlayerBarState extends State<PlayerBar>
           tooltip: l10n.lyrics,
           onPressed: widget.onToggleLyrics,
         ),
-        // Radio (mismo artista al terminar): resaltada en lila cuando está
-        // activa.
         ValueListenableBuilder<bool>(
           valueListenable: player.radio,
           builder: (context, on, _) => IconButton(
@@ -854,7 +723,6 @@ class _PlayerBarState extends State<PlayerBar>
             onPressed: player.toggleRadio,
           ),
         ),
-        // Cola: resaltada en lila cuando el panel está abierto.
         IconButton(
           icon: const Icon(Icons.queue_music_rounded, size: 20),
           constraints: const BoxConstraints.tightFor(width: 34, height: 40),
@@ -864,8 +732,6 @@ class _PlayerBarState extends State<PlayerBar>
           onPressed: widget.onToggleQueue,
         ),
         const SizedBox(width: 2),
-        // Volumen + selector de dispositivo: tap para mute, long press
-        // para mostrar la lista de dispositivos de audio.
         Tooltip(
           message: l10n.audioOutput,
           child: _VolumeSection(player: player, muted: muted),
@@ -875,12 +741,7 @@ class _PlayerBarState extends State<PlayerBar>
   }
 }
 
-/// Widget de volumen con selector de dispositivo de audio.
-///
-/// - **Tap** en icono 🔊: mute/unmute.
-/// - **Tap** en el selector: abre popup con dispositivos de audio.
-///   El ícono ▾ rota 180° al hacer hover (mismo estilo que los
-///   dropdowns de Settings).
+/// Volume control with audio device selector.
 class _VolumeSection extends StatefulWidget {
   final PlayerService player;
   final Color muted;
@@ -987,8 +848,6 @@ class _VolumeSectionState extends State<_VolumeSection> {
               tooltip: vol <= 0 ? l10n.unmute : l10n.mute,
               onPressed: player.toggleMute,
             ),
-            // Selector de dispositivo: estilo igual a los dropdowns de
-            // Settings (InkWell + Container redondeado + ícono rotativo).
             InkWell(
               borderRadius: BorderRadius.circular(8),
               mouseCursor: SystemMouseCursors.click,
@@ -1011,7 +870,6 @@ class _VolumeSectionState extends State<_VolumeSection> {
                 ),
               ),
             ),
-            // Slider de volumen
             SizedBox(
               width: 96,
               child: SliderTheme(

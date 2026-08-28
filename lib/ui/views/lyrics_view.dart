@@ -27,14 +27,9 @@ import '../widgets/cover_image.dart';
 import '../widgets/lyrics_display.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 
-/// Vista de letras sincronizadas: contenedor glass (igual que Inicio/Buscar)
-/// montado en el IndexedStack del AppShell. Muestra las lyrics de la pista
-/// en reproducción con auto-scroll, karaoke sweep, tap-to-seek, búsqueda
-/// manual y sincronización manual (port de forawn_mobile).
+/// Synced lyrics view with auto-scroll, karaoke sweep, tap-to-seek
+/// and manual search/sync.
 class LyricsView extends StatefulWidget {
-  /// Modo EMBEBIDO (pantalla completa): sin margen, sombra ni fondo plano —
-  /// las letras flotan sobre el fondo que las rodea. Por defecto `false`
-  /// (contenedor glass habitual dentro del shell).
   final bool embedded;
 
   const LyricsView({super.key, this.embedded = false});
@@ -48,35 +43,23 @@ class _LyricsViewState extends State<LyricsView>
   Track? _track;
   SyncedLyrics? _lyrics;
 
-  /// `true` mientras se busca en LRCLIB (spinner en el estado vacío).
   bool _loading = false;
 
   final ValueNotifier<Duration> _position = ValueNotifier(Duration.zero);
   final ValueNotifier<Duration> _duration = ValueNotifier(Duration.zero);
 
-  // ── Interpolación de posición para el sweep fluido ──
-  // El stream de posición del player viene throttled a ~250ms; el sweep
-  // karaoke necesita resolución por frame, así que un Ticker extrapola la
-  // posición entre emisiones reales (base + tiempo de pared) y se resincroniza
-  // con cada emisión para no acumular deriva.
+  // Position interpolation for smooth sweep (player stream is throttled).
   late final Ticker _smoothingTick;
   Duration _smoothBasePosition = Duration.zero;
   DateTime _smoothBaseAt = DateTime.now();
   bool _playing = false;
 
-  /// Desfase de sincronización de la pista: LA ÚNICA RAÍZ que se aplica
-  /// (se resta a la posición para el índice y el sweep; el tap-to-seek lo
-  /// suma). Nace del ajuste manual y absorbe — una sola vez, al persistirlo
-  /// en [_loadTrackOffset]/[_absorbAutoIntro] — el intro no musical que
-  /// reporta SponsorBlock: nada se suma por encima en tiempo de ejecución.
+  // Single sync offset root (manual + SponsorBlock intro absorbed).
   Duration _lyricsOffset = Duration.zero;
   late final SilenceSkipService _silenceSkip;
 
-  /// Modo karaoke (sweep palabra por palabra): se refleja en el widget de
-  /// lyrics y se persiste vía el SettingsStore.
   bool _sweepEnabled = false;
 
-  /// Modo embebido (fullscreen): acciones de la cabecera solo con hover.
   bool _actionsHovered = false;
 
   StreamSubscription<Track?>? _trackSub;
@@ -84,7 +67,6 @@ class _LyricsViewState extends State<LyricsView>
   StreamSubscription<Duration?>? _durationSub;
   StreamSubscription<bool>? _playingSub;
 
-  /// Contador para descartar búsquedas obsoletas (cambio rápido de canción).
   int _fetchToken = 0;
 
   @override
@@ -96,8 +78,6 @@ class _LyricsViewState extends State<LyricsView>
     final dur = player.durationValue;
     if (dur != null) _duration.value = dur;
 
-    // Escucha de SponsorBlock: si llegan datos nuevos para la pista actual,
-    // el intro se absorbe en la raíz persistida (ver [_absorbAutoIntro]).
     _silenceSkip = context.read<SilenceSkipService>();
     _silenceSkip.addListener(_onSilenceInfoChanged);
 
@@ -108,15 +88,11 @@ class _LyricsViewState extends State<LyricsView>
         _lyrics = null;
         _lyricsOffset = Duration.zero;
       });
-      // El offset es POR PISTA: cargar el ajuste guardado de esta canción y,
-      // si nunca se tocó, absorber el intro de SponsorBlock en la raíz
-      // (cambiar de pista o de fuente de letra no lo pierde).
       unawaited(_loadTrackOffset(t).then((_) => _absorbAutoIntro(t)));
       _fetchLyrics(t);
     });
     _positionSub = player.position.listen((p) {
       if (!mounted) return;
-      // Nueva base de extrapolación (y snap para pausa/seek).
       _smoothBasePosition = p;
       _smoothBaseAt = DateTime.now();
       if (!_playing) _position.value = p;
@@ -151,11 +127,9 @@ class _LyricsViewState extends State<LyricsView>
       if (d != null) _duration.value = d;
     });
 
-    // Cargar preferencias (best-effort).
     unawaited(_loadSweepPref());
     unawaited(_loadTrackOffset(_track));
 
-    // Buscar las letras de la pista actual al abrir.
     final track = _track;
     if (track != null) _fetchLyrics(track);
   }
@@ -172,16 +146,11 @@ class _LyricsViewState extends State<LyricsView>
     }
   }
 
-  /// SponsorBlock contestó con datos nuevos: si la pista actual nunca tuvo
-  /// offset propio, su intro no musical se absorbe en la raíz persistida
-  /// (p.ej. la consulta llegó cuando la letra ya estaba en pantalla).
   void _onSilenceInfoChanged() {
     if (!mounted) return;
     unawaited(_absorbAutoIntro(_track));
   }
 
-  /// Carga el offset POR PISTA y lo aplica si la pista sigue siendo la
-  /// actual (una respuesta tardía no pisa el offset de otra canción).
   Future<void> _loadTrackOffset(Track? track) async {
     if (track == null) return;
     try {
@@ -193,14 +162,7 @@ class _LyricsViewState extends State<LyricsView>
     } catch (_) {}
   }
 
-  /// Absorbe el intro no musical que SponsorBlock reporta para [track] en
-  /// LA MISMA RAÍZ del offset manual — una sola vez, y solo si la pista
-  /// nunca tuvo entrada propia: el valor queda persistido, visible y
-  /// editable en el diálogo de sincronización como cualquier otro; nada se
-  /// suma por encima en tiempo de ejecución (ni «hardcodeado» ni volátil:
-  /// si mañana SponsorBlock no contesta, el ajuste sigue ahí).
-  ///
-  /// Si el usuario YA ajustó esa canción a mano, no se toca: su valor manda.
+  // Absorbs SponsorBlock intro into the persistent offset root.
   Future<void> _absorbAutoIntro(Track? track) async {
     if (track == null) return;
     final intro = _silenceSkip.introEndFor(track.id);
@@ -229,7 +191,6 @@ class _LyricsViewState extends State<LyricsView>
     super.dispose();
   }
 
-  /// Busca las letras de [track] en LRCLIB (con caché en disco/memoria).
   Future<void> _fetchLyrics(Track? track) async {
     if (track == null) return;
     final token = ++_fetchToken;
@@ -250,10 +211,6 @@ class _LyricsViewState extends State<LyricsView>
     }
   }
 
-  /// Aplica [lyrics] a la pista actual: se muestra al instante y se guarda
-  /// en la caché (disco) para las próximas veces. [sourceLrc] es el LRC
-  /// original de donde salió [lyrics]: guardarlo tal cual preserva los tags
-  /// word-by-word (`toLRC()` los descartaría).
   Future<void> _applyLyrics(SyncedLyrics lyrics, {String? sourceLrc}) async {
     final track = _track;
     if (track == null) return;
@@ -265,19 +222,15 @@ class _LyricsViewState extends State<LyricsView>
     if (!mounted) return;
     setState(() {
       _lyrics = lyrics;
-      // El offset por pista se CONSERVA: cambiar la fuente de la letra no
-      // debe perder la sincronización que el usuario ya ajustó.
     });
   }
 
-  /// Tap en una línea: seek a ese timestamp (respetando el offset total).
   void _onLineTap(Duration timestamp) {
     final player = context.read<PlayerService>();
     final target = timestamp + _lyricsOffset;
     player.seek(target);
   }
 
-  /// Busca el archivo de audio cacheado de la pista (para la waveform).
   Future<String?> _audioPathOf(Track track) async {
     try {
       return await context.read<AudioCacheService>().cachedPath(track.id);
@@ -286,13 +239,6 @@ class _LyricsViewState extends State<LyricsView>
     }
   }
 
-  /// Future del audio path CACHEADO por pista (identidad). Un FutureBuilder
-  /// se resetea a `ConnectionState.waiting` (data: null) cada vez que cambia
-  /// la INSTANCIA del future — y aquí se reconstruye en cada rebuild, p. ej.
-  /// al alternar fullscreen↔normal (cambia `embedded`). Ese parpadeo
-  /// null→path hacía que LyricsDisplay creyera que cambió la pista y
-  /// reiniciara el scroll al inicio. Con el future cacheado, el snapshot se
-  /// mantiene estable entre rebuilds.
   Track? _audioPathTrack;
   Future<String?>? _audioPathFuture;
 
@@ -304,7 +250,6 @@ class _LyricsViewState extends State<LyricsView>
     return _audioPathFuture!;
   }
 
-  /// Diálogo de búsqueda manual en LRCLIB (con resultados y edición).
   Future<void> _showSearchDialog() async {
     final track = _track;
     if (track == null) return;
@@ -318,7 +263,6 @@ class _LyricsViewState extends State<LyricsView>
       ),
     );
     if (result == null || !mounted) return;
-    // El resultado puede traer LRC sincronizado o texto plano.
     if (result.syncedLyrics.trim().isNotEmpty) {
       await _applyLyrics(
         SyncedLyrics.fromLRC(
@@ -329,7 +273,6 @@ class _LyricsViewState extends State<LyricsView>
         sourceLrc: result.syncedLyrics,
       );
     } else if (result.plainLyrics.trim().isNotEmpty) {
-      // Letra sin timestamps: se muestra como líneas (el highlight salta).
       await _applyLyrics(
         SyncedLyrics(
           songTitle: track.title,
@@ -344,9 +287,6 @@ class _LyricsViewState extends State<LyricsView>
     }
   }
 
-  /// Diálogo de sincronización manual (offsets ±100/±500 ms, port de
-  /// forawn_mobile): muestra la línea actual/siguiente y ajusta el offset —
-  /// el MISMO valor que se aplica y persiste: una sola raíz.
   Future<void> _showSyncDialog() async {
     final lyrics = _lyrics;
     if (lyrics == null) return;
@@ -358,10 +298,7 @@ class _LyricsViewState extends State<LyricsView>
         offset: _lyricsOffset,
         accentColor: context.read<ThemeController>().accentColor,
         onOffsetChanged: (offset) {
-          // setState OBLIGATORIO: la pantalla consume widget.lyricsOffset
-          // para su índice activo — sin rebuild el cambio no se ve en vivo.
           setState(() => _lyricsOffset = offset);
-          // Persistir POR PISTA: cada canción recuerda su propio ajuste.
           final track = _track;
           if (track != null) {
             context.read<SettingsStore>().saveLyricsOffsetFor(track.id, offset);
@@ -371,14 +308,10 @@ class _LyricsViewState extends State<LyricsView>
     );
   }
 
-  /// Diálogo para compartir la letra: ventana de tres líneas (anterior,
-  /// actual, siguiente) navegable, texto editable y salidas (copiar, PNG
-  /// o intents web).
   void _showShareDialog() {
     final lyrics = _lyrics;
     final track = _track;
     if (lyrics == null || track == null) return;
-    // Misma fórmula que la pantalla: posición menos el offset raíz.
     final idx = lyrics.getCurrentLineIndex(_position.value - _lyricsOffset);
     showDialog<void>(
       context: context,
@@ -397,7 +330,6 @@ class _LyricsViewState extends State<LyricsView>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    // El acento del artwork de la pista tiñe las letras.
     final accent = context.watch<ThemeController>().accentColor;
 
     final embedded = widget.embedded;
@@ -423,8 +355,6 @@ class _LyricsViewState extends State<LyricsView>
               borderRadius: BorderRadius.circular(18),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  // Fondo plano (sin gradiente translúcido): las letras del
-                  // color de la canción se leen sobre él.
                   color: theme.colorScheme.surfaceContainer,
                 ),
                 child: _body(theme, l10n, accent, embedded),
@@ -433,8 +363,6 @@ class _LyricsViewState extends State<LyricsView>
     );
   }
 
-  /// Cuerpo común de la vista (header + listado de letras), compartido por
-  /// el modo normal (con contenedor) y el embebido (fullscreen).
   Widget _body(
     ThemeData theme,
     AppLocalizations l10n,
@@ -442,15 +370,11 @@ class _LyricsViewState extends State<LyricsView>
     bool embedded,
   ) {
     final header = Padding(
-      // Embebido: header mínimo (solo botones hover) → menos alto.
       padding: embedded
           ? const EdgeInsets.fromLTRB(4, 6, 4, 0)
           : const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
-          // Artwork a la altura de ambas filas (título + artista).
-          // En modo embebido (fullscreen) se omite: el artwork y
-          // el título ya viven en la cabecera del modo.
           if (!embedded && _track != null) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
@@ -470,14 +394,11 @@ class _LyricsViewState extends State<LyricsView>
             ),
             const SizedBox(width: 10),
           ],
-          // En embebido el título/artista se ocultan: los botones
-          // se alinean a la derecha con un Spacer.
           if (!embedded)
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Título de la canción como título de la vista.
                   Text(
                     _track?.title ?? l10n.lyricsTitle,
                     maxLines: 1,
@@ -503,9 +424,6 @@ class _LyricsViewState extends State<LyricsView>
             )
           else
             const Spacer(),
-          // Acciones (karaoke/sync/buscar/compartir): sueltas y
-          // SOLO visibles al hover en modo embebido; siempre
-          // visibles en el modo normal.
           MouseRegion(
             onEnter: (_) {
               if (embedded) setState(() => _actionsHovered = true);
@@ -522,7 +440,6 @@ class _LyricsViewState extends State<LyricsView>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Modo karaoke (sweep palabra por palabra).
                     IconButton(
                       icon: Icon(
                         Icons.graphic_eq_rounded,
@@ -541,19 +458,16 @@ class _LyricsViewState extends State<LyricsView>
                             .setLyricsSweepEnabled(next);
                       },
                     ),
-                    // Sincronización manual (ajuste de offset).
                     IconButton(
                       icon: const Icon(Icons.timer_rounded),
                       tooltip: l10n.syncLyricsTitle,
                       onPressed: _lyrics == null ? null : _showSyncDialog,
                     ),
-                    // Búsqueda manual en LRCLIB.
                     IconButton(
                       icon: const Icon(Icons.search_rounded),
                       tooltip: l10n.searchLyrics,
                       onPressed: _track == null ? null : _showSearchDialog,
                     ),
-                    // Compartir la línea actual (imagen o web).
                     IconButton(
                       icon: const Icon(Icons.share_rounded),
                       tooltip: l10n.shareLyrics,
@@ -984,18 +898,16 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
   String _selectedProvider = 'all';
 
   /// Opciones de proveedor: (valor, etiqueta).
-  static const _providerOptions = <(String, String)>[
-    ('all', 'Todos (KPoe + Unison + LRCLIB)'),
-    ('kpoe', 'KPoe · palabra a palabra'),
-    ('unison', 'Unison'),
-    ('lrclib', 'LRCLIB · línea'),
-  ];
+  static const _providerValues = ['all', 'kpoe', 'unison', 'lrclib'];
 
-  String _providerLabel(String value) {
-    for (final option in _providerOptions) {
-      if (option.$1 == value) return option.$2;
-    }
-    return value;
+  String _providerLabel(String value, AppLocalizations l10n) {
+    return switch (value) {
+      'all' => l10n.providerAll,
+      'kpoe' => l10n.providerKpoe,
+      'unison' => l10n.providerUnison,
+      'lrclib' => l10n.providerLrclib,
+      _ => value,
+    };
   }
 
   /// Selector de proveedor con el mismo estilo que los demás dropdowns de
@@ -1021,7 +933,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _providerLabel(_selectedProvider),
+                _providerLabel(_selectedProvider, AppLocalizations.of(context)!),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurface,
                 ),
@@ -1058,10 +970,13 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
       constraints: const BoxConstraints(minWidth: 260, maxHeight: 380),
       clipBehavior: Clip.antiAlias,
       items: [
-        for (final option in _providerOptions)
+        for (final v in _providerValues)
           PopupMenuItem<String>(
-            value: option.$1,
-            child: Text(option.$2),
+            value: v,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: Text(_providerLabel(v, AppLocalizations.of(context)!)),
+            ),
           ),
       ],
     );
@@ -1482,7 +1397,6 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     setState(() => _center = next);
   }
 
-  /// Captura la tarjeta tal como se ve (pixelRatio 3 ⇒ nítida).
   Future<Uint8List?> _captureBytes() async {
     final boundary = _captureKey.currentContext?.findRenderObject();
     if (boundary is! RenderRepaintBoundary) return null;
@@ -1493,9 +1407,7 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     return Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
   }
 
-  /// Copia el PNG al portapapeles del sistema sin dependencias extra:
-  /// escribe un temporal y delega en wl-copy (Wayland), xclip (X11) o
-  /// PowerShell (Windows).
+  // Copies PNG to system clipboard via wl-copy/xclip/PowerShell.
   Future<bool> _pngToClipboard(Uint8List bytes) async {
     final dir = await getTemporaryDirectory();
     final file = File(
@@ -1543,7 +1455,6 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     );
   }
 
-  /// Exporta la tarjeta prevista como archivo PNG (selector de guardado).
   Future<void> _saveImage() async {
     final l10n = AppLocalizations.of(context);
     try {
@@ -1572,8 +1483,6 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     }
   }
 
-  /// Abre la web destino CON la imagen ya copiada en el portapapeles:
-  /// compartir es colocar la imagen, no un texto.
   Future<void> _openShareTarget(String site, Uri uri) async {
     final l10n = AppLocalizations.of(context);
     final bytes = await _captureBytes();
@@ -1646,10 +1555,8 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Tarjeta compartible (WYSIWYG: esto ES el PNG).
                 Center(child: _buildCard(theme, accent, prev, next)),
                 const SizedBox(height: 12),
-                // Navegación de la línea central.
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -1699,8 +1606,6 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     );
   }
 
-  /// Estilo EXACTO de las letras en pantalla (lyrics_display): 38 px bold,
-  /// height 1.3, Roboto; activa en acento legible, inactivas al 30%.
   TextStyle _lyricStyle(Color color) => const TextStyle(
     fontSize: 38,
     fontWeight: FontWeight.bold,

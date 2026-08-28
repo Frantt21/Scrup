@@ -1302,6 +1302,36 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Siguiente canción (ratón)'**
   String get shortcutMouseForward;
+
+  /// No description provided for @provider.
+  ///
+  /// In es, this message translates to:
+  /// **'Proveedor:'**
+  String get provider;
+
+  /// No description provided for @providerAll.
+  ///
+  /// In es, this message translates to:
+  /// **'Todos (KPoe + Unison + LRCLIB)'**
+  String get providerAll;
+
+  /// No description provided for @providerKpoe.
+  ///
+  /// In es, this message translates to:
+  /// **'KPoe · palabra a palabra'**
+  String get providerKpoe;
+
+  /// No description provided for @providerUnison.
+  ///
+  /// In es, this message translates to:
+  /// **'Unison'**
+  String get providerUnison;
+
+  /// No description provided for @providerLrclib.
+  ///
+  /// In es, this message translates to:
+  /// **'LRCLIB · línea'**
+  String get providerLrclib;
 }
 
 class _AppLocalizationsDelegate

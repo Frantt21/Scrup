@@ -24,17 +24,11 @@ import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/scrup_toasts.dart';
 import '../widgets/track_tile.dart';
 
-/// Detalle de una playlist como CONTENEDOR FLOTANTE tipo glass (márgenes,
-/// blur y sombra, como el sidebar/player), renderizado EN EL MISMO espacio
-/// sin abrir rutas. El botón de volver vive en la title bar del app. La
-/// portada muestra acciones de edición al hacer hover y las canciones tienen
-/// menú contextual con clic derecho.
+/// Floating glass container showing playlist detail with hero, tracks,
+/// drag reorder, context menus and ambient color from cover art.
 class PlaylistDetailView extends StatefulWidget {
   final Playlist playlist;
   final VoidCallback onBack;
-
-  /// Se llama tras editar la playlist (p. ej. renombrarla) para que el
-  /// padre actualice su copia y la title bar muestre el nombre nuevo.
   final ValueChanged<Playlist>? onUpdated;
 
   const PlaylistDetailView({
@@ -49,8 +43,6 @@ class PlaylistDetailView extends StatefulWidget {
 }
 
 class _PlaylistDetailViewState extends State<PlaylistDetailView> {
-  /// Altura común de los controles del hero (play, shuffle y el campo de
-  /// filtro expandido): fijada explícitamente para que los tres midan igual.
   static const double _heroControlHeight = 44.0;
   late final Stream<List<Track>> _tracksStream;
   late final Stream<Playlist?> _playlistStream;
@@ -61,51 +53,28 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   Timer? _nullTrackTimer;
   List<Track> _tracks = const [];
 
-  /// Pista en reproducción (para el indicador de "en reproducción" en las
-  /// filas).
   Track? _currentTrack;
   bool _playing = false;
 
-  /// Playlist cuya cola se está reproduciendo (de [PlayerService.activePlaylistId]).
-  /// El ecualizador del hero SOLO aparece si es ESTA playlist la que se está
-  /// reproduciendo, no si la pista actual solo pertenece a ella.
   int? _activePlaylistId;
   late final PlayerService _player;
 
-  /// Playlist en vivo (portada/descripción/nombre pueden cambiar aquí).
   Playlist? _playlist;
 
-  /// Caché de colores persistido en disco (lo comparten el reproductor y
-  /// otras vistas): consultarlo evita re-descargar miniaturas entre sesiones.
   late final PaletteCacheStore _store;
 
-  /// Color de la portada (para el degradado del hero, el tinte del cristal y
-  /// como `primary` del detalle: botones y elementos usan el color de la
-  /// PLAYLIST, no el de la canción en reproducción).
   Color? _ambientColor;
   String? _ambientFor;
   int _ambientToken = 0;
 
-  /// Caché de color extraído por portada, compartida entre instancias del
-  /// detalle: evita re-descargar/re-analizar la misma portada en la sesión.
   static final Map<String, Color?> _paletteCache = {};
 
-  /// Caché de color por portada de CANCIÓN, compartida entre instancias del
-  /// detalle (y entre playlists): cada fila se tiñe con el color del artwork
-  /// de SU propia canción. Se usa `ThemeController.pickAccent` para elegirlo.
   static final Map<String, Color?> _trackPaletteCache = {};
 
-  /// Portadas de canción cuya extracción de color está en curso (evita
-  /// lanzar dos descargas iguales para la misma miniatura). Estático como el
-  /// caché: si otra instancia del detalle ya la está descargando, no se
-  /// duplica el trabajo.
   static final Set<String> _pendingTrackColors = {};
 
-  /// Hover sobre la portada (muestra las acciones de edición).
   bool _coverHovered = false;
 
-  /// Filtrado local de la lista: el botón de búsqueda del hero se expande
-  /// en este campo y filtra por título/artista SIN tocar la playlist.
   bool _filterOpen = false;
   final TextEditingController _filterCtrl = TextEditingController();
   final FocusNode _filterFocus = FocusNode();
@@ -129,7 +98,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       setState(() => _tracks = tracks);
     });
     _store = context.read<PaletteCacheStore>();
-    // Indicador de "en reproducción": la pista actual y si está sonando.
     _player = context.read<PlayerService>();
     _currentTrack = _player.currentTrackValue;
     _playing = _player.isPlaying;
@@ -172,22 +140,15 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     setState(() => _activePlaylistId = _player.activePlaylistId.value);
   }
 
-  /// Color del artwork de una canción, pidiendo su extracción si aún no está
-  /// cacheado. Lazy: solo las filas visibles (las que construye el ListView)
-  /// disparan la extracción, así el coste queda acotado a las ~20 visibles;
-  /// al llegar el color, un setState tiñe su fila. Devuelve `null` mientras
-  /// se extrae o si falla (la fila queda con los colores estándar).
   Color? _trackColorFor(Track track) {
     final url = track.thumbnailUrl;
     if (url == null) return null;
     if (_trackPaletteCache.containsKey(url)) return _trackPaletteCache[url];
-    // Caché persistido de una sesión anterior: usarlo sin descargar.
     final stored = _store.get(url);
     if (stored != null) {
       _trackPaletteCache[url] = stored;
       return stored;
     }
-    // Ya se intentó (aquí o en el reproductor) y falló en esta sesión.
     if (_store.isFailed(url)) {
       _trackPaletteCache[url] = null;
       return null;
@@ -220,8 +181,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     if (mounted) setState(() {});
   }
 
-  /// Extrae el color de la portada solo cuando cambia (evita re-analizar en
-  /// cada rebuild) y usa el caché de la sesión cuando existe.
   void _maybeExtractAmbient(String? coverUrl) {
     if (coverUrl == null || coverUrl == _ambientFor) return;
     _ambientFor = coverUrl;
@@ -229,14 +188,12 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       setState(() => _ambientColor = _paletteCache[coverUrl]);
       return;
     }
-    // Caché persistido de una sesión anterior: usarlo sin descargar.
     final stored = _store.get(coverUrl);
     if (stored != null) {
       _paletteCache[coverUrl] = stored;
       setState(() => _ambientColor = stored);
       return;
     }
-    // Ya se intentó (aquí o en el reproductor) y falló en esta sesión.
     if (_store.isFailed(coverUrl)) {
       _paletteCache[coverUrl] = null;
       setState(() => _ambientColor = null);
@@ -276,14 +233,9 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     await playQueue(context, _tracks, playlistId: widget.playlist.id);
   }
 
-  /// `true` si ESTA playlist es la que se está reproduciendo (su cola es la
-  /// activa): el ecualizador del hero solo aparece aquí, no en otras
-  /// playlists que contengan la pista actual.
   bool get _isPlayingThisPlaylist =>
       _activePlaylistId != null && _activePlaylistId == widget.playlist.id;
 
-  /// Reproduce toda la playlist en modo aleatorio: activa el shuffle del
-  /// reproductor (el auto-advance seguirá en aleatorio) y arranca la cola.
   Future<void> _playShuffled() async {
     if (_tracks.isEmpty) return;
     final player = context.read<PlayerService>();
@@ -291,12 +243,8 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     await playQueue(context, _tracks, playlistId: widget.playlist.id);
   }
 
-  /// `true` mientras el campo del filtro tiene texto: la lista pasa a modo
-  /// lectura (sin drag, los índices de reordenar apuntan a la lista completa).
   bool get _filterActive => _filterCtrl.text.trim().isNotEmpty;
 
-  /// Normaliza para filtrar: minúsculas y sin acentos comunes ("café" →
-  /// "cafe"), así buscar sin tildes también encuentra la canción.
   static String _normQuery(String s) {
     var out = s.toLowerCase();
     const accents = {
@@ -314,7 +262,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     return out;
   }
 
-  /// Lista visible tras aplicar el filtro del hero (título o artista).
   List<Track> get _visibleTracks {
     final q = _normQuery(_filterCtrl.text.trim());
     if (q.isEmpty) return _tracks;
@@ -338,8 +285,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     setState(() => _filterOpen = false);
   }
 
-  /// Quita una canción del playlist, previa confirmación (el borrado es
-  /// destructivo y un clic derecho distraído no debería costar la canción).
   Future<void> _removeTrack(Track track) async {
     final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
@@ -366,10 +311,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     );
   }
 
-  /// Reordena arrastrando (onReorderItem ya ajusta newIndex). Actualiza la
-  /// lista en memoria (feedback inmediato) y persiste el orden nuevo; el
-  /// stream re-emite el orden de la base sin cambiar nada visualmente. Si el
-  /// guardado falla, la próxima emisión del stream deshace el movimiento.
   Future<void> _onReorderItem(int oldIndex, int newIndex) async {
     final updated = [..._tracks];
     final moved = updated.removeAt(oldIndex);
@@ -380,35 +321,26 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         widget.playlist.id,
         [for (final t in updated) t.id],
       );
-    } catch (_) {
-      // Best-effort: el stream restaurará el orden persistido.
-    }
+  } catch (_) {}
   }
 
-  /// Menú contextual (clic derecho) sobre una canción del playlist.
   Future<void> _showTrackMenu(Track track, Offset position) async {
     final l10n = AppLocalizations.of(context);
     final action = await showMenu<String>(
       context: context,
-      // Anclaje correcto: la recta es de tamaño cero en la posición del
-      // cursor (right/bottom son offsets desde los bordes del overlay).
+      // Anclaje en la posición del cursor.
       position: RelativeRect.fromLTRB(
         position.dx,
         position.dy,
         position.dx,
         position.dy,
       ),
-      // Recortar el menú a sus esquinas redondeadas: con el menuPadding a
-      // cero, el hover de los items queda full-bleed sin desbordar.
       clipBehavior: Clip.antiAlias,
       items: [
         ContextMenuItem(
           value: 'play',
           icon: Icons.play_arrow_rounded,
           label: l10n.play,
-          // Iconos con el color del artwork DE LA CANCIÓN (el menú del
-          // Overlay no hereda el Theme local, hay que pasarlo explícito);
-          // si aún no se extrajo, fallback al color de la playlist.
           color: _menuTrackColor(track) ?? _ambientColor,
         ),
         ContextMenuItem(
@@ -440,8 +372,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     if (!mounted) return;
     switch (action) {
       case 'play':
-        // Reproducir desde aquí con la cola = la playlist (lo mismo que un
-        // clic en la fila).
         final start = _tracks.indexWhere((t) => t.id == track.id);
         await playQueue(
           context,
@@ -460,10 +390,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     }
   }
 
-  /// Editor de metadatos de una canción del playlist (clic derecho →
-  /// Editar metadatos). Al guardar: si la pista editada es la que SUENA, el
-  /// player actualiza cola/UI/base; si no, basta persistir la fila — el
-  /// stream de `watchPlaylistTracks` re-emite y la lista se refresca sola.
   Future<void> _editTrackMetadata(Track track) async {
     final saved = await showDialog<Track>(
       context: context,
@@ -483,9 +409,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     );
   }
 
-  /// Color del artwork de una canción para el menú contextual: mira el
-  /// caché de memoria y el persistido (sin disparar una extracción nueva —
-  /// el menú es transitorio).
   Color? _menuTrackColor(Track track) {
     final url = track.thumbnailUrl;
     if (url == null) return null;
@@ -498,7 +421,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
 
   // ------------------------------------------------------------ edición
 
-  /// Modal para editar la playlist (nombre, descripción y portada).
   Future<void> _editPlaylist() async {
     final l10n = AppLocalizations.of(context);
     final db = context.read<AppDatabase>();
@@ -608,8 +530,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     );
   }
 
-  /// Deriva un tema con el color de la portada como `primary` (y un
-  /// `onPrimary` con contraste legible), en lugar del acento de la canción.
   ThemeData _themeWithPlaylistColor(ThemeData base, Color color) {
     final onPrimary =
         ThemeData.estimateBrightnessForColor(color) == Brightness.dark
@@ -628,8 +548,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     final baseTheme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final playlistColor = _ambientColor;
-    // Mientras se ve la playlist, botones y elementos usan el color de SU
-    // portada (no el acento de la canción en reproducción).
     final theme = playlistColor != null
         ? _themeWithPlaylistColor(baseTheme, playlistColor)
         : baseTheme;
@@ -637,9 +555,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     final count = _tracks.length;
     final currentId = _currentTrack?.id;
 
-    /// Fila de canción compartida por la lista normal (Reorderable, con
-    /// drag para reordenar) y la lista filtrada (plana, solo lectura). El
-    /// índice [i] apunta a la lista que corresponda en cada modo.
     Widget rowFor(BuildContext context, int i) {
       final track = _visibleTracks[i];
       return _SortableTrackRow(
@@ -653,10 +568,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                 _showTrackMenu(track, details.globalPosition),
           child: TrackTile(
             track: track,
-            // La cola es LA PLAYLIST: al tocar una canción, el
-            // siguiente/anterior (y el auto-advance) recorren la playlist,
-            // no caen en radio. El índice se recalcula al tocar (por si la
-            // lista cambió desde el build).
             onPlay: () {
               final start = _tracks.indexWhere((t) => t.id == track.id);
               playQueue(
@@ -668,9 +579,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
             },
             isCurrent: track.id == currentId,
             isPlaying: _playing,
-            // Texto e iconos con el color del artwork de SU canción
-            // (extraído de forma perezosa por fila); mientras se extrae,
-            // fallback al color de la playlist
             accentColor: _trackColorFor(track) ?? playlistColor,
           ),
           ),
@@ -682,10 +590,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       data: theme,
       child: Container(
         constraints: const BoxConstraints.expand(),
-        // Margen flotante + sombra exterior (fuera del clip). Top 12 =
-        // alineado con el sidebar; bottom = kPlayerClearance para que el
-        // contenedor termine POR ENCIMA del player con el MISMO hueco (12)
-        // que lo separa del sidebar y del borde derecho (espaciado uniforme).
         margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
@@ -702,10 +606,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              // Plano: la MISMA base oscura plana del sidebar (un único
-              // tono, sin degradado), pero en el detalle se le añade un
-              // matiz sutil del color de la portada de la playlist (solo
-              // aquí; el sidebar se queda neutro).
               color:
                   (playlistColor != null
                           // Tinte SOLO del tono: se mezclan los colores opacos
@@ -718,24 +618,18 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                             )!
                           : theme.colorScheme.surfaceContainerHighest)
                       .withValues(alpha: 0.72),
-            ),
-            child: Material(
+            ),                child: Material(
               color: Colors.transparent,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Hero de presentación (cristal limpio, sin ambiente de
-                  // color de la portada)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 20, 24, 20),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        // Portada grande (hover muestra acciones de
-                        // edición)
                         _heroCover(theme, playlist.coverUrl),
                         const SizedBox(width: 24),
-                        // Título + descripción + acciones
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -763,8 +657,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                 ),
                               ],
                               const SizedBox(height: 16),
-                              // Reproducir + shuffle + búsqueda + conteo
-                              Wrap(
+                          Wrap(
                                 spacing: 10,
                                 runSpacing: 8,
                                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -772,10 +665,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                   FilledButton.icon(
                                     onPressed: count == 0 ? null : _playAll,
                                     style: FilledButton.styleFrom(
-                                      // Altura EXPLÍCITA compartida por los
-                                      // tres controles del hero (play, shuffle
-                                      // y el campo de filtro): nunca divergen.
-                                      minimumSize: const Size(
+                                    minimumSize: const Size(
                                         0,
                                         _heroControlHeight,
                                       ),
@@ -787,9 +677,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                     onPressed: count == 0
                                         ? null
                                         : _playShuffled,
-                                    // Mismo diseño que el botón de play,
-                                    // pero con fondo blanco y el texto/icono
-                                    // en el color acento de la playlist.
                                     style: FilledButton.styleFrom(
                                       backgroundColor: Colors.white,
                                       foregroundColor:
@@ -799,17 +686,9 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                         _heroControlHeight,
                                       ),
                                     ),
-                                    // Label corto: solo "Aleatorio"; el
-                                    // texto largo anterior agrandaba el
-                                    // botón respecto al de play.
                                     icon: const Icon(Icons.shuffle_rounded),
                                     label: Text(l10n.shuffle),
                                   ),
-                                  // Búsqueda/filtrado local: botón que se
-                                  // EXPANDE hacia la derecha en un campo
-                                  // para filtrar por título/artista. El
-                                  // crossfade evita que el icono "salte"
-                                  // al centro mientras el ancho anima.
                                   AnimatedContainer(
                                     duration: const Duration(milliseconds: 250),
                                     curve: Curves.easeOutCubic,
@@ -884,9 +763,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
                                   ),
-                                  // Indicador limpio: solo el ecualizador,
-                                  // y únicamente si esta playlist es la
-                                  // que se está reproduciendo
                                   if (_isPlayingThisPlaylist)
                                     Padding(
                                       padding: const EdgeInsets.only(left: 4),
@@ -905,15 +781,12 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                   ),
                   Expanded(
                     child: _tracks.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
+                        ? Center(                              child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
                                 Icon(
                                   Icons.music_off_rounded,
                                   size: 64,
-                                  // Icono tintado con el artwork de la
-                                  // playlist (si ya se extrajo)
                                   color:
                                       (playlistColor ??
                                               theme
@@ -967,13 +840,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                             itemBuilder: rowFor,
                           )
                         : ReorderableListView.builder(
-                            // El contenedor ya termina por encima del
-                            // player (margen inferior), así que aquí solo
-                            // hace falta un respiro pequeño.
                             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                            // Sin asas automáticas: cada fila trae su grip
-                            // propio (visible al hover) para no robar ancho
-                            // al contenido ni chocar con el scroll.
                             buildDefaultDragHandles: false,
                             proxyDecorator: (child, index, animation) =>
                                 AnimatedBuilder(
@@ -998,9 +865,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     );
   }
 
-  /// Recalcula el trío de colores de la portada de [track] (clic derecho →
-  /// Recalcular colores). Invalida caches en memoria (ThemeController +
-  /// _trackPaletteCache) para que la UI refleje el color nuevo.
   Future<void> _recalcTrackColors(Track track) async {
     final url = track.thumbnailUrl;
     if (url == null || url.isEmpty) return;
@@ -1012,7 +876,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       artworkCache: context.read<ArtworkCacheService>(),
     );
     if (mounted) {
-      // Invalidar caches en memoria.
       _trackPaletteCache.remove(url);
       context.read<ThemeController>().invalidateColor(url);
       // Re-aplicar el acento si es la pista actual.
@@ -1028,8 +891,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     }
   }
 
-  /// Portada grande del hero con overlay de edición al hacer hover (y un
-  /// tap en la portada también abre el modal de edición).
   Widget _heroCover(ThemeData theme, String? coverUrl) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,

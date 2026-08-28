@@ -650,4 +650,19 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get shortcutMouseForward => '다음 곡 (마우스)';
+
+  @override
+  String get provider => 'Proveedor:';
+
+  @override
+  String get providerAll => 'Todos (KPoe + Unison + LRCLIB)';
+
+  @override
+  String get providerKpoe => 'KPoe · palabra a palabra';
+
+  @override
+  String get providerUnison => 'Unison';
+
+  @override
+  String get providerLrclib => 'LRCLIB · línea';
 }

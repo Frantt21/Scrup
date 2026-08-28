@@ -70,10 +70,12 @@ Target platforms: **Windows, Linux and macOS** (single Flutter codebase).
 - **Context menus**: right-click on any track (home, playlist, player)
   for quick actions: play, add to playlist, edit metadata, recalculate
   colors.
-- **Metadata via Deezer**: on playback, the track is enriched with clean
-  title/artist/album/cover from Deezer's public API (best-effort, no key).
-  You can also edit metadata manually and re-search Deezer or pick a local
-  cover.
+- **Metadata enrichment**: on playback, tracks are enriched via
+  **InnerTube** (YouTube Music's internal API — clean canonical
+  title/artist/album/thumbnail, no API key needed). You can also edit
+  metadata manually and search across **Deezer**, **Apple Music / iTunes**,
+  **YT Music** and **Spotify oEmbed** (paste a Spotify track URL) to find
+  the best match.
 - **Favorites**: special playlist that cannot be deleted, with quick access
   from the heart button in the player.
 
@@ -156,7 +158,8 @@ metadata, etc.) to avoid conflicts.
 │  media_kit (libmpv) → plays local file + audio devices   │
 │  PlayerService → queue, repeat, shuffle, radio, devices  │
 │  LyricsService → synced lyrics (LRCLIB, KPoe)            │
-│  DeezerService → metadata enrichment                     │
+│  MetadataLookupService → multi-source metadata (Deezer,    │
+│                     iTunes, InnerTube, Spotify oEmbed)    │
 │  DiscordPresenceService → Rich Presence (IPC + FFI)      │
 │  ScrupAudioHandler → SMTC / Now Playing / MPRIS         │
 │  drift (SQLite) → history, playlists, favorites          │
@@ -179,11 +182,11 @@ metadata, etc.) to avoid conflicts.
   startup, the app tries to download them itself (with curl or PowerShell)
   and reports progress with a toast. Binaries are stored in a `tools/`
   subfolder next to the executable.
-- **YouTube Music via InnerTube**: song search and playlist reading use
-  YouTube Music's internal API (`WEB_REMIX`) — the same technique as tools
-  like spotdl: no API key, no login. Since it's an undocumented endpoint,
-  everything relying on it falls back to yt-dlp's classic `ytsearch`, so
-  the app never gets worse if it changes.
+- **YouTube Music via InnerTube**: song search, playlist reading and
+  metadata enrichment use YouTube Music's internal API (`WEB_REMIX`) —
+  the same technique as tools like spotdl: no API key, no login. Since
+  it's an undocumented endpoint, everything relying on it falls back to
+  yt-dlp's classic `ytsearch`, so the app never gets worse if it changes.
 - **Spotify import without API keys**: playlists are read from the public
   web embed (`__NEXT_DATA__`), which requires no account but truncates at
   ~100 tracks and exposes no total count.
@@ -290,7 +293,8 @@ lib/
 │   ├── spotify_import_service.dart    # Spotify playlist reading (embed)
 │   ├── audio_cache_service.dart       # Local cache with LRU and preload
 │   ├── player_service.dart            # Queue, repeat, shuffle, radio, audio devices
-│   ├── deezer_service.dart            # Metadata and covers via Deezer
+│   ├── deezer_service.dart            # Deezer API for metadata enrichment
+│   ├── metadata_lookup_service.dart   # Multi-source metadata search
 │   ├── lyrics_service.dart            # Synced lyrics (LRCLIB, KPoe)
 │   ├── scrup_audio_handler.dart       # SMTC / Now Playing / MPRIS
 │   ├── artwork_palette_service.dart   # Artwork color extraction

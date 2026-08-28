@@ -23,9 +23,7 @@ import 'widgets/playlists_sidebar.dart';
 import 'widgets/queue_panel.dart';
 import 'widgets/scrup_toasts.dart';
 
-/// Contenedor principal de la app: title bar personalizado, contenedor
-/// lateral con las playlists (glass), el inicio con búsqueda + recientes y
-/// el reproductor flotante.
+/// Main app shell: title bar, sidebar, views and player bar.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -37,47 +35,16 @@ class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   StreamSubscription<String>? _errorSub;
 
-  /// Playlist abierta en detalle (se renderiza en el espacio de contenido,
-  /// sin abrir rutas).
   Playlist? _openPlaylist;
 
-  /// `true` mientras la pantalla de configuración esté abierta.
   bool _showSettings = false;
-
-  /// Veces que se ha abierto la configuración: se usa como key para recrear
-  /// la vista cada vez y que las estadísticas del caché se recalculen al
-  /// abrir (el IndexedStack mantiene vivos a todos los hijos, así que el
-  /// initState solo corre al arrancar si no se fuerza un State nuevo).
   int _settingsOpenCount = 0;
-
-  /// Consulta de búsqueda lanzada desde el inicio: el HomeView la escribe y
-  /// la SearchView la ejecuta al cambiar de vista.
   final ValueNotifier<String?> _searchRequest = ValueNotifier<String?>(null);
-
-  /// `true` mientras el panel de la cola esté abierto (se desliza desde la
-  /// derecha empujando el contenido).
   bool _queueOpen = false;
-
-  /// El usuario ya alternó la cola: evita que la carga asíncrona de la
-  /// preferencia sobrescriba su elección (carrera de arranque).
   bool _queueUserToggled = false;
-
-  /// `true` mientras la vista de lyrics esté abierta (se monta en el
-  /// IndexedStack como Inicio/Búsqueda).
   bool _showLyrics = false;
-
-  /// Modo pantalla completa (F11 para alternar, Esc para salir): oculta la
-  /// title bar y monta el reproductor dedicado encima de TODO. PUNTO DE
-  /// PARTIDA del diseño visual completo definido con el usuario.
   bool _fullscreen = false;
-
-  /// El overlay fullscreen permanece montado mientras anima la salida (el
-  /// flag lógico [_fullscreen] ya está en false: F11/Esc no re-disparan).
   bool _showFsOverlay = false;
-
-  /// Key global para reparentar LyricsView entre el IndexedStack normal y
-  /// el panel derecho del modo fullscreen SIN recrear su State: cero
-  /// re-fetch de letras y un solo ticker de sweep.
   final GlobalKey _fsLyricsKey = GlobalKey();
 
   void _onBinaryDownloadStatus() {
@@ -137,20 +104,14 @@ class _AppShellState extends State<AppShell> {
         }
       }
     });
-    // Restaurar el estado de la cola (abierta/cerrada) de la última sesión.
     unawaited(_loadQueuePref());
-    // Atajos del modo fullscreen (F11 alterna, Esc sale).
     HardwareKeyboard.instance.addHandler(_handleKey);
   }
 
-  /// Atajos globales de teclado. Devuelve true solo cuando consume la tecla.
-  ///
-  /// No se disparan cuando el foco está en un campo de texto (TextField /
-  /// SearchBar) para que el usuario pueda escribir sin conflictos.
+  // Global keyboard shortcuts. Returns true when consumed.
   bool _handleKey(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
 
-    // No disparar atajos si hay un campo de texto enfocado.
     final focus = FocusManager.instance.primaryFocus;
     if (focus != null) {
       final ctx = focus.context;
@@ -163,12 +124,10 @@ class _AppShellState extends State<AppShell> {
     final key = event.logicalKey;
     final player = context.read<PlayerService>();
 
-    // F11: fullscreen
     if (key == LogicalKeyboardKey.f11) {
       _setFullscreen(!_fullscreen);
       return true;
     }
-    // Esc: salir de fullscreen o cerrar panel abierto
     if (key == LogicalKeyboardKey.escape) {
       if (_fullscreen) {
         _setFullscreen(false);
@@ -192,23 +151,19 @@ class _AppShellState extends State<AppShell> {
       }
     }
 
-    // ── Reproducción ──────────────────────────────────────────────
-    // Space: play / pausa
+    // ── Playback ─────────────────────────────────────────────────
     if (key == LogicalKeyboardKey.space) {
       player.togglePlayPause();
       return true;
     }
-    // N: siguiente canción
     if (key == LogicalKeyboardKey.keyN) {
       player.next();
       return true;
     }
-    // P: canción anterior
     if (key == LogicalKeyboardKey.keyP) {
       player.previous();
       return true;
     }
-    // →: adelantar 10s
     if (key == LogicalKeyboardKey.arrowRight) {
       final pos = player.positionValue;
       final dur = player.durationValue;
@@ -216,41 +171,34 @@ class _AppShellState extends State<AppShell> {
       player.seek(dur != null && target > dur ? dur : target);
       return true;
     }
-    // ←: retroceder 10s
     if (key == LogicalKeyboardKey.arrowLeft) {
       final pos = player.positionValue;
       final target = pos - const Duration(seconds: 10);
       player.seek(target.isNegative ? Duration.zero : target);
       return true;
     }
-    // ↑: subir volumen 5%
     if (key == LogicalKeyboardKey.arrowUp) {
       player.setVolume((player.volume.value + 0.05).clamp(0.0, 1.0));
       return true;
     }
-    // ↓: bajar volumen 5%
     if (key == LogicalKeyboardKey.arrowDown) {
       player.setVolume((player.volume.value - 0.05).clamp(0.0, 1.0));
       return true;
     }
-    // M: mute / unmute
     if (key == LogicalKeyboardKey.keyM) {
       player.toggleMute();
       return true;
     }
 
-    // ── Navegación ────────────────────────────────────────────────
-    // L: abrir/cerrar lyrics
+    // ── Navigation ────────────────────────────────────────────────
     if (key == LogicalKeyboardKey.keyL) {
       setState(() => _showLyrics = !_showLyrics);
       return true;
     }
-    // Q: abrir/cerrar cola
     if (key == LogicalKeyboardKey.keyQ) {
       setState(() => _queueOpen = !_queueOpen);
       return true;
     }
-    // , (comma): abrir/cerrar settings
     if (key == LogicalKeyboardKey.comma) {
       if (_showSettings) {
         _closeSettings();
@@ -260,25 +208,21 @@ class _AppShellState extends State<AppShell> {
       return true;
     }
 
-    // ── Modos ─────────────────────────────────────────────────────
-    // S: toggle shuffle
+    // ── Modes ─────────────────────────────────────────────────────
     if (key == LogicalKeyboardKey.keyS) {
       player.toggleShuffle();
       return true;
     }
-    // R: toggle repeat (off → all → one)
     if (key == LogicalKeyboardKey.keyR) {
       player.toggleRepeat();
       return true;
     }
-    // D: toggle radio
     if (key == LogicalKeyboardKey.keyD) {
       player.toggleRadio();
       return true;
     }
 
-    // ── Favoritos ─────────────────────────────────────────────────
-    // F: agregar/quitar de favoritos
+    // ── Favorites ─────────────────────────────────────────────────
     if (key == LogicalKeyboardKey.keyF) {
       _toggleFavorite();
       return true;
@@ -287,15 +231,12 @@ class _AppShellState extends State<AppShell> {
     return false;
   }
 
-  /// Alterna la canción actual en la playlist de Favoritos (mismo
-  /// comportamiento que el corazón en el player bar).
   Future<void> _toggleFavorite() async {
     final player = context.read<PlayerService>();
     final track = player.currentTrackValue;
     if (track == null) return;
     final db = context.read<AppDatabase>();
     final id = await db.ensureFavoritesPlaylist();
-    // Consulta puntual (no stream) para saber si ya está guardada.
     final query = db.select(db.playlistTracks)
       ..where(
         (pt) => pt.playlistId.equals(id) & pt.trackId.equals(track.id),
@@ -359,26 +300,19 @@ class _AppShellState extends State<AppShell> {
     super.dispose();
   }
 
-  /// Lanza una búsqueda desde el inicio: cambia a la SearchView y le pasa la
-  /// consulta.
   void _submitSearch(String query) {
     _searchRequest.value = query;
     setState(() => _selectedIndex = 1);
   }
 
-  /// Vuelve al inicio desde la SearchView.
   void _backToHome() {
     setState(() => _selectedIndex = 0);
   }
 
-  /// Abre la vista de lyrics como capa sobre la zona actual: NO cierra
-  /// playlist/settings (el IndexedStack prioriza el índice de letras y al
-  /// cerrar se recupera exactamente donde estaba el usuario).
   void _openLyrics() {
     setState(() => _showLyrics = true);
   }
 
-  /// Cierra la vista de lyrics y vuelve a la zona que hubiera debajo.
   void _closeLyrics() {
     setState(() => _showLyrics = false);
   }
@@ -404,8 +338,6 @@ class _AppShellState extends State<AppShell> {
     setState(() => _showSettings = false);
   }
 
-  /// Actualiza la playlist abierta tras una edición (p. ej. renombrada) para
-  /// que la title bar muestre el nombre nuevo.
   void _onPlaylistUpdated(Playlist playlist) {
     if (_openPlaylist?.id != playlist.id) return;
     setState(() => _openPlaylist = playlist);
@@ -415,14 +347,6 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final openPlaylist = _openPlaylist;
-    // Barra superior: el título de la zona ocupa EL MISMO sitio que el
-    // título de la app ("Scrup"), sin nada delante que lo desplace. Al estar
-    // dentro de una zona (playlist/configuración) se muestran junto al
-    // título las acciones de navegación: inicio (home) y búsqueda. El
-    // engranaje de configuración vive a la derecha. Lo usa la CustomTitleBar
-    // en las 3 plataformas (la title bar personalizada sustituye a la nativa
-    // en todas; en macOS los botones de ventana los conserva el sistema, en
-    // Windows/Linux los dibuja la barra).
     final inZone = _showSettings || openPlaylist != null;
     final barTitle = _showSettings
         ? l10n.settings
@@ -474,12 +398,8 @@ class _AppShellState extends State<AppShell> {
       child: Scaffold(
       body: Stack(
         children: [
-          // UI normal (title bar + sidebar + contenido + player). En
-          // fullscreen queda DEBAJO del overlay dedicado.
           Column(
             children: [
-              // En fullscreen la title bar se oculta (los botones de ventana
-              // no aplican); F11/Esc devuelven el modo normal.
               if (!_fullscreen)
                 CustomTitleBar(
                   title: barTitle,
@@ -519,11 +439,6 @@ class _AppShellState extends State<AppShell> {
                               else
                                 const SizedBox.shrink(),
                               SettingsView(key: ValueKey(_settingsOpenCount)),
-                              // TickerMode muta el ticker del sweep karaoke
-                              // cuando las letras están ocultas. Con el modo
-                              // fullscreen activo la instancia vive en el
-                              // overlay (reparenting por _fsLyricsKey), así
-                              // que aquí va un placeholder.
                               _showFsOverlay
                                   ? const SizedBox.shrink()
                                   : TickerMode(
@@ -564,8 +479,6 @@ class _AppShellState extends State<AppShell> {
               ),
             ],
           ),
-          // Overlay fullscreen: cubre TODO. Mientras anima la salida sigue
-          // montado; al terminar desmonta vía onExited.
           if (_showFsOverlay)
             Positioned.fill(
               child: FullscreenPlayerView(

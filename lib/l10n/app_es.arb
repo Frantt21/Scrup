@@ -339,5 +339,10 @@
   "shortcutCategoryNavigation": "Navegación",
   "shortcutCategoryModes": "Modos",
   "shortcutMouseBack": "Canción anterior (ratón)",
-  "shortcutMouseForward": "Siguiente canción (ratón)"
+  "shortcutMouseForward": "Siguiente canción (ratón)",
+  "provider": "Proveedor:",
+  "providerAll": "Todos (KPoe + Unison + LRCLIB)",
+  "providerKpoe": "KPoe · palabra a palabra",
+  "providerUnison": "Unison",
+  "providerLrclib": "LRCLIB · línea"
 }

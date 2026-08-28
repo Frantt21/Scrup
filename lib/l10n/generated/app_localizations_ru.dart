@@ -668,4 +668,19 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get shortcutMouseForward => 'Следующий трек (мышь)';
+
+  @override
+  String get provider => 'Proveedor:';
+
+  @override
+  String get providerAll => 'Todos (KPoe + Unison + LRCLIB)';
+
+  @override
+  String get providerKpoe => 'KPoe · palabra a palabra';
+
+  @override
+  String get providerUnison => 'Unison';
+
+  @override
+  String get providerLrclib => 'LRCLIB · línea';
 }

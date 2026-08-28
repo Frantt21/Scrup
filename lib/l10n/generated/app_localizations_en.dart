@@ -661,4 +661,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shortcutMouseForward => 'Next track (mouse)';
+
+  @override
+  String get provider => 'Provider:';
+
+  @override
+  String get providerAll => 'All (KPoe + Unison + LRCLIB)';
+
+  @override
+  String get providerKpoe => 'KPoe · word by word';
+
+  @override
+  String get providerUnison => 'Unison';
+
+  @override
+  String get providerLrclib => 'LRCLIB · line';
 }

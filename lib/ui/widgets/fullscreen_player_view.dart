@@ -17,32 +17,12 @@ import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import '../theme_controller.dart';
 
-/// Modo pantalla completa "dedicado": el reproductor ES la app.
-///
-/// Layout (todo cubre la ventana):
-/// - Fondo animado con TRES colores extraídos del artwork actual (blobs
-///   radiales suaves que derivan lentamente; uso de GPU asumido porque el
-///   modo es para sesión dedicada).
-/// - Izquierda: artwork GRANDE con los controles debajo.
-/// - Centro arriba: título + artista.
-/// - Derecha: lyrics completos (la misma vista del app, reparentada por el
-///   shell vía GlobalKey: cero re-fetch y un solo ticker).
-///
-/// Entrada/salida ANIMADA tipo "contenedores flotantes": cada bloque entra
-/// deslizándose desde su borde (izquierda ←, derecha →, centro desde arriba)
-/// y al salir se retira hacia SU lado, revelando la UI normal debajo.
+/// Fullscreen mode: the player IS the app.
+/// Animated entry/exit with three-zone layout (art + controls, lyrics, header).
 class FullscreenPlayerView extends StatefulWidget {
-  /// `true` mientras el modo esté activo. Al pasar a `false` el overlay
-  /// reproduce la salida y avisa con [onExited].
   final bool active;
-
-  /// Panel de lyrics (instancia del shell reparentada con GlobalKey).
   final Widget lyricsPanel;
-
-  /// El botón X pide cerrar (el shell decide: sale del fullscreen nativo).
   final VoidCallback onRequestClose;
-
-  /// La animación de salida terminó: el shell puede desmontar el overlay.
   final VoidCallback onExited;
 
   const FullscreenPlayerView({
@@ -59,18 +39,10 @@ class FullscreenPlayerView extends StatefulWidget {
 
 class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     with SingleTickerProviderStateMixin {
-  /// Entrada/salida del overlay completo.
   late final AnimationController _transition;
-
   Track? _track;
-
-  /// PlayerService (para listeners de cola y streams).
   late final PlayerService _player;
-
-  /// Paleta TRÍO del artwork actual para el fondo.
   List<Color> _palette = const [];
-
-  /// Ruta del archivo en disco del artwork ACTUAL.
   String? _artPath;
 
   StreamSubscription<Track?>? _trackSub;
@@ -85,7 +57,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
       vsync: this,
       duration: const Duration(milliseconds: 550),
     )..addStatusListener(_onTransitionStatus);
-    // Si nace ya activo (arranque directo en modo), animar la entrada.
     if (widget.active) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _transition.forward();
@@ -95,7 +66,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
       if (!mounted || t?.id == _track?.id) return;
       _loadTrackVisuals(t);
     });
-    // Precarga al moverse la cola también (no solo tras cada carga).
     _player.queueIndex.addListener(_prefetchNextListener);
     _player.queue.addListener(_prefetchNextListener);
     _loadTrackVisuals(_track);
@@ -104,7 +74,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
   void _prefetchNextListener() => unawaited(_prefetchNext());
 
   void _onTransitionStatus(AnimationStatus status) {
-    // Salida completa y ya NO activo → avisar al shell para desmontarnos.
     if (status == AnimationStatus.dismissed && !widget.active && mounted) {
       widget.onExited();
     }
@@ -128,19 +97,14 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     super.dispose();
   }
 
-  // ── Artwork hi-res + paleta (dos fases) ──────────────────────────────
+  // ── Artwork hi-res + palette (two phases) ──────────────────────────
 
-  /// URLs de artworks cuyo archivo ya está en disco (evita re-download).
   static final Set<String> _ensuredUrls = {};
-
-  /// Tríos de color ya calculados (clave: URL original).
   static final Map<String, List<Color>> _trioCache = {};
 
   Timer? _prefetchTimer;
 
-  /// Fase 1: cargar artwork en disco y mostrarlo YA (inmediato si cached).
-  /// La paleta se extrae en fase 2 (separada) para no competir en el
-  /// mismo frame de rendering.
+  // Phase 1: load artwork to disk and show immediately.
   Future<void> _loadTrackVisuals(Track? track) async {
     final token = ++_visualToken;
     final rawUrl = track?.thumbnailUrl;
@@ -155,7 +119,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
       return;
     }
 
-    // ── Fase 1: solo artwork (ruta del archivo en disco) ──────────────
+    // Phase 1: artwork only (file path).
     final artworkCache = context.read<ArtworkCacheService>();
     String? path;
     final lower = rawUrl.toLowerCase();
@@ -171,7 +135,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     path ??= await artworkCache.filePathFor(rawUrl);
 
     if (path == null) {
-      // Necesitar descarga de red → descargar y guardar.
       Uint8List? bytes;
       for (final url in [Track.hiResThumbnail(rawUrl) ?? rawUrl, rawUrl]) {
         try {
@@ -195,25 +158,21 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
 
     if (!mounted || token != _visualToken) return;
 
-    // Mostrar artwork INMEDIATAMENTE (frame 1).
     if (path != null) _ensuredUrls.add(rawUrl);
     setState(() {
       _track = track;
       _artPath = path;
     });
 
-    // ── Fase 2: paleta en background (frame 2+, diferida) ─────────────
+    // Phase 2: palette in background.
     _loadPalettePhase2(rawUrl, token);
   }
 
-  /// Fase 2: extraer trío de colores sin bloquear la visualización del
-  /// artwork. Se ejecuta después de que el primer setState ya mostró la
-  /// imagen.
+  // Phase 2: extract color trio without blocking artwork display.
   Future<void> _loadPalettePhase2(String rawUrl, int token) async {
     final paletteStore = context.read<PaletteCacheStore>();
     final artworkCache = context.read<ArtworkCacheService>();
 
-    // Buscar en caché primero.
     var trio = _trioCache[rawUrl];
     if (trio == null) {
       final saved = paletteStore.getTrio(rawUrl);
@@ -223,7 +182,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
       }
     }
 
-    // Si no hay caché, extraer del archivo de artwork.
     if (trio == null) {
       final bytes = await artworkCache.load(rawUrl);
       if (bytes != null) {
@@ -240,10 +198,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     if (trio != null && trio.isNotEmpty) {
       setState(() => _palette = trio!);
     } else if (_palette.isNotEmpty) {
-      // El artwork del track NUEVO no tiene trío (descarga falló, sin
-      // bytes en disco, sin caché): NO dejar el fondo con los colores de
-      // la canción ANTERIOR — apagar a negro en vez de arrastrar el trío
-      // viejo (los usuarios lo veían como "fondo del color equivocado").
+      // Clear old palette when new artwork has no colors.
       setState(() => _palette = const []);
     }
     _prefetchTimer?.cancel();
@@ -252,9 +207,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     });
   }
 
-  /// Precarga artwork + paleta de los próximos [count] tracks de la cola.
-  /// El artwork se decodifica vía `precacheImage` para que la textura GPU
-  /// ya esté caliente cuando la canción llegue (sin freeze de decode).
+  // Prefetches artwork + palette for the next 3 queue tracks.
   Future<void> _prefetchNext() async {
     if (!mounted) return;
     final player = context.read<PlayerService>();
@@ -267,8 +220,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
       if (url == null || url.isEmpty) continue;
       if (_ensuredUrls.contains(url) && _trioCache.containsKey(url)) continue;
 
-      // Asegurar que el artwork esté en disco (sin extraer paleta).
-      if (!mounted) return;
+        if (!mounted) return;
       final artworkCache = context.read<ArtworkCacheService>();
       var path = await artworkCache.filePathFor(url);
       if (path == null) {
@@ -290,8 +242,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
         }
       }
 
-      // Pre-decodificar a GPU: cuando el track llegue, Image.file ya no
-      // necesitará decode porque la textura está en ImageCache.
       if (mounted && path != null) {
         _ensuredUrls.add(url);
         try {
@@ -306,9 +256,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // SIN acento de respaldo: el fondo usa SOLO los colores reales del
-    // artwork; si aún no hay paleta, _padded rellena con negro (nada de
-    // lilas/azules por defecto colándose).
     final palette = _palette;
 
     return AnimatedBuilder(
@@ -320,7 +267,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Fondo animado tricolor (aparece con fade).
               Opacity(
                 opacity: t,
                 child: RepaintBoundary(
@@ -333,9 +279,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
                     constraints.maxWidth,
                     constraints.maxHeight,
                   );
-                  // Contenedor ÚNICO centrado (no justificado): artwork +
-                  // controles a la izquierda, GAP, lyrics a la derecha.
-                  final artSide = math
+                final artSide = math
                       .min(size.height - 250, 620.0)
                       .clamp(240.0, 720.0);
                   const gap = 56.0;
@@ -343,10 +287,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
                   if (artSide + gap + lyricsW > size.width - 96) {
                     lyricsW = math.max(280.0, size.width - 96 - artSide - gap);
                   }
-                  // Geometría del bloque centrado (para posicionar el
-                  // contenedor de controles en el STACK RAÍZ: los eventos
-                  // de ratón no se entregan fuera de los bounds del padre,
-                  // así que la zona DEBE vivir en un stack full-screen).
                   final contentW = artSide + gap + lyricsW;
                   final leftX = (size.width - contentW) / 2;
                   final artBottom = size.height / 2 + artSide / 2;
@@ -359,7 +299,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Izquierda (sale ← al cerrar).
                             FractionalTranslation(
                               translation: Offset(-(1 - t), 0),
                               child: Opacity(
@@ -372,9 +311,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
                               ),
                             ),
                             const SizedBox(width: gap),
-                            // Derecha (sale → al cerrar): lyrics embebidos.
-                            // Altura LIMITADA (acompaña al artwork, no todo
-                            // el alto de la pantalla).
                             FractionalTranslation(
                               translation: Offset(1 - t, 0),
                               child: Opacity(
@@ -389,8 +325,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
                           ],
                         ),
                       ),
-                      // Contenedor FLOTANTE de controles: posición relativa
-                      // al artwork pero EN EL STACK RAÍZ → hit-test real.
                       Positioned(
                         top: artBottom + 18,
                         left: leftX,
@@ -404,7 +338,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
                   );
                 },
               ),
-              // Centro arriba: título + artista (sale ↑).
               Align(
                 alignment: Alignment.topCenter,
                 child: FractionalTranslation(
@@ -415,7 +348,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
                   ),
                 ),
               ),
-              // Botón cerrar (fade).
               Positioned(
                 top: 18,
                 right: 18,
@@ -439,14 +371,8 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
 
 // ── Fondo animado: olas verticales ────────────────────────────────────────
 
-/// Olas VERTICALES que cubren TODO el fondo: cada color es una banda cuyo
-/// borde ondula en función de la altura y deriva con el tiempo; se pintan
-/// solapadas hacia la derecha sobre una base del primer color, así el lienzo
-/// completo queda tapado siempre. Un blur generoso funde los bordes.
-///
-/// El loop es INFINITO y sin costuras (coeficientes temporales enteros) y
-/// los colores se interpolan exponencialmente frame a frame, así que al
-/// cambiar de canción el fondo MUTA suavemente en vez de saltar.
+/// Animated liquid backdrop with three colors from artwork palette.
+/// Colors interpolate smoothly on track changes.
 class _AnimatedBackdrop extends StatefulWidget {
   final List<Color> colors;
 
@@ -458,18 +384,11 @@ class _AnimatedBackdrop extends StatefulWidget {
 
 class _AnimatedBackdropState extends State<_AnimatedBackdrop>
     with TickerProviderStateMixin {
-  /// Transición de paleta (mismo criterio que el gradiente del player bar):
-  /// al cambiar de canción se anima del trío mostrado al nuevo en ~700ms.
   late final AnimationController _fade;
 
-  /// Reloj PROPIO del fondo: tiempo continuo en segundos (nunca se resetea).
-  /// Un loop que repite (como el drift anterior) hacía que el fluido
-  /// "pareciera estático" en los tramos lentos; esto fluye siempre.
   final ValueNotifier<double> _clock = ValueNotifier(0);
   late final Ticker _ticker;
 
-  /// Programa GLSL del fondo líquido; `null` si no se pudo cargar →
-  /// fallback a las manchas de acuarela en Dart.
   ui.FragmentProgram? _program;
 
   List<Color> _from = const [];
@@ -500,8 +419,7 @@ class _AnimatedBackdropState extends State<_AnimatedBackdrop>
       if (!mounted) return;
       setState(() => _program = program);
     } catch (_) {
-      // Sin shader (compilación ausente, GPU sin SPIR-V…): acuarela Dart.
-    }
+      }
   }
 
   @override
@@ -509,17 +427,12 @@ class _AnimatedBackdropState extends State<_AnimatedBackdrop>
     super.didUpdateWidget(old);
     final next = _padded(widget.colors);
     if (!listEquals(next, _target)) {
-      // El ORIGEN es lo que se está viendo ahora mismo (interpolado hasta
-      // el punto de corte), así el cambio nunca salta ni "congela" mezclas.
       _from = _shown();
       _target = next;
       _fade.forward(from: 0);
     }
   }
 
-  /// Colores de respaldo cuando no hay paleta del artwork: variaciones
-  /// de negro/gris para que el fondo animado tenga contraste suficiente
-  /// (3 colores idénticos al shader le daban "orbs" blancos sin sentido).
   static const _fallbackPalette = [
     Color(0xFF111111),
     Color(0xFF1A1A1A),
@@ -530,7 +443,6 @@ class _AnimatedBackdropState extends State<_AnimatedBackdrop>
     for (var i = 0; i < 3; i++) i < src.length ? src[i] : _fallbackPalette[i],
   ];
 
-  /// Colores mostrados ahora mismo (lerp curvado origen→destino).
   List<Color> _shown() {
     final t = Curves.easeOutCubic.transform(_fade.value);
     return [for (var i = 0; i < 3; i++) Color.lerp(_from[i], _target[i], t)!];
