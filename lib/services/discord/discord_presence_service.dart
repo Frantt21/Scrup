@@ -306,7 +306,6 @@ class DiscordPresenceService {
     // Usar trackStartTime como referencia estable: Discord calcula
     // elapsed = now - start, así que start debe ser el instante en que
     // la pista empezó (restándole la posición actual).
-    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final startSec = trackStartTime.millisecondsSinceEpoch ~/ 1000;
     final totalSec = total?.inSeconds ?? 0;
     final hasEnd = totalSec > 0 && playing;

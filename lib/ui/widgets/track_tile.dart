@@ -78,6 +78,7 @@ class TrackTile extends StatelessWidget {
 
     return InkWell(
       onTap: onPlay,
+      mouseCursor: SystemMouseCursors.click,
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),

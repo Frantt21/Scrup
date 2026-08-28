@@ -206,6 +206,7 @@ class _WindowButtonState extends State<_WindowButton> {
         message: widget.tooltip,
         child: InkWell(
           onTap: widget.onPressed,
+          mouseCursor: SystemMouseCursors.click,
           child: Container(
             width: 46,
             height: double.infinity,

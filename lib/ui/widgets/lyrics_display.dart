@@ -415,6 +415,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                   cursor: SystemMouseCursors.click,
                   child: InkWell(
                     onTap: _syncToCurrentLine,
+                    mouseCursor: SystemMouseCursors.click,
                     borderRadius: BorderRadius.circular(30),
                   child: Container(
                     padding: const EdgeInsets.symmetric(

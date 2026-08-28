@@ -429,6 +429,7 @@ class _ViewToggle extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
+        mouseCursor: SystemMouseCursors.click,
         child: Tooltip(
           message: tooltip,
           waitDuration: const Duration(milliseconds: 400),
@@ -499,6 +500,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
           onTap: widget.onTap,
+          mouseCursor: SystemMouseCursors.click,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
@@ -740,6 +742,7 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                         child: InkWell(
                           customBorder: const CircleBorder(),
                           onTap: widget.onDelete,
+                          mouseCursor: SystemMouseCursors.click,
                           child: const Padding(
                             padding: EdgeInsets.all(4),
                             child: Icon(

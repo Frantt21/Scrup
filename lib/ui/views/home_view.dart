@@ -206,8 +206,7 @@ class _HomeViewState extends State<HomeView> {
                         }, childCount: visible),
                       ),
                     ),
-                ],
-              ),
+                ],              ),
             ),
           ),
         );
@@ -215,6 +214,7 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 }
+
 
 /// Tarjeta cuadrada con el artwork completo y título/artista en la esquina
 /// inferior, con un hover que muestra el botón de play (sin animación de
@@ -292,12 +292,12 @@ class _RecentCardState extends State<_RecentCard> {
     final theme = Theme.of(context);
     final track = widget.track;
 
-    return GestureDetector(
-      onSecondaryTapUp: (details) => _showMenu(details.globalPosition),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onSecondaryTapUp: (details) => _showMenu(details.globalPosition),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
@@ -321,6 +321,9 @@ class _RecentCardState extends State<_RecentCard> {
             borderRadius: BorderRadius.circular(13),
             child: InkWell(
               onTap: widget.onPlay,
+              // El default del InkWell (adaptiveClickable) es BASIC en
+              // escritorio: pisaría el click del MouseRegion exterior.
+              mouseCursor: SystemMouseCursors.click,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
