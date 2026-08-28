@@ -268,7 +268,8 @@ class _PlayerBarState extends State<PlayerBar>
 
   /// Recalcula el trío de colores de la portada de [track] (menú
   /// contextual → Recalcular colores): fuerza re-extracción fuera del hilo
-  /// de UI y persiste trío + acento derivado.
+  /// de UI y persiste trío + acento derivado. Invalida los caches en
+  /// memoria para que la UI refleje el color nuevo al instante.
   Future<void> _recalcTrackColors(Track track) async {
     final url = track.thumbnailUrl;
     final l10n = AppLocalizations.of(context);
@@ -280,7 +281,14 @@ class _PlayerBarState extends State<PlayerBar>
       force: true,
       artworkCache: context.read<ArtworkCacheService>(),
     );
+    // Invalidar caches en memoria para que la UI aplique el color nuevo.
     if (mounted) {
+      context.read<ThemeController>().invalidateColor(url);
+      // Re-aplicar el acento si es la pista actual.
+      if (_track?.thumbnailUrl == url) {
+        final newAccent = store.get(url);
+        context.read<ThemeController>().setAccent(newAccent);
+      }
       showScrupToast(l10n.colorsUpdated, kind: ScrupToastKind.success);
     }
   }

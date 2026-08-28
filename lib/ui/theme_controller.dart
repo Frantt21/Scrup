@@ -217,6 +217,17 @@ class ThemeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Forzar un color de acento (p. ej. tras recálculo manual desde la UI).
+  /// El color se aplica al instante sin esperar al próximo cambio de pista.
+  void setAccent(Color? color) => _setAccent(color);
+
+  /// Invalida el color en memoria para [url] (p. ej. tras un recálculo
+  /// manual): borra la entrada del caché para que la próxima lectura
+  /// (ya sea de SQLite o de re-extracción) aplique el color nuevo.
+  void invalidateColor(String url) {
+    _paletteCache.remove(url);
+  }
+
   /// Elige el color de acento de una paleta: prefiere el vibrante oscuro
   /// (legible sobre negro), luego vibrante, dominante y muted. Si la paleta
   /// es esencialmente MONOCROMA (artwork B/N: ningún swatch con saturación

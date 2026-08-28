@@ -14,6 +14,7 @@ import '../../services/palette_cache_store.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/player_service.dart';
 import '../playback.dart';
+import '../theme_controller.dart';
 import '../playlist_actions.dart';
 import '../widgets/context_menu_item.dart';
 import '../widgets/cover_image.dart';
@@ -995,7 +996,8 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   }
 
   /// Recalcula el trío de colores de la portada de [track] (clic derecho →
-  /// Recalcular colores).
+  /// Recalcular colores). Invalida caches en memoria (ThemeController +
+  /// _trackPaletteCache) para que la UI refleje el color nuevo.
   Future<void> _recalcTrackColors(Track track) async {
     final url = track.thumbnailUrl;
     if (url == null || url.isEmpty) return;
@@ -1007,6 +1009,15 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       artworkCache: context.read<ArtworkCacheService>(),
     );
     if (mounted) {
+      // Invalidar caches en memoria.
+      _trackPaletteCache.remove(url);
+      context.read<ThemeController>().invalidateColor(url);
+      // Re-aplicar el acento si es la pista actual.
+      if (_currentTrack?.thumbnailUrl == url) {
+        final newAccent = store.get(url);
+        context.read<ThemeController>().setAccent(newAccent);
+      }
+      setState(() {});
       showScrupToast(
         AppLocalizations.of(context).colorsUpdated,
         kind: ScrupToastKind.success,
