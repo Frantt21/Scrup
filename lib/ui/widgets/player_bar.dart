@@ -270,11 +270,9 @@ class _PlayerBarState extends State<PlayerBar>
       alpha: 0.55,
     );
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onSecondaryTapUp: (details) => _showContextMenu(details.globalPosition),
-        child: Container(
+    return GestureDetector(
+      onSecondaryTapUp: (details) => _showContextMenu(details.globalPosition),
+      child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
@@ -444,7 +442,6 @@ class _PlayerBarState extends State<PlayerBar>
             ],
           ),
         ),
-      ),
       ),
     );
   }
