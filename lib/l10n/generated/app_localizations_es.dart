@@ -592,4 +592,70 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get audioOutput => 'Salida de audio';
+
+  @override
+  String get keyboardShortcuts => 'Atajos de teclado';
+
+  @override
+  String get shortcutPlayPause => 'Reproducir / Pausar';
+
+  @override
+  String get shortcutNext => 'Siguiente canción';
+
+  @override
+  String get shortcutPrevious => 'Canción anterior';
+
+  @override
+  String get shortcutSeekForward => 'Adelantar 10s';
+
+  @override
+  String get shortcutSeekBackward => 'Retroceder 10s';
+
+  @override
+  String get shortcutVolumeUp => 'Subir volumen 5%';
+
+  @override
+  String get shortcutVolumeDown => 'Bajar volumen 5%';
+
+  @override
+  String get shortcutMute => 'Silenciar / Restaurar sonido';
+
+  @override
+  String get shortcutToggleLyrics => 'Mostrar / ocultar letras';
+
+  @override
+  String get shortcutToggleQueue => 'Mostrar / ocultar cola';
+
+  @override
+  String get shortcutToggleSettings => 'Mostrar / ocultar configuración';
+
+  @override
+  String get shortcutClosePanel => 'Cerrar panel abierto';
+
+  @override
+  String get shortcutFullscreen => 'Pantalla completa';
+
+  @override
+  String get shortcutToggleShuffle => 'Alternar modo aleatorio';
+
+  @override
+  String get shortcutToggleRepeat => 'Alternar repetición';
+
+  @override
+  String get shortcutToggleRadio => 'Alternar modo radio';
+
+  @override
+  String get shortcutToggleFavorite => 'Agregar / quitar de favoritos';
+
+  @override
+  String get shortcutCategoryPlayback => 'Reproducción';
+
+  @override
+  String get shortcutCategoryVolume => 'Volumen';
+
+  @override
+  String get shortcutCategoryNavigation => 'Navegación';
+
+  @override
+  String get shortcutCategoryModes => 'Modos';
 }

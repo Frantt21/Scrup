@@ -578,4 +578,70 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get audioOutput => '오디오 출력';
+
+  @override
+  String get keyboardShortcuts => '키보드 단축키';
+
+  @override
+  String get shortcutPlayPause => '재생 / 일시정지';
+
+  @override
+  String get shortcutNext => '다음 곡';
+
+  @override
+  String get shortcutPrevious => '이전 곡';
+
+  @override
+  String get shortcutSeekForward => '10초 앞으로';
+
+  @override
+  String get shortcutSeekBackward => '10초 뒤로';
+
+  @override
+  String get shortcutVolumeUp => '볼륨 +5%';
+
+  @override
+  String get shortcutVolumeDown => '볼륨 -5%';
+
+  @override
+  String get shortcutMute => '음소거 / 음소거 해제';
+
+  @override
+  String get shortcutToggleLyrics => '가사 표시 전환';
+
+  @override
+  String get shortcutToggleQueue => '대기열 표시 전환';
+
+  @override
+  String get shortcutToggleSettings => '설정 표시 전환';
+
+  @override
+  String get shortcutClosePanel => '활성 패널 닫기';
+
+  @override
+  String get shortcutFullscreen => '전체 화면';
+
+  @override
+  String get shortcutToggleShuffle => '셔플 전환';
+
+  @override
+  String get shortcutToggleRepeat => '반복 전환';
+
+  @override
+  String get shortcutToggleRadio => '라디오 모드 전환';
+
+  @override
+  String get shortcutToggleFavorite => '즐겨찾기 추가 / 제거';
+
+  @override
+  String get shortcutCategoryPlayback => '재생';
+
+  @override
+  String get shortcutCategoryVolume => '볼륨';
+
+  @override
+  String get shortcutCategoryNavigation => '탐색';
+
+  @override
+  String get shortcutCategoryModes => '모드';
 }

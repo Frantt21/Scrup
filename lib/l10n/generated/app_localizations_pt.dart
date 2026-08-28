@@ -590,6 +590,72 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get audioOutput => 'Saída de áudio';
+
+  @override
+  String get keyboardShortcuts => 'Atalhos de teclado';
+
+  @override
+  String get shortcutPlayPause => 'Reproduzir / Pausar';
+
+  @override
+  String get shortcutNext => 'Próxima música';
+
+  @override
+  String get shortcutPrevious => 'Música anterior';
+
+  @override
+  String get shortcutSeekForward => 'Avançar 10s';
+
+  @override
+  String get shortcutSeekBackward => 'Retroceder 10s';
+
+  @override
+  String get shortcutVolumeUp => 'Aumentar volume 5%';
+
+  @override
+  String get shortcutVolumeDown => 'Diminuir volume 5%';
+
+  @override
+  String get shortcutMute => 'Silenciar / Restaurar som';
+
+  @override
+  String get shortcutToggleLyrics => 'Mostrar / ocultar letras';
+
+  @override
+  String get shortcutToggleQueue => 'Mostrar / ocultar fila';
+
+  @override
+  String get shortcutToggleSettings => 'Mostrar / ocultar configurações';
+
+  @override
+  String get shortcutClosePanel => 'Fechar painel ativo';
+
+  @override
+  String get shortcutFullscreen => 'Ecrã inteiro';
+
+  @override
+  String get shortcutToggleShuffle => 'Alternar modo aleatório';
+
+  @override
+  String get shortcutToggleRepeat => 'Alternar repetição';
+
+  @override
+  String get shortcutToggleRadio => 'Alternar modo rádio';
+
+  @override
+  String get shortcutToggleFavorite => 'Adicionar / remover dos favoritos';
+
+  @override
+  String get shortcutCategoryPlayback => 'Reprodução';
+
+  @override
+  String get shortcutCategoryVolume => 'Volume';
+
+  @override
+  String get shortcutCategoryNavigation => 'Navegação';
+
+  @override
+  String get shortcutCategoryModes => 'Modos';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1178,4 +1244,70 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get audioOutput => 'Saída de áudio';
+
+  @override
+  String get keyboardShortcuts => 'Atalhos de teclado';
+
+  @override
+  String get shortcutPlayPause => 'Reproduzir / Pausar';
+
+  @override
+  String get shortcutNext => 'Próxima música';
+
+  @override
+  String get shortcutPrevious => 'Música anterior';
+
+  @override
+  String get shortcutSeekForward => 'Avançar 10s';
+
+  @override
+  String get shortcutSeekBackward => 'Retroceder 10s';
+
+  @override
+  String get shortcutVolumeUp => 'Aumentar volume 5%';
+
+  @override
+  String get shortcutVolumeDown => 'Diminuir volume 5%';
+
+  @override
+  String get shortcutMute => 'Silenciar / Restaurar som';
+
+  @override
+  String get shortcutToggleLyrics => 'Mostrar / ocultar letras';
+
+  @override
+  String get shortcutToggleQueue => 'Mostrar / ocultar fila';
+
+  @override
+  String get shortcutToggleSettings => 'Mostrar / ocultar configurações';
+
+  @override
+  String get shortcutClosePanel => 'Fechar painel ativo';
+
+  @override
+  String get shortcutFullscreen => 'Tela cheia';
+
+  @override
+  String get shortcutToggleShuffle => 'Alternar modo aleatório';
+
+  @override
+  String get shortcutToggleRepeat => 'Alternar repetição';
+
+  @override
+  String get shortcutToggleRadio => 'Alternar modo rádio';
+
+  @override
+  String get shortcutToggleFavorite => 'Adicionar / remover dos favoritos';
+
+  @override
+  String get shortcutCategoryPlayback => 'Reprodução';
+
+  @override
+  String get shortcutCategoryVolume => 'Volume';
+
+  @override
+  String get shortcutCategoryNavigation => 'Navegação';
+
+  @override
+  String get shortcutCategoryModes => 'Modos';
 }

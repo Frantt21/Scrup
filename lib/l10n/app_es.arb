@@ -315,5 +315,27 @@
   "audioOutput": "Salida de audio",
   "@audioOutput": {
     "description": "Tooltip for the audio output device selector"
-  }
+  },
+  "keyboardShortcuts": "Atajos de teclado",
+  "shortcutPlayPause": "Reproducir / Pausar",
+  "shortcutNext": "Siguiente canción",
+  "shortcutPrevious": "Canción anterior",
+  "shortcutSeekForward": "Adelantar 10s",
+  "shortcutSeekBackward": "Retroceder 10s",
+  "shortcutVolumeUp": "Subir volumen 5%",
+  "shortcutVolumeDown": "Bajar volumen 5%",
+  "shortcutMute": "Silenciar / Restaurar sonido",
+  "shortcutToggleLyrics": "Mostrar / ocultar letras",
+  "shortcutToggleQueue": "Mostrar / ocultar cola",
+  "shortcutToggleSettings": "Mostrar / ocultar configuración",
+  "shortcutClosePanel": "Cerrar panel abierto",
+  "shortcutFullscreen": "Pantalla completa",
+  "shortcutToggleShuffle": "Alternar modo aleatorio",
+  "shortcutToggleRepeat": "Alternar repetición",
+  "shortcutToggleRadio": "Alternar modo radio",
+  "shortcutToggleFavorite": "Agregar / quitar de favoritos",
+  "shortcutCategoryPlayback": "Reproducción",
+  "shortcutCategoryVolume": "Volumen",
+  "shortcutCategoryNavigation": "Navegación",
+  "shortcutCategoryModes": "Modos"
 }

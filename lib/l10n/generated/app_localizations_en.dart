@@ -589,4 +589,70 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get audioOutput => 'Audio output';
+
+  @override
+  String get keyboardShortcuts => 'Keyboard Shortcuts';
+
+  @override
+  String get shortcutPlayPause => 'Play / Pause';
+
+  @override
+  String get shortcutNext => 'Next track';
+
+  @override
+  String get shortcutPrevious => 'Previous track';
+
+  @override
+  String get shortcutSeekForward => 'Seek forward 10s';
+
+  @override
+  String get shortcutSeekBackward => 'Seek backward 10s';
+
+  @override
+  String get shortcutVolumeUp => 'Volume up 5%';
+
+  @override
+  String get shortcutVolumeDown => 'Volume down 5%';
+
+  @override
+  String get shortcutMute => 'Mute / Unmute';
+
+  @override
+  String get shortcutToggleLyrics => 'Toggle lyrics';
+
+  @override
+  String get shortcutToggleQueue => 'Toggle queue';
+
+  @override
+  String get shortcutToggleSettings => 'Toggle settings';
+
+  @override
+  String get shortcutClosePanel => 'Close active panel';
+
+  @override
+  String get shortcutFullscreen => 'Fullscreen';
+
+  @override
+  String get shortcutToggleShuffle => 'Toggle shuffle';
+
+  @override
+  String get shortcutToggleRepeat => 'Toggle repeat';
+
+  @override
+  String get shortcutToggleRadio => 'Toggle radio';
+
+  @override
+  String get shortcutToggleFavorite => 'Add / remove from favorites';
+
+  @override
+  String get shortcutCategoryPlayback => 'Playback';
+
+  @override
+  String get shortcutCategoryVolume => 'Volume';
+
+  @override
+  String get shortcutCategoryNavigation => 'Navigation';
+
+  @override
+  String get shortcutCategoryModes => 'Modes';
 }

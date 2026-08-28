@@ -578,4 +578,70 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get audioOutput => '音声出力';
+
+  @override
+  String get keyboardShortcuts => 'キーボードショートカット';
+
+  @override
+  String get shortcutPlayPause => '再生 / 一時停止';
+
+  @override
+  String get shortcutNext => '次の曲';
+
+  @override
+  String get shortcutPrevious => '前の曲';
+
+  @override
+  String get shortcutSeekForward => '10秒早送り';
+
+  @override
+  String get shortcutSeekBackward => '10秒巻き戻し';
+
+  @override
+  String get shortcutVolumeUp => '音量 +5%';
+
+  @override
+  String get shortcutVolumeDown => '音量 -5%';
+
+  @override
+  String get shortcutMute => 'ミュート / ミュート解除';
+
+  @override
+  String get shortcutToggleLyrics => '歌詞の表示切替';
+
+  @override
+  String get shortcutToggleQueue => 'キューの表示切替';
+
+  @override
+  String get shortcutToggleSettings => '設定の表示切替';
+
+  @override
+  String get shortcutClosePanel => 'アクティブパネルを閉じる';
+
+  @override
+  String get shortcutFullscreen => 'フルスクリーン';
+
+  @override
+  String get shortcutToggleShuffle => 'シャッフル切替';
+
+  @override
+  String get shortcutToggleRepeat => 'リピート切替';
+
+  @override
+  String get shortcutToggleRadio => 'ラジオモード切替';
+
+  @override
+  String get shortcutToggleFavorite => 'お気に入りに追加 / 削除';
+
+  @override
+  String get shortcutCategoryPlayback => '再生';
+
+  @override
+  String get shortcutCategoryVolume => '音量';
+
+  @override
+  String get shortcutCategoryNavigation => 'ナビゲーション';
+
+  @override
+  String get shortcutCategoryModes => 'モード';
 }

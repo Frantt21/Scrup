@@ -366,6 +366,8 @@ class _SettingsViewState extends State<SettingsView> {
                 const SizedBox(height: 16),
                 _buildCacheSection(theme),
                 const SizedBox(height: 16),
+                _buildShortcutsSection(theme),
+                const SizedBox(height: 16),
                 _buildAboutSection(theme),
               ],
             ),
@@ -738,7 +740,7 @@ class _SettingsViewState extends State<SettingsView> {
                 icon: const Icon(Icons.folder_open_rounded, size: 18),
                 label: Text(l10n.openFolder),
               ),
-              const Spacer(),
+              const SizedBox(width: 10),
               FilledButton.icon(
                 onPressed: _clearing ? null : _clearCache,
                 style: FilledButton.styleFrom(
@@ -923,6 +925,137 @@ class _SettingsViewState extends State<SettingsView> {
     );
     if (playlist == null || !mounted) return;
     setState(() => _selectedPlaylist = playlist);
+  }
+
+  Widget _buildShortcutsSection(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    final labels = <String, String>{
+      '_playPause': l10n.shortcutPlayPause,
+      '_next': l10n.shortcutNext,
+      '_previous': l10n.shortcutPrevious,
+      '_seekForward': l10n.shortcutSeekForward,
+      '_seekBackward': l10n.shortcutSeekBackward,
+      '_volumeUp': l10n.shortcutVolumeUp,
+      '_volumeDown': l10n.shortcutVolumeDown,
+      '_mute': l10n.shortcutMute,
+      '_toggleLyrics': l10n.shortcutToggleLyrics,
+      '_toggleQueue': l10n.shortcutToggleQueue,
+      '_toggleSettings': l10n.shortcutToggleSettings,
+      '_closePanel': l10n.shortcutClosePanel,
+      '_fullscreen': l10n.shortcutFullscreen,
+      '_toggleShuffle': l10n.shortcutToggleShuffle,
+      '_toggleRepeat': l10n.shortcutToggleRepeat,
+      '_toggleRadio': l10n.shortcutToggleRadio,
+      '_toggleFavorite': l10n.shortcutToggleFavorite,
+    };
+
+    // Categorías con sus atajos.
+    final categories = <(String, List<(String, String)>)>[
+      (l10n.shortcutCategoryPlayback, [
+        ('Space', '_playPause'),
+        ('N', '_next'),
+        ('P', '_previous'),
+        ('→', '_seekForward'),
+        ('←', '_seekBackward'),
+        ('F', '_toggleFavorite'),
+      ]),
+      (l10n.shortcutCategoryVolume, [
+        ('↑', '_volumeUp'),
+        ('↓', '_volumeDown'),
+        ('M', '_mute'),
+      ]),
+      (l10n.shortcutCategoryNavigation, [
+        ('L', '_toggleLyrics'),
+        ('Q', '_toggleQueue'),
+        (',', '_toggleSettings'),
+        ('Esc', '_closePanel'),
+        ('F11', '_fullscreen'),
+      ]),
+      (l10n.shortcutCategoryModes, [
+        ('S', '_toggleShuffle'),
+        ('R', '_toggleRepeat'),
+        ('D', '_toggleRadio'),
+      ]),
+    ];
+
+    return _SectionCard(
+      icon: Icons.keyboard_rounded,
+      title: l10n.keyboardShortcuts,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final cat in categories) ...[
+            // Título de categoría
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4, top: 2),
+              child: Text(
+                cat.$1,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            // Atajos de esta categoría
+            for (final entry in cat.$2)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: theme.colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.5),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.06),
+                        ),
+                      ),
+                      child: Text(
+                        entry.$1,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontFeatures: const [
+                            FontFeature.tabularFigures(),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Container(
+                        height: 1,
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: muted.withValues(alpha: 0.2),
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      labels[entry.$2] ?? '',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildAboutSection(ThemeData theme) {

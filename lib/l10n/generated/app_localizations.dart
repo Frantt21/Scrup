@@ -1158,6 +1158,138 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Salida de audio'**
   String get audioOutput;
+
+  /// No description provided for @keyboardShortcuts.
+  ///
+  /// In es, this message translates to:
+  /// **'Atajos de teclado'**
+  String get keyboardShortcuts;
+
+  /// No description provided for @shortcutPlayPause.
+  ///
+  /// In es, this message translates to:
+  /// **'Reproducir / Pausar'**
+  String get shortcutPlayPause;
+
+  /// No description provided for @shortcutNext.
+  ///
+  /// In es, this message translates to:
+  /// **'Siguiente canción'**
+  String get shortcutNext;
+
+  /// No description provided for @shortcutPrevious.
+  ///
+  /// In es, this message translates to:
+  /// **'Canción anterior'**
+  String get shortcutPrevious;
+
+  /// No description provided for @shortcutSeekForward.
+  ///
+  /// In es, this message translates to:
+  /// **'Adelantar 10s'**
+  String get shortcutSeekForward;
+
+  /// No description provided for @shortcutSeekBackward.
+  ///
+  /// In es, this message translates to:
+  /// **'Retroceder 10s'**
+  String get shortcutSeekBackward;
+
+  /// No description provided for @shortcutVolumeUp.
+  ///
+  /// In es, this message translates to:
+  /// **'Subir volumen 5%'**
+  String get shortcutVolumeUp;
+
+  /// No description provided for @shortcutVolumeDown.
+  ///
+  /// In es, this message translates to:
+  /// **'Bajar volumen 5%'**
+  String get shortcutVolumeDown;
+
+  /// No description provided for @shortcutMute.
+  ///
+  /// In es, this message translates to:
+  /// **'Silenciar / Restaurar sonido'**
+  String get shortcutMute;
+
+  /// No description provided for @shortcutToggleLyrics.
+  ///
+  /// In es, this message translates to:
+  /// **'Mostrar / ocultar letras'**
+  String get shortcutToggleLyrics;
+
+  /// No description provided for @shortcutToggleQueue.
+  ///
+  /// In es, this message translates to:
+  /// **'Mostrar / ocultar cola'**
+  String get shortcutToggleQueue;
+
+  /// No description provided for @shortcutToggleSettings.
+  ///
+  /// In es, this message translates to:
+  /// **'Mostrar / ocultar configuración'**
+  String get shortcutToggleSettings;
+
+  /// No description provided for @shortcutClosePanel.
+  ///
+  /// In es, this message translates to:
+  /// **'Cerrar panel abierto'**
+  String get shortcutClosePanel;
+
+  /// No description provided for @shortcutFullscreen.
+  ///
+  /// In es, this message translates to:
+  /// **'Pantalla completa'**
+  String get shortcutFullscreen;
+
+  /// No description provided for @shortcutToggleShuffle.
+  ///
+  /// In es, this message translates to:
+  /// **'Alternar modo aleatorio'**
+  String get shortcutToggleShuffle;
+
+  /// No description provided for @shortcutToggleRepeat.
+  ///
+  /// In es, this message translates to:
+  /// **'Alternar repetición'**
+  String get shortcutToggleRepeat;
+
+  /// No description provided for @shortcutToggleRadio.
+  ///
+  /// In es, this message translates to:
+  /// **'Alternar modo radio'**
+  String get shortcutToggleRadio;
+
+  /// No description provided for @shortcutToggleFavorite.
+  ///
+  /// In es, this message translates to:
+  /// **'Agregar / quitar de favoritos'**
+  String get shortcutToggleFavorite;
+
+  /// No description provided for @shortcutCategoryPlayback.
+  ///
+  /// In es, this message translates to:
+  /// **'Reproducción'**
+  String get shortcutCategoryPlayback;
+
+  /// No description provided for @shortcutCategoryVolume.
+  ///
+  /// In es, this message translates to:
+  /// **'Volumen'**
+  String get shortcutCategoryVolume;
+
+  /// No description provided for @shortcutCategoryNavigation.
+  ///
+  /// In es, this message translates to:
+  /// **'Navegación'**
+  String get shortcutCategoryNavigation;
+
+  /// No description provided for @shortcutCategoryModes.
+  ///
+  /// In es, this message translates to:
+  /// **'Modos'**
+  String get shortcutCategoryModes;
 }
 
 class _AppLocalizationsDelegate

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -142,19 +143,169 @@ class _AppShellState extends State<AppShell> {
     HardwareKeyboard.instance.addHandler(_handleKey);
   }
 
-  /// Atajos globales de teclado: F11 entra/sale de fullscreen; Esc sale si
-  /// ya está en fullscreen. Devuelve true solo cuando consume la tecla.
+  /// Atajos globales de teclado. Devuelve true solo cuando consume la tecla.
+  ///
+  /// No se disparan cuando el foco está en un campo de texto (TextField /
+  /// SearchBar) para que el usuario pueda escribir sin conflictos.
   bool _handleKey(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
-    if (event.logicalKey == LogicalKeyboardKey.f11) {
+
+    // No disparar atajos si hay un campo de texto enfocado.
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus != null) {
+      final ctx = focus.context;
+      if (ctx != null &&
+          (ctx.findAncestorWidgetOfExactType<EditableText>() != null)) {
+        return false;
+      }
+    }
+
+    final key = event.logicalKey;
+    final player = context.read<PlayerService>();
+
+    // F11: fullscreen
+    if (key == LogicalKeyboardKey.f11) {
       _setFullscreen(!_fullscreen);
       return true;
     }
-    if (_fullscreen && event.logicalKey == LogicalKeyboardKey.escape) {
-      _setFullscreen(false);
+    // Esc: salir de fullscreen o cerrar panel abierto
+    if (key == LogicalKeyboardKey.escape) {
+      if (_fullscreen) {
+        _setFullscreen(false);
+        return true;
+      }
+      if (_showSettings) {
+        _closeSettings();
+        return true;
+      }
+      if (_showLyrics) {
+        _closeLyrics();
+        return true;
+      }
+      if (_queueOpen) {
+        setState(() => _queueOpen = false);
+        return true;
+      }
+      if (_openPlaylist != null) {
+        _selectPlaylist(null);
+        return true;
+      }
+    }
+
+    // ── Reproducción ──────────────────────────────────────────────
+    // Space: play / pausa
+    if (key == LogicalKeyboardKey.space) {
+      player.togglePlayPause();
       return true;
     }
+    // N: siguiente canción
+    if (key == LogicalKeyboardKey.keyN) {
+      player.next();
+      return true;
+    }
+    // P: canción anterior
+    if (key == LogicalKeyboardKey.keyP) {
+      player.previous();
+      return true;
+    }
+    // →: adelantar 10s
+    if (key == LogicalKeyboardKey.arrowRight) {
+      final pos = player.positionValue;
+      final dur = player.durationValue;
+      final target = pos + const Duration(seconds: 10);
+      player.seek(dur != null && target > dur ? dur : target);
+      return true;
+    }
+    // ←: retroceder 10s
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      final pos = player.positionValue;
+      final target = pos - const Duration(seconds: 10);
+      player.seek(target.isNegative ? Duration.zero : target);
+      return true;
+    }
+    // ↑: subir volumen 5%
+    if (key == LogicalKeyboardKey.arrowUp) {
+      player.setVolume((player.volume.value + 0.05).clamp(0.0, 1.0));
+      return true;
+    }
+    // ↓: bajar volumen 5%
+    if (key == LogicalKeyboardKey.arrowDown) {
+      player.setVolume((player.volume.value - 0.05).clamp(0.0, 1.0));
+      return true;
+    }
+    // M: mute / unmute
+    if (key == LogicalKeyboardKey.keyM) {
+      player.toggleMute();
+      return true;
+    }
+
+    // ── Navegación ────────────────────────────────────────────────
+    // L: abrir/cerrar lyrics
+    if (key == LogicalKeyboardKey.keyL) {
+      setState(() => _showLyrics = !_showLyrics);
+      return true;
+    }
+    // Q: abrir/cerrar cola
+    if (key == LogicalKeyboardKey.keyQ) {
+      setState(() => _queueOpen = !_queueOpen);
+      return true;
+    }
+    // , (comma): abrir/cerrar settings
+    if (key == LogicalKeyboardKey.comma) {
+      if (_showSettings) {
+        _closeSettings();
+      } else {
+        _openSettings();
+      }
+      return true;
+    }
+
+    // ── Modos ─────────────────────────────────────────────────────
+    // S: toggle shuffle
+    if (key == LogicalKeyboardKey.keyS) {
+      player.toggleShuffle();
+      return true;
+    }
+    // R: toggle repeat (off → all → one)
+    if (key == LogicalKeyboardKey.keyR) {
+      player.toggleRepeat();
+      return true;
+    }
+    // D: toggle radio
+    if (key == LogicalKeyboardKey.keyD) {
+      player.toggleRadio();
+      return true;
+    }
+
+    // ── Favoritos ─────────────────────────────────────────────────
+    // F: agregar/quitar de favoritos
+    if (key == LogicalKeyboardKey.keyF) {
+      _toggleFavorite();
+      return true;
+    }
+
     return false;
+  }
+
+  /// Alterna la canción actual en la playlist de Favoritos (mismo
+  /// comportamiento que el corazón en el player bar).
+  Future<void> _toggleFavorite() async {
+    final player = context.read<PlayerService>();
+    final track = player.currentTrackValue;
+    if (track == null) return;
+    final db = context.read<AppDatabase>();
+    final id = await db.ensureFavoritesPlaylist();
+    // Consulta puntual (no stream) para saber si ya está guardada.
+    final query = db.select(db.playlistTracks)
+      ..where(
+        (pt) => pt.playlistId.equals(id) & pt.trackId.equals(track.id),
+      );
+    final rows = await query.get();
+    if (rows.isNotEmpty) {
+      await db.removeFromPlaylist(id, track.id);
+    } else {
+      await db.addToPlaylist(id, track);
+    }
   }
 
   /// Entra/sale de pantalla completa: oculta la title bar, monta el

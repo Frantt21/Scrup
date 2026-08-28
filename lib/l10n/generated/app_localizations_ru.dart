@@ -596,4 +596,70 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get audioOutput => 'Выход аудио';
+
+  @override
+  String get keyboardShortcuts => 'Горячие клавиши';
+
+  @override
+  String get shortcutPlayPause => 'Воспроизведение / Пауза';
+
+  @override
+  String get shortcutNext => 'Следующий трек';
+
+  @override
+  String get shortcutPrevious => 'Предыдущий трек';
+
+  @override
+  String get shortcutSeekForward => 'Перемотка вперёд 10с';
+
+  @override
+  String get shortcutSeekBackward => 'Перемотка назад 10с';
+
+  @override
+  String get shortcutVolumeUp => 'Громкость +5%';
+
+  @override
+  String get shortcutVolumeDown => 'Громкость -5%';
+
+  @override
+  String get shortcutMute => 'Отключить / Включить звук';
+
+  @override
+  String get shortcutToggleLyrics => 'Показать / скрыть текст';
+
+  @override
+  String get shortcutToggleQueue => 'Показать / скрыть очередь';
+
+  @override
+  String get shortcutToggleSettings => 'Показать / скрыть настройки';
+
+  @override
+  String get shortcutClosePanel => 'Закрыть активную панель';
+
+  @override
+  String get shortcutFullscreen => 'Полноэкранный режим';
+
+  @override
+  String get shortcutToggleShuffle => 'Случайный порядок';
+
+  @override
+  String get shortcutToggleRepeat => 'Повтор';
+
+  @override
+  String get shortcutToggleRadio => 'Режим радио';
+
+  @override
+  String get shortcutToggleFavorite => 'Добавить / убрать из избранного';
+
+  @override
+  String get shortcutCategoryPlayback => 'Воспроизведение';
+
+  @override
+  String get shortcutCategoryVolume => 'Громкость';
+
+  @override
+  String get shortcutCategoryNavigation => 'Навигация';
+
+  @override
+  String get shortcutCategoryModes => 'Режимы';
 }

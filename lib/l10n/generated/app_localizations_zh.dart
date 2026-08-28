@@ -576,4 +576,70 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get audioOutput => '音频输出';
+
+  @override
+  String get keyboardShortcuts => '键盘快捷键';
+
+  @override
+  String get shortcutPlayPause => '播放 / 暂停';
+
+  @override
+  String get shortcutNext => '下一首';
+
+  @override
+  String get shortcutPrevious => '上一首';
+
+  @override
+  String get shortcutSeekForward => '快进 10 秒';
+
+  @override
+  String get shortcutSeekBackward => '快退 10 秒';
+
+  @override
+  String get shortcutVolumeUp => '音量 +5%';
+
+  @override
+  String get shortcutVolumeDown => '音量 -5%';
+
+  @override
+  String get shortcutMute => '静音 / 取消静音';
+
+  @override
+  String get shortcutToggleLyrics => '切换歌词显示';
+
+  @override
+  String get shortcutToggleQueue => '切换播放队列';
+
+  @override
+  String get shortcutToggleSettings => '切换设置';
+
+  @override
+  String get shortcutClosePanel => '关闭当前面板';
+
+  @override
+  String get shortcutFullscreen => '全屏';
+
+  @override
+  String get shortcutToggleShuffle => '切换随机播放';
+
+  @override
+  String get shortcutToggleRepeat => '切换循环模式';
+
+  @override
+  String get shortcutToggleRadio => '切换电台模式';
+
+  @override
+  String get shortcutToggleFavorite => '添加 / 移除收藏';
+
+  @override
+  String get shortcutCategoryPlayback => '播放';
+
+  @override
+  String get shortcutCategoryVolume => '音量';
+
+  @override
+  String get shortcutCategoryNavigation => '导航';
+
+  @override
+  String get shortcutCategoryModes => '模式';
 }
