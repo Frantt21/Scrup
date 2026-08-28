@@ -4,14 +4,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
-/// Resuelve las rutas a los binarios sidecar (yt-dlp + ffmpeg) según la
-/// plataforma y el modo de ejecución (desarrollo o empaquetado).
-///
-/// Orden de búsqueda:
-/// 1. Variables de entorno `SCRUP_YTDLP_PATH` / `SCRUP_FFMPEG_PATH` (override).
-/// 2. Directorio `<exeDir>/tools/` (modo empaquetado, nuevo).
-/// 3. Directorio junto al ejecutable (legacy).
-/// 4. `bin/<plataforma>/` relativo al directorio de trabajo (desarrollo).
 class BinaryDownloadStatus {
   const BinaryDownloadStatus({
     required this.name,
@@ -78,9 +70,7 @@ class Binaries {
     return null;
   }
 
-  /// Devuelve un par (comando, args) listo para Process.start/run.
-  /// Si curl está disponible, devuelve el comando directamente (sin shell
-  /// wrapper). En Windows usa PowerShell como fallback.
+  // Returns (executable, args) for downloading a URL.
   static (String, List<String>)? _downloadCommand(
     String url,
     String outputPath,
@@ -269,9 +259,7 @@ class Binaries {
     return false;
   }
 
-  /// Busca recursivamente `ffmpeg.exe` (o `ffmpeg` en Unix) dentro de
-  /// [dir], incluyendo subcarpetas anidadas (el zip de gyan.dev crea
-  /// `ffmpeg-X.Y.Z-essentials_build/bin/ffmpeg.exe`).
+  // Recursively finds ffmpeg in dir (handles nested zip extraction).
   static String? _findFfmpegInDir(String dir) {
     try {
       final ffmpegDir = Directory(dir);
@@ -285,25 +273,21 @@ class Binaries {
     return null;
   }
 
-  /// Busca ffmpeg.exe en múltiples ubicaciones: junto a searchDir, en
-  /// subcarpetas anidadas del zip, y en la ubicación legacy junto al .exe.
+  // Searches for ffmpeg in multiple known locations.
   static String? _findFfmpeg() {
     final dir = _searchDir();
     final exeDir = p.dirname(Platform.resolvedExecutable);
 
-    // 1. <searchDir>/ffmpeg/ffmpeg.exe
+    // Search tools dir first, then legacy location next to exe.
     if (dir != null) {
       final candidate = p.join(dir, 'ffmpeg', 'ffmpeg$_exeExt');
       if (File(candidate).existsSync()) return candidate;
-      // 2. <searchDir>/ffmpeg.exe (sin subcarpeta)
       final flat = p.join(dir, 'ffmpeg$_exeExt');
       if (File(flat).existsSync()) return flat;
-      // 3. <searchDir>/ffmpeg/**/ffmpeg.exe (zip anidado)
       final nested = _findFfmpegInDir(p.join(dir, 'ffmpeg'));
       if (nested != null) return nested;
     }
 
-    // 4-6. Fallback legacy: junto al .exe (sin carpeta tools)
     if (dir != exeDir) {
       final legacyCandidate = p.join(exeDir, 'ffmpeg', 'ffmpeg$_exeExt');
       if (File(legacyCandidate).existsSync()) return legacyCandidate;
@@ -319,16 +303,11 @@ class Binaries {
   static Future<bool> ensureSidecarsPresent() async {
     if (_ytdlpPath != null && _ffmpegPath != null) return true;
 
-    // Verificación rápida: buscar en todas las ubicaciones conocidas
-    // antes de decidir descargar. Esto evita la notificación cuando los
-    // binarios ya existen.
+    // Quick check: search known locations before downloading.
     ytdlpPath;
     ffmpegPath;
     if (_ytdlpPath != null && _ffmpegPath != null) return true;
 
-    // Determinar el directorio de descarga:
-    // - En builds release/paquetados: <exeDir>/tools/
-    // - En desarrollo: projectRoot/bin/<plataforma>
     String downloadDir;
     final root = projectRoot;
     if (root != null) {
@@ -353,7 +332,7 @@ class Binaries {
       return false;
     }
 
-    // Re-buscar los binarios después de descargarlos.
+    // Re-resolve paths after download.
     _ytdlpPath = null;
     _ffmpegPath = null;
     _denoPath = null;
@@ -362,27 +341,24 @@ class Binaries {
     return true;
   }
 
-  /// Directorio donde buscaremos los binarios, si existe.
   static String? _searchDir() {
     final env = Platform.environment;
     if (env['SCRUP_YTDLP_PATH'] != null &&
         env['SCRUP_YTDLP_PATH']!.isNotEmpty) {
       return p.dirname(env['SCRUP_YTDLP_PATH']!);
     }
-    // Modo empaquetado: buscar en <exeDir>/tools/ (nuevo) y
-    // <exeDir>/ (legacy, binarios descargados antes del cambio).
+    // Packaged: <exeDir>/tools/ first, then legacy <exeDir>/.
     try {
       final exeDir = p.dirname(Platform.resolvedExecutable);
       final toolsDir = p.join(exeDir, 'tools');
       if (File(p.join(toolsDir, 'yt-dlp$_exeExt')).existsSync()) {
         return toolsDir;
       }
-      // Fallback legacy: binarios junto al .exe (sin carpeta tools).
       if (File(p.join(exeDir, 'yt-dlp$_exeExt')).existsSync()) {
         return exeDir;
       }
     } catch (_) {}
-    // Desarrollo desde projectRoot (más confiable que CWD).
+    // Development: projectRoot/bin/<platform>, then CWD fallback.
     final root = projectRoot;
     if (root != null) {
       final dev = p.join(root, 'bin', _platformDir);
@@ -390,7 +366,6 @@ class Binaries {
         return dev;
       }
     }
-    // Desarrollo: relativo al CWD del proyecto (fallback).
     final cwdDev = p.join(Directory.current.path, 'bin', _platformDir);
     if (File(p.join(cwdDev, 'yt-dlp$_exeExt')).existsSync()) {
       return cwdDev;
@@ -432,7 +407,6 @@ class Binaries {
       _ffmpegPath = env;
       return _ffmpegPath;
     }
-    // Buscar en múltiples ubicaciones (directo, flat, anidado, legacy).
     final found = _findFfmpeg();
     if (found != null) {
       _ffmpegPath = found;
@@ -446,14 +420,7 @@ class Binaries {
     return null;
   }
 
-  /// Runtime JS de yt-dlp (deno) junto a los binarios, o `null` si no hay.
-  ///
-  /// yt-dlp 2026+ ha **deprecado la extracción sin runtime JS** de YouTube
-  /// ("some formats may be missing"). Si deno está en el PATH de los
-  /// subprocesos, yt-dlp lo detecta solo y la extracción queda completa y a
-  /// prueba del cierre del camino sin JS. Se busca en el directorio de
-  /// binarios (descargado por `tool/fetch_binaries.sh`), en `SCRUP_DENO_PATH`
-  /// y en el PATH del sistema (por si el usuario lo tiene instalado).
+  // Deno runtime for yt-dlp's JS-based extraction.
   static String? get denoPath {
     if (_denoPath != null) return _denoPath;
     final env = Platform.environment['SCRUP_DENO_PATH'];
@@ -477,9 +444,7 @@ class Binaries {
     return null;
   }
 
-  /// Directorios que deben añadirse al PATH de los subprocesos (yt-dlp busca
-  /// ahí ffmpeg y el runtime JS): el directorio de binarios (donde vive deno)
-  /// y el directorio de ffmpeg. Sin duplicados y en orden estable.
+  // Dirs to add to subprocess PATH (for ffmpeg and deno).
   static List<String> get pathDirs {
     final dirs = <String>[];
     final binDir = _searchDir();
@@ -512,7 +477,6 @@ class Binaries {
     return null;
   }
 
-  /// Descripción del estado de los binarios, útil para la UI.
   static String get statusSummary {
     final yt = ytdlpPath;
     final ff = ffmpegPath;

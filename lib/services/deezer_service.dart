@@ -5,12 +5,8 @@ import 'package:http/http.dart' as http;
 
 import '../core/track.dart';
 
-/// Enriquece los metadatos de una pista de YouTube consultando la API
-/// pública de Deezer (sin API key): título/artista/álbum limpios y la
-/// portada del álbum en alta resolución.
-///
-/// Es *best-effort*: si no hay una coincidencia fiable, devuelve `null` y
-/// la app se queda con los metadatos originales de YouTube.
+/// Enriches YouTube track metadata via Deezer's public API.
+/// Best-effort: returns null if no reliable match found.
 class DeezerService {
   DeezerService({http.Client? client, this.userAgent = _defaultUserAgent})
     : _client = client ?? http.Client();
@@ -22,19 +18,11 @@ class DeezerService {
   final http.Client _client;
   final String userAgent;
 
-  /// Caché por id de video de YouTube: evita repetir peticiones a Deezer
-  /// cuando la misma pista vuelve a sonar en la sesión.
   final Map<String, Track?> _cache = {};
 
-  /// Descargas en curso por id de video (dedupe de llamadas concurrentes).
   final Map<String, Future<Track?>> _inflight = {};
 
-  /// Busca metadatos en Deezer para [track] y devuelve una versión
-  /// enriquecida, o `null` si no encuentra una coincidencia fiable.
-  ///
-  /// Las pistas con `cleanMetadata` (YT Music/InnerTube, que ya traen
-  /// título/artista canónicos) se devuelven SIN tocar: ni consulta, ni
-  /// caché — su matching difuso solo puede empeorarlas.
+  // Enriches a track with Deezer metadata. Skips tracks with cleanMetadata.
   Future<Track?> enrich(Track track) async {
     if (track.cleanMetadata) return null;
     if (_cache.containsKey(track.id)) return _cache[track.id];
@@ -52,22 +40,13 @@ class DeezerService {
     }
   }
 
-  /// Busca en Deezer con un título y artista ESCRITOS A MANO (editor de
-  /// metadatos), SIN pasar por la caché por videoId: si el usuario corrige
-  /// el artista/título, la búsqueda debe consultar la API de nuevo, no
-  /// repetir el resultado (o el `null`) que ya quedó cacheado para ese
-  /// video. Devuelve la metadata candidata, o `null` sin coincidencia
-  /// fiable.
+  // Searches Deezer bypassing cache (for manual metadata edits).
   Future<Track?> searchManual(String title, String artist) async {
     final probe = Track(id: '__manual__', title: title, artist: artist);
     return _searchAndPick(probe);
   }
 
-  /// Enriquece una lista de pistas en paralelo (con límite de concurrencia
-  /// para no saturar la API) y devuelve las pistas ya fusionadas con la
-  /// metadata de Deezer cuando hay coincidencia fiable, o la original en
-  /// caso contrario. Reutiliza la caché por videoId, así que reproducir
-  /// después no repite peticiones.
+  // Enriches multiple tracks in parallel with concurrency limit.
   Future<List<Track>> enrichAll(
     List<Track> tracks, {
     int concurrency = 4,
@@ -116,17 +95,11 @@ class DeezerService {
       final data = json['data'] as List<dynamic>? ?? [];
       return _pickBest(track, data);
     } catch (_) {
-      // Sin red, rate-limit, JSON raro... el enriquecimiento nunca debe
-      // interrumpir la reproducción.
       return null;
     }
   }
 
-  /// Elige la coincidencia más fiable entre los resultados de Deezer y la
-  /// pista original. Reglas anti-falsos positivos:
-  /// - Puntuación mínima (artista+ título) de 2.
-  /// - Alguna señal de título (no sobreescribir con otra canción del mismo
-  ///   artista). Se exime solo si el original no trae artista.
+  // Picks the best match from Deezer results.
   Track? _pickBest(Track track, List<dynamic> data) {
     Track? best;
     var bestScore = 0;
@@ -162,8 +135,7 @@ class DeezerService {
     );
   }
 
-  /// Similitud aproximada. Devuelve `(score, titleScore)`: el artista exacto
-  /// vale 3, el parcial 2; el título exacto 2, el parcial 1.
+  // Returns (totalScore, titleScore) for matching.
   (int, int) _score(Track original, Track candidate) {
     final a = _norm(original.artist);
     final b = _norm(original.title);
@@ -189,8 +161,6 @@ class DeezerService {
     return (artistScore + titleScore, titleScore);
   }
 
-  /// Normaliza para comparar: minúsculas, sin diacríticos, sin puntuación,
-  /// sin espacios extra. ("Música" → "musica", "Café" → "cafe".)
   static const Map<String, String> _diacritics = {
     'á': 'a',
     'à': 'a',
@@ -232,8 +202,7 @@ class DeezerService {
         .trim();
   }
 
-  /// Devuelve un [Track] enriquecido a partir del original (mantiene el id
-  /// de YouTube y la duración) o `null` si no se encontró coincidencia.
+  // Merges Deezer data into original track.
   Track? apply(Track original, Track? deezer) {
     if (deezer == null) return null;
     return original.copyWith(

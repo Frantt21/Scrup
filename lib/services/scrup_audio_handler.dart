@@ -5,21 +5,9 @@ import 'package:audio_service/audio_service.dart';
 import '../core/track.dart';
 import 'player_service.dart';
 
-/// Puente con los **controles multimedia nativos del OS** vía audio_service:
-/// - Windows → SMTC (SystemMediaTransportControls: overlay de medios y
-///   teclas multimedia), implementado por el paquete `audio_service_win`
-///   (audio_service NO soporta Windows: usa un NoOp por defecto). Nota:
-///   `audio_service_win` no implementa la línea de tiempo, así que la barra
-///   de progreso/seek del SMTC no aparece en Windows.
-/// - macOS → Now Playing (lock screen / Control Center).
-/// - Linux → MPRIS (con el paquete compañero `audio_service_mpris`).
-///
-/// Expone la pista actual (título/artista/álbum/portada/duración) y el estado
-/// de reproducción (play/pausa + posición), y reenvía los comandos del OS
-/// (play, pausa, anterior, siguiente, seek) al [PlayerService].
-///
-/// Se crea ANTES de `runApp` (AudioService.init) y se conecta al reproductor
-/// cuando el árbol de providers construye el [PlayerService] ([attach]).
+/// Bridge to OS media controls via audio_service:
+/// Windows (SMTC) / macOS (Now Playing) / Linux (MPRIS).
+/// Created before runApp, connected via [attach].
 class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
   PlayerService? _player;
   final List<StreamSubscription> _subs = [];
@@ -28,12 +16,10 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
   bool _playing = false;
   Duration _lastPosition = Duration.zero;
 
-  /// Último segundo publicado (throttle de la posición del SMTC a ~1 Hz:
-  /// actualizaciones más frecuentes causan tirones en el overlay de Windows).
+  // Throttle position to ~1Hz to avoid SMTC overlay jitter on Windows.
   int _lastPublishedSec = -1;
 
-  /// Conecta el handler al reproductor: sincroniza metadatos y estado, y
-  /// empieza a recibir comandos del OS. Idempotente.
+  // Connects handler to player. Idempotent.
   void attach(PlayerService player) {
     if (_player != null) return;
     _player = player;
@@ -52,7 +38,7 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
         _playing = playing;
         _publishPlaybackState();
       }),
-      // Posición: alimenta la barra de progreso del SMTC (throttle ~1 Hz).
+      // Feed OS progress bar (throttle ~1Hz).
       player.position.listen((pos) {
         _lastPosition = pos;
         final sec = pos.inMilliseconds ~/ 1000;
@@ -61,12 +47,9 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
         _publishPlaybackState();
       }),
     ]);
-    // Sin pista no se publica nada (guardia de _publishPlaybackState): el
-    // SMTC/Now Playing/MPRIS no se encienden vacíos; el primer estado real
-    // llega con la primera pista vía el listener de currentTrack.
+    // Don't publish empty state — OS overlay activates on first track.
   }
 
-  /// Convierte una pista en el [MediaItem] que ve el OS.
   MediaItem _mediaItemFor(Track track) {
     return MediaItem(
       id: track.id,
@@ -80,11 +63,7 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
     );
   }
 
-  /// Publica el estado de reproducción en el OS. Sin pista NO se publica
-  /// nada: audio_service reenvía cada estado al platform, y en Windows eso
-  /// encendería un SMTC vacío (sin metadata) al arrancar. El estado correcto
-  /// se publica en cuanto llega la primera pista (que es cuando el OS
-  /// empieza a mostrar el overlay).
+  // Publishes playback state to OS. No-op if no track loaded.
   void _publishPlaybackState() {
     if (!_hasTrack) return;
     final controls = [
@@ -134,31 +113,22 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> seek(Duration position) async {
     _lastPosition = position;
-    // Forzar la publicación del siguiente evento de posición: si el seek cae
-    // en el mismo segundo ya publicado, el throttle lo silenciaría y la barra
-    // del OS no reflejaría el salto hasta el próximo segundo.
+    // Force next position event past the throttle.
     _lastPublishedSec = -1;
     await _player?.seek(position);
   }
 
   @override
   Future<void> stop() async {
-    // Publicar PAUSADO antes de limpiar la pista: así el OS refleja el
-    // estado correcto (si se limpiara primero, _publishPlaybackState no
-    // publicaría nada por la guardia de _hasTrack).
+    // Publish paused state before clearing track (guard needs _hasTrack).
     _playing = false;
     _publishPlaybackState();
     _hasTrack = false;
     mediaItem.add(null);
-    // Pausar en vez de `_player.stop()`: stop() de media_kit emite el evento
-    // `completed`, que el PlayerService interpreta como fin de canción y
-    // dispararía el auto-advance/radio (el propio servicio evita stop() por
-    // ese motivo).
+    // Pause instead of stop: stop() triggers 'completed' event → auto-advance.
     await _player?.pause();
   }
 
-  /// Cancela las suscripciones al reproductor. Best-effort: la app de
-  /// escritorio termina con el proceso, así que normalmente no hace falta.
   Future<void> dispose() async {
     for (final s in _subs) {
       await s.cancel();

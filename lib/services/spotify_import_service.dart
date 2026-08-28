@@ -7,7 +7,6 @@ import '../core/track.dart';
 import 'ytdlp_service.dart';
 import 'ytmusic_service.dart';
 
-/// Pista tal y como viene de una playlist de Spotify (metadatos crudos).
 class SpotifyPlaylistTrack {
   const SpotifyPlaylistTrack({
     required this.title,
@@ -17,12 +16,11 @@ class SpotifyPlaylistTrack {
 
   final String title;
   final String artists;
-  final int durationMs; // 0 si se desconoce.
+  final int durationMs;
 
   String get searchQuery => '$title $artists'.trim();
 }
 
-/// Playlist leída del embed público de Spotify.
 class SpotifyPlaylist {
   const SpotifyPlaylist({
     required this.id,
@@ -35,7 +33,6 @@ class SpotifyPlaylist {
   final List<SpotifyPlaylistTrack> tracks;
 }
 
-/// Resultado de emparejar UNA pista de la playlist contra YouTube.
 class SpotifyMatchResult {
   const SpotifyMatchResult(
     this.index,
@@ -44,7 +41,6 @@ class SpotifyMatchResult {
     this.error,
   });
 
-  /// Posición dentro de la playlist original.
   final int index;
   final SpotifyPlaylistTrack requested;
   final Track? match;
@@ -53,8 +49,6 @@ class SpotifyMatchResult {
   bool get hasMatch => match != null;
 }
 
-/// Error de importación con motivo estable ('invalid-id', 'network',
-/// 'not-found', 'parse', 'empty') para mapearlo a mensajes l10n.
 class SpotifyImportException implements Exception {
   const SpotifyImportException(this.reason);
   final String reason;
@@ -63,11 +57,8 @@ class SpotifyImportException implements Exception {
   String toString() => reason;
 }
 
-/// Lee playlists PÚBLICAS de Spotify sin API keys usando el endpoint del
-/// embed web (`open.spotify.com/embed/playlist/{id}`), cuyo HTML incrusta un
-/// JSON (`__NEXT_DATA__`) con el nombre y las pistas. Después empareja cada
-/// pista contra YouTube con yt-dlp para poder crear la playlist en Scrup,
-/// donde la fuente siempre es YouTube.
+/// Reads public Spotify playlists via the embed endpoint and matches
+/// tracks to YouTube.
 class SpotifyImportService {
   SpotifyImportService({http.Client? client})
     : _client = client ?? http.Client();
@@ -77,8 +68,6 @@ class SpotifyImportService {
     dotAll: true,
   );
 
-  /// Acepta URL completa (con o sin query, con o sin intl-XX),
-  /// URI `spotify:playlist:ID` o el ID pelado base62 de 22 caracteres.
   static String? extractPlaylistId(String input) {
     final s = input.trim();
     if (s.isEmpty) return null;
@@ -92,8 +81,7 @@ class SpotifyImportService {
     return null;
   }
 
-  /// Descarga y parsea el embed público. Lanza [SpotifyImportException] si
-  /// el enlace no es válido, la playlist no existe o no es pública.
+  // Fetches and parses the public embed. Throws on invalid/deleted/private.
   Future<SpotifyPlaylist> fetchPlaylist(String urlOrId) async {
     final id = extractPlaylistId(urlOrId);
     if (id == null) throw const SpotifyImportException('invalid-id');
@@ -112,7 +100,6 @@ class SpotifyImportService {
     return parseEmbedHtml(res.body, expectedId: id);
   }
 
-  /// Parsea el HTML del embed. Expuesto para tests (sin red).
   static SpotifyPlaylist parseEmbedHtml(String html, {String? expectedId}) {
     final m = _nextDataRe.firstMatch(html);
     if (m == null) throw const SpotifyImportException('parse');
@@ -165,9 +152,7 @@ class SpotifyImportService {
     );
   }
 
-  /// Busca recursivamente el primer Map que tenga 'trackList': la ruta
-  /// exacta (`props.pageProps.state.data.entity`) cambia entre versiones
-  /// del embed, así que no dependemos de ella.
+  // Recursively finds first Map with 'trackList' key.
   static Map<String, dynamic>? findEntity(Object? node) {
     if (node is Map) {
       if (node['trackList'] is List) {
@@ -186,10 +171,8 @@ class SpotifyImportService {
     return null;
   }
 
-  // ------------------------------------------------------------- matching
+  // ── Matching ──────────────────────────────────────────────────────
 
-  /// Normaliza texto para comparar títulos: minúsculas, solo alfanumérico y
-  /// con diacríticos latinos plegados (á→a…).
   static String normalize(String s) {
     final sb = StringBuffer();
     for (final ch in s.toLowerCase().runes) {
@@ -224,8 +207,6 @@ class SpotifyImportService {
     0xE7: 99, // ç -> c
   };
 
-  /// Similitud de títulos 0..1: igualdad > contención > solape de tokens
-  /// (Jaccard). Tolerante a "(Official Video)", "Remasterizado", etc.
   static double titleSimilarity(String a, String b) {
     final na = normalize(a);
     final nb = normalize(b);
@@ -239,10 +220,7 @@ class SpotifyImportService {
     return inter / (ta.length + tb.length - inter);
   }
 
-  /// Elige el mejor candidato de YouTube para una pista de Spotify combinando
-  /// similitud de título (70%), cercanía de duración (25%) y bonus si el
-  /// artista aparece en el candidato (5%). Devuelve null si ninguno supera
-  /// el umbral mínimo (mejor omitir que meter basura).
+  // Picks best YouTube match for a Spotify track.
   static Track? pickBestMatch(
     List<Track> candidates,
     SpotifyPlaylistTrack target,
@@ -275,9 +253,7 @@ class SpotifyImportService {
     return bestScore >= .35 ? best : null;
   }
 
-  /// Busca en YouTube Music primero (canciones canónicas con metadatos
-  /// limpios, técnica de spotdl); si no devuelve nada o falla, cae al
-  /// `ytsearch` genérico de yt-dlp.
+  // Tries YT Music first, falls back to yt-dlp search.
   Future<List<Track>> _candidatesFor(
     SpotifyPlaylistTrack target, {
     required YtDlpService ytDlp,
@@ -290,17 +266,12 @@ class SpotifyImportService {
         if (songs.isNotEmpty) {
           return [for (final s in songs) s.toTrack()];
         }
-      } catch (_) {
-        // Endpoint no oficial: cualquier fallo cae al fallback.
-      }
+      } catch (_) {}
     }
     return ytDlp.search(target.searchQuery, limit: limitPerSearch);
   }
 
-  /// Empareja todas las pistas contra YouTube con un pool de trabajadores
-  /// ([concurrency], como DeezerService.enrichAll). Reporta cada resultado
-  /// por callback en cuanto termina (sin orden garantizado); devuelve la
-  /// lista completa al acabar.
+  // Matches all tracks to YouTube with a concurrent worker pool.
   Future<List<SpotifyMatchResult>> importToYoutube({
     required SpotifyPlaylist playlist,
     required YtDlpService ytDlp,

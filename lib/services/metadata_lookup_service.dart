@@ -6,28 +6,12 @@ import '../core/track.dart';
 import 'deezer_service.dart';
 import 'ytmusic_service.dart';
 
-/// Un candidato de metadatos junto al servicio que lo devolvió (se muestra
-/// como badge en la lista de resultados del editor).
 typedef MetadataHit = ({Track track, String source});
 
-/// Límite de resultados que devuelve [MetadataLookupService.search] tras
-/// mezclar todas las fuentes.
 const int kMaxLookupResults = 20;
 
-/// Búsqueda de metadatos MULTI-FUENTE para el editor de metadatos:
-///
-/// - **Deezer** (API pública, sin key): título/artista/álbum limpios y
-///   portada del álbum en alta resolución.
-/// - **Apple Music / iTunes Search API** (pública, sin key): título,
-///   artista, álbum y portada del álbum en alta resolución (600×600).
-/// - **InnerTube (YT Music)**: título, artista y thumbnail; reutiliza el
-///   mismo cliente que la búsqueda de la app.
-/// - **Spotify**: su API de búsqueda requiere OAuth, pero el endpoint
-///   **oEmbed es público** — permite resolver título + portada a partir de
-///   una URL de track pegada por el usuario.
-///
-/// Devuelve candidatos DEDUPLICADOS (artista+título) para que el usuario
-/// elija el mejor en el diálogo del editor.
+/// Multi-source metadata search for the editor.
+/// Sources: Deezer, iTunes, InnerTube, Spotify oEmbed.
 class MetadataLookupService {
   MetadataLookupService({
     http.Client? client,
@@ -44,15 +28,11 @@ class MetadataLookupService {
 
   final http.Client _client;
 
-  /// User-Agent para las peticiones HTTP.
   final String userAgent;
   final YtMusicService _ytmusic = YtMusicService();
   final DeezerService _deezer;
 
-  /// Busca en todas las fuentes públicas. [query] puede ser texto libre
-  /// ("artista título") o contener una URL de Spotify. Devuelve TODOS los
-  /// hits, duplicados incluidos: cada uno lleva su [MetadataHit.source] para
-  /// que el usuario compare el mismo tema según el servicio en el badge.
+  // Searches all public sources. Returns all hits with source badges.
   Future<List<MetadataHit>> search(String query) async {
     final spotifyLink = _spotifyUrlRe.firstMatch(query);
     final textQuery = query.replaceFirst(_spotifyUrlRe, '').trim();
@@ -70,10 +50,8 @@ class MetadataLookupService {
     ].take(kMaxLookupResults).toList();
   }
 
-  // ── Deezer ──────────────────────────────────────────────────────────────
+  // ── Deezer ──────────────────────────────────────────────────────────
 
-  /// Delega en el servicio existente (API pública, con su propia lógica de
-  /// coincidencia fiable). El texto libre va como título, sin artista.
   Future<List<MetadataHit>> _searchDeezer(String query) async {
     if (query.trim().isEmpty) return const [];
     try {
@@ -84,7 +62,7 @@ class MetadataLookupService {
     }
   }
 
-  // ── Apple Music / iTunes Search ────────────────────────────────────────
+  // ── Apple Music / iTunes Search ─────────────────────────────────────
 
   Future<List<MetadataHit>> _searchItunes(String query) async {
     if (query.trim().isEmpty) return const [];
@@ -125,7 +103,7 @@ class MetadataLookupService {
     }
   }
 
-  // ── InnerTube / YT Music ────────────────────────────────────────────────
+  // ── InnerTube / YT Music ───────────────────────────────────────────
 
   Future<List<MetadataHit>> _searchInnerTube(String query) async {
     try {
@@ -147,7 +125,7 @@ class MetadataLookupService {
     }
   }
 
-  // ── Spotify oEmbed (público, solo URL de track) ────────────────────────
+  // ── Spotify oEmbed ──────────────────────────────────────────────────
 
   Future<List<MetadataHit>> _fromSpotifyUrl(String url) async {
     try {

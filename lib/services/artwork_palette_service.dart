@@ -11,37 +11,18 @@ import '../core/track.dart';
 import 'artwork_cache_service.dart';
 import 'palette_cache_store.dart';
 
-/// Extracción de paletas de artwork — FUENTE ÚNICA para toda la app.
-///
-/// Un artwork produce exactamente UN trío de colores (background
-/// fullscreen); el acento de controles/lyrics se DERIVA de ese trío (1 de
-/// los 3). Así controles y fondo nunca discrepan y todo vive en la misma
-/// caché SQLite ([PaletteCacheStore]).
-///
-/// GUARDIA MONOCROMA: en portadas ~90% negras/blancas los swatches que
-/// sobreviven son RUIDO DE CROMA del JPEG (azulados/morados sin relación
-/// con la imagen). Si NINGÚN swatch alcanza saturación real, el trío es una
-/// rampa de GRISES oscuros sobre el negro base.
+/// Extracts artwork palettes — single source for the whole app.
+/// Monochrome guard: if no swatch has real saturation, returns greys.
 class ArtworkPaletteService {
   ArtworkPaletteService._();
 
-  /// Saturación mínima (HSL) para considerar que un color es intención del
-  /// artista y no ruido de compresión. En imágenes oscuras (~90% negras),
-  /// el ruido JPEG produce colores con saturación artificial de 0.20-0.28;
-  /// 0.30 filtra ese ruido sin perder acentos reales.
   static const double kMinSaturation = 0.30;
 
-  /// Si la luminancia es menor que esto, el color es "casi negro"
-  /// independientemente de su saturación (ruido de compresión en sombras).
   static const double kDarknessThreshold = 0.10;
 
   static const String _userAgent = 'Scrup/0.1 (music player)';
 
-  /// Devuelve el trío para [url], desde caché o extrayéndolo.
-  ///
-  /// [force] ignora la caché de paleta (recalculo manual desde Ajustes).
-  /// [artworkCache] si se provee, almacena/carga bytes de artwork en disco
-  /// para evitar re-descargas de red.
+  // Returns trio for URL from cache or extracted. [force] skips cache.
   static Future<List<Color>> trioFor(
     String url,
     PaletteCacheStore store, {
@@ -65,13 +46,7 @@ class ArtworkPaletteService {
     return trio;
   }
 
-  /// Extrae el trío desde bytes YA descargados (p. ej. los que el
-  /// fullscreen muestra) y lo persiste con su acento derivado.
-  ///
-  /// TODO el trabajo pesado (decodificar + cuantizar) corre FUERA del
-  /// isolate de UI: era la causa del tirón al cambiar de canción —
-  /// PaletteGenerator decodificaba y cuantizaba imágenes de hasta 1280px
-  /// en el hilo principal, dos veces por cambio (actual + precarga).
+  // Extracts trio from already-downloaded bytes. Heavy work runs off UI.
   static Future<List<Color>> trioFromBytes(
     String url,
     Uint8List bytes,
@@ -91,15 +66,11 @@ class ArtworkPaletteService {
     }
   }
 
-  /// Decodifica [bytes] y cuantiza los píxeles — TODO el trabajo pesado
-  /// (decode JPEG + resize + quantize) corre en UN solo isolate,
-  /// eliminando `ui.instantiateImageCodec` del hilo de UI.
+  // Decodes and quantizes pixels in a background isolate.
   static Future<List<Color>> extractSwatches(Uint8List bytes) async {
     return Isolate.run(() => _decodeAndQuantize(bytes));
   }
 
-  /// Toda la pipeline pesada: decode → resize 96px → RGBA → quantize.
-  /// Corre 100% fuera del hilo de UI.
   static List<Color> _decodeAndQuantize(Uint8List bytes) {
     final img = img_pkg.decodeImage(bytes);
     if (img == null) return const [];
@@ -108,9 +79,7 @@ class ArtworkPaletteService {
     return _quantize(rgba);
   }
 
-  /// Cuantización simple por cubos RGB de 4 bits por canal: promedia el
-  /// color de cada cubo y ordena por población. Sobre 96×96 son ~9k
-  /// píxeles — microsegundos en el isolate.
+  // Simple quantization: average color per 4-bit RGB cube, sorted by count.
   static List<Color> _quantize(Uint8List rgba) {
     final sumsR = <int, int>{};
     final sumsG = <int, int>{};
@@ -123,8 +92,7 @@ class ArtworkPaletteService {
       final r = rgba[i];
       final g = rgba[i + 1];
       final b = rgba[i + 2];
-      // Clave 12 bits: r/g/b a 4 bits cada canal.
-      final key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+        final key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
       sumsR[key] = (sumsR[key] ?? 0) + r;
       sumsG[key] = (sumsG[key] ?? 0) + g;
       sumsB[key] = (sumsB[key] ?? 0) + b;
@@ -144,8 +112,7 @@ class ArtworkPaletteService {
     ];
   }
 
-  /// Bytes del artwork: disco local → caché → red con cadena de respaldo
-  /// maxresdefault (1280px) → URL original.
+  // Fetches artwork bytes: disk → cache → network with hi-res fallback.
   static Future<Uint8List?> _fetchBytes(
     String url, {
     ArtworkCacheService? artworkCache,
@@ -162,7 +129,7 @@ class ArtworkPaletteService {
       return null;
     }
 
-    // 1) Caché de artwork en disco: evita re-descargar portadas conocidas.
+    // Disk cache: avoids re-downloading known covers.
     if (artworkCache != null) {
       try {
         final cached = await artworkCache.load(url);
@@ -172,7 +139,7 @@ class ArtworkPaletteService {
       } catch (_) {}
     }
 
-    // 2) Red: cadena de respaldo maxresdefault → URL original.
+    // Network: hi-res fallback → original URL.
     for (final candidate in [Track.hiResThumbnail(url) ?? url, url]) {
       try {
         final resp = await http
@@ -180,7 +147,6 @@ class ArtworkPaletteService {
             .timeout(const Duration(seconds: 10));
         if (resp.statusCode == 200 && resp.bodyBytes.length > 1024) {
           final bytes = resp.bodyBytes;
-          // Persistir en disco para próximas sesiones.
           if (artworkCache != null) {
             try {
               await artworkCache.save(url, bytes);
@@ -195,9 +161,7 @@ class ArtworkPaletteService {
     return null;
   }
 
-  /// Elige el trío de una lista de colores candidatos (ordenados por
-  /// población): top-3 por saturación×contraste con separación mínima de
-  /// tono. Con guardia monocroma (ver clase).
+  // Picks top-3 by saturation×contrast with min hue separation.
   static List<Color> pickTrio(List<Color> candidates) {
     double score(Color c) {
       final hsl = HSLColor.fromColor(c);
@@ -208,14 +172,7 @@ class ArtworkPaletteService {
       ..sort((a, b) => score(b).compareTo(score(a)));
     if (swatches.isEmpty) return const [];
 
-    // ── Guardia monocroma ────────────────────────────────────────────────
-    // Verificar los bins por POBLACIÓN (no por score): el score premia la
-    // saturación, así que en una portada B/N los bins minúsculos de RUIDO
-    // JPEG (azulados/morados) le ganan al negro/gris neutro dominante y
-    // fingen "tener color" → fondo teñido de azul sin relación con la obra.
-    // Por población, los 5 bins más llenos de una portada B/N son
-    // negros/grises/neutros: si NINGUNO alcanza saturación Y luminancia
-    // reales, la imagen es monocromática.
+    // Monochrome guard: check top-5 by population for real saturation.
     bool isMonochrome = true;
     for (final s in candidates.take(5)) {
       final hsl = HSLColor.fromColor(s);
@@ -232,9 +189,7 @@ class ArtworkPaletteService {
     double hueOf(Color c) => HSLColor.fromColor(c).hue;
     bool sat(Color c) => HSLColor.fromColor(c).saturation >= 0.15;
 
-    // Los colores con saturación Y luminancia REALES van primero: el
-    // trío (y su acento derivado) nunca debe arrancar de un bin oscuro de
-    // ruido de compresión, por mucha saturación que este tenga.
+    // Real colors (saturation + lightness) go first.
     bool realColor(Color c) {
       final hsl = HSLColor.fromColor(c);
       return hsl.saturation >= kMinSaturation &&
@@ -249,7 +204,6 @@ class ArtworkPaletteService {
     final picked = <Color>[ordered.first];
     for (final c in ordered.skip(1)) {
       if (picked.length >= 3) break;
-      // Distancia de tono SOLO entre colores con saturación real.
       final farEnough = picked.every((p) {
         if (!sat(p) || !sat(c)) return true;
         final d = (hueOf(p) - hueOf(c)).abs() % 360;
@@ -257,8 +211,7 @@ class ArtworkPaletteService {
       });
       if (farEnough) picked.add(c);
     }
-    // Relleno por luminancia si faltaron matices distintos (monocromos
-    // parciales): variaciones del primero, sin inventar hue ajenos.
+    // Fill remaining slots with lightness variations of the first color.
     while (picked.length < 3) {
       final base = HSLColor.fromColor(picked.first);
       final shift = picked.length == 1 ? 0.22 : -0.18;
@@ -271,13 +224,10 @@ class ArtworkPaletteService {
     return picked;
   }
 
-  /// Deriva el acento único (controles/lyrics) del trío: el color dominante
-  /// (más poblado) define si hay color real; los secundarios con ruido JPEG
-  /// no deben secuestrar el acento. En trío monocromo, plata neutra legible.
+  // Derives accent (controls/lyrics) from trio.
   static Color? accentFromTrio(List<Color> trio) {
     if (trio.isEmpty) return null;
     final hsl = HSLColor.fromColor(trio.first);
-    // Mismos guards que pickTrio: saturación real Y luminancia suficiente.
     if (hsl.saturation >= kMinSaturation && hsl.lightness >= kDarknessThreshold) {
       return trio.first;
     }

@@ -6,27 +6,14 @@ import '../core/lyrics_search_result.dart';
 import '../core/synced_lyrics.dart';
 import '../data/database.dart';
 
-/// Servicio de letras sincronizadas (multi-proveedor: KPoe → Unison → LRCLIB).
-///
-/// Busca y cachea las letras de una canción: primero en memoria, luego en
-/// Drift (SQLite) y por último en las APIs externas. Intenta obtener lyrics
-/// word-by-word (KPoe/Unison) antes de caer a LRCLIB (línea por línea).
+/// Multi-provider lyrics service: KPoe → Unison → LRCLIB.
+/// Tries word-by-word first, falls back to line-by-line.
 class LyricsService {
   LyricsService(this._db);
 
   final AppDatabase _db;
 
-  final _cache = <String, SyncedLyrics>{};
-  final _notFound = <String>{}; // keys ya buscadas sin resultado (sesión)
-
-  /// Busca letras manualmente.
-  /// [provider]: 'all' | 'kpoe' | 'lrclib' | 'unison'
-  ///
-  /// KPoe y Unison exigen título y artista como campos separados (una query
-  /// libre en un solo campo responde 400). Para que funcionen desde la
-  /// búsqueda manual se generan candidatos (título, artista): primero las
-  /// pistas reales de la canción en reproducción ([titleHint]/[artistHint])
-  /// y luego particiones heurísticas de la consulta ("A - B", "B by A").
+  final _cache = <String, SyncedLyrics>{};  final _notFound = <String>{}; // Keys already searched with no result.  // Searches lyrics manually across all providers.
   Future<List<LyricsSearchResult>> searchLyrics(
     String query, {
     String provider = 'all',
@@ -152,11 +139,7 @@ class LyricsService {
     }
 
     return results;
-  }
-
-  /// Candidatos (título, artista) para proveedores con campos separados.
-  /// Deduplicados y sin pares vacíos. Los hints de la pista actual van
-  /// primero (coincidencia exacta); luego las particiones de la query.
+  }  // Generates (title, artist) candidates for providers with separate fields.
   static List<(String, String)> _searchCandidates(
     String query,
     String? titleHint,
@@ -197,20 +180,13 @@ class LyricsService {
     return candidates;
   }
 
-  /// Milisegundos → timestamp LRC `mm:ss.cc`.
   static String _lrcTs(int ms) {
     final mins = ms ~/ 60000;
     final secs = (ms % 60000) ~/ 1000;
     final cs = (ms % 1000) ~/ 10;
     return '${mins.toString().padLeft(2, '0')}:'
         '${secs.toString().padLeft(2, '0')}.${cs.toString().padLeft(2, '0')}';
-  }
-
-  /// Guarda unos lyrics seleccionados manualmente (en disco y caché).
-  ///
-  /// Si el LRC trae palabras con timestamp (tags `<mm:ss.xx>`), se persiste
-  /// en el formato karaoke JSON para no perder el modo word-by-word al
-  /// reiniciar la app (`toLRC()` de línea los descartaría).
+  }  // Saves manually selected lyrics, preserving word-by-word if present.
   Future<void> saveManualLyrics(
     String songTitle,
     String artist,
@@ -237,17 +213,12 @@ class LyricsService {
     }
   }
 
-  /// Busca y devuelve las letras de una canción, o `null` si no se
-  /// encontraron (o ya se comprobó antes sin resultado).
-  /// Intenta KPoe → Unison → LRCLIB en cascada.
+  // Fetches lyrics: KPoe → Unison → LRCLIB, with SQLite cache.
   Future<SyncedLyrics?> fetchLyrics(String title, String artist) async {
     try {
       final cacheKey = _key(title, artist);
       if (_cache.containsKey(cacheKey)) return _cache[cacheKey];
-      if (_notFound.contains(cacheKey)) return null;
-
-      // 1) SQLite (getStoredLrc retorna null si isNotFound==true)
-      final stored = await _db.getStoredLrc(title, artist);
+      if (_notFound.contains(cacheKey)) return null;      final stored = await _db.getStoredLrc(title, artist);
       if (stored != null) {
         // Check if it's JSON (word-by-word) or plain LRC
         final lyrics = _parseStoredLyrics(stored, title, artist);
@@ -255,13 +226,8 @@ class LyricsService {
           _cache[cacheKey] = lyrics;
           return lyrics;
         }
-      }
+      }      final cleanTrack = _cleanTitle(title);      final cleanArtist = _cleanArtist(artist);
 
-      // Limpiar título y artista
-      final cleanTrack = _cleanTitle(title);
-      final cleanArtist = _cleanArtist(artist);
-
-      // ── Try KPoe (word-by-word) ──
       final kpoeResult = await _fetchKpoe(
         cleanTrack,
         cleanArtist,
@@ -276,7 +242,6 @@ class LyricsService {
         return kpoeResult;
       }
 
-      // ── Try Unison (word-by-word or line) ──
       final unisonResult = await _fetchUnison(
         cleanTrack,
         cleanArtist,
@@ -288,7 +253,6 @@ class LyricsService {
         return unisonResult;
       }
 
-      // ── Fallback: LRCLIB (line-by-line) ──
       final lrclibResult = await _fetchLrclib(
         cleanTrack,
         cleanArtist,
@@ -298,18 +262,13 @@ class LyricsService {
       if (lrclibResult != null) {
         _cache[cacheKey] = lrclibResult;
         return lrclibResult;
-      }
-
-      // Sin resultado: marcarlo para no volver a buscar.
-      _notFound.add(cacheKey);
+      }      _notFound.add(cacheKey);
       await _db.markLyricsNotFound(title, artist);
       return null;
     } catch (e) {
       return null;
     }
-  }
-
-  // ── KPoe API (word-by-word) ───────────────────────────────────────
+  }  // ── KPoe ─────────────────────────────────────────────────────────────
 
   static const _kpoeServers = [
     'https://lyricsplus.prjktla.my.id',
@@ -414,7 +373,7 @@ class LyricsService {
     }
   }
 
-  // ── Unison API (word-by-word or line) ──────────────────────────────
+  // ── Unison ───────────────────────────────────────────────────────────
 
   Future<SyncedLyrics?> _fetchUnison(
     String cleanTrack,
@@ -465,11 +424,8 @@ class LyricsService {
       }
     } catch (_) {}
     return null;
-  }
+  }  // ── Unison search helpers ────────────────────────────────────────────
 
-  // ── Unison: helpers de búsqueda manual ──────────────────────────────
-
-  /// Lookup exacto por song+artist (devuelve el registro completo).
   Future<LyricsSearchResult?> _unisonExactLookup(
     String song,
     String artist,
@@ -488,9 +444,6 @@ class LyricsService {
     }
   }
 
-  /// Búsqueda full-text (`/lyrics/search?q=`): devuelve candidatos con
-  /// score pero SIN cuerpo de lyrics; se descarga el cuerpo de los mejores
-  /// por id hasta encontrar uno parseable.
   Future<LyricsSearchResult?> _unisonSearchLookup(String query) async {
     try {
       final uri = Uri.parse(
@@ -524,9 +477,6 @@ class LyricsService {
     return null;
   }
 
-  /// Convierte el `data` de un registro Unison (formato ttml | lrc | plain)
-  /// en un resultado de búsqueda; null si no hay nada útil. El LRC se
-  /// re-serializa con tags de palabra para preservar el modo karaoke.
   LyricsSearchResult? _unisonRecordToResult(Map<String, dynamic> record) {
     final lyricsText = record['lyrics'] as String?;
     if (lyricsText == null || lyricsText.isEmpty) return null;
@@ -550,7 +500,6 @@ class LyricsService {
     }
 
     if (parsed.lines.isEmpty) {
-      // Texto plano sin timestamps: útil como letra sin sincronizar.
       if (format == 'plain') {
         return LyricsSearchResult(
           id: (record['id'] as num?)?.toInt() ?? 0,
@@ -580,7 +529,7 @@ class LyricsService {
     );
   }
 
-  // ── LRCLIB API (line-by-line fallback) ─────────────────────────────
+  // ── LRCLIB ──────────────────────────────────────────────────────────
 
   Future<SyncedLyrics?> _fetchLrclib(
     String cleanTrack,
@@ -647,7 +596,6 @@ class LyricsService {
     return null;
   }
 
-  /// Elimina las lyrics guardadas de una canción.
   Future<void> deleteLyrics(String title, String artist) async {
     try {
       final key = _key(title, artist);
@@ -663,7 +611,7 @@ class LyricsService {
   String _key(String title, String artist) =>
       '${title.toLowerCase().trim()}_${artist.toLowerCase().trim()}';
 
-  /// Limpia el título (remaster, remix, feats…).
+  // Strips remaster/remix/feat tags from title.
   String _cleanTitle(String title) {
     String clean = title;
     clean = clean.replaceAll(
@@ -696,7 +644,7 @@ class LyricsService {
     return clean.trim();
   }
 
-  /// Limpia el artista (" - Topic", primeros de lista, etc.).
+  // Strips "- Topic" and similar suffixes from artist.
   String _cleanArtist(String artist) {
     String clean = artist;
     clean = clean.replaceAll(
@@ -712,7 +660,6 @@ class LyricsService {
 
   // ── JSON serialization for word-by-word preservation ────────────────
 
-  /// Converts SyncedLyrics to JSON string that preserves word-by-word data.
   String _syncedLyricsToJson(SyncedLyrics lyrics) {
     final linesJson = lyrics.lines.map((line) {
       final lineMap = <String, dynamic>{
@@ -729,9 +676,8 @@ class LyricsService {
     return json.encode({'format': 'karaoke', 'lines': linesJson});
   }
 
-  /// Parses stored lyrics: detects JSON (word-by-word) vs plain LRC.
+  // Parses stored lyrics: JSON (word-by-word) vs plain LRC.
   SyncedLyrics? _parseStoredLyrics(String stored, String title, String artist) {
-    // Try JSON first (word-by-word from KPoe)
     if (stored.startsWith('{')) {
       try {
         final data = json.decode(stored) as Map<String, dynamic>;
@@ -765,7 +711,6 @@ class LyricsService {
         }
       } catch (_) {}
     }
-    // Fallback: plain LRC
     if (stored.isNotEmpty) {
       return SyncedLyrics.fromLRC(
         songTitle: title,
@@ -776,7 +721,6 @@ class LyricsService {
     return null;
   }
 
-  /// Similitud de Levenshtein (0..1).
   double _calculateSimilarity(String s1, String s2) {
     if (s1 == s2) return 1.0;
     if (s1.isEmpty || s2.isEmpty) return 0.0;

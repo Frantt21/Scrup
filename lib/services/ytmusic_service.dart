@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 
 import '../core/track.dart';
 
-/// Resultado de una búsqueda en YouTube Music.
 class YtMusicResult {
   const YtMusicResult({
     required this.videoId,
@@ -15,7 +14,6 @@ class YtMusicResult {
     this.thumbnailUrl,
   });
 
-  /// Mismo espacio de ids que YouTube: reproduce con el pipeline normal.
   final String videoId;
   final String title;
   final String artist;
@@ -25,9 +23,7 @@ class YtMusicResult {
   Duration? get duration =>
       durationSeconds == null ? null : Duration(seconds: durationSeconds!);
 
-  /// Conversión a Track del pipeline normal (cache/reproducción/deezer).
-  /// Marca `cleanMetadata`: InnerTube con filtro Songs ya devuelve
-  /// título/artista canónicos — Deezer no debe sobreescribirlos.
+  // Converts to Track. Marks cleanMetadata to skip Deezer overwrite.
   Track toTrack() => Track(
     id: videoId,
     title: title,
@@ -46,7 +42,7 @@ class YtMusicException implements Exception {
   String toString() => message;
 }
 
-/// Playlist pública de YouTube / YouTube Music leída vía InnerTube browse.
+/// Public YouTube/YT Music playlist read via InnerTube browse.
 class YtmPlaylist {
   const YtmPlaylist({
     required this.id,
@@ -57,17 +53,11 @@ class YtmPlaylist {
   final String id;
   final String name;
 
-  /// Tracks listos para el pipeline normal (videoIds exactos: matching 100%).
   final List<Track> tracks;
 }
 
-/// Búsqueda en YouTube Music vía la API interna InnerTube (la misma que usa
-/// spotdl como backend): no requiere login ni API key y devuelve CANCIONES
-/// con metadatos limpios (artista, duración), muy superiores al `ytsearch`
-/// genérico de yt-dlp para emparejar pistas de Spotify.
-///
-/// Es un endpoint no documentado: si falla o cambia, el llamador debe tener
-/// un fallback (p. ej. yt-dlp).
+/// YouTube Music search via undocumented InnerTube API.
+/// Returns songs with clean metadata. Fallback required on failure.
 class YtMusicService {
   YtMusicService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -76,7 +66,6 @@ class YtMusicService {
   static const _clientName = 'WEB_REMIX';
   static const _clientVersion = '1.20240403.01.00';
 
-  /// Filtro InnerTube "Songs": solo canciones canónicas, sin vídeos sueltos.
   static const _songsFilterParam = 'EgWKAQIIAWoKEAkQBRAKEAMQBA==';
   static final _clockRe = RegExp(r'^\d{1,2}:\d{2}(?::\d{2})?$');
   static final _ytListParamRe = RegExp(r'[?&]list=([A-Za-z0-9_-]+)');
@@ -131,12 +120,7 @@ class YtMusicService {
     return parseResponse(data, limit);
   }
 
-  /// Parsea la respuesta InnerTube. Expuesto para tests (sin red).
-  ///
-  /// En vez de seguir la ruta exacta del JSON (cambia entre versiones),
-  /// recorre el árbol y recolecta todos los `musicResponsiveListItemRenderer`
-  /// que traigan videoId, en orden de aparición: el estante de "Songs"
-  /// siempre va primero en la respuesta general.
+  // Parses InnerTube response by walking the tree for list item renderers.
   static List<YtMusicResult> parseResponse(Object? node, int limit) {
     final results = <YtMusicResult>[];
     final seen = <String>{};
@@ -164,9 +148,7 @@ class YtMusicService {
     return results;
   }
 
-  /// Extrae un resultado de un `musicResponsiveListItemRenderer` (misma
-  /// forma de ítem en resultados de búsqueda y playlists). Null si no trae
-  /// videoId o título utilizables.
+  // Extracts result from a musicResponsiveListItemRenderer.
   static YtMusicResult? resultFromListItem(Map item) {
     final videoId =
         (item['playlistItemData'] as Map?)?['videoId'] as String? ??
@@ -214,8 +196,7 @@ class YtMusicService {
         title = texts.isNotEmpty ? texts.first : null;
         continue;
       }
-      // Columna secundaria: "Artista • Álbum • 3:45" (runs separados).
-      for (final t in texts) {
+        for (final t in texts) {
         final trimmed = t.trim();
         if (_clockRe.hasMatch(trimmed)) {
           seconds ??= _parseClock(trimmed);
@@ -224,7 +205,6 @@ class YtMusicService {
         }
       }
     }
-    // En playlists la duración vive en fixedColumns (columna de ancho fijo).
     if (seconds == null) {
       final fixed = (item['fixedColumns'] as List?)?.whereType<Map>();
       for (final col in fixed ?? const <Map>[]) {
@@ -256,10 +236,8 @@ class YtMusicService {
     );
   }
 
-  // ------------------------------------------------- playlists YouTube/YTM
+  // ── Playlists ───────────────────────────────────────────────────────
 
-  /// Acepta URLs con parámetro `list=` (music.youtube.com, youtube.com
-  /// watch/result, youtu.be) o el ID pelado (PL…, UU…, OL…).
   static String? extractYoutubePlaylistId(String input) {
     final s = input.trim();
     if (s.isEmpty) return null;
@@ -269,9 +247,7 @@ class YtMusicService {
     return null;
   }
 
-  /// Lee una playlist PÚBLICA de YouTube / YouTube Music paginando el
-  /// endpoint InnerTube browse (sin límite práctico; [maxTracks] es solo un
-  /// seguro). Los videoIds vienen exactos: no hay búsqueda ni matching.
+  // Reads a public YTM playlist via InnerTube browse (paginated).
   Future<YtmPlaylist> fetchPlaylist(
     String urlOrId, {
     int maxTracks = 2000,
@@ -282,8 +258,6 @@ class YtMusicService {
     final seen = <String>{};
     String? continuation;
     var name = '';
-    // 50 páginas x ~100 ítems cubre holgado maxTracks; el corte real lo
-    // ponen la ausencia de continuation o un capítulo vacío.
     for (var page = 0; page < 50 && tracks.length < maxTracks; page++) {
       final body = jsonEncode({
         'context': _context(),
@@ -329,7 +303,6 @@ class YtMusicService {
           added++;
         }
       }
-      // Sin más páginas o sin progreso real: fin.
       if (parsed.$2 == null || added == 0) break;
       continuation = parsed.$2;
     }
@@ -337,8 +310,7 @@ class YtMusicService {
     return YtmPlaylist(id: id, name: name, tracks: tracks);
   }
 
-  /// Parsea una página del browse de playlist: ítems + token de continuación
-  /// + título del header. Expuesto para tests (sin red).
+  // Parses browse page: items + continuation token + header name.
   static (List<YtMusicResult>, String?, String) parseBrowsePage(Object? node) {
     final items = <YtMusicResult>[];
     final seen = <String>{};
@@ -393,7 +365,6 @@ class YtMusicService {
     return (items, continuation, name);
   }
 
-  /// Convierte "m:ss" u "h:mm:ss" a segundos.
   static int _parseClock(String s) {
     final parts = s.split(':').map((p) => int.tryParse(p) ?? 0).toList();
     var seconds = 0;
