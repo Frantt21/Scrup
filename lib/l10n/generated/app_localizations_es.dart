@@ -658,4 +658,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get shortcutCategoryModes => 'Modos';
+
+  @override
+  String get shortcutMouseBack => 'Canción anterior (ratón)';
+
+  @override
+  String get shortcutMouseForward => 'Siguiente canción (ratón)';
 }

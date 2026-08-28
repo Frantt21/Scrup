@@ -210,5 +210,7 @@
   "shortcutCategoryPlayback": "播放",
   "shortcutCategoryVolume": "音量",
   "shortcutCategoryNavigation": "导航",
-  "shortcutCategoryModes": "模式"
+  "shortcutCategoryModes": "模式",
+  "shortcutMouseBack": "上一首 (鼠标)",
+  "shortcutMouseForward": "下一首 (鼠标)"
 }

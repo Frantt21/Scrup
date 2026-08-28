@@ -210,5 +210,7 @@
   "shortcutCategoryPlayback": "再生",
   "shortcutCategoryVolume": "音量",
   "shortcutCategoryNavigation": "ナビゲーション",
-  "shortcutCategoryModes": "モード"
+  "shortcutCategoryModes": "モード",
+  "shortcutMouseBack": "前の曲 (マウス)",
+  "shortcutMouseForward": "次の曲 (マウス)"
 }

@@ -1290,6 +1290,18 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Modos'**
   String get shortcutCategoryModes;
+
+  /// No description provided for @shortcutMouseBack.
+  ///
+  /// In es, this message translates to:
+  /// **'Canción anterior (ratón)'**
+  String get shortcutMouseBack;
+
+  /// No description provided for @shortcutMouseForward.
+  ///
+  /// In es, this message translates to:
+  /// **'Siguiente canción (ratón)'**
+  String get shortcutMouseForward;
 }
 
 class _AppLocalizationsDelegate

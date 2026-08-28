@@ -337,5 +337,7 @@
   "shortcutCategoryPlayback": "Playback",
   "shortcutCategoryVolume": "Volume",
   "shortcutCategoryNavigation": "Navigation",
-  "shortcutCategoryModes": "Modes"
+  "shortcutCategoryModes": "Modes",
+  "shortcutMouseBack": "Previous track (mouse)",
+  "shortcutMouseForward": "Next track (mouse)"
 }

@@ -655,4 +655,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shortcutCategoryModes => 'Modes';
+
+  @override
+  String get shortcutMouseBack => 'Previous track (mouse)';
+
+  @override
+  String get shortcutMouseForward => 'Next track (mouse)';
 }

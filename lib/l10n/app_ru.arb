@@ -210,5 +210,7 @@
   "shortcutCategoryPlayback": "Воспроизведение",
   "shortcutCategoryVolume": "Громкость",
   "shortcutCategoryNavigation": "Навигация",
-  "shortcutCategoryModes": "Режимы"
+  "shortcutCategoryModes": "Режимы",
+  "shortcutMouseBack": "Предыдущий трек (мышь)",
+  "shortcutMouseForward": "Следующий трек (мышь)"
 }

@@ -656,6 +656,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get shortcutCategoryModes => 'Modos';
+
+  @override
+  String get shortcutMouseBack => 'Música anterior (rato)';
+
+  @override
+  String get shortcutMouseForward => 'Próxima música (rato)';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1310,4 +1316,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shortcutCategoryModes => 'Modos';
+
+  @override
+  String get shortcutMouseBack => 'Música anterior (mouse)';
+
+  @override
+  String get shortcutMouseForward => 'Próxima música (mouse)';
 }

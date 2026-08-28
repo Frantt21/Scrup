@@ -210,5 +210,7 @@
   "shortcutCategoryPlayback": "재생",
   "shortcutCategoryVolume": "볼륨",
   "shortcutCategoryNavigation": "탐색",
-  "shortcutCategoryModes": "모드"
+  "shortcutCategoryModes": "모드",
+  "shortcutMouseBack": "이전 곡 (마우스)",
+  "shortcutMouseForward": "다음 곡 (마우스)"
 }

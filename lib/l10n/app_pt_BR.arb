@@ -210,5 +210,7 @@
   "shortcutCategoryPlayback": "Reprodução",
   "shortcutCategoryVolume": "Volume",
   "shortcutCategoryNavigation": "Navegação",
-  "shortcutCategoryModes": "Modos"
+  "shortcutCategoryModes": "Modos",
+  "shortcutMouseBack": "Música anterior (mouse)",
+  "shortcutMouseForward": "Próxima música (mouse)"
 }

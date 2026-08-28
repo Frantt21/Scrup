@@ -662,4 +662,10 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get shortcutCategoryModes => 'Режимы';
+
+  @override
+  String get shortcutMouseBack => 'Предыдущий трек (мышь)';
+
+  @override
+  String get shortcutMouseForward => 'Следующий трек (мышь)';
 }

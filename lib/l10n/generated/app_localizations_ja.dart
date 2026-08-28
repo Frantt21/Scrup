@@ -644,4 +644,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get shortcutCategoryModes => 'モード';
+
+  @override
+  String get shortcutMouseBack => '前の曲 (マウス)';
+
+  @override
+  String get shortcutMouseForward => '次の曲 (マウス)';
 }

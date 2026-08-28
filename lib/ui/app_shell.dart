@@ -308,6 +308,20 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  /// Botones laterales del ratón: button 4 (back) = canción anterior,
+  /// button 5 (forward) = siguiente canción.
+  void _handlePointerDown(PointerDownEvent event) {
+    final player = context.read<PlayerService>();
+    // event.buttons es un bitmask: bit 3 = button 4, bit 4 = button 5.
+    if (event.buttons & 0x10 != 0) {
+      // Button 5 (forward): siguiente canción.
+      player.next();
+    } else if (event.buttons & 0x08 != 0) {
+      // Button 4 (back): canción anterior.
+      player.previous();
+    }
+  }
+
   /// Entra/sale de pantalla completa: oculta la title bar, monta el
   /// reproductor dedicado y pide al WM el modo nativo. La salida animada la
   /// gestiona el overlay (reverse → onExited → desmontar).
@@ -455,7 +469,9 @@ class _AppShellState extends State<AppShell> {
       onPressed: _showSettings ? _closeSettings : _openSettings,
     );
 
-    return Scaffold(
+    return Listener(
+      onPointerDown: _handlePointerDown,
+      child: Scaffold(
       body: Stack(
         children: [
           // UI normal (title bar + sidebar + contenido + player). En
@@ -566,6 +582,7 @@ class _AppShellState extends State<AppShell> {
             ),
         ],
       ),
+    ),
     );
   }
 }

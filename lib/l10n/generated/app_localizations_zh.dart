@@ -642,4 +642,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get shortcutCategoryModes => '模式';
+
+  @override
+  String get shortcutMouseBack => '上一首 (鼠标)';
+
+  @override
+  String get shortcutMouseForward => '下一首 (鼠标)';
 }

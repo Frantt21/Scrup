@@ -949,6 +949,8 @@ class _SettingsViewState extends State<SettingsView> {
       '_toggleRepeat': l10n.shortcutToggleRepeat,
       '_toggleRadio': l10n.shortcutToggleRadio,
       '_toggleFavorite': l10n.shortcutToggleFavorite,
+      '_mouseBack': l10n.shortcutMouseBack,
+      '_mouseForward': l10n.shortcutMouseForward,
     };
 
     // Categorías con sus atajos.
@@ -959,6 +961,8 @@ class _SettingsViewState extends State<SettingsView> {
         ('P', '_previous'),
         ('→', '_seekForward'),
         ('←', '_seekBackward'),
+        ('🖱️ ⏴', '_mouseBack'),
+        ('🖱️ ⏵', '_mouseForward'),
         ('F', '_toggleFavorite'),
       ]),
       (l10n.shortcutCategoryVolume, [

@@ -644,4 +644,10 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get shortcutCategoryModes => '모드';
+
+  @override
+  String get shortcutMouseBack => '이전 곡 (마우스)';
+
+  @override
+  String get shortcutMouseForward => '다음 곡 (마우스)';
 }
