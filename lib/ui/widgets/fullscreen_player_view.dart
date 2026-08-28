@@ -418,8 +418,7 @@ class _AnimatedBackdropState extends State<_AnimatedBackdrop>
       );
       if (!mounted) return;
       setState(() => _program = program);
-    } catch (_) {
-      }
+    } catch (_) {}
   }
 
   @override

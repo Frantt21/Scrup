@@ -16,11 +16,11 @@
 
 #include <flutter/runtime_effect.glsl>
 
-uniform vec2 uResolution;  // índices 0-1
-uniform float uTime;       // índice 2
-uniform vec3 uColorA;      // índices 3-5
-uniform vec3 uColorB;      // índices 6-8
-uniform vec3 uColorC;      // índices 9-11
+uniform vec2 uResolution;
+uniform float uTime;
+uniform vec3 uColorA;
+uniform vec3 uColorB;
+uniform vec3 uColorC;
 
 out vec4 fragColor;
 
