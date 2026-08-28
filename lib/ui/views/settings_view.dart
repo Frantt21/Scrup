@@ -719,9 +719,9 @@ class _SettingsViewState extends State<SettingsView> {
           const SizedBox(height: 14),
           Row(
             children: [
-              OutlinedButton.icon(
+              FilledButton.icon(
                 onPressed: _refreshStats,
-                style: ButtonStyle(
+                style: FilledButton.styleFrom().copyWith(
                   mouseCursor: WidgetStateProperty.all(
                     SystemMouseCursors.click,
                   ),
@@ -730,9 +730,9 @@ class _SettingsViewState extends State<SettingsView> {
                 label: Text(l10n.refresh),
               ),
               const SizedBox(width: 10),
-              OutlinedButton.icon(
+              FilledButton.icon(
                 onPressed: _openCacheFolder,
-                style: ButtonStyle(
+                style: FilledButton.styleFrom().copyWith(
                   mouseCursor: WidgetStateProperty.all(
                     SystemMouseCursors.click,
                   ),
