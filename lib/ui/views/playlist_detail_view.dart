@@ -646,9 +646,11 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         key: ValueKey(track.id),
         index: i,
         accentColor: _trackColorFor(track) ?? playlistColor,
-        child: GestureDetector(
-          onSecondaryTapUp: (details) =>
-              _showTrackMenu(track, details.globalPosition),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onSecondaryTapUp: (details) =>
+                _showTrackMenu(track, details.globalPosition),
           child: TrackTile(
             track: track,
             // La cola es LA PLAYLIST: al tocar una canción, el
@@ -670,6 +672,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
             // (extraído de forma perezosa por fila); mientras se extrae,
             // fallback al color de la playlist
             accentColor: _trackColorFor(track) ?? playlistColor,
+          ),
           ),
         ),
       );

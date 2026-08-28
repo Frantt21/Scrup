@@ -1152,6 +1152,12 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'{index} de {total}'**
   String lineOfTotal(int index, int total);
+
+  /// Tooltip for the audio output device selector
+  ///
+  /// In es, this message translates to:
+  /// **'Salida de audio'**
+  String get audioOutput;
 }
 
 class _AppLocalizationsDelegate

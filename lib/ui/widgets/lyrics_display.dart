@@ -467,9 +467,11 @@ class _LyricsDisplayState extends State<LyricsDisplay>
             child: Center(
               child: Material(
                 color: Colors.transparent,
-                child: InkWell(
-                  onTap: _syncToCurrentLine,
-                  borderRadius: BorderRadius.circular(30),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: InkWell(
+                    onTap: _syncToCurrentLine,
+                    borderRadius: BorderRadius.circular(30),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
@@ -501,6 +503,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                       ],
                     ),
                   ),
+                ),
                 ),
               ),
             ),

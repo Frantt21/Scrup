@@ -579,6 +579,7 @@ class ScrupApp extends StatelessWidget {
       popupMenuTheme: PopupMenuThemeData(
         color: const Color(0xFF1E1E1E),
         surfaceTintColor: Colors.transparent,
+        mouseCursor: WidgetStateProperty.all(SystemMouseCursors.click),
         // Sin padding vertical: el hover de los items llega completo al
         // borde superior/inferior del menú (los showMenu pasan clipBehavior
         // antiAlias para recortarlo a las esquinas redondeadas).

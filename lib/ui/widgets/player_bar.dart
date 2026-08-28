@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart' hide Track;
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
@@ -346,8 +347,10 @@ class _PlayerBarState extends State<PlayerBar>
       alpha: 0.55,
     );
 
-    return GestureDetector(
-      onSecondaryTapUp: (details) => _showContextMenu(details.globalPosition),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onSecondaryTapUp: (details) => _showContextMenu(details.globalPosition),
       child: Container(
         // Sombra exterior (fuera del clip para que no se recorte)
         decoration: BoxDecoration(
@@ -535,6 +538,7 @@ class _PlayerBarState extends State<PlayerBar>
               ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -860,51 +864,175 @@ class _PlayerBarState extends State<PlayerBar>
           onPressed: widget.onToggleQueue,
         ),
         const SizedBox(width: 2),
-        ValueListenableBuilder<double>(
-          valueListenable: player.volume,
-          builder: (context, vol, _) {
-            final icon = vol <= 0
-                ? Icons.volume_off_rounded
-                : (vol < 0.5
-                      ? Icons.volume_down_rounded
-                      : Icons.volume_up_rounded);
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(icon, size: 20),
-                  constraints: const BoxConstraints.tightFor(
-                    width: 34,
-                    height: 40,
-                  ),
-                  padding: EdgeInsets.zero,
-                  color: muted,
-                  tooltip: vol <= 0 ? l10n.unmute : l10n.mute,
-                  onPressed: player.toggleMute,
-                ),
-                SizedBox(
-                  width: 96,
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 3,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 5,
-                      ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 11,
-                      ),
-                    ),
-                    child: Slider(
-                      value: vol.clamp(0.0, 1.0),
-                      onChanged: player.setVolume,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
+        // Volumen + selector de dispositivo: tap para mute, long press
+        // para mostrar la lista de dispositivos de audio.
+        Tooltip(
+          message: l10n.audioOutput,
+          child: _VolumeSection(player: player, muted: muted),
         ),
       ],
+    );
+  }
+}
+
+/// Widget de volumen con selector de dispositivo de audio.
+///
+/// - **Tap** en icono 🔊: mute/unmute.
+/// - **Tap** en el selector: abre popup con dispositivos de audio.
+///   El ícono ▾ rota 180° al hacer hover (mismo estilo que los
+///   dropdowns de Settings).
+class _VolumeSection extends StatefulWidget {
+  final PlayerService player;
+  final Color muted;
+
+  const _VolumeSection({required this.player, required this.muted});
+
+  @override
+  State<_VolumeSection> createState() => _VolumeSectionState();
+}
+
+class _VolumeSectionState extends State<_VolumeSection> {
+  bool _hovering = false;
+
+  void _showDeviceMenu(BuildContext anchorContext) {
+    final player = widget.player;
+    final devices = player.audioDevices.value;
+    final current = player.audioDevice.value;
+    if (devices.isEmpty) return;
+
+    final renderBox = anchorContext.findRenderObject() as RenderBox;
+    final overlay =
+        Overlay.of(anchorContext).context.findRenderObject() as RenderBox;
+    final position = RelativeRect.fromRect(
+      Rect.fromCenter(
+        center: renderBox.localToGlobal(
+          renderBox.size.center(Offset.zero),
+          ancestor: overlay,
+        ),
+        width: 200,
+        height: 0,
+      ),
+      Offset.zero & overlay.size,
+    );
+
+    showMenu<String>(
+      context: anchorContext,
+      position: position,
+      constraints: const BoxConstraints(minWidth: 200, maxHeight: 300),
+      clipBehavior: Clip.antiAlias,
+      items: devices.map((d) {
+        final isAuto = d.name == 'auto' || d.name.isEmpty;
+        final label = isAuto ? 'Auto' : d.description;
+        final selected = d.name == current.name;
+        return PopupMenuItem<String>(
+          value: d.name,
+          child: Row(
+            children: [
+              if (selected)
+                Icon(Icons.check_rounded,
+                    size: 16,
+                    color: Theme.of(anchorContext).colorScheme.primary)
+              else
+                const SizedBox(width: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    ).then((selectedName) {
+      if (selectedName == null) return;
+      final device = devices.firstWhere(
+        (d) => d.name == selectedName,
+        orElse: () => AudioDevice.auto(),
+      );
+      player.setAudioDevice(device);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final player = widget.player;
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return ValueListenableBuilder<double>(
+      valueListenable: player.volume,
+      builder: (context, vol, _) {
+        final icon = vol <= 0
+            ? Icons.volume_off_rounded
+            : (vol < 0.5
+                  ? Icons.volume_down_rounded
+                  : Icons.volume_up_rounded);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icono de volumen con mute
+            IconButton(
+              icon: Icon(icon, size: 20),
+              constraints: const BoxConstraints.tightFor(
+                width: 34,
+                height: 40,
+              ),
+              padding: EdgeInsets.zero,
+              color: widget.muted,
+              tooltip: vol <= 0 ? l10n.unmute : l10n.mute,
+              onPressed: player.toggleMute,
+            ),
+            // Selector de dispositivo: estilo igual a los dropdowns de
+            // Settings (InkWell + Container redondeado + ícono rotativo).
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              mouseCursor: SystemMouseCursors.click,
+              focusColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              onTap: () => _showDeviceMenu(context),
+              child: MouseRegion(
+                onEnter: (_) => setState(() => _hovering = true),
+                onExit: (_) => setState(() => _hovering = false),
+                child: AnimatedRotation(
+                  turns: _hovering ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: _hovering
+                        ? theme.colorScheme.primary
+                        : widget.muted,
+                  ),
+                ),
+              ),
+            ),
+            // Slider de volumen
+            SizedBox(
+              width: 96,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 3,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 5,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 11,
+                  ),
+                ),
+                child: Slider(
+                  value: vol.clamp(0.0, 1.0),
+                  onChanged: player.setVolume,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

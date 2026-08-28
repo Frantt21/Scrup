@@ -593,4 +593,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String lineOfTotal(int index, int total) {
     return '$index из $total';
   }
+
+  @override
+  String get audioOutput => 'Выход аудио';
 }

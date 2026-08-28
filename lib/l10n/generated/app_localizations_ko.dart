@@ -575,4 +575,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String lineOfTotal(int index, int total) {
     return '총 $total줄 중 $index';
   }
+
+  @override
+  String get audioOutput => '오디오 출력';
 }

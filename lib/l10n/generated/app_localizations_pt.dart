@@ -587,6 +587,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String lineOfTotal(int index, int total) {
     return '$index de $total';
   }
+
+  @override
+  String get audioOutput => 'Saída de áudio';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1172,4 +1175,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String lineOfTotal(int index, int total) {
     return '$index de $total';
   }
+
+  @override
+  String get audioOutput => 'Saída de áudio';
 }

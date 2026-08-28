@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+
 /// Item de menú contextual (clic derecho) con la estética de la app: icono
 /// en el color de acento y tamaño contenido, con el label en el estilo del
 /// menú. Compartido por todos los `showMenu` del app para que se vean
@@ -12,11 +13,12 @@ import 'package:flutter/material.dart';
 class ContextMenuItem extends PopupMenuItem<String> {
   ContextMenuItem({
     super.key,
-    required super.value,
+    required String value,
     required IconData icon,
     required String label,
     this.color,
   }) : super(
+         value: value,
          child: _MenuItemBody(icon: icon, label: label, color: color),
        );
 

@@ -187,5 +187,6 @@
   "imageCopied": "Imagem copiada para a área de transferência",
   "imageSaved": "Imagem guardada",
   "shareOnSite": "Partilhar no {site}",
-  "lineOfTotal": "{index} de {total}"
+  "lineOfTotal": "{index} de {total}",
+  "audioOutput": "Saída de áudio"
 }

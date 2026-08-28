@@ -187,5 +187,6 @@
   "imageCopied": "이미지가 클립보드에 복사되었습니다",
   "imageSaved": "이미지가 저장되었습니다",
   "shareOnSite": "{site}에서 공유",
-  "lineOfTotal": "총 {total}줄 중 {index}"
+  "lineOfTotal": "총 {total}줄 중 {index}",
+  "audioOutput": "오디오 출력"
 }

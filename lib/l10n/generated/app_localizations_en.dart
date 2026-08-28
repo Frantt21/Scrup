@@ -586,4 +586,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String lineOfTotal(int index, int total) {
     return '$index of $total';
   }
+
+  @override
+  String get audioOutput => 'Audio output';
 }

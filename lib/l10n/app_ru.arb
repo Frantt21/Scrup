@@ -187,5 +187,6 @@
   "imageCopied": "Изображение скопировано в буфер обмена",
   "imageSaved": "Изображение сохранено",
   "shareOnSite": "Поделиться в {site}",
-  "lineOfTotal": "{index} из {total}"
+  "lineOfTotal": "{index} из {total}",
+  "audioOutput": "Выход аудио"
 }

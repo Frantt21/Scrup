@@ -1004,6 +1004,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
     return Builder(
       builder: (fieldContext) => InkWell(
         borderRadius: BorderRadius.circular(14),
+        mouseCursor: SystemMouseCursors.click,
         focusColor: Colors.transparent,
         hoverColor: Colors.white.withValues(alpha: 0.04),
         onTap: () => _openProviderMenu(fieldContext),
@@ -1058,7 +1059,10 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
       clipBehavior: Clip.antiAlias,
       items: [
         for (final option in _providerOptions)
-          PopupMenuItem<String>(value: option.$1, child: Text(option.$2)),
+          PopupMenuItem<String>(
+            value: option.$1,
+            child: Text(option.$2),
+          ),
       ],
     );
     if (selected == null || !mounted || selected == _selectedProvider) return;

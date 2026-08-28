@@ -199,6 +199,7 @@ class _WindowButtonState extends State<_WindowButton> {
     final theme = Theme.of(context);
     final isClose = widget.isClose;
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: Tooltip(

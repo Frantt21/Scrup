@@ -573,4 +573,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String lineOfTotal(int index, int total) {
     return '第 $index/$total 句';
   }
+
+  @override
+  String get audioOutput => '音频输出';
 }

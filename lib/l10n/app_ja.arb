@@ -187,5 +187,6 @@
   "imageCopied": "画像をクリップボードにコピーしました",
   "imageSaved": "画像を保存しました",
   "shareOnSite": "{site}でシェア",
-  "lineOfTotal": "{total}件中{index}件目"
+  "lineOfTotal": "{total}件中{index}件目",
+  "audioOutput": "音声出力"
 }

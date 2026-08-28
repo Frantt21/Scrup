@@ -400,6 +400,7 @@ class _SettingsViewState extends State<SettingsView> {
             label: _localeLabel(controller.locale),
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
+              mouseCursor: SystemMouseCursors.click,
               // Sin brillo de focus persistente tras abrir el menú; el hover
               // es un destello sutil acorde al cristal.
               focusColor: Colors.transparent,
@@ -676,6 +677,7 @@ class _SettingsViewState extends State<SettingsView> {
           Builder(
             builder: (fieldContext) => InkWell(
               borderRadius: BorderRadius.circular(14),
+              mouseCursor: SystemMouseCursors.click,
               focusColor: Colors.transparent,
               hoverColor: Colors.white.withValues(alpha: 0.04),
               onTap: () => _openCacheLimitMenu(fieldContext),
@@ -717,12 +719,22 @@ class _SettingsViewState extends State<SettingsView> {
             children: [
               OutlinedButton.icon(
                 onPressed: _refreshStats,
+                style: ButtonStyle(
+                  mouseCursor: WidgetStateProperty.all(
+                    SystemMouseCursors.click,
+                  ),
+                ),
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: Text(l10n.refresh),
               ),
               const SizedBox(width: 10),
               OutlinedButton.icon(
                 onPressed: _openCacheFolder,
+                style: ButtonStyle(
+                  mouseCursor: WidgetStateProperty.all(
+                    SystemMouseCursors.click,
+                  ),
+                ),
                 icon: const Icon(Icons.folder_open_rounded, size: 18),
                 label: Text(l10n.openFolder),
               ),
@@ -732,6 +744,10 @@ class _SettingsViewState extends State<SettingsView> {
                 style: FilledButton.styleFrom(
                   backgroundColor: theme.colorScheme.error,
                   foregroundColor: theme.colorScheme.onError,
+                ).copyWith(
+                  mouseCursor: WidgetStateProperty.all(
+                    SystemMouseCursors.click,
+                  ),
                 ),
                 icon: _clearing
                     ? const SizedBox(
@@ -801,6 +817,7 @@ class _SettingsViewState extends State<SettingsView> {
           Builder(
             builder: (fieldContext) => InkWell(
               borderRadius: BorderRadius.circular(14),
+              mouseCursor: SystemMouseCursors.click,
               focusColor: Colors.transparent,
               hoverColor: Colors.white.withValues(alpha: 0.04),
               onTap: _recalculating
@@ -844,6 +861,11 @@ class _SettingsViewState extends State<SettingsView> {
             onPressed: (_recalculating || _selectedPlaylist == null)
                 ? null
                 : _recalculatePalettes,
+            style: FilledButton.styleFrom().copyWith(
+              mouseCursor: WidgetStateProperty.all(
+                SystemMouseCursors.click,
+              ),
+            ),
             icon: _recalculating
                 ? const SizedBox(
                     width: 16,

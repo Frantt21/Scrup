@@ -311,5 +311,9 @@
         "type": "int"
       }
     }
+  },
+  "audioOutput": "Audio output",
+  "@audioOutput": {
+    "description": "Tooltip for the audio output device selector"
   }
 }

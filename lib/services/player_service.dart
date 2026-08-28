@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart' hide Track;
+import 'package:media_kit/src/models/audio_device.dart';
 
 import '../core/queue_shuffle.dart';
 import '../core/track.dart';
@@ -164,6 +165,14 @@ class PlayerService {
   /// media_kit trabaja en 0–100; aquí se mantiene la escala de la UI.
   final ValueNotifier<double> volume = ValueNotifier<double>(1.0);
 
+  /// Dispositivo de audio seleccionado, expuesto a la UI.
+  final ValueNotifier<AudioDevice> audioDevice =
+      ValueNotifier<AudioDevice>(AudioDevice.auto());
+
+  /// Lista de dispositivos de audio disponibles, expuesta a la UI.
+  final ValueNotifier<List<AudioDevice>> audioDevices =
+      ValueNotifier<List<AudioDevice>>(const []);
+
   bool _playing = false;
   Duration _lastPosition = Duration.zero;
   Track? _currentTrack;
@@ -302,6 +311,15 @@ class PlayerService {
     });
     // Auto-advance: al terminar una pista, decidir qué sigue
     _player.stream.completed.listen((_) => _onTrackCompleted());
+    _player.stream.audioDevice.listen((d) {
+      audioDevice.value = d;
+    });
+    _player.stream.audioDevices.listen((d) {
+      audioDevices.value = d;
+    });
+    // Initialize with current state
+    audioDevice.value = _player.state.audioDevice;
+    audioDevices.value = _player.state.audioDevices;
   }
 
   bool get isPlaying => _playing;
@@ -516,6 +534,12 @@ class PlayerService {
     final clamped = v.clamp(0.0, 1.0);
     volume.value = clamped;
     await _player.setVolume(clamped * 100);
+  }
+
+  /// Cambia el dispositivo de salida de audio.
+  Future<void> setAudioDevice(AudioDevice device) async {
+    await _player.setAudioDevice(device);
+    audioDevice.value = device;
   }
 
   /// Silencia/restaura el sonido recordando el volumen previo.
@@ -1030,6 +1054,8 @@ class PlayerService {
     radio.dispose();
     activePlaylistId.dispose();
     volume.dispose();
+    audioDevice.dispose();
+    audioDevices.dispose();
     queue.dispose();
     queueIndex.dispose();
   }
