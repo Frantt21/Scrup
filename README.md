@@ -12,6 +12,27 @@ Metadata, history and playlists are stored in a local SQLite database
 
 Target platforms: **Windows, Linux and macOS** (single Flutter codebase).
 
+## Installation
+
+### Linux (flatpak)
+
+No system dependencies required: GTK3 comes from the GNOME runtime and
+libmpv, sqlite and the sidecar binaries (yt-dlp/ffmpeg/deno) ship inside the
+package.
+
+```bash
+flatpak install flathub com.scrup.scrup   # once published
+flatpak run com.scrup.scrup
+
+# or build the flatpak locally:
+bash linux/flatpak/build.sh
+```
+
+### Windows
+
+Run `Scrup-Setup-<version>.exe` (Inno Setup installer, no admin required).
+yt-dlp/ffmpeg are auto-downloaded on first playback.
+
 ## Features
 
 ### Playback

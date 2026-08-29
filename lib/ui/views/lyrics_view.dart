@@ -933,7 +933,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _providerLabel(_selectedProvider, AppLocalizations.of(context)!),
+                _providerLabel(_selectedProvider, AppLocalizations.of(context)),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurface,
                 ),
@@ -975,7 +975,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
             value: v,
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
-              child: Text(_providerLabel(v, AppLocalizations.of(context)!)),
+              child: Text(_providerLabel(v, AppLocalizations.of(context))),
             ),
           ),
       ],

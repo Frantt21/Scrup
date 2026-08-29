@@ -52,3 +52,10 @@ LINUX.md
 /logs devtools
 lib/core/version.g.dart
 PENDING.md
+RELEASE.md
+RELEASE_LINUX.md
+/release
+/dist
+/installer
+linux/flatpak/com.scrup.scrup.yml
+/linux/flatpak
