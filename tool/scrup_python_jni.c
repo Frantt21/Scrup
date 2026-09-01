@@ -73,22 +73,26 @@ static int py_init(void)
     config.write_bytecode = 0;
     PyConfig_SetBytesString(&config, &config.program_name, "python3");
 
-    /* PYTHONMALLOC=malloc: desactiva mimalloc/pymalloc para no leer
-     * /proc/sys/vm/* (bloqueado por SELinux untrusted_app).
-     * PYTHONUNBUFFERED: fuerza salida sin buffer para que el log se
-     * escriba antes de que sys.exit() cierre el proceso. */
+    /* PYTHONMALLOC=malloc: disable mimalloc/pymalloc to avoid reading
+     * /proc/sys/vm/* (blocked by SELinux untrusted_app).
+     * PYTHONUNBUFFERED: force unbuffered output so log is written
+     * before sys.exit() closes the process. */
     setenv("PYTHONMALLOC", "malloc", 1);
     setenv("PYTHONUNBUFFERED", "1", 1);
     if (g_pythonHome) setenv("PYTHONHOME", g_pythonHome, 1);
-    /* LD_LIBRARY_PATH al dir lib de la toolchain para que los módulos
-     * dinámicos (_ssl -> libssl_python.so, _hashlib -> libcrypto_python.so)
-     * se resuelvan. Estas libs se extraen como assets ahí (no jniLibs). */
+    /* LD_LIBRARY_PATH to toolchain lib dir so dynamic modules
+     * (_ssl, _hashlib, etc.) are found at runtime. */
     if (g_pythonHome) {
         char *ld = (char *)malloc(strlen(g_pythonHome) + 8);
         sprintf(ld, "%s/lib", g_pythonHome);
         setenv("LD_LIBRARY_PATH", ld, 1);
         free(ld);
     }
+    /* Point OpenSSL to Android system CA certs. use_environment=0
+     * prevents os.environ from calling putenv(), so we set it here
+     * at the C level where getenv() can see it. */
+    if (!getenv("SSL_CERT_DIR"))
+        setenv("SSL_CERT_DIR", "/system/etc/security/cacerts", 1);
 
     PyStatus st = Py_InitializeFromConfig(&config);
     PyConfig_Clear(&config);
@@ -123,17 +127,16 @@ Java_com_scrup_scrup_MainActivity_pythonHello(JNIEnv *env, jobject thiz)
     return (*env)->NewStringUTF(env, str ? str : "?");
 }
 
-/* Ejecuta yt-dlp (un zipapp). script_path es la ruta absoluta a yt-dlp; args
- * se convierten en sys.argv[1:]. El stdout/stderr de PYTHON (no los fd del
- * proceso, que compartirían la salida con otros hilos Flutter/mpv) se
- * redirigen a un archivo de log accesible por Kotlin. Devuelve el exit code
- * de yt-dlp (0 ok, !=0 error). */
+/* Executes yt-dlp (a zipapp). script_path is the absolute path to the
+ * wrapper script; args become sys.argv. Python stdout/stderr are
+ * redirected to the log file so Kotlin can read the output. Returns
+ * the exit code (0 = ok, !=0 = error). */
 JNIEXPORT jint JNICALL
 Java_com_scrup_scrup_MainActivity_pythonRunYtDlp(
         JNIEnv *env, jobject thiz,
         jstring script_path, jobjectArray args, jstring log_path)
 {
-    if (py_init() != 0) return 200; /* error interno */
+    if (py_init() != 0) return 200;
 
     const char *script = (*env)->GetStringUTFChars(env, script_path, NULL);
     const char *logp   = (*env)->GetStringUTFChars(env, log_path, NULL);
@@ -157,10 +160,7 @@ Java_com_scrup_scrup_MainActivity_pythonRunYtDlp(
         PyObject_SetAttrString(sys, "argv", argv);
         Py_DECREF(argv);
 
-        /* Redirect Python sys.stdout/stderr to the log file.
-         * Note: when a wrapper script is used (Kotlin side), it handles
-         * fd-level redirection before calling this. This is a fallback
-         * for direct calls. */
+        /* Redirect Python sys.stdout/stderr to the log file. */
         char *setup = (char *)malloc(strlen(logp) + 300);
         sprintf(setup,
             "import sys\n"
@@ -173,8 +173,7 @@ Java_com_scrup_scrup_MainActivity_pythonRunYtDlp(
         free(setup);
         if (r2 != 0) PyErr_Print();
 
-        /* runpy.run_path(script) ejecuta el zipapp yt-dlp como `python
-         * script`. El GIL está tomado (thread owner) durante todo esto. */
+        /* runpy.run_path(script) runs the wrapper/yt-dlp zipapp. */
         PyObject *runpy = PyImport_ImportModule("runpy");
         if (runpy) {
             PyObject *res = PyObject_CallMethod(runpy, "run_path", "s", script);
@@ -193,7 +192,7 @@ Java_com_scrup_scrup_MainActivity_pythonRunYtDlp(
             exit_code = 1;
         }
 
-        /* Restore sys.stdout/stderr and close the log file. */
+        /* Restore sys.stdout/stderr and flush/close the log file. */
         PyRun_SimpleString(
             "import sys\n"
             "if '_scrup_restore' in globals():\n"
@@ -208,8 +207,8 @@ Java_com_scrup_scrup_MainActivity_pythonRunYtDlp(
     return exit_code;
 }
 
-/* Solicita interrupción (KeyboardInterrupt) al intérprete para cancelar una
- * ejecución en curso. Debe llamarse desde OTRO hilo. */
+/* Requests interrupt (KeyboardInterrupt) to cancel an ongoing execution.
+ * Must be called from ANOTHER thread. */
 JNIEXPORT void JNICALL
 Java_com_scrup_scrup_MainActivity_pythonCancel(JNIEnv *env, jobject thiz)
 {

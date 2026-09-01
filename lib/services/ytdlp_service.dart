@@ -84,12 +84,10 @@ class YtDlpService {
 
   /// Argumentos comunes para descargar el mejor audio de una pista.
   List<String> _downloadArgs(String videoId, String outputDir) {
-    return [
+    final args = <String>[
       '--no-playlist',
       '--no-warnings',
       '--newline',
-      // El mtime debe ser el de la descarga, no la fecha de subida del
-      // video, para que la evicción LRU del caché sea correcta.
       '--no-mtime',
       '-f',
       'bestaudio/best',
@@ -99,6 +97,8 @@ class YtDlpService {
       'after_move:filepath',
       'https://www.youtube.com/watch?v=$videoId',
     ];
+    if (_isAndroid) args.add('--no-check-certificates');
+    return args;
   }
 
   // En Android el "binario" yt-dlp es el python3 de la toolchain y el script
@@ -280,17 +280,24 @@ class YtDlpService {
   }
 
   Future<List<Track>> _doSearch(String query, int limit) async {
-    final result = await _run([
+    final args = <String>[
       'ytsearch$limit:$query',
       '--flat-playlist',
       '--no-warnings',
       '--skip-download',
       '-J',
-    ]);
+    ];
+    if (_isAndroid) args.add('--no-check-certificates');
+    final result = await _run(args);
 
     final Map<String, dynamic> json;
     try {
-      json = jsonDecode(result.stdout as String) as Map<String, dynamic>;
+      // On Android stdout and stderr are merged into one log file.
+      // Strip any lines that don't look like JSON before parsing.
+      final raw = result.stdout as String;
+      final jsonStart = raw.indexOf('{');
+      final cleaned = jsonStart >= 0 ? raw.substring(jsonStart) : raw;
+      json = jsonDecode(cleaned) as Map<String, dynamic>;
     } catch (e) {
       debugPrint('[yt-dlp] search parse failed: ${result.stdout}');
       throw YtDlpException('No se pudo interpretar la respuesta de yt-dlp.');

@@ -94,29 +94,22 @@ class MainActivity : FlutterActivity() {
                                 val ytdlp = "$home/yt-dlp"
                                 val lp = logPath ?: "$home/tmp/ytdlp_run.log"
 
-                                // Write a wrapper that redirects fd 1/2 to the log
-                                // file BEFORE importing yt-dlp. This captures all
-                                // output reliably (Python 3.14 run_path issue).
+                                // Wrapper: fixes sys.argv for yt-dlp then runs it.
+                                // stdout/stderr redirect and SSL_CERT_DIR are handled
+                                // by the C driver (scrup_python_jni.c).
                                 val wrapper = java.io.File(home, "_run_wrapper.py")
                                 wrapper.writeText(
-                                    "import os, sys, runpy\n" +
-                                    "logp = sys.argv[1]\n" +
-                                    "script = sys.argv[2]\n" +
-                                    "sys.argv = [script] + sys.argv[3:]\n" +
-                                    "fd = os.open(logp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)\n" +
-                                    "os.dup2(fd, 1)\n" +
-                                    "os.dup2(fd, 2)\n" +
-                                    "os.close(fd)\n" +
-                                    "sys.stdout = os.fdopen(1, 'w', buffering=1)\n" +
-                                    "sys.stderr = os.fdopen(2, 'w', buffering=1)\n" +
+                                    "import sys, runpy\n" +
+                                    "script = sys.argv[1]\n" +
+                                    "sys.argv = [script] + sys.argv[2:]\n" +
                                     "try:\n" +
                                     "  runpy.run_path(script, run_name='__main__')\n" +
                                     "except SystemExit:\n" +
                                     "  pass\n"
                                 )
 
-                                // Call wrapper: _run_wrapper.py <logPath> <ytdlp> [args...]
-                                val wrapperArgs = arrayOf(lp, ytdlp) + args.toTypedArray()
+                                // Call wrapper: _run_wrapper.py <ytdlp> [args...]
+                                val wrapperArgs = arrayOf(ytdlp) + args.toTypedArray()
                                 val rc = pythonRunYtDlp(wrapper.absolutePath, wrapperArgs, lp)
                                 val out = try {
                                     java.io.File(lp).readText()
