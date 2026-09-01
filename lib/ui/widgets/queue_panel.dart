@@ -24,13 +24,34 @@ class QueuePanel extends StatelessWidget {
   /// `true` = cola visible (el panel ocupa su ancho); `false` = colapsado.
   final bool open;
 
-  const QueuePanel({super.key, required this.open});
+  /// Móvil: la cola se muestra como overlay a pantalla completa (sin el
+  /// deslizamiento lateral del mode escritorio).
+  final bool mobile;
+
+  /// Solo en [`mobile`]: botón para cerrar el overlay.
+  final VoidCallback? onClose;
+
+  const QueuePanel({
+    super.key,
+    required this.open,
+    this.mobile = false,
+    this.onClose,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final player = context.read<PlayerService>();
+
+    if (mobile) {
+      return _QueueOverlay(
+        theme: theme,
+        l10n: l10n,
+        player: player,
+        onClose: onClose,
+      );
+    }
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: open ? kQueuePanelWidth : 0),
@@ -49,6 +70,55 @@ class QueuePanel extends StatelessWidget {
   }
 }
 
+/// Overlay móvil: ocupa toda la pantalla (sin contenedor flotante) + cierre.
+class _QueueOverlay extends StatelessWidget {
+  final ThemeData theme;
+  final AppLocalizations l10n;
+  final PlayerService player;
+  final VoidCallback? onClose;
+
+  const _QueueOverlay({
+    required this.theme,
+    required this.l10n,
+    required this.player,
+    this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: theme.colorScheme.surface,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  tooltip: l10n.close,
+                  onPressed: onClose,
+                ),
+                Expanded(
+                  child: Text(
+                    l10n.queueTitle,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: _QueueBody(player: player, theme: theme, l10n: l10n),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Contenido del panel: cristal + cabecera + lista de la cola.
 class _QueueGlass extends StatelessWidget {
   final PlayerService player;
@@ -63,12 +133,6 @@ class _QueueGlass extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final queueListenable = Listenable.merge([
-      player.queue,
-      player.queueIndex,
-      player.shuffle,
-    ]);
-
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
@@ -89,26 +153,54 @@ class _QueueGlass extends StatelessWidget {
               alpha: 0.72,
             ),
           ),
-          child: StreamBuilder<bool>(
-            stream: player.playing,
-            initialData: player.isPlaying,
-            builder: (context, playingSnap) {
-              final playing = playingSnap.data ?? false;
-              return AnimatedBuilder(
-                animation: queueListenable,
-                builder: (context, _) {
-                  final queue = player.queue.value;
-                  final index = player.queueIndex.value;
-                  return Material(
-                    color: Colors.transparent,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          child: _QueueBody(player: player, theme: theme, l10n: l10n),
+        ),
+      ),
+    );
+  }
+}
+
+/// Lista de la cola (con su cabecera y el recuento). Compartida entre el
+/// panel flotante (desktop) y el overlay a pantalla completa (móvil).
+class _QueueBody extends StatelessWidget {
+  final PlayerService player;
+  final ThemeData theme;
+  final AppLocalizations l10n;
+
+  const _QueueBody({
+    required this.player,
+    required this.theme,
+    required this.l10n,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final queueListenable = Listenable.merge([
+      player.queue,
+      player.queueIndex,
+      player.shuffle,
+    ]);
+
+    return StreamBuilder<bool>(
+      stream: player.playing,
+      initialData: player.isPlaying,
+      builder: (context, playingSnap) {
+        final playing = playingSnap.data ?? false;
+        return AnimatedBuilder(
+          animation: queueListenable,
+          builder: (context, _) {
+            final queue = player.queue.value;
+            final index = player.queueIndex.value;
+            return Material(
+              color: Colors.transparent,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Cabecera: título + nº de canciones
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Row(
                       children: [
-                        // Cabecera: título + nº de canciones
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                          child: Row(
-                            children: [
                               Icon(
                                 Icons.queue_music_rounded,
                                 size: 18,
@@ -179,10 +271,7 @@ class _QueueGlass extends StatelessWidget {
                 },
               );
             },
-          ),
-        ),
-      ),
-    );
+      );
   }
 }
 

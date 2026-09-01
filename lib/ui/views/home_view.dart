@@ -7,6 +7,7 @@ import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 
+import '../../core/binaries.dart';
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
@@ -113,32 +114,14 @@ class _HomeViewState extends State<HomeView> {
             .clamp(1, 10);
         final visible = _recent.length.clamp(0, cols * _rows);
 
-        return Container(
-          margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
-                blurRadius: 28,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.72,
-                ),
-              ),
-              child: CustomScrollView(
+        final bool mobile = Binaries.isMobile;
+        final Widget scroll = CustomScrollView(
                 slivers: [
                   // Barra de búsqueda (sin título ni subtítulo)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                      padding: EdgeInsets.fromLTRB(mobile ? 12 : 24,
+                          mobile ? 8 : 20, mobile ? 12 : 24, 16),
                       child: TextField(
                         onSubmitted: _submitSearch,
                         textInputAction: TextInputAction.search,
@@ -167,7 +150,8 @@ class _HomeViewState extends State<HomeView> {
                   if (_loaded)
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                        padding: EdgeInsets.fromLTRB(
+                            mobile ? 12 : 24, 8, mobile ? 12 : 24, 12),
                         child: _recent.isEmpty
                             ? _EmptyHint(theme: theme)
                             : Text(
@@ -182,11 +166,9 @@ class _HomeViewState extends State<HomeView> {
                     SliverPadding(
                       // El player flotante cubre la parte inferior: dejar espacio
                       // para que la última fila del grid quede accesible.
-                      padding: const EdgeInsets.fromLTRB(
-                        16,
-                        0,
-                        16,
-                        kPlayerOverlayInset,
+                      // En móvil no hay clearance (el mini-player vive aparte).
+                      padding: EdgeInsets.fromLTRB(
+                        16, 0, 16, mobile ? 16 : kPlayerOverlayInset,
                       ),
                       sliver: SliverGrid(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -206,7 +188,33 @@ class _HomeViewState extends State<HomeView> {
                         }, childCount: visible),
                       ),
                     ),
-                ],              ),
+                ],
+              );
+
+        // En móvil ocupamos todo el espacio (sin cristal flotante).
+        if (mobile) return scroll;
+
+        return Container(
+          margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 28,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.72,
+                ),
+              ),
+              child: scroll,
             ),
           ),
         );

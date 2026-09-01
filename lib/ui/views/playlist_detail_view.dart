@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
+import '../../core/binaries.dart';
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
@@ -590,16 +591,21 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       data: theme,
       child: Container(
         constraints: const BoxConstraints.expand(),
-        margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
+        // En móvil usamos todo el espacio (sin cristal flotante).
+        margin: Binaries.isMobile
+            ? EdgeInsets.zero
+            : const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.45),
-              blurRadius: 28,
-              offset: const Offset(0, 12),
-            ),
-          ],
+          boxShadow: Binaries.isMobile
+              ? const []
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    blurRadius: 28,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),

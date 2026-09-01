@@ -91,9 +91,22 @@ class YtDlpService {
     ];
   }
 
+  // En Android el "binario" yt-dlp es el python3 de la toolchain y el script
+  // yt-dlp viaja como primer argumento (zipapp). En el resto de plataformas
+  // se ejecuta el ejecutable directamente.
+  List<String> _launcher(String ytdlpExe) {
+    final script = Binaries.ytDlpScript;
+    if (script != null) return [ytdlpExe, script];
+    return [ytdlpExe];
+  }
+
   // Environment with sidecar binary dirs added to PATH.
   Map<String, String> _envWithSidecars() {
-    final env = {...Platform.environment};
+    final env = {
+      ...Platform.environment,
+      // Android: LD_LIBRARY_PATH/PYTHONHOME para el python3 embebido.
+      ...Binaries.androidToolchainEnv(),
+    };
     final dirs = Binaries.pathDirs;
     if (dirs.isEmpty) return env;
     final sep = Platform.isWindows ? ';' : ':';
@@ -131,7 +144,7 @@ class YtDlpService {
     List<String> args, {
     Duration timeout = const Duration(seconds: 60),
   }) async {
-    final ytdlp = Binaries.ytdlpPath;
+    final ytdlp = await Binaries.resolveYtDlp();
     if (ytdlp == null) {
       throw YtDlpException(
         'yt-dlp no encontrado. Ejecuta "bash tool/fetch_binaries.sh" '
@@ -139,11 +152,15 @@ class YtDlpService {
       );
     }
 
-    debugPrint('[yt-dlp] ${args.join(' ')}');
+    final launcher = _launcher(ytdlp);
+    final executable = launcher.first;
+    final script = launcher.length > 1 ? launcher[1] : null;
+    final processArgs = script != null ? [script, ...args] : [...launcher.sublist(1), ...args];
+    debugPrint('[yt-dlp] $executable ${processArgs.join(' ')}');
     final result = await _retryOnSharingViolation(
       () => Process.run(
-        ytdlp,
-        args,
+        executable,
+        processArgs,
         stdoutEncoding: utf8,
         stderrEncoding: utf8,
         environment: _envWithSidecars(),
@@ -232,7 +249,7 @@ class YtDlpService {
     String? title,
     void Function(double? percent)? onProgress,
   }) async {
-    final ytdlp = Binaries.ytdlpPath;
+    final ytdlp = await Binaries.resolveYtDlp();
     if (ytdlp == null) {
       throw YtDlpException(
         'yt-dlp no encontrado. Ejecuta "bash tool/fetch_binaries.sh" '
@@ -241,10 +258,14 @@ class YtDlpService {
     }
 
     debugPrint('[yt-dlp] stream $videoId');
+    final launcher = _launcher(ytdlp);
+    final executable = launcher.first;
+    final script = launcher.length > 1 ? launcher[1] : null;
+    final processArgs = script != null ? [script, ..._downloadArgs(videoId, outputDir)] : [...launcher.sublist(1), ..._downloadArgs(videoId, outputDir)];
     final process = await _retryOnSharingViolation(
       () => Process.start(
-        ytdlp,
-        _downloadArgs(videoId, outputDir),
+        executable,
+        processArgs,
         environment: _envWithSidecars(),
       ),
     );

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
@@ -18,6 +18,7 @@ import 'views/search_view.dart';
 import 'views/settings_view.dart';
 import 'widgets/custom_title_bar.dart';
 import 'widgets/fullscreen_player_view.dart';
+import 'widgets/mini_player.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/playlists_sidebar.dart';
 import 'widgets/queue_panel.dart';
@@ -70,6 +71,9 @@ class _AppShellState extends State<AppShell> {
       );
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Sidecars (yt-dlp/ffmpeg) descend on desktop; on mobile the toolchain
+      // lives in the app bundle (asset copy) — handled elsewhere.
+      if (!Binaries.isDesktop) return;
       final yt = Binaries.ytdlpPath;
       final ff = Binaries.ffmpegPath;
       if (yt == null || ff == null) {
@@ -393,6 +397,8 @@ class _AppShellState extends State<AppShell> {
       onPressed: _showSettings ? _closeSettings : _openSettings,
     );
 
+    final bool mobile = Binaries.isMobile;
+
     return Listener(
       onPointerDown: _handlePointerDown,
       child: Scaffold(
@@ -400,83 +406,37 @@ class _AppShellState extends State<AppShell> {
         children: [
           Column(
             children: [
-              if (!_fullscreen)
+              if (!_fullscreen && !mobile)
                 CustomTitleBar(
                   title: barTitle,
                   actions: barActions,
                   trailing: barTrailing,
                 ),
               Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    PlaylistsSidebar(
-                      openPlaylistId: openPlaylist?.id,
-                      onSelectPlaylist: _selectPlaylist,
-                    ),
-                    Expanded(
-                      child: Stack(
+                child: mobile
+                    // ── Móvil: sin title bar ni sidebars; todo el espacio ──
+                    ? _buildMobileContent()
+                    // ── Desktop: sidebar + contenido + cola ──────────────
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          IndexedStack(
-                            index: _showLyrics
-                                ? 4
-                                : (openPlaylist != null
-                                      ? 2
-                                      : (_showSettings ? 3 : _selectedIndex)),
-                            children: [
-                              HomeView(onSearch: _submitSearch),
-                              SearchView(
-                                searchRequest: _searchRequest,
-                                onBack: _backToHome,
-                              ),
-                              if (openPlaylist != null)
-                                PlaylistDetailView(
-                                  key: ValueKey(openPlaylist.id),
-                                  playlist: openPlaylist,
-                                  onBack: () => _selectPlaylist(null),
-                                  onUpdated: _onPlaylistUpdated,
-                                )
-                              else
-                                const SizedBox.shrink(),
-                              SettingsView(key: ValueKey(_settingsOpenCount)),
-                              _showFsOverlay
-                                  ? const SizedBox.shrink()
-                                  : TickerMode(
-                                      enabled: _showLyrics,
-                                      child: LyricsView(key: _fsLyricsKey),
-                                    ),
-                            ],
+                          PlaylistsSidebar(
+                            openPlaylistId: openPlaylist?.id,
+                            onSelectPlaylist: _selectPlaylist,
                           ),
-                          Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                              child: PlayerBar(
-                                queueOpen: _queueOpen,
-                                lyricsOpen: _showLyrics,
-                                onToggleLyrics: () => _showLyrics
-                                    ? _closeLyrics()
-                                    : _openLyrics(),
-                                onToggleQueue: () {
-                                  _queueUserToggled = true;
-                                  final next = !_queueOpen;
-                                  setState(() => _queueOpen = next);
-                                  unawaited(
-                                    context.read<SettingsStore>().saveQueueOpen(
-                                      next,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
+                          Expanded(child: _buildMainStack(barTitle)),
+                          QueuePanel(open: _queueOpen),
                         ],
                       ),
-                    ),
-                    QueuePanel(open: _queueOpen),
-                  ],
-                ),
               ),
+              // ── Móvil: mini-player + NavigationBar ──────────────
+              if (mobile && !_fullscreen) ...[
+                MiniPlayer(
+                  onOpenNowPlaying: () => unawaited(_setFullscreen(true)),
+                  onOpenQueue: _openQueueMobile,
+                ),
+                _buildMobileNavBar(),
+              ],
             ],
           ),
           if (_showFsOverlay)
@@ -497,5 +457,159 @@ class _AppShellState extends State<AppShell> {
       ),
     ),
     );
+  }
+
+  // Contenido principal compartido: pila de vistas (+ player flotante desktop).
+  Widget _buildMainStack(String barTitle) {
+    final openPlaylist = _openPlaylist;
+    return Stack(
+      children: [
+        IndexedStack(
+          index: _showLyrics
+              ? 4
+              : (openPlaylist != null
+                    ? 2
+                    : (_showSettings ? 3 : _selectedIndex)),
+          children: [
+            HomeView(onSearch: _submitSearch),
+            SearchView(
+              searchRequest: _searchRequest,
+              onBack: _backToHome,
+            ),
+            if (openPlaylist != null)
+              PlaylistDetailView(
+                key: ValueKey(openPlaylist.id),
+                playlist: openPlaylist,
+                onBack: () => _selectPlaylist(null),
+                onUpdated: _onPlaylistUpdated,
+              )
+            else
+              const SizedBox.shrink(),
+            SettingsView(key: ValueKey(_settingsOpenCount)),
+            _showFsOverlay
+                ? const SizedBox.shrink()
+                : TickerMode(
+                    enabled: _showLyrics,
+                    child: LyricsView(key: _fsLyricsKey),
+                  ),
+          ],
+        ),
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: PlayerBar(
+              queueOpen: _queueOpen,
+              lyricsOpen: _showLyrics,
+              onToggleLyrics: () => _showLyrics
+                  ? _closeLyrics()
+                  : _openLyrics(),
+              onToggleQueue: () => _setQueueOpen(!_queueOpen),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Contenido móvil: la pila de vistas sin player flotante (el mini-player
+  // vive abajo) y la cola como overlay a pantalla completa.
+  Widget _buildMobileContent() {
+    final openPlaylist = _openPlaylist;
+    final content = Stack(
+      children: [
+        IndexedStack(
+          index: _showLyrics
+              ? 4
+              : (openPlaylist != null
+                    ? 2
+                    : (_showSettings ? 3 : _selectedIndex)),
+          children: [
+            HomeView(onSearch: _submitSearch),
+            SearchView(
+              searchRequest: _searchRequest,
+              onBack: _backToHome,
+            ),
+            if (openPlaylist != null)
+              PlaylistDetailView(
+                key: ValueKey(openPlaylist.id),
+                playlist: openPlaylist,
+                onBack: () => _selectPlaylist(null),
+                onUpdated: _onPlaylistUpdated,
+              )
+            else
+              const SizedBox.shrink(),
+            SettingsView(key: ValueKey(_settingsOpenCount)),
+            _showFsOverlay
+                ? const SizedBox.shrink()
+                : TickerMode(
+                    enabled: _showLyrics,
+                    child: LyricsView(key: _fsLyricsKey),
+                  ),
+          ],
+        ),
+        // Cola como overlay a pantalla completa en móvil.
+        if (_queueOpen)
+          Positioned.fill(
+            child: QueuePanel(
+              open: true,
+              mobile: true,
+              onClose: () => _setQueueOpen(false),
+            ),
+          ),
+      ],
+    );
+    return content;
+  }
+
+  void _setQueueOpen(bool next) {
+    _queueUserToggled = true;
+    setState(() => _queueOpen = next);
+    unawaited(context.read<SettingsStore>().saveQueueOpen(next));
+  }
+
+  void _openQueueMobile() => _setQueueOpen(!_queueOpen);
+
+  // Barra de navegación inferior de Android (Inicio / Buscar / Ajustes).
+  Widget _buildMobileNavBar() {
+    return NavigationBar(
+      selectedIndex: _mobileNavIndex,
+      onDestinationSelected: (i) {
+        setState(() {
+          _openPlaylist = null;
+          _showLyrics = false;
+          if (i == 2) {
+            // Ajustes vive en la pila de vistas (index 3 vía _showSettings).
+            _showSettings = true;
+          } else {
+            _showSettings = false;
+            _selectedIndex = i;
+          }
+        });
+      },
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home_rounded),
+          label: 'Inicio',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.search_outlined),
+          selectedIcon: Icon(Icons.search_rounded),
+          label: 'Buscar',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.settings_outlined),
+          selectedIcon: Icon(Icons.settings_rounded),
+          label: 'Ajustes',
+        ),
+      ],
+    );
+  }
+
+  // Índice activo de la NavigationBar móvil: mapea el estado real de la app.
+  int get _mobileNavIndex {
+    if (_showSettings) return 2;
+    return _selectedIndex;
   }
 }

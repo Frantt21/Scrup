@@ -36,6 +36,10 @@ migrate_working_dir/
 # Binarios sidecar (yt-dlp + ffmpeg) - se descargan con tool/fetch_binaries.sh
 /bin/
 
+# Toolchain Android (CPython + yt-dlp) - se genera con
+# tool/fetch_android_toolchain.sh y se empaqueta como assets nativos.
+/android/app/src/main/assets/toolchain/
+
 # Symbolication related
 app.*.symbols
 

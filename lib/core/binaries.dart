@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 class BinaryDownloadStatus {
   const BinaryDownloadStatus({
@@ -24,6 +26,11 @@ class Binaries {
   static final ValueNotifier<BinaryDownloadStatus?> downloadStatus =
       ValueNotifier<BinaryDownloadStatus?>(null);
 
+  /// Mobile targets (Android/iOS) have no desktop sidecar toolchain; the
+  /// UI must not try to download/run OS binaries there.
+  static bool get isMobile => Platform.isAndroid || Platform.isIOS;
+  static bool get isDesktop => !isMobile;
+
   static String get _platformDir {
     if (Platform.isWindows) return 'windows';
     if (Platform.isLinux) return 'linux';
@@ -32,6 +39,171 @@ class Binaries {
   }
 
   static String get _exeExt => Platform.isWindows ? '.exe' : '';
+
+  // ── Toolchain Android (CPython + yt-dlp) ────────────────────────────────
+  // Generada por tool/fetch_android_toolchain.sh y empaquetada como ASSETS
+  // NATIVOS (android/app/src/main/assets/toolchain/) — no pubspec — porque
+  // Flutter no permite assets por plataforma. Se materializa una sola vez a
+  // la carpeta de archivos de la app y ahí se ejecuta `python3 <root>/yt-dlp`.
+  static const String _androidToolchainAbi = 'aarch64';
+  static const String _androidToolchainChannel = 'com.scrup.music.toolchain';
+
+  static String? _androidToolchainRoot;
+  static Future<bool>? _androidToolchainFuture;
+
+  /// En Android el binario a ejecutar es `<root>/python3` y yt-dlp se pasa
+  /// como primer argumento (zipapp); en el resto de plataformas es nulo y los
+  /// procesos deben invocar directamente [`ytdlpPath`].
+  static String? get ytDlpScript {
+    if (!Platform.isAndroid) return null;
+    final root = _androidToolchainRoot;
+    if (root == null) return null;
+    return p.join(root, 'yt-dlp');
+  }
+
+  /// Inicia (una sola vez) la extracción de la toolchain CPython/yt-dlp desde
+  /// los assets nativos. No bloquea el arranque: los primeros usos fallarán
+  /// con "yt-dlp no encontrado" hasta que termine (unos segundos).
+  static Future<bool> ensureAndroidToolchain() {
+    if (!Platform.isAndroid) return Future.value(false);
+    return _androidToolchainFuture ??= _extractAndroidToolchain();
+  }
+
+  static Future<bool> _extractAndroidToolchain() async {
+    final channel = const MethodChannel(_androidToolchainChannel);
+    try {
+      final filesDir = await getApplicationSupportDirectory();
+      final root = p.join(filesDir.path, 'toolchain', _androidToolchainAbi);
+      final marker = p.join(filesDir.path, '.scrup_toolchain_v2');
+      if (File(marker).existsSync()) {
+        debugPrint('[Scrup] toolchain marker existe, ejecutando chcon en ejecutables');
+        _androidToolchainRoot = root;
+        for (final name in const ['python3', 'yt-dlp']) {
+          _ensureExecutable(p.join(root, name));
+        }
+        return true;
+      }
+
+      // Leer el inventario (asset nativo).
+      final manifestPath = '$_androidToolchainAbi/manifest.json';
+      final manifestBytes = await _readMany(channel, [manifestPath]);
+      final mb = manifestBytes[manifestPath];
+      if (mb == null) return _failToolchain('manifest no leído');
+      final map = jsonDecode(utf8.decode(mb)) as Map<String, dynamic>;
+      final files = (map['files'] as List<dynamic>? ?? []).cast<String>();
+      if (files.isEmpty) return _failToolchain('manifest sin archivos');
+
+      // Copiar por LOTES (≤ 12 archivos por invocación) para no superar el
+      // límite de ~1MB del Binder por transacción de MethodChannel.
+      // Los assets que no existan en el APK (directorios de stdlib que
+      // aapt2 rechaza por comenzar con '_') se avisan pero no abortan:
+      // yt-dlp funciona perfectamente sin ellos.
+      const batchSize = 12;
+      const essentialBaseNames = {'python3', 'yt-dlp'};
+      var missingEssential = <String>[];
+      var written = 0;
+      var skipped = 0;
+      for (var i = 0; i < files.length; i += batchSize) {
+        final batch = files.sublist(
+          i,
+          i + batchSize > files.length ? files.length : i + batchSize,
+        );
+        final keys = [for (final rel in batch) '$_androidToolchainAbi/$rel'];
+        final data = await _readMany(channel, keys);
+        for (final rel in batch) {
+          final bytes = data['$_androidToolchainAbi/$rel'];
+          if (bytes == null) {
+            skipped++;
+            // Solo registrar como error si es un archivo esencial.
+            final bn = p.basename(rel);
+            if (essentialBaseNames.contains(bn)) {
+              missingEssential.add(rel);
+            }
+            continue;
+          }
+          final target = File(p.join(root, rel));
+          await target.parent.create(recursive: true);
+          await target.writeAsBytes(bytes);
+          written++;
+        }
+      }
+      if (missingEssential.isNotEmpty) {
+        debugPrint(
+            '[Scrup] toolchain: ${missingEssential.length} asset(s) esencial(es'
+            ' perdido(s): ${missingEssential.join(", ")}');
+      }
+
+      const execNames = {'python3', 'yt-dlp'};
+      for (final rel in files) {
+        if (execNames.contains(p.basename(rel))) {
+          _ensureExecutable(p.join(root, rel));
+        }
+      }
+
+      // PYTHONHOME/TMPDIR esperan esta carpeta.
+      await Directory(p.join(root, 'tmp')).create();
+      await File(marker).writeAsString('ok');
+
+      final python3Ok = File(p.join(root, 'python3')).existsSync();
+      final ytdlpOk = File(p.join(root, 'yt-dlp')).existsSync();
+      if (!python3Ok || !ytdlpOk) {
+        return _failToolchain(
+            'falta python3/yt-dlp tras copiar (python3=$python3Ok, yt-dlp=$ytdlpOk)');
+      }
+      _androidToolchainRoot = root;
+      final skippedNote =
+          skipped > 0 ? ' — $skipped recursos stdlib no empaquetados por aapt2' : '';
+      debugPrint(
+          '[Scrup] toolchain android lista en $root '
+          '($written archivos copiados, $skipped omitidos$skippedNote)');
+      return true;
+    } catch (e, st) {
+      debugPrint('[Scrup] toolchain android falló: $e');
+      assert(() {
+        debugPrint(st.toString());
+        return true;
+      }());
+      return false;
+    }
+  }
+
+  static bool _failToolchain(String why) {
+    debugPrint('[Scrup] toolchain android incompleta: $why');
+    return false;
+  }
+
+  /// Lee un lote de assets nativos (camino `toolchain/<abi>/<rel>`). Devuelve
+  /// un mapa rel→bytes; los archivos que no puedan leerse se omiten.
+  static Future<Map<String, Uint8List>> _readMany(
+    MethodChannel channel,
+    List<String> keys,
+  ) async {
+    final raw = await channel.invokeMethod<Map<Object?, Object?>>(
+      'readMany',
+      {'paths': keys},
+    );
+    if (raw == null) return const {};
+    final out = <String, Uint8List>{};
+    raw.forEach((k, v) {
+      if (k is String && v is Uint8List) out[k] = v;
+    });
+    return out;
+  }
+
+  /// Variables de entorno necesarias para ejecutar el python3 de Android
+  /// (loader de bionic: LD_LIBRARY_PATH para encontrar libpython/openssl).
+  static Map<String, String> androidToolchainEnv() {
+    if (!Platform.isAndroid) return const {};
+    final root = _androidToolchainRoot;
+    if (root == null) return const {};
+    return {
+      'LD_LIBRARY_PATH': p.join(root, 'lib'),
+      'PYTHONHOME': root,
+      'PYTHONUTF8': '1',
+      'PYTHONNOUSERSITE': '1',
+      'TMPDIR': p.join(root, 'tmp'),
+    };
+  }
 
   static String? get projectRoot {
     final candidates = <String>{
@@ -101,8 +273,17 @@ class Binaries {
   static void _ensureExecutable(String path) {
     if (Platform.isWindows) return;
     try {
-      Process.runSync('chmod', ['+x', path], environment: Platform.environment);
-    } catch (_) {}
+      final r = Process.runSync('chmod', ['+x', path], environment: Platform.environment);
+      if (r.exitCode != 0) debugPrint('[Scrup] chmod $path falló: ${r.stderr}');
+    } catch (e) {
+      debugPrint('[Scrup] chmod $path error: $e');
+    }
+    try {
+      final r = Process.runSync('chcon', ['u:object_r:shell_data_file:s0', path], environment: Platform.environment);
+      if (r.exitCode != 0) debugPrint('[Scrup] chcon $path falló: ${r.stderr}');
+    } catch (e) {
+      debugPrint('[Scrup] chcon $path error: $e');
+    }
   }
 
   static BinaryDownloadStatus? _parseDownloadStatus(String line, String name) {
@@ -379,6 +560,16 @@ class Binaries {
 
   static String? get ytdlpPath {
     if (_ytdlpPath != null) return _ytdlpPath;
+    // En Android yt-dlp se ejecuta con el python3 de la toolchain extraída;
+    // el script se pasa aparte (ver ytDlpScript).
+    if (Platform.isAndroid) {
+      final root = _androidToolchainRoot;
+      if (root == null) return null;
+      final exe = p.join(root, 'python3');
+      if (!File(exe).existsSync()) return null;
+      _ytdlpPath = exe;
+      return _ytdlpPath;
+    }
     final env = Platform.environment['SCRUP_YTDLP_PATH'];
     if (env != null && env.isNotEmpty) {
       _ytdlpPath = env;
@@ -398,6 +589,17 @@ class Binaries {
       return _ytdlpPath;
     }
     return null;
+  }
+
+  /// Resuelve el binario yt-dlp esperando, en Android, a que la toolchain
+  /// termine de extraerse de los assets. Así las primeras búsquedas no fallan
+  /// con "yt-dlp no encontrado" durante la ventana de extracción (~segundos).
+  /// Compatible con el patrón sincrónico del resto: devuelve el camino o null.
+  static Future<String?> resolveYtDlp() async {
+    if (Platform.isAndroid) {
+      await ensureAndroidToolchain();
+    }
+    return ytdlpPath;
   }
 
   static String? get ffmpegPath {

@@ -94,6 +94,8 @@ class DiscordPresenceService {
   /// Carga la configuración guardada, arranca el transporte si está
   /// activado y se suscribe a los cambios del reproductor.
   Future<void> start() async {
+    // Discord Rich Presence needs local IPC, which only exists on desktop.
+    if (Platform.isAndroid || Platform.isIOS) return;
     try {
       _enabled = await settings.loadDiscordEnabled();
     } catch (_) {
@@ -147,6 +149,9 @@ class DiscordPresenceService {
   /// Activa/desactiva la presencia desde Configuración (persiste y aplica
   /// al instante).
   Future<void> setEnabled(bool enabled) async {
+    // No local IPC on mobile: the toggle is hidden there, but keep the
+    // guard so a stale stored value can never start a transport.
+    if (Platform.isAndroid || Platform.isIOS) return;
     _enabled = enabled;
     await settings.saveDiscordEnabled(enabled);
     if (enabled) {

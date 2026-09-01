@@ -1,8 +1,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Red: InnerTube, descarga de audio y metadatos. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Notificación de MediaSession (API 33+: se pide en runtime). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Reproducción en segundo plano con la notificación de audio. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
     <application
-        android:label="scrup"
+        android:label="Scrup"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:supportsRtl="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

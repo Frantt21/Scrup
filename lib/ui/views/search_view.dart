@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/binaries.dart';
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/player_service.dart';
@@ -136,7 +137,90 @@ class _SearchViewState extends State<SearchView> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
 
-    return Container(
+    final bool mobile = Binaries.isMobile;
+
+    // En móvil usamos todo el espacio (sin contenedor flotante ni clearance
+    // del player); en desktop el cristal flotante con clearance.
+    final Widget body = mobile
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 4, 12, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back_rounded),
+                          tooltip: l10n.backToHome,
+                          onPressed: widget.onBack,
+                        ),
+                        Text(
+                          l10n.searchTitle,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _searchController,
+                      onSubmitted: _search,
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: l10n.searchHint,
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: _searching
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : null,
+                        filled: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(28),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 34,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _recentSearches.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (context, i) {
+                          final q = _recentSearches[i];
+                          return ActionChip(
+                            label: Text(q),
+                            onPressed: () {
+                              _searchController.text = q;
+                              _search(q);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(child: _buildBody(theme)),
+            ],
+          )
+        : Container(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
@@ -237,6 +321,8 @@ class _SearchViewState extends State<SearchView> {
         ),
       ),
     );
+
+    return body;
   }
 
   Widget _buildBody(ThemeData theme) {

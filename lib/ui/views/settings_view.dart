@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:drift/drift.dart' show OrderingTerm;
 
 import '../../core/version.g.dart';
+import '../../core/binaries.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/artwork_palette_service.dart';
@@ -316,6 +317,40 @@ class _SettingsViewState extends State<SettingsView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final bool mobile = Binaries.isMobile;
+
+    final Widget body = Material(
+      color: Colors.transparent,
+      child: ListView(
+        // El contenedor ya termina por encima del player (margen
+        // inferior), así que aquí solo hace falta un respiro pequeño.
+        padding: EdgeInsets.fromLTRB(
+            mobile ? 16 : 20, mobile ? 12 : 20, mobile ? 16 : 20, 12),
+        children: [
+          Text(
+            AppLocalizations.of(context).settings,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 20),
+          _buildLanguageSection(theme),
+          const SizedBox(height: 16),
+          _buildDiscordSection(theme),
+          const SizedBox(height: 16),
+          _buildPlayerSection(theme),
+          const SizedBox(height: 16),
+          _buildCacheSection(theme),
+          const SizedBox(height: 16),
+          _buildShortcutsSection(theme),
+          const SizedBox(height: 16),
+          _buildAboutSection(theme),
+        ],
+      ),
+    );
+
+    if (mobile) return body;
+
     return Container(
       // Margen flotante + sombra exterior (fuera del clip). Top 12 =
       // alineado con el sidebar; bottom = kPlayerClearance para que el
@@ -344,34 +379,7 @@ class _SettingsViewState extends State<SettingsView> {
               alpha: 0.72,
             ),
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: ListView(
-              // El contenedor ya termina por encima del player (margen
-              // inferior), así que aquí solo hace falta un respiro pequeño.
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-              children: [
-                Text(
-                  AppLocalizations.of(context).settings,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                _buildLanguageSection(theme),
-                const SizedBox(height: 16),
-                _buildDiscordSection(theme),
-                const SizedBox(height: 16),
-                _buildPlayerSection(theme),
-                const SizedBox(height: 16),
-                _buildCacheSection(theme),
-                const SizedBox(height: 16),
-                _buildShortcutsSection(theme),
-                const SizedBox(height: 16),
-                _buildAboutSection(theme),
-              ],
-            ),
-          ),
+          child: body,
         ),
       ),
     );
@@ -500,6 +508,9 @@ class _SettingsViewState extends State<SettingsView> {
   /// Scrup está embebido en el cliente: funciona de fábrica, solo hay que
   /// tener Discord abierto y darle al interruptor.
   Widget _buildDiscordSection(ThemeData theme) {
+    // Discord Rich Presence is desktop-only (local IPC over named pipes /
+    // XDG_RUNTIME_DIR sockets); not available on mobile.
+    if (!Binaries.isDesktop) return const SizedBox.shrink();
     final l10n = AppLocalizations.of(context);
     final service = context.read<DiscordPresenceService>();
 
@@ -597,30 +608,33 @@ class _SettingsViewState extends State<SettingsView> {
               await settings.setLyricsSweepEnabled(value);
             },
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            tileColor: Colors.transparent,
-            title: SizedBox(
-              width: 240,
-              child: Text(
-                l10n.skipSilence,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurface,
+          // Silence-skip analyzes the local file with an ffmpeg subprocess
+          // (desktop only; no ffmpeg toolchain on mobile).
+          if (Binaries.isDesktop)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              tileColor: Colors.transparent,
+              title: SizedBox(
+                width: 240,
+                child: Text(
+                  l10n.skipSilence,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                  ),
                 ),
               ),
-            ),
-            subtitle: Text(
-              l10n.skipSilenceHint,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              subtitle: Text(
+                l10n.skipSilenceHint,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
+              value: _skipSilenceEnabled,
+              onChanged: (value) async {
+                setState(() => _skipSilenceEnabled = value);
+                await settings.setSkipSilenceEnabled(value);
+              },
             ),
-            value: _skipSilenceEnabled,
-            onChanged: (value) async {
-              setState(() => _skipSilenceEnabled = value);
-              await settings.setSkipSilenceEnabled(value);
-            },
-          ),
         ],
       ),
     );

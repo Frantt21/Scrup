@@ -47,43 +47,52 @@ Future<void> main() async {
     audioHandler = ScrupAudioHandler();
   }
 
-  await windowManager.ensureInitialized();
-  if (Platform.isMacOS) {
-    await windowManager.setTitleBarStyle(
-      TitleBarStyle.hidden,
-      windowButtonVisibility: true,
-    );
-  } else if (Platform.isLinux) {
-    await windowManager.setAsFrameless();
-  }
-  // Intercept close to flush pending data before exit.
-  try {
-    await windowManager.setPreventClose(true);
-  } catch (_) {
-  }
-  final windowOptions = WindowOptions(
-    size: const Size(1400, 800),
-    minimumSize: const Size(1440, 800),
-    center: true,
-    title: 'Scrup',
-    // Ocultar la nativa en Windows y macOS (macOS ya lo dejó configurado
-    // arriba; aquí se mantiene para waitUntilReadyToShow). En Linux NO se
-    // pasa (null): setTitleBarStyle(normal) DESHARÍA el setAsFrameless()
-    // anterior reactivando la barra nativa del gestor de ventanas.
-    titleBarStyle: (Platform.isWindows || Platform.isMacOS)
-        ? TitleBarStyle.hidden
-        : null,
-  );
-  windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.setResizable(true);
+  if (Binaries.isDesktop) {
+    await windowManager.ensureInitialized();
+    if (Platform.isMacOS) {
+      await windowManager.setTitleBarStyle(
+        TitleBarStyle.hidden,
+        windowButtonVisibility: true,
+      );
+    } else if (Platform.isLinux) {
+      await windowManager.setAsFrameless();
+    }
+    // Intercept close to flush pending data before exit.
     try {
-      await windowManager.maximize();
-    } catch (_) {}
-    await windowManager.show();
-    await windowManager.focus();
-  });
+      await windowManager.setPreventClose(true);
+    } catch (_) {
+    }
+    final windowOptions = WindowOptions(
+      size: const Size(1400, 800),
+      minimumSize: const Size(1440, 800),
+      center: true,
+      title: 'Scrup',
+      // Ocultar la nativa en Windows y macOS (macOS ya lo dejó configurado
+      // arriba; aquí se mantiene para waitUntilReadyToShow). En Linux NO se
+      // pasa (null): setTitleBarStyle(normal) DESHARÍA el setAsFrameless()
+      // anterior reactivando la barra nativa del gestor de ventanas.
+      titleBarStyle: (Platform.isWindows || Platform.isMacOS)
+          ? TitleBarStyle.hidden
+          : null,
+    );
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.setResizable(true);
+      try {
+        await windowManager.maximize();
+      } catch (_) {}
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
 
   Binaries.logBinaries();
+
+  // Extrae (en segundo plano) la toolchain CPython/yt-dlp desde los assets
+  // nativos de Android. Las primeras búsquedas/descargas avisarán "yt-dlp no
+  // encontrado" hasta que termine (unos segundos).
+  if (Binaries.isMobile) {
+    unawaited(Binaries.ensureAndroidToolchain());
+  }
 
   final database = AppDatabase();
   try {
@@ -302,19 +311,21 @@ class ScrupApp extends StatelessWidget {
             });
             unawaited(_restoreSession(player, settings, db));
             final palette = context.read<PaletteCacheStore>();
-            windowManager.addListener(
-              _AppCloseHandler(() async {
-                await _writeQueueSnapshot(settings, player.queueSnapshot);
-                final current = player.currentTrackValue;
-                if (current != null) {
-                  await settings.saveResumePosition(
-                    player.positionValue.inSeconds,
-                    current.id,
-                  );
-                }
-                await palette.flush();
-              }),
-            );
+            if (Binaries.isDesktop) {
+              windowManager.addListener(
+                _AppCloseHandler(() async {
+                  await _writeQueueSnapshot(settings, player.queueSnapshot);
+                  final current = player.currentTrackValue;
+                  if (current != null) {
+                    await settings.saveResumePosition(
+                      player.positionValue.inSeconds,
+                      current.id,
+                    );
+                  }
+                  await palette.flush();
+                }),
+              );
+            }
             return player;
           },
           dispose: (_, player) async {
@@ -335,7 +346,7 @@ class ScrupApp extends StatelessWidget {
               player: context.read<PlayerService>(),
               settings: context.read<SettingsStore>(),
             );
-            unawaited(service.start());
+            if (Binaries.isDesktop) unawaited(service.start());
             return service;
           },
           dispose: (_, service) => service.dispose(),
