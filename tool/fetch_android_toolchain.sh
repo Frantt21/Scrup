@@ -148,6 +148,15 @@ for abi in $ABIS; do
   done
   rm -rf "$out/lib/python3.14"/config-3.14* "$out/lib/pkgconfig" "$out/lib/include"
 
+  # aapt2 drops directories starting with '_' from APK assets.
+  # Log which _-prefixed dirs exist so we know what to fix at runtime.
+  _prefixed=$(find "$out/lib/python3.14" -type d -name '_*' ! -name '__*' 2>/dev/null || true)
+  if [[ -n "$_prefixed" ]]; then
+    echo "$_prefixed" | while read -r d; do
+      log "aapt2 will strip: $(echo "$d" | sed "s|$out/lib/python3.14/||")"
+    done
+  fi
+
   # 5. File inventory for the runtime extractor (Dart reads the native assets).
   manifest_json "$out"
 

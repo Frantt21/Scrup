@@ -56,13 +56,30 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "getAbi" -> result.success(toolchainAbi())
+                    "pythonConfigure" -> {
+                        val home = call.argument<String>("home")
+                        val pythonPath = call.argument<String>("pythonPath")
+                        if (home == null || pythonPath == null) {
+                            result.error("badArgs", "home and pythonPath required", null)
+                            return@setMethodCallHandler
+                        }
+                        pythonExecutor.execute {
+                            try {
+                                pythonConfigure(home, pythonPath)
+                                result.success(null)
+                            } catch (e: Throwable) {
+                                result.error("python", e.toString(), Log.getStackTraceString(e))
+                            }
+                        }
+                    }
                     "pythonHello" -> {
-                        // Prueba de humo: valida que libpython embebido carga.
-                        try {
-                            val msg = pythonHello()
-                            result.success(msg)
-                        } catch (e: Throwable) {
-                            result.error("python", e.toString(), Log.getStackTraceString(e))
+                        pythonExecutor.execute {
+                            try {
+                                val msg = pythonHello()
+                                result.success(msg)
+                            } catch (e: Throwable) {
+                                result.error("python", e.toString(), Log.getStackTraceString(e))
+                            }
                         }
                     }
                     "ytDlpRun" -> {
@@ -73,15 +90,34 @@ class MainActivity : FlutterActivity() {
                                 val files = filesDir.absolutePath
                                 val abi = toolchainAbi()
                                 val home = "$files/toolchain/$abi"
-                                // Configuramos el home del intérprete ANTES de
-                                // cada ejecución: los paths de la toolchain
-                                // (extraída por Dart vía ensureAndroidToolchain)
-                                // ya existen aquí, así que py_init() puede
-                                // inicializarse correctamente (una sola vez).
                                 pythonConfigure(home, "$home/lib/python3.14")
-                                val script = "$home/yt-dlp"
+                                val ytdlp = "$home/yt-dlp"
                                 val lp = logPath ?: "$home/tmp/ytdlp_run.log"
-                                val rc = pythonRunYtDlp(script, args.toTypedArray(), lp)
+
+                                // Write a wrapper that redirects fd 1/2 to the log
+                                // file BEFORE importing yt-dlp. This captures all
+                                // output reliably (Python 3.14 run_path issue).
+                                val wrapper = java.io.File(home, "_run_wrapper.py")
+                                wrapper.writeText(
+                                    "import os, sys, runpy\n" +
+                                    "logp = sys.argv[1]\n" +
+                                    "script = sys.argv[2]\n" +
+                                    "sys.argv = [script] + sys.argv[3:]\n" +
+                                    "fd = os.open(logp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)\n" +
+                                    "os.dup2(fd, 1)\n" +
+                                    "os.dup2(fd, 2)\n" +
+                                    "os.close(fd)\n" +
+                                    "sys.stdout = os.fdopen(1, 'w', buffering=1)\n" +
+                                    "sys.stderr = os.fdopen(2, 'w', buffering=1)\n" +
+                                    "try:\n" +
+                                    "  runpy.run_path(script, run_name='__main__')\n" +
+                                    "except SystemExit:\n" +
+                                    "  pass\n"
+                                )
+
+                                // Call wrapper: _run_wrapper.py <logPath> <ytdlp> [args...]
+                                val wrapperArgs = arrayOf(lp, ytdlp) + args.toTypedArray()
+                                val rc = pythonRunYtDlp(wrapper.absolutePath, wrapperArgs, lp)
                                 val out = try {
                                     java.io.File(lp).readText()
                                 } catch (e: Exception) { "" }

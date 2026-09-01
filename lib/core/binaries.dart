@@ -57,8 +57,15 @@ class Binaries {
     try {
       const ch = MethodChannel(_androidToolchainChannel);
       final abi = await ch.invokeMethod<String>('getAbi');
-      if (abi != null && abi.isNotEmpty) _androidToolchainAbi = abi;
-    } catch (_) {}
+      if (abi != null && abi.isNotEmpty) {
+        _androidToolchainAbi = abi;
+        debugPrint('[Scrup] ABI detected: $abi');
+      } else {
+        debugPrint('[Scrup] ABI channel returned null/empty, using default: $_androidToolchainAbi');
+      }
+    } catch (e) {
+      debugPrint('[Scrup] ABI detection failed ($e), using default: $_androidToolchainAbi');
+    }
     return _androidToolchainAbi;
   }
 
@@ -148,7 +155,10 @@ class Binaries {
             ' perdido(s): ${missingEssential.join(", ")}');
       }
 
-      // PYTHONHOME/TMPDIR esperan esta carpeta.
+      // Ensure executables have +x and correct SELinux label.
+      _ensureExecutable(p.join(root, 'python3'));
+      _ensureExecutable(p.join(root, 'yt-dlp'));
+
       await Directory(p.join(root, 'tmp')).create();
       await File(marker).writeAsString('ok');
 
@@ -156,8 +166,27 @@ class Binaries {
       final stdlibOk = Directory(p.join(root, 'lib', 'python3.14')).existsSync();
       if (!ytdlpOk || !stdlibOk) {
         return _failToolchain(
-            'falta yt-dlp/stdlib tras copiar (yt-dlp=$ytdlpOk, stdlib=$stdlibOk)');
+            'missing yt-dlp/stdlib (yt-dlp=$ytdlpOk, stdlib=$stdlibOk)');
       }
+
+      // aapt2 strips directories starting with '_' from APK assets.
+      // Re-create critical ones (zipfile._path) from a bundled shim so
+      // that yt-dlp can import zipfile correctly on Python 3.14+.
+      _patchAaptStrippedModules(root);
+
+      // Health check: verify Python can actually import the stdlib.
+      final healthOk = await _healthCheck(channel, root);
+      if (!healthOk) {
+        // Try re-extracting once (corrupt files from a previous run).
+        debugPrint('[Scrup] toolchain health check failed, re-extracting...');
+        try {
+          await File(marker).delete();
+        } catch (_) {}
+        _androidToolchainRoot = null;
+        _androidToolchainFuture = null;
+        return false;
+      }
+
       _androidToolchainRoot = root;
       final skippedNote =
           skipped > 0 ? ' — $skipped recursos stdlib no empaquetados por aapt2' : '';
@@ -180,8 +209,86 @@ class Binaries {
     return false;
   }
 
-  /// Lee un lote de assets nativos (camino `toolchain/<abi>/<rel>`). Devuelve
-  /// un mapa rel→bytes; los archivos que no puedan leerse se omiten.
+  // aapt2 strips _-prefixed dirs from APK assets. This creates a shim
+  // for zipfile._path (Python 3.14+) so yt-dlp can import zipfile.
+  static void _patchAaptStrippedModules(String root) {
+    final stdlibDir = p.join(root, 'lib', 'python3.14');
+    if (!Directory(stdlibDir).existsSync()) return;
+
+    // zipfile._path is critical for yt-dlp. Check if it was stripped.
+    final zipfileDir = p.join(stdlibDir, 'zipfile');
+    final pathPkg = p.join(zipfileDir, '_path');
+    final pathMod = p.join(zipfileDir, '_path.py');
+    if (Directory(pathPkg).existsSync()) return; // already present
+    if (File(pathMod).existsSync()) return;      // already flattened
+
+    // Create a minimal _path.py shim.
+    debugPrint('[Scrup] patching missing zipfile._path (aapt2 strip workaround)');
+    try {
+      File(pathMod).writeAsStringSync('''
+import os as _os
+import sys as _sys
+
+class Path:
+    """Minimal Path shim for zipfile on Android."""
+    __slots__ = ('_path',)
+    def __init__(self, root, *parts):
+        self._path = _os.path.join(root, *parts) if parts else root
+    def __truediv__(self, other):
+        return Path(self._path, other)
+    def __str__(self):
+        return self._path
+    def __repr__(self):
+        return f'Path({self._path!r})'
+    def open(self, mode='r', *a, **kw):
+        return open(self._path, mode, *a, **kw)
+    def exists(self):
+        return _os.path.exists(self._path)
+    def is_dir(self):
+        return _os.path.isdir(self._path)
+    def is_file(self):
+        return _os.path.isfile(self._path)
+    def stat(self):
+        return _os.stat(self._path)
+    def iterdir(self):
+        for name in _os.listdir(self._path):
+            yield Path(self._path, name)
+    def resolve(self):
+        return Path(_os.path.realpath(self._path))
+
+class CompleteDirs:
+    def __init__(self, root):
+        self._root = root
+    def open(self, *a, **kw):
+        return open(self._root, *a, **kw)
+    def __truediv__(self, other):
+        return Path(self._root, other)
+''');
+    } catch (e) {
+      debugPrint('[Scrup] failed to create _path.py shim: $e');
+    }
+  }
+
+  // Validates that libpython loads correctly for this ABI.
+  static Future<bool> _healthCheck(MethodChannel channel, String root) async {
+    try {
+      // Configure Python (needed before pythonHello works).
+      await channel.invokeMethod<void>('pythonConfigure', {
+        'home': root,
+        'pythonPath': p.join(root, 'lib', 'python3.14'),
+      });
+      final msg = await channel
+          .invokeMethod<String>('pythonHello')
+          .timeout(const Duration(seconds: 10));
+      final ok = msg != null && msg.isNotEmpty;
+      debugPrint('[Scrup] toolchain health: ${ok ? 'OK' : 'FAIL'} ($msg)');
+      return ok;
+    } catch (e) {
+      debugPrint('[Scrup] toolchain health check failed: $e');
+      return false;
+    }
+  }
+
   static Future<Map<String, Uint8List>> _readMany(
     MethodChannel channel,
     List<String> keys,

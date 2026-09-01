@@ -125,14 +125,19 @@ class YtDlpService {
     return env;
   }
 
-  // Ejecuta yt-dlp en Android vía el driver JNI (libpython embebido). La
-  // salida (stdout+stderr) se vuelca a un archivo de log por el driver; Kotlin
-  // lo relee y lo devuelve junto al exit code.
+  // Runs yt-dlp on Android via JNI (embedded libpython).
+  // Output goes to a log file; Kotlin reads it back with the exit code.
   Future<ProcessResult> _runJni(
     List<String> args, {
     Duration timeout = const Duration(seconds: 60),
   }) async {
-    await Binaries.ensureAndroidToolchain();
+    final ready = await Binaries.ensureAndroidToolchain();
+    if (!ready) {
+      throw YtDlpException(
+        'yt-dlp toolchain not available. Check that the Android build '
+        'includes the correct ABI assets.',
+      );
+    }
     debugPrint('[yt-dlp] jni ${args.join(' ')}');
     final logPath = await _jniLogPath();
     try {
@@ -146,12 +151,17 @@ class YtDlpService {
       final output = (res?['output'] as String?) ?? '';
       if (exitCode != 0) {
         final err = output.trim();
-        throw YtDlpException(err.isNotEmpty ? err : 'Error de yt-dlp');
+        debugPrint('[yt-dlp] jni failed (exit=$exitCode): '
+            '${err.substring(0, err.length.clamp(0, 500))}');
+        throw YtDlpException(err.isNotEmpty ? err : 'yt-dlp error');
       }
       return ProcessResult(0, exitCode, output, '');
     } on TimeoutException {
       await _jniCancel();
-      throw YtDlpException('yt-dlp tardó demasiado (timeout).');
+      throw YtDlpException('yt-dlp timed out.');
+    } catch (e) {
+      debugPrint('[yt-dlp] jni exception: $e');
+      rethrow;
     }
   }
 
@@ -282,6 +292,7 @@ class YtDlpService {
     try {
       json = jsonDecode(result.stdout as String) as Map<String, dynamic>;
     } catch (e) {
+      debugPrint('[yt-dlp] search parse failed: ${result.stdout}');
       throw YtDlpException('No se pudo interpretar la respuesta de yt-dlp.');
     }
 

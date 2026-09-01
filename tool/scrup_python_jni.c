@@ -74,8 +74,11 @@ static int py_init(void)
     PyConfig_SetBytesString(&config, &config.program_name, "python3");
 
     /* PYTHONMALLOC=malloc: desactiva mimalloc/pymalloc para no leer
-     * /proc/sys/vm/* (bloqueado por SELinux untrusted_app). */
+     * /proc/sys/vm/* (bloqueado por SELinux untrusted_app).
+     * PYTHONUNBUFFERED: fuerza salida sin buffer para que el log se
+     * escriba antes de que sys.exit() cierre el proceso. */
     setenv("PYTHONMALLOC", "malloc", 1);
+    setenv("PYTHONUNBUFFERED", "1", 1);
     if (g_pythonHome) setenv("PYTHONHOME", g_pythonHome, 1);
     /* LD_LIBRARY_PATH al dir lib de la toolchain para que los módulos
      * dinámicos (_ssl -> libssl_python.so, _hashlib -> libcrypto_python.so)
@@ -154,9 +157,11 @@ Java_com_scrup_scrup_MainActivity_pythonRunYtDlp(
         PyObject_SetAttrString(sys, "argv", argv);
         Py_DECREF(argv);
 
-        /* Redirigir sys.stdout/sys.stderr de Python (no los fd del proceso)
-         * a un archivo de log: captura solo la salida de yt-dlp. */
-        char *setup = (char *)malloc(strlen(logp) + 140);
+        /* Redirect Python sys.stdout/stderr to the log file.
+         * Note: when a wrapper script is used (Kotlin side), it handles
+         * fd-level redirection before calling this. This is a fallback
+         * for direct calls. */
+        char *setup = (char *)malloc(strlen(logp) + 300);
         sprintf(setup,
             "import sys\n"
             "_scrup_restore=(sys.stdout,sys.stderr)\n"
@@ -188,7 +193,7 @@ Java_com_scrup_scrup_MainActivity_pythonRunYtDlp(
             exit_code = 1;
         }
 
-        /* Restaurar los streams y cerrar/flushear el log. */
+        /* Restore sys.stdout/stderr and close the log file. */
         PyRun_SimpleString(
             "import sys\n"
             "if '_scrup_restore' in globals():\n"

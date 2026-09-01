@@ -1,12 +1,11 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+
 import '../core/track.dart';
 import 'ytdlp_service.dart';
 import 'ytmusic_service.dart';
 
-/// Búsqueda combinada de Scrup: lanza en paralelo YouTube Music (canciones
-/// canónicas con metadatos limpios, vía InnerTube) y YouTube general
-/// (yt-dlp), y fusiona los resultados: canciones primero, sin duplicar ids.
-/// Si YT Music falla o no devuelve nada, se queda solo con yt-dlp: la
-/// búsqueda nunca es peor que antes.
 class SearchService {
   SearchService({YtMusicService? ytMusic, YtDlpService? ytDlp})
     : _ytMusic = ytMusic ?? YtMusicService(),
@@ -19,7 +18,6 @@ class SearchService {
     final q = query.trim();
     if (q.isEmpty) return const [];
 
-    // YT Music tolerante a fallos: cualquier error → lista vacía.
     final songsFuture = _ytMusic
         .search(q, limit: limit)
         .then<List<Track>>(
@@ -27,9 +25,18 @@ class SearchService {
           onError: (_) => const <Track>[],
         );
 
+    // yt-dlp may fail on Android (toolchain issues). Gracefully degrade
+    // to InnerTube-only results so the user still sees search results.
+    final videosFuture = _ytDlp
+        .search(q, limit: limit)
+        .catchError((e) {
+      debugPrint('[Search] yt-dlp search failed: $e');
+      return <Track>[];
+    });
+
     final [songs, videos] = await Future.wait([
       songsFuture,
-      _ytDlp.search(q, limit: limit),
+      videosFuture,
     ]);
     return mergeResults(songs, videos, limit);
   }
