@@ -3,7 +3,10 @@ import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart' hide Track;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -92,6 +95,25 @@ Future<void> main() async {
   // encontrado" hasta que termine (unos segundos).
   if (Binaries.isMobile) {
     unawaited(Binaries.ensureAndroidToolchain());
+
+    // TEMP: prueba offline de la pipeline JNI (yt-dlp --version, sin red).
+    unawaited(() async {
+      try {
+        await Binaries.ensureAndroidToolchain();
+        const ch = MethodChannel('com.scrup.music.toolchain');
+        final logPath =
+            p.join((await getApplicationSupportDirectory()).path, 'ver.log');
+        final res = await ch.invokeMethod<Map<dynamic, dynamic>>(
+          'ytDlpRun',
+          {'args': <String>['--version'], 'logPath': logPath},
+        );
+        final code = (res?['exitCode'] as num?)?.toInt() ?? 1;
+        final out = (res?['output'] as String?) ?? '';
+        debugPrint('[TEMP-VERSION] exitCode=$code output=${out.trim()}');
+      } catch (e) {
+        debugPrint('[TEMP-VERSION] ERROR $e');
+      }
+    }());
   }
 
   final database = AppDatabase();

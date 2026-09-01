@@ -45,8 +45,22 @@ class Binaries {
   // NATIVOS (android/app/src/main/assets/toolchain/) — no pubspec — porque
   // Flutter no permite assets por plataforma. Se materializa una sola vez a
   // la carpeta de archivos de la app y ahí se ejecuta `python3 <root>/yt-dlp`.
-  static const String _androidToolchainAbi = 'aarch64';
+  // El ABI se resuelve en runtime según el dispositivo (aarch64 en arm64
+  // reales, x86_64 en emulador) porque los módulos binarios de CPython
+  // (lib-dynload: zlib, _ssl, ...) son específicos de ABI.
+  static String _androidToolchainAbi = 'aarch64';
   static const String _androidToolchainChannel = 'com.scrup.music.toolchain';
+
+  /// Resuelve el ABI de la toolchain CPython según el dispositivo (vía
+  /// Build.SUPPORTED_ABIS en Kotlin). Devuelve 'aarch64' o 'x86_64'.
+  static Future<String> _resolveAndroidAbi() async {
+    try {
+      const ch = MethodChannel(_androidToolchainChannel);
+      final abi = await ch.invokeMethod<String>('getAbi');
+      if (abi != null && abi.isNotEmpty) _androidToolchainAbi = abi;
+    } catch (_) {}
+    return _androidToolchainAbi;
+  }
 
   static String? _androidToolchainRoot;
   static Future<bool>? _androidToolchainFuture;
@@ -73,14 +87,15 @@ class Binaries {
     final channel = const MethodChannel(_androidToolchainChannel);
     try {
       final filesDir = await getApplicationSupportDirectory();
+      await _resolveAndroidAbi();
       final root = p.join(filesDir.path, 'toolchain', _androidToolchainAbi);
-      final marker = p.join(filesDir.path, '.scrup_toolchain_v2');
+      final marker = p.join(
+        filesDir.path,
+        '.scrup_toolchain_v2_${_androidToolchainAbi}',
+      );
       if (File(marker).existsSync()) {
-        debugPrint('[Scrup] toolchain marker existe, ejecutando chcon en ejecutables');
+        debugPrint('[Scrup] toolchain marker existe ($_androidToolchainAbi)');
         _androidToolchainRoot = root;
-        for (final name in const ['python3', 'yt-dlp']) {
-          _ensureExecutable(p.join(root, name));
-        }
         return true;
       }
 
@@ -133,22 +148,15 @@ class Binaries {
             ' perdido(s): ${missingEssential.join(", ")}');
       }
 
-      const execNames = {'python3', 'yt-dlp'};
-      for (final rel in files) {
-        if (execNames.contains(p.basename(rel))) {
-          _ensureExecutable(p.join(root, rel));
-        }
-      }
-
       // PYTHONHOME/TMPDIR esperan esta carpeta.
       await Directory(p.join(root, 'tmp')).create();
       await File(marker).writeAsString('ok');
 
-      final python3Ok = File(p.join(root, 'python3')).existsSync();
       final ytdlpOk = File(p.join(root, 'yt-dlp')).existsSync();
-      if (!python3Ok || !ytdlpOk) {
+      final stdlibOk = Directory(p.join(root, 'lib', 'python3.14')).existsSync();
+      if (!ytdlpOk || !stdlibOk) {
         return _failToolchain(
-            'falta python3/yt-dlp tras copiar (python3=$python3Ok, yt-dlp=$ytdlpOk)');
+            'falta yt-dlp/stdlib tras copiar (yt-dlp=$ytdlpOk, stdlib=$stdlibOk)');
       }
       _androidToolchainRoot = root;
       final skippedNote =

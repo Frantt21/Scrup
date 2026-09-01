@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../core/binaries.dart';
 import '../core/track.dart';
@@ -66,6 +68,14 @@ class YtDlpService {
 
   static const Duration _searchCacheTtl = Duration(minutes: 5);
 
+  // Canal JNI (MainActivity) que ejecuta yt-dlp embebido en el proceso vía
+  // libpython (libscrup_python.so, jniLibs -> SELinux apk_data_file). Se usa
+  // en Android en lugar de Process.run/start.
+  static const MethodChannel _androidChannel =
+      MethodChannel('com.scrup.music.toolchain');
+
+  static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+
   /// Caché LRU en memoria de búsquedas recientes (clave = `query|limit`).
   final Map<String, _SearchCacheEntry> _searchCache = {};
 
@@ -115,6 +125,47 @@ class YtDlpService {
     return env;
   }
 
+  // Ejecuta yt-dlp en Android vía el driver JNI (libpython embebido). La
+  // salida (stdout+stderr) se vuelca a un archivo de log por el driver; Kotlin
+  // lo relee y lo devuelve junto al exit code.
+  Future<ProcessResult> _runJni(
+    List<String> args, {
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    await Binaries.ensureAndroidToolchain();
+    debugPrint('[yt-dlp] jni ${args.join(' ')}');
+    final logPath = await _jniLogPath();
+    try {
+      final res = await _androidChannel
+          .invokeMethod<Map<dynamic, dynamic>>(
+            'ytDlpRun',
+            {'args': args, 'logPath': logPath},
+          )
+          .timeout(timeout);
+      final exitCode = (res?['exitCode'] as num?)?.toInt() ?? 1;
+      final output = (res?['output'] as String?) ?? '';
+      if (exitCode != 0) {
+        final err = output.trim();
+        throw YtDlpException(err.isNotEmpty ? err : 'Error de yt-dlp');
+      }
+      return ProcessResult(0, exitCode, output, '');
+    } on TimeoutException {
+      await _jniCancel();
+      throw YtDlpException('yt-dlp tardó demasiado (timeout).');
+    }
+  }
+
+  Future<String> _jniLogPath() async {
+    final dir = await getApplicationSupportDirectory();
+    return p.join(dir.path, 'scrup_ytdlp_run.log');
+  }
+
+  Future<void> _jniCancel() async {
+    try {
+      await _androidChannel.invokeMethod<void>('ytDlpCancel');
+    } catch (_) {}
+  }
+
   Future<File?> _findPartial(String dir, String videoId) async {
     final d = Directory(dir);
     if (!await d.exists()) return null;
@@ -144,6 +195,9 @@ class YtDlpService {
     List<String> args, {
     Duration timeout = const Duration(seconds: 60),
   }) async {
+    if (_isAndroid) {
+      return _runJni(args, timeout: timeout);
+    }
     final ytdlp = await Binaries.resolveYtDlp();
     if (ytdlp == null) {
       throw YtDlpException(
@@ -249,6 +303,14 @@ class YtDlpService {
     String? title,
     void Function(double? percent)? onProgress,
   }) async {
+    if (_isAndroid) {
+      return _startStreamingAndroid(
+        videoId,
+        outputDir: outputDir,
+        title: title,
+        onProgress: onProgress,
+      );
+    }
     final ytdlp = await Binaries.resolveYtDlp();
     if (ytdlp == null) {
       throw YtDlpException(
@@ -415,6 +477,115 @@ class YtDlpService {
       playablePath: partialCompleter.future,
       finalPath: doneCompleter.future,
       cancel: process.kill,
+    );
+  }
+
+  // Descarga streaming en Android vía el driver JNI (libpython embebido).
+  // yt-dlp corre en el executor nativo (bloqueando su hilo); aquí resolvemos
+  // el playback cuando el .part/archivo final es reproducible y reportamos
+  // progreso leyendo el log que el driver va escribiendo.
+  Future<StreamingDownload> _startStreamingAndroid(
+    String videoId, {
+    required String outputDir,
+    String? title,
+    void Function(double? percent)? onProgress,
+  }) async {
+    await Binaries.ensureAndroidToolchain();
+    debugPrint('[yt-dlp] stream(jni) $videoId');
+
+    final partialCompleter = Completer<String>();
+    final doneCompleter = Completer<String>();
+    var cancelled = false;
+
+    // Lanza la descarga en background vía el canal JNI.
+    unawaited(() async {
+      try {
+        await _run(
+          _downloadArgs(videoId, outputDir),
+          timeout: const Duration(minutes: 10),
+        );
+        final finalPath = await _findFinal(outputDir, videoId);
+        if (finalPath == null) {
+          final err =
+              'La descarga de "${title ?? videoId}" no produjo un archivo.';
+          if (!doneCompleter.isCompleted) {
+            doneCompleter.completeError(YtDlpException(err));
+          }
+          if (!partialCompleter.isCompleted) {
+            partialCompleter.completeError(YtDlpException(err));
+          }
+        } else {
+          if (!doneCompleter.isCompleted) {
+            doneCompleter.complete(finalPath);
+          }
+          if (!partialCompleter.isCompleted) {
+            partialCompleter.complete(finalPath);
+          }
+        }
+      } catch (e) {
+        final msg = e is YtDlpException ? e.message : '$e';
+        if (!cancelled) {
+          if (!doneCompleter.isCompleted) {
+            doneCompleter.completeError(YtDlpException(msg));
+          }
+          if (!partialCompleter.isCompleted) {
+            partialCompleter.completeError(YtDlpException(msg));
+          }
+        }
+      }
+    }());
+
+    // Polling: resuelve playback cuando hay datos reproducibles y reporta
+    // progreso desde el log que el driver va escribiendo.
+    unawaited(() async {
+      final started = DateTime.now();
+      final logPath = await _jniLogPath();
+      var lastReported = -1;
+      final progressRe = RegExp(r'\[download\]\s+(\d+(?:\.\d+)?)%');
+      while (!doneCompleter.isCompleted) {
+        if (!partialCompleter.isCompleted) {
+          final finalPath = await _findFinal(outputDir, videoId);
+          if (finalPath != null) {
+            partialCompleter.complete(finalPath);
+          } else {
+            final partial = await _findPartial(outputDir, videoId);
+            if (partial != null) {
+              final size = await partial.length();
+              final elapsedMs =
+                  DateTime.now().difference(started).inMilliseconds;
+              if (size >= 1024 * 1024 ||
+                  (elapsedMs >= 6000 && size >= 64 * 1024)) {
+                partialCompleter.complete(partial.path);
+              }
+            }
+          }
+        }
+        try {
+          final f = File(logPath);
+          if (await f.exists()) {
+            final cur = await f.readAsString();
+            final ms = progressRe.allMatches(cur).toList();
+            if (ms.isNotEmpty) {
+              final p = double.parse(ms.last.group(1)!);
+              final r = p.round();
+              if (r != lastReported) {
+                lastReported = r;
+                onProgress?.call(p / 100);
+              }
+            }
+          }
+        } catch (_) {}
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+    }());
+
+    return StreamingDownload(
+      playablePath: partialCompleter.future,
+      finalPath: doneCompleter.future,
+      cancel: () {
+        cancelled = true;
+        unawaited(_jniCancel());
+      },
     );
   }
 
