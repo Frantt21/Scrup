@@ -146,24 +146,18 @@ class _SearchViewState extends State<SearchView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(4, 4, 12, 8),
+                // Misma alineación de header que Library en móvil (16px).
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back_rounded),
-                          tooltip: l10n.backToHome,
-                          onPressed: widget.onBack,
-                        ),
-                        Text(
-                          l10n.searchTitle,
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                    // Móvil: header sin botón (la navegación vive en la
+                    // NavigationBar inferior).
+                    Text(
+                      l10n.searchTitle,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -193,25 +187,6 @@ class _SearchViewState extends State<SearchView> {
                         contentPadding: const EdgeInsets.symmetric(
                           vertical: 12,
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 34,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _recentSearches.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (context, i) {
-                          final q = _recentSearches[i];
-                          return ActionChip(
-                            label: Text(q),
-                            onPressed: () {
-                              _searchController.text = q;
-                              _search(q);
-                            },
-                          );
-                        },
                       ),
                     ),
                   ],

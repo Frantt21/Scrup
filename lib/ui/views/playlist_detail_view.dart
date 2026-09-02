@@ -562,18 +562,23 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       body: Stack(
         children: [
           CustomScrollView(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             slivers: [
               // Full-width cover image header with gradient overlay
               SliverAppBar(
-                expandedHeight: MediaQuery.of(context).size.width,
+                expandedHeight: MediaQuery.sizeOf(context).width,
                 pinned: false,
                 floating: false,
                 snap: false,
                 stretch: true,
+                stretchTriggerOffset: 60,
                 backgroundColor: Colors.transparent,
                 elevation: 0,
                 automaticallyImplyLeading: false,
                 flexibleSpace: FlexibleSpaceBar(
+                  collapseMode: CollapseMode.pin,
                   stretchModes: const [
                     StretchMode.zoomBackground,
                     StretchMode.blurBackground,
@@ -620,63 +625,67 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
               ),
               // Playlist info + action buttons
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                  child: Column(
-                    children: [
-                      Text(
-                        playlist.name,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (playlist.description != null &&
-                          playlist.description!.isNotEmpty) ...[
-                        const SizedBox(height: 4),
+                // Cuerpo "plano" (estilo forawn): este bloque lleva el color
+                // de fondo final del degradado para que al hacer scroll no se
+                // vea un corte entre artwork y contenido.
+                child: Container(
+                  color: bgColor,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                    child: Column(
+                      children: [
                         Text(
-                          playlist.description!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                          playlist.name,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
                           ),
                           textAlign: TextAlign.center,
                         ),
-                      ],
-                      const SizedBox(height: 4),
-                      Text(
-                        '$count tracks',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          FilledButton.icon(
-                            onPressed: count == 0 ? null : _playAll,
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size(0, 44),
+                        if (playlist.description != null &&
+                            playlist.description!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            playlist.description!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
-                            icon: const Icon(Icons.play_arrow_rounded),
-                            label: Text(l10n.play),
-                          ),
-                          const SizedBox(width: 12),
-                          FilledButton.icon(
-                            onPressed: count == 0 ? null : _playShuffled,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: theme.colorScheme.primary,
-                              minimumSize: const Size(0, 44),
-                            ),
-                            icon: const Icon(Icons.shuffle_rounded),
-                            label: Text(l10n.shuffle),
+                            textAlign: TextAlign.center,
                           ),
                         ],
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          '$count tracks',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            FilledButton.icon(
+                              onPressed: count == 0 ? null : _playAll,
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 44),
+                              ),
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label: Text(l10n.play),
+                            ),
+                            const SizedBox(width: 12),
+                            FilledButton.icon(
+                              onPressed: count == 0 ? null : _playShuffled,
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 44),
+                              ),
+                              icon: const Icon(Icons.shuffle_rounded),
+                              label: Text(l10n.shuffle),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -756,17 +765,17 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     );
   }
 
-  // Floating circle button for the mobile header overlay.
+  // Floating circle button for the mobile header overlay (acento como Play).
   Widget _floatingCircleBtn(IconData icon, ThemeData theme, VoidCallback onTap) {
     return Container(
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.8),
+        color: theme.colorScheme.primary.withValues(alpha: 0.85),
         shape: BoxShape.circle,
       ),
       child: IconButton(
-        icon: Icon(icon, size: 20),
+        icon: Icon(icon, size: 20, color: theme.colorScheme.onPrimary),
         onPressed: onTap,
         padding: EdgeInsets.zero,
       ),

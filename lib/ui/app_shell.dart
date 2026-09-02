@@ -290,7 +290,9 @@ class _AppShellState extends State<AppShell> {
     try {
       final saved = await context.read<SettingsStore>().loadQueueOpen();
       if (!mounted || saved == null || _queueUserToggled) return;
-      setState(() => _queueOpen = saved);
+      // Móvil: la cola ya no es un panel persistente (se abre/cierra como
+      // bottom sheet), así que siempre arranca cerrada.
+      setState(() => _queueOpen = Binaries.isMobile ? false : saved);
     } catch (_) {
       // La preferencia nunca debe impedir el arranque.
     }
@@ -402,13 +404,15 @@ class _AppShellState extends State<AppShell> {
 
     return Listener(
       onPointerDown: _handlePointerDown,
+      // Sin SafeArea global (edge-to-edge): cada vista móvil maneja su propio
+      // inset superior, y la playlist detail dibuja el artwork DEBAJO de la
+      // barra de estado (igual que forawn_mobile). La NavigationBar lleva su
+      // propio SafeArea inferior para no pisar la barra de gestos de Android.
       child: Scaffold(
       // El teclado queda POR ENCIMA del app: no empuja nav bar ni mini-player
       // (combina con adjustPan del manifest para centrar el campo en foco).
       resizeToAvoidBottomInset: false,
-      body: SafeArea(
-        top: mobile,
-        child: Stack(
+      body: Stack(
         children: [
           Column(
             children: [
@@ -441,28 +445,34 @@ class _AppShellState extends State<AppShell> {
                   onOpenNowPlaying: () {},
                   onOpenQueue: _openQueueMobile,
                 ),
+                // Sin SafeArea extra: la NavigationBar queda al borde y la
+                // barra de gestos translúcida se superpone; así mantiene su
+                // altura compacta (64dp) en edge-to-edge.
                 _buildMobileNavBar(),
               ],
             ],
           ),
           if (_showFsOverlay)
             Positioned.fill(
-              child: FullscreenPlayerView(
-                active: _fullscreen,
-                lyricsPanel: TickerMode(
-                  enabled: true,
-                  // Embebido: sin margen/sombra/fondo — las letras flotan
-                  // sobre las olas del fondo fullscreen.
-                  child: LyricsView(key: _fsLyricsKey, embedded: true),
+              // El fullscreen player usa su propio layout: mantiene SafeArea
+              // completo para no quedar bajo barras (no es edge-to-edge).
+              child: SafeArea(
+                child: FullscreenPlayerView(
+                  active: _fullscreen,
+                  lyricsPanel: TickerMode(
+                    enabled: true,
+                    // Embebido: sin margen/sombra/fondo — las letras flotan
+                    // sobre las olas del fondo fullscreen.
+                    child: LyricsView(key: _fsLyricsKey, embedded: true),
+                  ),
+                  onRequestClose: () => unawaited(_setFullscreen(false)),
+                  onExited: () => setState(() => _showFsOverlay = false),
                 ),
-                onRequestClose: () => unawaited(_setFullscreen(false)),
-                onExited: () => setState(() => _showFsOverlay = false),
               ),
             ),
         ],
       ),
       ),
-    ),
     );
   }
 
@@ -532,14 +542,22 @@ class _AppShellState extends State<AppShell> {
                     ? 3
                     : (_showSettings ? 4 : _selectedIndex)),
           children: [
-            HomeView(onSearch: _submitSearch),
-            SearchView(
-              searchRequest: _searchRequest,
-              onBack: _backToHome,
+            SafeArea(top: true, child: HomeView(onSearch: _submitSearch)),
+            SafeArea(
+              top: true,
+              child: SearchView(
+                searchRequest: _searchRequest,
+                onBack: _backToHome,
+              ),
             ),
-            LibraryView(
-              onSelectPlaylist: _selectPlaylist,
+            SafeArea(
+              top: true,
+              child: LibraryView(
+                onSelectPlaylist: _selectPlaylist,
+              ),
             ),
+            // Sin SafeArea superior: el artwork del detail va detrás de la
+            // barra de estado (edge-to-edge), como en forawn_mobile.
             if (openPlaylist != null)
               PlaylistDetailView(
                 key: ValueKey(openPlaylist.id),
@@ -549,31 +567,50 @@ class _AppShellState extends State<AppShell> {
               )
             else
               const SizedBox.shrink(),
-            SettingsView(key: ValueKey(_settingsOpenCount)),
+            SafeArea(
+              top: true,
+              child: SettingsView(key: ValueKey(_settingsOpenCount)),
+            ),
             _showFsOverlay
                 ? const SizedBox.shrink()
-                : TickerMode(
-                    enabled: _showLyrics,
-                    child: LyricsView(key: _fsLyricsKey),
+                : SafeArea(
+                    top: true,
+                    child: TickerMode(
+                      enabled: _showLyrics,
+                      child: LyricsView(key: _fsLyricsKey),
+                    ),
                   ),
           ],
         ),
-        // Cola como overlay a pantalla completa en móvil.
-        if (_queueOpen)
-          Positioned.fill(
-            child: QueuePanel(
-              open: true,
-              mobile: true,
-              onClose: () => _setQueueOpen(false),
-            ),
-          ),
+        // NOTE: la cola móvil ya NO se dibuja como overlay a pantalla
+        // completa: `_setQueueOpen(true)` abre un bottom sheet arrastrable
+        // (`QueueSheet`).
       ],
     );
     return content;
   }
 
-  void _setQueueOpen(bool next) {
+  /// Abre/cierra la cola. En móvil (Android) NO es un screen: se abre un
+  /// contenedor arrastrable (bottom sheet) y se cierra al deslizarlo abajo,
+  /// con el scrim o con back.
+  Future<void> _setQueueOpen(bool next) async {
     _queueUserToggled = true;
+    if (Binaries.isMobile && next) {
+      setState(() => _queueOpen = true);
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: false,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black54,
+        builder: (_) => const QueueSheet(),
+      );
+      if (mounted) {
+        setState(() => _queueOpen = false);
+        unawaited(context.read<SettingsStore>().saveQueueOpen(false));
+      }
+      return;
+    }
     setState(() => _queueOpen = next);
     unawaited(context.read<SettingsStore>().saveQueueOpen(next));
   }
@@ -581,45 +618,64 @@ class _AppShellState extends State<AppShell> {
   void _openQueueMobile() => _setQueueOpen(!_queueOpen);
 
   // Barra de navegación inferior de Android (Inicio / Buscar / Librería / Ajustes).
+  // Barra propia compacta de 64dp: el NavigationBar M3 añade internamente un
+  // SafeArea (inset inferior) que lo hacía MÁS ALTO en edge-to-edge. Solo
+  // iconos (sin etiquetas) y sin efecto de pulso al presionar.
   Widget _buildMobileNavBar() {
-    final l10n = AppLocalizations.of(context);
-    return NavigationBar(
-      selectedIndex: _mobileNavIndex,
-      onDestinationSelected: (i) {
-        setState(() {
-          _openPlaylist = null;
-          _showLyrics = false;
-          if (i == 3) {
-            _showSettings = true;
-          } else {
-            _showSettings = false;
-            _selectedIndex = i;
-          }
-        });
-      },
-      destinations: [
-        NavigationDestination(
-          icon: const Icon(Icons.home_outlined),
-          selectedIcon: const Icon(Icons.home_rounded),
-          label: l10n.home,
+    final cs = Theme.of(context).colorScheme;
+    final defs = <(IconData, int)>[
+      (Icons.home_rounded, 0),
+      (Icons.search_rounded, 1),
+      (Icons.library_music_rounded, 2),
+      (Icons.settings_rounded, 3),
+    ];
+    return Material(
+      color: cs.surfaceContainer,
+      child: SizedBox(
+        height: 64,
+        child: Padding(
+          // Respiro inferior: separa un poco los iconos de los botones de
+          // navegación del sistema (gestos / 3 botones) en edge-to-edge.
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(
+            children: [
+              for (final d in defs)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _selectMobileNav(d.$2),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          d.$1,
+                          size: 26,
+                          color: _mobileNavIndex == d.$2
+                              ? cs.primary
+                              : cs.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
-        NavigationDestination(
-          icon: const Icon(Icons.search_outlined),
-          selectedIcon: const Icon(Icons.search_rounded),
-          label: l10n.searchTitle,
-        ),
-        NavigationDestination(
-          icon: const Icon(Icons.library_music_outlined),
-          selectedIcon: const Icon(Icons.library_music_rounded),
-          label: l10n.library,
-        ),
-        NavigationDestination(
-          icon: const Icon(Icons.settings_outlined),
-          selectedIcon: const Icon(Icons.settings_rounded),
-          label: l10n.settings,
-        ),
-      ],
+      ),
     );
+  }
+
+  void _selectMobileNav(int i) {
+    setState(() {
+      _openPlaylist = null;
+      _showLyrics = false;
+      if (i == 3) {
+        _showSettings = true;
+      } else {
+        _showSettings = false;
+        _selectedIndex = i;
+      }
+    });
   }
 
   // Índice activo de la NavigationBar móvil: mapea el estado real de la app.

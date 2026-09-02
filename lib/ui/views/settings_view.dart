@@ -325,7 +325,7 @@ class _SettingsViewState extends State<SettingsView> {
         // El contenedor ya termina por encima del player (margen
         // inferior), así que aquí solo hace falta un respiro pequeño.
         padding: EdgeInsets.fromLTRB(
-            mobile ? 16 : 20, mobile ? 12 : 20, mobile ? 16 : 20, 12),
+            mobile ? 16 : 20, mobile ? 16 : 20, mobile ? 16 : 20, 12),
         children: [
           Text(
             AppLocalizations.of(context).settings,
@@ -335,15 +335,15 @@ class _SettingsViewState extends State<SettingsView> {
           ),
           const SizedBox(height: 20),
           _buildLanguageSection(theme),
-          const SizedBox(height: 16),
+          SizedBox(height: mobile ? 8 : 16),
           _buildDiscordSection(theme),
-          const SizedBox(height: 16),
+          SizedBox(height: mobile ? 8 : 16),
           _buildPlayerSection(theme),
-          const SizedBox(height: 16),
+          SizedBox(height: mobile ? 8 : 16),
           _buildCacheSection(theme),
-          const SizedBox(height: 16),
+          SizedBox(height: mobile ? 8 : 16),
           _buildShortcutsSection(theme),
-          const SizedBox(height: 16),
+          SizedBox(height: mobile ? 8 : 16),
           _buildAboutSection(theme),
         ],
       ),
@@ -417,7 +417,7 @@ class _SettingsViewState extends State<SettingsView> {
               hoverColor: Colors.white.withValues(alpha: 0.04),
               onTap: () => _openLanguageMenu(fieldContext),
               child: Container(
-                width: 240,
+                width: Binaries.isMobile ? double.infinity : 240,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 12,
@@ -525,7 +525,7 @@ class _SettingsViewState extends State<SettingsView> {
             contentPadding: EdgeInsets.zero,
             tileColor: Colors.transparent,
             title: SizedBox(
-              width: 240,
+              width: Binaries.isMobile ? null : 240,
               child: Text(
                 l10n.discordEnabled,
                 style: theme.textTheme.bodyLarge?.copyWith(
@@ -540,7 +540,10 @@ class _SettingsViewState extends State<SettingsView> {
             },
           ),
           Padding(
-            padding: const EdgeInsets.only(top: 8, left: 16),
+            padding: EdgeInsets.only(
+              top: 8,
+              left: Binaries.isMobile ? 0 : 16,
+            ),
             child: ValueListenableBuilder<bool>(
               valueListenable: service.connected,
               builder: (context, connected, _) => Row(
@@ -588,7 +591,7 @@ class _SettingsViewState extends State<SettingsView> {
             contentPadding: EdgeInsets.zero,
             tileColor: Colors.transparent,
             title: SizedBox(
-              width: 240,
+              width: Binaries.isMobile ? null : 240,
               child: Text(
                 l10n.karaokeSweep,
                 style: theme.textTheme.bodyLarge?.copyWith(
@@ -615,7 +618,7 @@ class _SettingsViewState extends State<SettingsView> {
               contentPadding: EdgeInsets.zero,
               tileColor: Colors.transparent,
               title: SizedBox(
-                width: 240,
+                width: Binaries.isMobile ? null : 240,
                 child: Text(
                   l10n.skipSilence,
                   style: theme.textTheme.bodyLarge?.copyWith(
@@ -698,7 +701,7 @@ class _SettingsViewState extends State<SettingsView> {
               hoverColor: Colors.white.withValues(alpha: 0.04),
               onTap: () => _openCacheLimitMenu(fieldContext),
               child: Container(
-                width: 240,
+                width: Binaries.isMobile ? double.infinity : 240,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 12,
@@ -731,7 +734,9 @@ class _SettingsViewState extends State<SettingsView> {
             ),
           ),
           const SizedBox(height: 14),
-          Row(
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
             children: [
               FilledButton.icon(
                 onPressed: _refreshStats,
@@ -743,7 +748,6 @@ class _SettingsViewState extends State<SettingsView> {
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: Text(l10n.refresh),
               ),
-              const SizedBox(width: 10),
               FilledButton.icon(
                 onPressed: _openCacheFolder,
                 style: FilledButton.styleFrom().copyWith(
@@ -754,7 +758,6 @@ class _SettingsViewState extends State<SettingsView> {
                 icon: const Icon(Icons.folder_open_rounded, size: 18),
                 label: Text(l10n.openFolder),
               ),
-              const SizedBox(width: 10),
               FilledButton.icon(
                 onPressed: _clearing ? null : _clearCache,
                 style: FilledButton.styleFrom(
@@ -828,46 +831,45 @@ class _SettingsViewState extends State<SettingsView> {
       const SizedBox(height: 14),
       Row(
         children: [
-          // Campo estilo selector de idioma: rectangular, ancho fijo y menú
-          // propio vía showMenu (hover full-bleed, sin padding forzado).
-          Builder(
-            builder: (fieldContext) => InkWell(
-              borderRadius: BorderRadius.circular(14),
-              mouseCursor: SystemMouseCursors.click,
-              focusColor: Colors.transparent,
-              hoverColor: Colors.white.withValues(alpha: 0.04),
-              onTap: _recalculating
-                  ? null
-                  : () => _openPlaylistMenu(fieldContext),
-              child: Container(
-                width: 240,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: theme.colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.35,
+          Expanded(
+            child: Builder(
+              builder: (fieldContext) => InkWell(
+                borderRadius: BorderRadius.circular(14),
+                mouseCursor: SystemMouseCursors.click,
+                focusColor: Colors.transparent,
+                hoverColor: Colors.white.withValues(alpha: 0.04),
+                onTap: _recalculating
+                    ? null
+                    : () => _openPlaylistMenu(fieldContext),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
                   ),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.06),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: theme.colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.35),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _selectedPlaylist?.name ?? '—',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: theme.colorScheme.onSurface,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _selectedPlaylist?.name ?? '—',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: theme.colorScheme.onSurface,
+                          ),
                         ),
                       ),
-                    ),
-                    const Icon(Icons.expand_more_rounded, size: 20),
-                  ],
+                      const Icon(Icons.expand_more_rounded, size: 20),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1110,7 +1112,9 @@ class _LocaleOption {
   const _LocaleOption(this.locale, this.label);
 }
 
-/// Tarjeta de sección: fondo sutil redondeado con icono, título y caption.
+/// Tarjeta/sección de ajustes. En desktop es un fondo sutil redondeado; en
+/// móvil se elimina el contenedor (la sección ocupa todo el ancho) y las
+/// categorías se separan con una línea divisoria.
 class _SectionCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -1127,42 +1131,61 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (caption != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            caption!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        child,
+      ],
+    );
+
+    if (Binaries.isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          content,
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.18),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         color: theme.colorScheme.surfaceContainer.withValues(alpha: 0.5),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 20, color: theme.colorScheme.primary),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (caption != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              caption!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
+      child: content,
     );
   }
 }

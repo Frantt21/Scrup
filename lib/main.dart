@@ -90,6 +90,14 @@ Future<void> main() async {
 
   Binaries.logBinaries();
 
+  if (Binaries.isMobile) {
+    // Edge-to-edge estilo forawn_mobile: barras de sistema transparentes y
+    // la app dibuja DEBAJO de ellas (el artwork del playlist detail llega
+    // hasta el borde superior y el fondo cubre la barra de navegación).
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(_systemOverlayStyle);
+  }
+
   // Extrae (en segundo plano) la toolchain CPython/yt-dlp desde los assets
   // nativos de Android. Las primeras búsquedas/descargas avisarán "yt-dlp no
   // encontrado" hasta que termine (unos segundos).
@@ -399,16 +407,24 @@ class ScrupApp extends StatelessWidget {
                 themeAnimationCurve: Curves.easeInOut,
                 theme: _buildTheme(themeController.accentColor),
                 builder: (context, child) {
-                  final app = Stack(
+                  Widget core = Stack(
                     children: [
                       child ?? const SizedBox.shrink(),
                       const ScrupToastHost(),
                     ],
                   );
                   if (Platform.isLinux) {
-                    return _LinuxRoundedCorners(child: app);
+                    core = _LinuxRoundedCorners(child: core);
                   }
-                  return app;
+                  if (Binaries.isMobile) {
+                    // Reaplica el estilo de barras en cada build (persistente
+                    // también para rutas empujadas).
+                    core = AnnotatedRegion<SystemUiOverlayStyle>(
+                      value: _systemOverlayStyle,
+                      child: core,
+                    );
+                  }
+                  return core;
                 },
                 home: const AppShell(),
               );
@@ -628,6 +644,18 @@ class _LinuxMaximizeListener extends WindowListener {
   @override
   void onWindowUnmaximize() => onChanged(false);
 }
+
+/// Barras de sistema transparentes (edge-to-edge), igual que forawn_mobile:
+/// status y nav bar no dibujan fondo, los iconos siempre claros (la app es
+/// oscura) y sin scrim de contraste.
+const SystemUiOverlayStyle _systemOverlayStyle = SystemUiOverlayStyle(
+  statusBarColor: Colors.transparent,
+  statusBarIconBrightness: Brightness.light,
+  systemNavigationBarColor: Colors.transparent,
+  systemNavigationBarDividerColor: Colors.transparent,
+  systemNavigationBarIconBrightness: Brightness.light,
+  systemNavigationBarContrastEnforced: false,
+);
 
 /// Persiste la instantánea de la cola (orden, orden pre-shuffle, índice y
 /// playlist activa). Compartida por el debounce de `onQueueChanged` y el

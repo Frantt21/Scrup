@@ -24,34 +24,13 @@ class QueuePanel extends StatelessWidget {
   /// `true` = cola visible (el panel ocupa su ancho); `false` = colapsado.
   final bool open;
 
-  /// Móvil: la cola se muestra como overlay a pantalla completa (sin el
-  /// deslizamiento lateral del mode escritorio).
-  final bool mobile;
-
-  /// Solo en [`mobile`]: botón para cerrar el overlay.
-  final VoidCallback? onClose;
-
-  const QueuePanel({
-    super.key,
-    required this.open,
-    this.mobile = false,
-    this.onClose,
-  });
+  const QueuePanel({super.key, required this.open});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final player = context.read<PlayerService>();
-
-    if (mobile) {
-      return _QueueOverlay(
-        theme: theme,
-        l10n: l10n,
-        player: player,
-        onClose: onClose,
-      );
-    }
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: open ? kQueuePanelWidth : 0),
@@ -70,56 +49,56 @@ class QueuePanel extends StatelessWidget {
   }
 }
 
-/// Overlay móvil: ocupa toda la pantalla (sin contenedor flotante) + cierre.
-class _QueueOverlay extends StatelessWidget {
-  final ThemeData theme;
-  final AppLocalizations l10n;
-  final PlayerService player;
-  final VoidCallback? onClose;
-
-  const _QueueOverlay({
-    required this.theme,
-    required this.l10n,
-    required this.player,
-    this.onClose,
-  });
+/// Contenedor arrastrable de la cola en Android (NO es un screen): se muestra
+/// como bottom sheet con asa, se puede deslizar hacia abajo para cerrarlo.
+class QueueSheet extends StatelessWidget {
+  const QueueSheet({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: theme.colorScheme.surface,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  tooltip: l10n.close,
-                  onPressed: onClose,
-                ),
-                Expanded(
-                  child: Text(
-                    l10n.queueTitle,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final player = context.read<PlayerService>();
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      ),
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHigh,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Asa de arrastre.
+              const Padding(
+                padding: EdgeInsets.only(top: 10, bottom: 4),
+                child: SizedBox(
+                  width: 36,
+                  height: 4,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Color(0x66FFFFFF),
+                      borderRadius: BorderRadius.all(Radius.circular(2)),
                     ),
                   ),
                 ),
-              ],
-            ),
-            Expanded(
-              child: _QueueBody(player: player, theme: theme, l10n: l10n),
-            ),
-          ],
+              ),
+              Flexible(
+                child: _QueueBody(player: player, theme: theme, l10n: l10n),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Contenido del panel: cristal + cabecera + lista de la cola.
+/// Contenido del panel de la cola (desktop) con su cristal.
 class _QueueGlass extends StatelessWidget {
   final PlayerService player;
   final ThemeData theme;

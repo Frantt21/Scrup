@@ -123,8 +123,9 @@ class _HomeViewState extends State<HomeView> {
                   // Barra de búsqueda (sin título ni subtítulo)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(mobile ? 12 : 24,
-                          mobile ? 8 : 20, mobile ? 12 : 24, 16),
+padding: EdgeInsets.fromLTRB(
+                            mobile ? 16 : 24, mobile ? 16 : 20,
+                            mobile ? 16 : 24, 16),
                       child: TextField(
                         onSubmitted: _submitSearch,
                         textInputAction: TextInputAction.search,
@@ -154,7 +155,7 @@ class _HomeViewState extends State<HomeView> {
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: EdgeInsets.fromLTRB(
-                            mobile ? 12 : 24, 8, mobile ? 12 : 24, 12),
+                            mobile ? 16 : 24, 8, mobile ? 16 : 24, 12),
                         child: _recent.isEmpty
                             ? _EmptyHint(theme: theme)
                             : Text(

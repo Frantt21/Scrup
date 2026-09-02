@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../theme_controller.dart';
 
 import '../../core/track.dart';
 import '../../services/player_service.dart';
@@ -82,6 +83,8 @@ class _MiniPlayerState extends State<MiniPlayer> {
     final track = _track;
     final theme = Theme.of(context);
     final player = context.read<PlayerService>();
+    final themeController = context.watch<ThemeController>();
+    final accent = themeController.accentColor ?? theme.colorScheme.primary;
 
     if (track == null) return const SizedBox.shrink();
 
@@ -90,18 +93,50 @@ class _MiniPlayerState extends State<MiniPlayer> {
         : 0.0;
 
     return Material(
-      color: theme.colorScheme.surfaceContainerHigh,
-      child: InkWell(
+      clipBehavior: Clip.antiAlias,
+      // Mismo acento del player desktop, en PLANO (sin degradado): base
+      // translúcida + acento uniforme en todo el fondo del mini-player.
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: TweenAnimationBuilder<Color?>(
+              tween: ColorTween(end: accent),
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeOutCubic,
+              builder: (context, color, _) {
+                return DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: (color ?? accent).withValues(alpha: 0.25),
+                  ),
+                );
+              },
+            ),
+          ),
+          // Efecto de progreso sobre el fondo (estilo forawn_mobile): en vez
+          // de una barra en el borde superior, una capa translúcida del acento
+          // que crece desde la izquierda con el avance de la reproducción.
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: AnimatedFractionallySizedBox(
+                duration: const Duration(milliseconds: 450),
+                curve: Curves.easeOutCubic,
+                heightFactor: 1.0,
+                widthFactor: progress,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.35),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          InkWell(
         onTap: widget.onOpenNowPlaying,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Barra de progreso fina y táctil.
-            LinearProgressIndicator(
-              value: progress,
-              minHeight: 2.5,
-              backgroundColor: theme.colorScheme.surfaceContainerHighest,
-            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
               child: Row(
@@ -174,6 +209,8 @@ class _MiniPlayerState extends State<MiniPlayer> {
           ],
         ),
       ),
+    ],
+    ),
     );
   }
 }

@@ -102,6 +102,7 @@ class _LibraryViewState extends State<LibraryView> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   l10n.library,
@@ -140,11 +141,16 @@ class _LibraryViewState extends State<LibraryView> {
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 0.9,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                // 2 columnas: tarjetas grandes y simétricas que cubren el
+                // ancho. Portada 1:1 + bloque de texto debajo.
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                mainAxisExtent:
+                    (MediaQuery.sizeOf(context).width - 12 * 2 - 12) /
+                        2 +
+                    48,
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, i) => _PlaylistGridCard(
@@ -185,7 +191,9 @@ class _PlaylistGridCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
+          // Portada siempre 1:1, ancho de la celda.
+          AspectRatio(
+            aspectRatio: 1,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: CoverImage(
@@ -243,15 +251,8 @@ class _PlaylistGridCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            primary.withValues(alpha: 0.45),
-            primary.withValues(alpha: 0.15),
-            cs.surfaceContainer,
-          ],
-        ),
+        // Card plana (sin degradado), con un tinte sutil del acento.
+        color: primary.withValues(alpha: 0.18),
       ),
       child: Icon(Icons.favorite_rounded, size: 28, color: primary),
     );
