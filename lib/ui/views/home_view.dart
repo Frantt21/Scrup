@@ -14,6 +14,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../services/player_service.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
+import '../theme_controller.dart';
 import '../widgets/scrup_toasts.dart';
 import '../widgets/context_menu_item.dart';
 import '../widgets/cover_image.dart';
@@ -29,7 +30,11 @@ class HomeView extends StatefulWidget {
   /// vista Buscar y le pasa la consulta).
   final ValueChanged<String>? onSearch;
 
-  const HomeView({super.key, this.onSearch});
+  /// Se llama al tocar una playlist reciente del inicio (AppShell abre su
+  /// detalle).
+  final ValueChanged<Playlist>? onOpenPlaylist;
+
+  const HomeView({super.key, this.onSearch, this.onOpenPlaylist});
 
   @override
   State<HomeView> createState() => _HomeViewState();
@@ -42,6 +47,8 @@ class _HomeViewState extends State<HomeView> {
   StreamSubscription<bool>? _playingSub;
   List<Track> _recent = const [];
   bool _loaded = false;
+  StreamSubscription<List<Playlist>>? _recentPlaylistsSub;
+  List<Playlist> _recentPlaylists = const [];
 
   /// Pista en reproducción (para el indicador de "en reproducción").
   Track? _currentTrack;
@@ -51,7 +58,6 @@ class _HomeViewState extends State<HomeView> {
   /// Card size and grid layout (desktop ~200px, mobile compact).
   static const _cardExtent = 200.0;
   static const _rows = 2;
-  static const _mobileCardExtent = 110.0;
   static const _mobileRows = 3;
 
   @override
@@ -64,6 +70,13 @@ class _HomeViewState extends State<HomeView> {
         _recent = tracks;
         _loaded = true;
       });
+    });
+    _recentPlaylistsSub = context
+        .read<AppDatabase>()
+        .watchRecentPlaylists(limit: 12)
+        .listen((playlists) {
+      if (!mounted) return;
+      setState(() => _recentPlaylists = playlists);
     });
     // Indicador de "en reproducción" en las tarjetas
     final player = context.read<PlayerService>();
@@ -92,8 +105,14 @@ class _HomeViewState extends State<HomeView> {
     _sub?.cancel();
     _trackSub?.cancel();
     _playingSub?.cancel();
+    _recentPlaylistsSub?.cancel();
     _nullTrackTimer?.cancel();
     super.dispose();
+  }
+
+  /// Abre el detalle de una playlist (lo gestiona el AppShell).
+  void _openPlaylist(Playlist playlist) {
+    widget.onOpenPlaylist?.call(playlist);
   }
 
   void _submitSearch(String query) {
@@ -107,20 +126,24 @@ class _HomeViewState extends State<HomeView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final themeController = context.watch<ThemeController>();
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final bool mobile = Binaries.isMobile;
-        // Desktop: cards ~200px. Mobile: 3 columns, 3 rows.
+        // Desktop: cards ~200px. Mobile: exactamente 3 FILAS × 2 COLUMNAS.
         final cols = mobile
-            ? 3
+            ? 2
             : ((constraints.maxWidth - 32) / (_cardExtent + 12)).floor().clamp(1, 10);
         final rows = mobile ? _mobileRows : _rows;
         final visible = _recent.length.clamp(0, cols * rows);
 
+        final recentPlaylists = _recentPlaylists;
+
         final Widget scroll = CustomScrollView(
                 slivers: [
-                  // Barra de búsqueda (sin título ni subtítulo)
+                  // Barra de búsqueda (sin título ni subtítulo), encima del
+                  // degradado de acento del inicio.
                   SliverToBoxAdapter(
                     child: Padding(
 padding: EdgeInsets.fromLTRB(
@@ -144,6 +167,15 @@ padding: EdgeInsets.fromLTRB(
                       ),
                     ),
                   ),
+                  if (recentPlaylists.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _RecentPlaylistsRow(
+                        playlists: recentPlaylists,
+                        accent: themeController.accentColor ??
+                            theme.colorScheme.primary,
+                        onOpen: _openPlaylist,
+                      ),
+                    ),
                   if (!_loaded)
                     const SliverToBoxAdapter(
                       child: Padding(
@@ -195,8 +227,28 @@ padding: EdgeInsets.fromLTRB(
                 ],
               );
 
-        // En móvil ocupamos todo el espacio (sin cristal flotante).
-        if (mobile) return scroll;
+        // En móvil: el degradado de acento pega arriba del todo, detrás del
+        // contenido, y no hay margen despejado con el fondo de la ventana.
+        if (mobile) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              _TopAccentGradient(accent: themeController.accentColor),
+              scroll,
+            ],
+          );
+        }
+
+        // ── Escritorio ──
+        // El degradado de acento vive DENTRO del cristal, arriba, detrás del
+        // contenido, ocupando ~1/4 del alto del panel y desvaneciéndose.
+        final Widget inner = Stack(
+          fit: StackFit.expand,
+          children: [
+            _TopAccentGradient(accent: themeController.accentColor),
+            scroll,
+          ],
+        );
 
         return Container(
           margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
@@ -218,7 +270,7 @@ padding: EdgeInsets.fromLTRB(
                   alpha: 0.72,
                 ),
               ),
-              child: scroll,
+              child: inner,
             ),
           ),
         );
@@ -299,10 +351,127 @@ class _RecentCardState extends State<_RecentCard> {
     }
   }
 
+  /// Bottom sheet contextual (long press) en móvil.
+  Future<void> _showMobileMenu() async {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final track = widget.track;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: theme.colorScheme.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 32,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: 46,
+                      height: 46,
+                      child: CoverImage(
+                        source: track.thumbnailUrl,
+                        fit: BoxFit.cover,
+                        fallback: Container(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          child: Icon(
+                            Icons.music_note_rounded,
+                            size: 24,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          track.title,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          track.artist.isEmpty
+                              ? l10n.unknownArtist
+                              : track.artist,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.playlist_add_rounded),
+              title: Text(l10n.addToPlaylist),
+              onTap: () => Navigator.pop(ctx, 'add'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.palette_rounded),
+              title: Text(l10n.recalcColors),
+              onTap: () => Navigator.pop(ctx, 'recalc'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'add') {
+      await showAddToPlaylistDialog(context, widget.track);
+    } else if (action == 'recalc') {
+      final url = widget.track.thumbnailUrl;
+      if (url != null && url.isNotEmpty) {
+        final store = context.read<PaletteCacheStore>();
+        await ArtworkPaletteService.trioFor(
+          url,
+          store,
+          force: true,
+          artworkCache: context.read<ArtworkCacheService>(),
+        );
+        if (mounted) {
+          showScrupToast(l10n.colorsUpdated, kind: ScrupToastKind.success);
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final track = widget.track;
+
+    // Acento de 1px del borde: el acento derivado del artwork de la canción
+    // (fallback al primary del tema si la paleta aún no está cacheada).
+    final accent = _accentFor(track, theme);
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -310,109 +479,110 @@ class _RecentCardState extends State<_RecentCard> {
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onSecondaryTapUp: (details) => _showMenu(details.globalPosition),
+        onLongPress: _showMobileMenu,
+        onTap: widget.onPlay,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
+            // Borde de 1px con el acento de la canción (siempre visible);
+            // en hover se refuerza. Sin sombra/pulsación cuadrada.
             border: Border.all(
+              width: 1,
               color: _hovered
-                  ? theme.colorScheme.primary.withValues(alpha: 0.6)
-                  : Colors.transparent,
+                  ? accent.withValues(alpha: 0.9)
+                  : accent.withValues(alpha: 0.45),
             ),
-            boxShadow: _hovered
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ]
-                : null,
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(13),
-            child: InkWell(
-              onTap: widget.onPlay,
-              // El default del InkWell (adaptiveClickable) es BASIC en
-              // escritorio: pisaría el click del MouseRegion exterior.
-              mouseCursor: SystemMouseCursors.click,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Artwork completo
-                  _artwork(theme),
-                  // Gradiente inferior para legibilidad del texto
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black54],
-                        stops: [0.5, 1.0],
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Artwork completo
+                _artwork(theme),
+                // Gradiente inferior para legibilidad del texto
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black54],
+                      stops: [0.5, 1.0],
+                    ),
+                  ),
+                ),
+                // Título + artista en la esquina inferior
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 10,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        track.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Play al hacer hover
+                if (_hovered)
+                  Center(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        shape: BoxShape.circle,
+                      ),
+                      padding: const EdgeInsets.all(10),
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        size: 36,
+                        color: theme.colorScheme.primary,
                       ),
                     ),
                   ),
-                  // Título + artista en la esquina inferior
+                // Indicador limpio: solo el ecualizador (la sombra del
+                // widget lo hace legible sobre el artwork)
+                if (widget.isCurrent)
                   Positioned(
+                    top: 10,
                     left: 10,
-                    right: 10,
-                    bottom: 10,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          track.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          track.artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: NowPlayingBars(active: widget.isPlaying, size: 13),
                   ),
-                  // Play al hacer hover
-                  if (_hovered)
-                    Center(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          shape: BoxShape.circle,
-                        ),
-                        padding: const EdgeInsets.all(10),
-                        child: Icon(
-                          Icons.play_arrow_rounded,
-                          size: 36,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  // Indicador limpio: solo el ecualizador (la sombra del
-                  // widget lo hace legible sobre el artwork)
-                  if (widget.isCurrent)
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: NowPlayingBars(active: widget.isPlaying, size: 13),
-                    ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  /// Acento de la canción: trío cacheado → accent (fallback primary).
+  Color _accentFor(Track track, ThemeData theme) {
+    final url = track.thumbnailUrl;
+    if (url != null && url.isNotEmpty) {
+      final trio = context.read<PaletteCacheStore>().getTrio(url);
+      final accent = trio == null ? null : ArtworkPaletteService.accentFromTrio(trio);
+      if (accent != null) return accent;
+    }
+    return theme.colorScheme.primary;
   }
 
   Widget _artwork(ThemeData theme) {
@@ -467,6 +637,171 @@ class _EmptyHint extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Degradado de acento en el TOP del Inicio: ocupa ~1/4 del alto y se
+/// desvanece hacia abajo hasta transparente. Solo en el inicio.
+class _TopAccentGradient extends StatelessWidget {
+  final Color? accent;
+
+  const _TopAccentGradient({this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accent ?? Theme.of(context).colorScheme.primary;
+    return IgnorePointer(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                color.withValues(alpha: 0.35),
+                color.withValues(alpha: 0.18),
+                color.withValues(alpha: 0.0),
+              ],
+            ),
+          ),
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fila horizontal ÚNICA y scrolleable de playlists recientes, con cards más
+/// grandes que las recientes (estilo forawn_mobile).
+class _RecentPlaylistsRow extends StatelessWidget {
+  final List<Playlist> playlists;
+  final Color accent;
+  final ValueChanged<Playlist> onOpen;
+
+  const _RecentPlaylistsRow({
+    required this.playlists,
+    required this.accent,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    if (playlists.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text(
+            l10n.recentPlaylistsTitle,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 132,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: playlists.length,
+            itemBuilder: (context, i) {
+              final playlist = playlists[i];
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: _RecentPlaylistCard(
+                  playlist: playlist,
+                  accent: accent,
+                  onTap: () => onOpen(playlist),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Card grande de playlist reciente: portada 1:1 con acento plano de fondo.
+class _RecentPlaylistCard extends StatelessWidget {
+  final Playlist playlist;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _RecentPlaylistCard({
+    required this.playlist,
+    required this.accent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasCover = playlist.coverUrl != null && playlist.coverUrl!.isNotEmpty;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 96,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: SizedBox(
+                width: 96,
+                height: 96,
+                child: hasCover
+                    ? CoverImage(
+                        source: playlist.coverUrl!,
+                        fit: BoxFit.cover,
+                        fallback: _coverFallback(theme),
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [accent, accent.withValues(alpha: 0.6)],
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.queue_music_rounded,
+                          size: 32,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              playlist.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _coverFallback(ThemeData theme) {
+    return Container(
+      color: theme.colorScheme.surfaceContainerHigh,
+      child: Icon(
+        Icons.queue_music_rounded,
+        size: 32,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
     );
   }
 }

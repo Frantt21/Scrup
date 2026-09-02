@@ -19,6 +19,7 @@ class SettingsStore {
   static const _originalQueueKey = 'player.queue_original_ids';
   static const _queueIndexKey = 'player.queue_index';
   static const _activePlaylistIdKey = 'player.active_playlist_id';
+  static const _flatPlaylistHeaderKey = 'ui.flat_playlist_header';
   static const _resumeKey = 'player.resume';  static const _cacheMaxSizeKey = 'cache.max_size_mb';  static const lyricsSweepKey = 'lyrics_sweep_enabled';  final ValueNotifier<bool> playerAnimationEnabled = ValueNotifier(true);  final ValueNotifier<bool> lyricsSweepEnabled = ValueNotifier(false);
 
   SharedPreferences? _prefs;
@@ -211,7 +212,23 @@ class SettingsStore {
   Future<int?> loadActivePlaylistId() async {
     final prefs = await _instance;
     return prefs.getInt(_activePlaylistIdKey);
-  }  // Saves track id + position in a single write to avoid race conditions.
+  }
+
+  /// Estilo del header del detalle de playlist (móvil): `true` = portada 1:1
+  /// sobre acento plano, `false` (por defecto) = portada full-bleed con
+  /// degradado.
+  Future<void> saveFlatPlaylistHeader(bool flat) async {
+    final prefs = await _instance;
+    await prefs.setBool(_flatPlaylistHeaderKey, flat);
+  }
+
+  /// `null` si el usuario nunca cambió el estilo (por defecto: full-bleed).
+  Future<bool?> loadFlatPlaylistHeader() async {
+    final prefs = await _instance;
+    return prefs.getBool(_flatPlaylistHeaderKey);
+  }
+
+  // Saves track id + position in a single write to avoid race conditions.
   Future<void> saveResumePosition(int seconds, String trackId) async {
     final prefs = await _instance;
     await prefs.setString(

@@ -35,6 +35,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get recentTitle => '最近播放';
 
   @override
+  String get recentPlaylistsTitle => 'Playlists recientes';
+
+  @override
   String get addToPlaylist => '添加到播放列表';
 
   @override
@@ -242,6 +245,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get playlistFilterHint => '筛选歌曲';
+
+  @override
+  String get searchPlaylists => 'Buscar playlists';
+
+  @override
+  String get noMatchingPlaylists => 'Ninguna playlist coincide';
 
   @override
   String get playlistNoResults => '没有匹配的歌曲';

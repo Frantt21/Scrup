@@ -488,7 +488,7 @@ class _AppShellState extends State<AppShell> {
                     ? 2
                     : (_showSettings ? 3 : _selectedIndex)),
           children: [
-            HomeView(onSearch: _submitSearch),
+            HomeView(onSearch: _submitSearch, onOpenPlaylist: _selectPlaylist),
             SearchView(
               searchRequest: _searchRequest,
               onBack: _backToHome,
@@ -542,7 +542,7 @@ class _AppShellState extends State<AppShell> {
                     ? 3
                     : (_showSettings ? 4 : _selectedIndex)),
           children: [
-            SafeArea(top: true, child: HomeView(onSearch: _submitSearch)),
+            SafeArea(top: true, child: HomeView(onSearch: _submitSearch, onOpenPlaylist: _selectPlaylist)),
             SafeArea(
               top: true,
               child: SearchView(
@@ -630,7 +630,7 @@ class _AppShellState extends State<AppShell> {
       (Icons.settings_rounded, 3),
     ];
     return Material(
-      color: cs.surfaceContainer,
+      color: Colors.black,
       child: SizedBox(
         height: 64,
         child: Padding(

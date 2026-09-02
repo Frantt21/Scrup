@@ -43,6 +43,9 @@ class Playlists extends Table {
 
   /// Playlist especial de Favoritos (siempre al final, no se puede borrar).
   BoolColumn get isFavorites => boolean().withDefault(const Constant(false))();
+
+  /// Última vez que se reprodujo la playlist (para las "recientes" del inicio).
+  DateTimeColumn get lastPlayedAt => dateTime().nullable()();
 }
 
 /// Lyrics cacheadas de una canción (LRC sincronizado).

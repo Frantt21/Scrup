@@ -23,6 +23,9 @@ class Playlist {
   /// Playlist especial de Favoritos (siempre al final, no se puede borrar).
   final bool isFavorites;
 
+  /// Última vez que se reprodujo la playlist (null si nunca se ha reproducido).
+  final DateTime? lastPlayedAt;
+
   const Playlist({
     required this.id,
     required this.name,
@@ -30,6 +33,7 @@ class Playlist {
     this.coverUrl,
     this.description,
     this.isFavorites = false,
+    this.lastPlayedAt,
   });
 }
 
@@ -42,7 +46,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -81,6 +85,10 @@ class AppDatabase extends _$AppDatabase {
         // palette_cache.json. El JSON viejo se elimina best-effort al
         // arrancar (ver PaletteCacheStore.load).
         await m.createTable(paletteCache);
+      }
+      if (from < 9) {
+        // Fecha de última reproducción de la playlist (para "recientes").
+        await m.addColumn(playlists, playlists.lastPlayedAt);
       }
     },
   );
@@ -334,9 +342,42 @@ class AppDatabase extends _$AppDatabase {
               coverUrl: r.coverUrl,
               description: r.description,
               isFavorites: r.isFavorites,
+              lastPlayedAt: r.lastPlayedAt,
             ),
           )
           .toList(),
+    );
+  }
+
+  /// Observa las playlists por fecha de reproducción (más recientes primero),
+  /// para la sección de "playlists recientes" del inicio. Solo las que se han
+  /// reproducido alguna vez.
+  Stream<List<Playlist>> watchRecentPlaylists({int limit = 10}) {
+    final query = select(playlists)
+      ..where((p) => p.lastPlayedAt.isNotNull())
+      ..orderBy([(p) => OrderingTerm.desc(p.lastPlayedAt)])
+      ..limit(limit);
+    return query.watch().map(
+      (rows) => rows
+          .map(
+            (r) => Playlist(
+              id: r.id,
+              name: r.name,
+              createdAt: r.createdAt,
+              coverUrl: r.coverUrl,
+              description: r.description,
+              isFavorites: r.isFavorites,
+              lastPlayedAt: r.lastPlayedAt,
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  /// Registra que [playlistId] se reprodujo ahora (para las "recientes").
+  Future<void> markPlaylistPlayed(int playlistId) async {
+    await (update(playlists)..where((p) => p.id.equals(playlistId))).write(
+      PlaylistsCompanion(lastPlayedAt: Value(DateTime.now())),
     );
   }
 
@@ -354,6 +395,7 @@ class AppDatabase extends _$AppDatabase {
               coverUrl: r.coverUrl,
               description: r.description,
               isFavorites: r.isFavorites,
+              lastPlayedAt: r.lastPlayedAt,
             ),
     );
   }

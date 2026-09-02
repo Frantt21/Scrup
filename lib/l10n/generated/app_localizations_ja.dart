@@ -35,6 +35,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get recentTitle => '最近再生した曲';
 
   @override
+  String get recentPlaylistsTitle => 'Playlists recientes';
+
+  @override
   String get addToPlaylist => 'プレイリストに追加';
 
   @override
@@ -242,6 +245,12 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get playlistFilterHint => '曲を絞り込む';
+
+  @override
+  String get searchPlaylists => 'Buscar playlists';
+
+  @override
+  String get noMatchingPlaylists => 'Ninguna playlist coincide';
 
   @override
   String get playlistNoResults => '一致する曲がありません';

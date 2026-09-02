@@ -342,8 +342,9 @@ class _SettingsViewState extends State<SettingsView> {
           SizedBox(height: mobile ? 8 : 16),
           _buildCacheSection(theme),
           SizedBox(height: mobile ? 8 : 16),
-          _buildShortcutsSection(theme),
-          SizedBox(height: mobile ? 8 : 16),
+          // Los atajos de teclado no existen en Android: se ocultan.
+          if (!mobile) _buildShortcutsSection(theme),
+          if (!mobile) const SizedBox(height: 16),
           _buildAboutSection(theme),
         ],
       ),

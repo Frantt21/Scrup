@@ -35,6 +35,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get recentTitle => '최근 재생';
 
   @override
+  String get recentPlaylistsTitle => 'Playlists recientes';
+
+  @override
   String get addToPlaylist => '플레이리스트에 추가';
 
   @override
@@ -242,6 +245,12 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get playlistFilterHint => '곡 필터링';
+
+  @override
+  String get searchPlaylists => 'Buscar playlists';
+
+  @override
+  String get noMatchingPlaylists => 'Ninguna playlist coincide';
 
   @override
   String get playlistNoResults => '일치하는 곡이 없습니다';

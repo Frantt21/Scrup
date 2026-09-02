@@ -35,6 +35,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get recentTitle => 'Recientes';
 
   @override
+  String get recentPlaylistsTitle => 'Playlists recientes';
+
+  @override
   String get addToPlaylist => 'Añadir a playlist';
 
   @override
@@ -243,6 +246,12 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get playlistFilterHint => 'Filtrar canciones';
+
+  @override
+  String get searchPlaylists => 'Buscar playlists';
+
+  @override
+  String get noMatchingPlaylists => 'Ninguna playlist coincide';
 
   @override
   String get playlistNoResults => 'Ninguna canción coincide';

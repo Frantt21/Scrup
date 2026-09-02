@@ -27,12 +27,16 @@ class MiniPlayer extends StatefulWidget {
 
 class _MiniPlayerState extends State<MiniPlayer> {
   Track? _track;
+  Track? _preparing;
+  bool _preparingActive = false;
   bool _playing = false;
   Duration _position = Duration.zero;
   Duration? _duration;
   Timer? _ticker;
 
   final List<StreamSubscription> _subs = [];
+  VoidCallback? _onPreparingChanged;
+  VoidCallback? _onQueueChanged;
 
   @override
   void initState() {
@@ -40,6 +44,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
     final player = context.read<PlayerService>();
     _track = player.currentTrackValue;
     _duration = player.durationValue;
+    _syncPreparing(player);
     _subs.addAll([
       player.currentTrack.listen((t) {
         if (!mounted) return;
@@ -55,8 +60,39 @@ class _MiniPlayerState extends State<MiniPlayer> {
         setState(() => _duration = d);
       }),
     ]);
+    _onPreparingChanged = () {
+      if (mounted) _syncPreparing(player);
+    };
+    _onQueueChanged = () {
+      if (mounted) _syncPreparing(player);
+    };
+    player.preparingTrackId.addListener(_onPreparingChanged!);
+    player.queue.addListener(_onQueueChanged!);
     if (player.currentTrackValue != null) {
       _ticker = _startTicker();
+    }
+  }
+
+  /// Mantiene la pista "en preparación" (cargando) para que el mini-player
+  /// NO desaparezca al cambiar de canción: mientras se resuelve la fuente,
+  /// mostramos la pista entrante con un indicador de carga.
+  void _syncPreparing(PlayerService player) {
+    final id = player.preparingTrackId.value;
+    Track? found;
+    if (id != null) {
+      for (final t in player.queue.value) {
+        if (t.id == id) {
+          found = t;
+          break;
+        }
+      }
+    }
+    final active = id != null;
+    if (found?.id != _preparing?.id || active != _preparingActive) {
+      setState(() {
+        _preparing = found;
+        _preparingActive = active;
+      });
     }
   }
 
@@ -71,9 +107,16 @@ class _MiniPlayerState extends State<MiniPlayer> {
 
   @override
   void dispose() {
+    final player = context.read<PlayerService>();
     _ticker?.cancel();
     for (final s in _subs) {
       s.cancel();
+    }
+    if (_onPreparingChanged != null) {
+      player.preparingTrackId.removeListener(_onPreparingChanged!);
+    }
+    if (_onQueueChanged != null) {
+      player.queue.removeListener(_onQueueChanged!);
     }
     super.dispose();
   }
@@ -86,7 +129,13 @@ class _MiniPlayerState extends State<MiniPlayer> {
     final themeController = context.watch<ThemeController>();
     final accent = themeController.accentColor ?? theme.colorScheme.primary;
 
-    if (track == null) return const SizedBox.shrink();
+    // El mini-player está SIEMPRE montado a altura fija (barra persistente):
+    //   · track != null            → reproducción normal.
+    //   · track == null + loading  → pista entrante con indicador de carga.
+    //   · track == null + idle     → barra placeholder ("Nada en reproducción").
+    // Así nunca desaparece al cambiar de canción ni durante la carga.
+    final Track? showing = track ?? (_preparingActive ? _preparing : null);
+    final bool loading = track == null && _preparingActive;
 
     final progress = _duration != null && _duration!.inMilliseconds > 0
         ? (_position.inMilliseconds / _duration!.inMilliseconds).clamp(0.0, 1.0)
@@ -116,101 +165,138 @@ class _MiniPlayerState extends State<MiniPlayer> {
           // Efecto de progreso sobre el fondo (estilo forawn_mobile): en vez
           // de una barra en el borde superior, una capa translúcida del acento
           // que crece desde la izquierda con el avance de la reproducción.
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: AnimatedFractionallySizedBox(
-                duration: const Duration(milliseconds: 450),
-                curve: Curves.easeOutCubic,
-                heightFactor: 1.0,
-                widthFactor: progress,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.35),
+          if (track != null)
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: AnimatedFractionallySizedBox(
+                  duration: const Duration(milliseconds: 450),
+                  curve: Curves.easeOutCubic,
+                  heightFactor: 1.0,
+                  widthFactor: progress,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.35),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: showing == null ? null : widget.onOpenNowPlaying,
+              child: SizedBox(
+                height: 60,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: SizedBox(
+                          width: 46,
+                          height: 46,
+                          child: showing == null
+                              ? Container(
+                                  color: theme.colorScheme.surfaceContainerHigh,
+                                  child: Icon(
+                                    Icons.music_note_rounded,
+                                    size: 22,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                )
+                              : CoverImage(
+                                  source: showing.thumbnailUrl,
+                                  fit: BoxFit.cover,
+                                  fallback: Container(
+                                    color:
+                                        theme.colorScheme.surfaceContainerHigh,
+                                    child: Icon(
+                                      Icons.music_note_rounded,
+                                      color:
+                                          theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              showing?.title ?? 'Scrup',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: showing == null
+                                    ? theme.colorScheme.onSurfaceVariant
+                                    : null,
+                              ),
+                            ),
+                            if (showing != null && showing.artist.isNotEmpty)
+                              Text(
+                                loading ? 'Cargando…' : showing.artist,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            if (showing == null)
+                              Text(
+                                'Nada en reproducción',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (loading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          ),
+                        )
+                      else if (showing != null) ...[
+                        IconButton(
+                          icon: Icon(
+                            _playing
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                          ),
+                          tooltip: _playing ? 'Pausar' : 'Reproducir',
+                          onPressed: () => player.togglePlayPause(),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.skip_next_rounded),
+                          tooltip: 'Siguiente',
+                          onPressed: player.next,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.queue_music_rounded),
+                          tooltip: 'Cola',
+                          onPressed: widget.onOpenQueue,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
             ),
           ),
-          InkWell(
-        onTap: widget.onOpenNowPlaying,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: CoverImage(
-                      source: track.thumbnailUrl,
-                      width: 42,
-                      height: 42,
-                      fallback: Container(
-                        width: 42,
-                        height: 42,
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        child: Icon(
-                          Icons.music_note_rounded,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          track.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (track.artist.isNotEmpty)
-                          Text(
-                            track.artist,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      _playing
-                          ? Icons.pause_rounded
-                          : Icons.play_arrow_rounded,
-                    ),
-                    tooltip: _playing ? 'Pausar' : 'Reproducir',
-                    onPressed: () => player.togglePlayPause(),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.skip_next_rounded),
-                    tooltip: 'Siguiente',
-                    onPressed: player.next,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.queue_music_rounded),
-                    tooltip: 'Cola',
-                    onPressed: widget.onOpenQueue,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
-    ],
-    ),
     );
   }
 }

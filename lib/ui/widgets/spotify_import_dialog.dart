@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/binaries.dart';
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/spotify_import_service.dart';
@@ -178,9 +180,12 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
     // cabecera con X y cuerpo en padding 24.
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: Binaries.isMobile ? 16 : 24,
+        vertical: Binaries.isMobile ? 16 : 24,
+      ),
       child: Container(
-        width: 420,
+        width: math.min(420, MediaQuery.sizeOf(context).width - 32),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           color: theme.colorScheme.surfaceContainerHigh,

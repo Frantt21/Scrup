@@ -157,6 +157,12 @@ abstract class AppLocalizations {
   /// **'Recientes'**
   String get recentTitle;
 
+  /// No description provided for @recentPlaylistsTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Playlists recientes'**
+  String get recentPlaylistsTitle;
+
   /// No description provided for @addToPlaylist.
   ///
   /// In es, this message translates to:
@@ -528,6 +534,18 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Filtrar canciones'**
   String get playlistFilterHint;
+
+  /// No description provided for @searchPlaylists.
+  ///
+  /// In es, this message translates to:
+  /// **'Buscar playlists'**
+  String get searchPlaylists;
+
+  /// No description provided for @noMatchingPlaylists.
+  ///
+  /// In es, this message translates to:
+  /// **'Ninguna playlist coincide'**
+  String get noMatchingPlaylists;
 
   /// No description provided for @playlistNoResults.
   ///

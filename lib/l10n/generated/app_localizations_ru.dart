@@ -35,6 +35,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get recentTitle => 'Недавние';
 
   @override
+  String get recentPlaylistsTitle => 'Playlists recientes';
+
+  @override
   String get addToPlaylist => 'Добавить в плейлист';
 
   @override
@@ -246,6 +249,12 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get playlistFilterHint => 'Фильтр песен';
+
+  @override
+  String get searchPlaylists => 'Buscar playlists';
+
+  @override
+  String get noMatchingPlaylists => 'Ninguna playlist coincide';
 
   @override
   String get playlistNoResults => 'Нет подходящих песен';
