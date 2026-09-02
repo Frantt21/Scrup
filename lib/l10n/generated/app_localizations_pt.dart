@@ -172,6 +172,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get removeFromPlaylist => 'Remover da playlist';
 
   @override
+  String get changeCover => 'Alterar capa';
+
+  @override
   String get editPlaylist => 'Editar playlist';
 
   @override
@@ -851,6 +854,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get removeFromPlaylist => 'Remover da playlist';
+
+  @override
+  String get changeCover => 'Alterar capa';
 
   @override
   String get editPlaylist => 'Editar playlist';

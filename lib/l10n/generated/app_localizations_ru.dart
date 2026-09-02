@@ -175,6 +175,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get removeFromPlaylist => 'Убрать из плейлиста';
 
   @override
+  String get changeCover => 'Изменить обложку';
+
+  @override
   String get editPlaylist => 'Изменить плейлист';
 
   @override

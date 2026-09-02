@@ -49,6 +49,7 @@
   "emptyPlaylist": "空播放列表",
   "emptyPlaylistHint": "从搜索中添加歌曲",
   "removeFromPlaylist": "从播放列表中移除",
+  "changeCover": "更换封面",
   "editPlaylist": "编辑播放列表",
   "edit": "编辑",
   "playlistUpdated": "播放列表已更新",

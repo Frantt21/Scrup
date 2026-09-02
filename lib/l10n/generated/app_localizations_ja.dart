@@ -171,6 +171,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get removeFromPlaylist => 'プレイリストから削除';
 
   @override
+  String get changeCover => 'カバーを変更';
+
+  @override
   String get editPlaylist => 'プレイリストを編集';
 
   @override

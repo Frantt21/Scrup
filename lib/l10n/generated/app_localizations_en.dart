@@ -172,6 +172,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get removeFromPlaylist => 'Remove from playlist';
 
   @override
+  String get changeCover => 'Change cover';
+
+  @override
   String get editPlaylist => 'Edit playlist';
 
   @override

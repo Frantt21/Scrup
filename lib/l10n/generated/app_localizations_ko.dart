@@ -171,6 +171,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get removeFromPlaylist => '플레이리스트에서 제거';
 
   @override
+  String get changeCover => '커버 변경';
+
+  @override
   String get editPlaylist => '플레이리스트 편집';
 
   @override

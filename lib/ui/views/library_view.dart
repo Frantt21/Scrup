@@ -5,6 +5,10 @@ import 'package:provider/provider.dart';
 
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/playlist_cover_store.dart';
+import '../widgets/cover_image.dart';
+import '../widgets/create_playlist_dialog.dart';
+import '../widgets/scrup_toasts.dart';
 
 
 /// Mobile library view: all playlists displayed in a grid.
@@ -50,34 +54,38 @@ class _LibraryViewState extends State<LibraryView> {
 
   Future<void> _createPlaylist() async {
     final l10n = AppLocalizations.of(context);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        final ctrl = TextEditingController();
-        return AlertDialog(
-          title: Text(l10n.newPlaylist),
-          content: TextField(
-            controller: ctrl,
-            autofocus: true,
-            decoration: InputDecoration(hintText: l10n.playlistNameHint),
-            onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(MaterialLocalizations.of(ctx).cancelButtonLabel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
-              child: Text(MaterialLocalizations.of(ctx).okButtonLabel),
-            ),
-          ],
-        );
-      },
-    );
-    if (!mounted || name == null || name.isEmpty) return;
     final db = context.read<AppDatabase>();
-    final id = await db.createPlaylist(name);
+    // Mismo diálogo que desktop (sidebar): flujo compartido.
+    final data =
+        await showDialog<
+          ({String name, String? description, String? imagePath})
+        >(context: context, builder: (_) => const CreatePlaylistDialog());
+    if (data == null || !mounted) return;
+    final name = data.name.trim();
+    if (name.isEmpty) return;
+    final int id;
+    try {
+      id = await db.createPlaylist(name);
+    } catch (_) {
+      if (!mounted) return;
+      showScrupToast(l10n.cantCreatePlaylist, kind: ScrupToastKind.error);
+      return;
+    }
+    final description = data.description;
+    if (description != null && description.isNotEmpty) {
+      try {
+        await db.setPlaylistDescription(id, description);
+      } catch (_) {}
+    }
+    final imagePath = data.imagePath;
+    if (imagePath != null) {
+      try {
+        final dest = await copyPlaylistCoverToAppDir(id, imagePath);
+        await db.setPlaylistCover(id, dest);
+      } catch (_) {}
+    }
+    showScrupToast(l10n.playlistCreated(name), kind: ScrupToastKind.success);
+    if (!mounted) return;
     final pl = await db.getPlaylist(id);
     if (pl != null && mounted) widget.onSelectPlaylist(pl);
   }
@@ -133,10 +141,10 @@ class _LibraryViewState extends State<LibraryView> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             sliver: SliverGrid(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+                crossAxisCount: 3,
                 mainAxisSpacing: 10,
                 crossAxisSpacing: 10,
-                childAspectRatio: 0.85,
+                childAspectRatio: 0.9,
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, i) => _PlaylistGridCard(
@@ -169,49 +177,83 @@ class _PlaylistGridCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final l10n = AppLocalizations.of(context);
+    final favorites = playlist.isFavorites;
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Container(
-                color: cs.surfaceContainerHighest,
-                child: const Center(
-                  child: Icon(Icons.queue_music_rounded, size: 48),
-                ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: CoverImage(
+                source: playlist.coverUrl,
+                cacheWidth: 200,
+                fallback: favorites
+                    ? _favoritesFallback(cs)
+                    : Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              cs.surfaceContainerHigh,
+                              cs.surfaceContainer,
+                            ],
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.queue_music_rounded,
+                          size: 28,
+                          color: cs.primary.withValues(alpha: 0.45),
+                        ),
+                      ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    playlist.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$trackCount ${trackCount == 1 ? "track" : "tracks"}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            playlist.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: favorites ? cs.primary : null,
             ),
+          ),
+          Text(
+            l10n.songCount(trackCount),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _favoritesFallback(ColorScheme cs) {
+    final primary = cs.primary;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            primary.withValues(alpha: 0.45),
+            primary.withValues(alpha: 0.15),
+            cs.surfaceContainer,
           ],
         ),
       ),
+      child: Icon(Icons.favorite_rounded, size: 28, color: primary),
     );
   }
 }

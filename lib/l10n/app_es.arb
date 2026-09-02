@@ -91,6 +91,7 @@
   "emptyPlaylist": "Playlist vacía",
   "emptyPlaylistHint": "Añade canciones desde la búsqueda",
   "removeFromPlaylist": "Quitar de la playlist",
+  "changeCover": "Cambiar portada",
   "editPlaylist": "Editar playlist",
   "edit": "Editar",
   "playlistUpdated": "Playlist actualizada",

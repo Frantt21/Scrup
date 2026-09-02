@@ -403,6 +403,9 @@ class _AppShellState extends State<AppShell> {
     return Listener(
       onPointerDown: _handlePointerDown,
       child: Scaffold(
+      // El teclado queda POR ENCIMA del app: no empuja nav bar ni mini-player
+      // (combina con adjustPan del manifest para centrar el campo en foco).
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         top: mobile,
         child: Stack(

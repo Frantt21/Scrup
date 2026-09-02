@@ -49,6 +49,7 @@
   "emptyPlaylist": "빈 플레이리스트",
   "emptyPlaylistHint": "검색에서 노래를 추가하세요",
   "removeFromPlaylist": "플레이리스트에서 제거",
+  "changeCover": "커버 변경",
   "editPlaylist": "플레이리스트 편집",
   "edit": "편집",
   "playlistUpdated": "플레이리스트 업데이트됨",

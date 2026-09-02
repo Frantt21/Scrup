@@ -17,7 +17,12 @@ Future<String> copyPlaylistCoverToAppDir(
   final coversDir = Directory(p.join(base.path, 'playlist_covers'));
   await coversDir.create(recursive: true);
   final ext = p.extension(sourcePath);
-  final dest = p.join(coversDir.path, 'playlist_$playlistId$ext');
+  // Nombre versionado: cada cambio de portada produce una ruta NUEVA. Flutter
+  // cachea `Image.file` por ruta, así que reutilizar `playlist_$id$ext`
+  // mostraba la portada vieja hasta recrear la vista (o reiniciar). Con un
+  // path distinto el ImageCache se invalida y el UI refresca al instante.
+  final millis = DateTime.now().millisecondsSinceEpoch;
+  final dest = p.join(coversDir.path, 'playlist_${playlistId}_$millis$ext');
   if (!p.equals(sourcePath, dest)) {
     await File(sourcePath).copy(dest);
   }

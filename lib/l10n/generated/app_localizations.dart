@@ -403,6 +403,12 @@ abstract class AppLocalizations {
   /// **'Quitar de la playlist'**
   String get removeFromPlaylist;
 
+  /// No description provided for @changeCover.
+  ///
+  /// In es, this message translates to:
+  /// **'Cambiar portada'**
+  String get changeCover;
+
   /// No description provided for @editPlaylist.
   ///
   /// In es, this message translates to:

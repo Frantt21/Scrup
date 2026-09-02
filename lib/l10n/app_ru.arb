@@ -49,6 +49,7 @@
   "emptyPlaylist": "Пустой плейлист",
   "emptyPlaylistHint": "Добавьте песни через поиск",
   "removeFromPlaylist": "Убрать из плейлиста",
+  "changeCover": "Изменить обложку",
   "editPlaylist": "Изменить плейлист",
   "edit": "Изменить",
   "playlistUpdated": "Плейлист обновлён",

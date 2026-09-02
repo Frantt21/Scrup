@@ -91,6 +91,7 @@
   "emptyPlaylist": "Empty playlist",
   "emptyPlaylistHint": "Add songs from the search",
   "removeFromPlaylist": "Remove from playlist",
+  "changeCover": "Change cover",
   "editPlaylist": "Edit playlist",
   "edit": "Edit",
   "playlistUpdated": "Playlist updated",

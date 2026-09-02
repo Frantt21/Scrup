@@ -49,6 +49,7 @@
   "emptyPlaylist": "空のプレイリスト",
   "emptyPlaylistHint": "検索から曲を追加してください",
   "removeFromPlaylist": "プレイリストから削除",
+  "changeCover": "カバーを変更",
   "editPlaylist": "プレイリストを編集",
   "edit": "編集",
   "playlistUpdated": "プレイリストを更新しました",

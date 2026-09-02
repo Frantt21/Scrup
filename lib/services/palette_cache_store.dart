@@ -17,7 +17,7 @@ class PaletteCacheStore {
 
   static const int _maxEntries = 1500;
 
-  static const int _cacheVersion = 3;
+  static const int _cacheVersion = 4;
 
   static const int _maxFailedEntries = 1000;
 

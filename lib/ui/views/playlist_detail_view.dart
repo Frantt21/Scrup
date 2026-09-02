@@ -67,6 +67,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
   Color? _ambientColor;
   String? _ambientFor;
   int _ambientToken = 0;
+  int _coverVersion = 0;
 
   static final Map<String, Color?> _paletteCache = {};
 
@@ -540,7 +541,20 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     int count,
     String? currentId,
   ) {
-    final bgColor = _ambientColor ?? theme.colorScheme.surface;
+    // Fondo del mismo color que el panel de desktop: lerp del ambiente con
+    // surface (0.30), no el acento crudo — así las vistas se ven iguales.
+    final Color bgColor;
+    if (_ambientColor != null) {
+      bgColor =
+          Color.lerp(
+            theme.colorScheme.surfaceContainerHighest,
+            _ambientColor!,
+            0.30,
+          ) ??
+          theme.colorScheme.surface;
+    } else {
+      bgColor = theme.colorScheme.surface;
+    }
     final coverUrl = playlist.coverUrl;
 
     return Scaffold(
@@ -569,6 +583,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                     children: [
                       if (coverUrl != null && coverUrl.isNotEmpty)
                         CoverImage(
+                          key: ValueKey('cover_${coverUrl}_$_coverVersion'),
                           source: coverUrl,
                           fit: BoxFit.cover,
                           fallback: Container(
@@ -584,18 +599,18 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                           child: const Center(
                             child: Icon(Icons.queue_music_rounded, size: 120),
                           ),
-                        ),
-                      DecoratedBox(
+                        ),                        DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [
-                              bgColor.withValues(alpha: 0.1),
-                              bgColor.withValues(alpha: 0.6),
+                              Colors.black.withValues(alpha: 0.2),
+                              Colors.transparent,
+                              bgColor.withValues(alpha: 0.75),
                               bgColor,
                             ],
-                            stops: const [0.0, 0.6, 1.0],
+                            stops: const [0.0, 0.38, 0.78, 1.0],
                           ),
                         ),
                       ),
@@ -649,9 +664,11 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                             label: Text(l10n.play),
                           ),
                           const SizedBox(width: 12),
-                          FilledButton.tonalIcon(
+                          FilledButton.icon(
                             onPressed: count == 0 ? null : _playShuffled,
                             style: FilledButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: theme.colorScheme.primary,
                               minimumSize: const Size(0, 44),
                             ),
                             icon: const Icon(Icons.shuffle_rounded),
@@ -668,7 +685,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                 SliverFillRemaining(
                   child: Center(
                     child: Text(
-                      'No tracks',
+                      l10n.emptyPlaylist,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -702,7 +719,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                 ),
             ],
           ),
-          // Floating back button
+          // Floating header: (back) ... (search)(more)
           Positioned(
             top: 0,
             left: 0,
@@ -712,20 +729,23 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Row(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface.withValues(alpha: 0.8),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back_rounded, size: 20),
-                        onPressed: widget.onBack,
-                        padding: EdgeInsets.zero,
-                      ),
+                    _floatingCircleBtn(
+                      Icons.arrow_back_rounded,
+                      theme,
+                      widget.onBack,
                     ),
-
+                    const Spacer(),
+                    _floatingCircleBtn(
+                      Icons.search_rounded,
+                      theme,
+                      _openFilter,
+                    ),
+                    const SizedBox(width: 4),
+                    _floatingCircleBtn(
+                      Icons.more_vert_rounded,
+                      theme,
+                      () => _showMobilePlaylistOptions(context),
+                    ),
                   ],
                 ),
               ),
@@ -734,6 +754,170 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
         ],
       ),
     );
+  }
+
+  // Floating circle button for the mobile header overlay.
+  Widget _floatingCircleBtn(IconData icon, ThemeData theme, VoidCallback onTap) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.8),
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        icon: Icon(icon, size: 20),
+        onPressed: onTap,
+        padding: EdgeInsets.zero,
+      ),
+    );
+  }
+
+  // Options bottom sheet for mobile playlist detail.
+  Future<void> _showMobilePlaylistOptions(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final playlist = _playlist ?? widget.playlist;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: theme.colorScheme.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 32, height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                playlist.name,
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.palette_rounded),
+              title: Text(l10n.recalcColors),
+              onTap: () => Navigator.pop(ctx, 'recalc'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.image_rounded),
+              title: Text(l10n.changeCover),
+              onTap: () => Navigator.pop(ctx, 'cover'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_rounded),
+              title: Text(l10n.editPlaylist),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_rounded, color: theme.colorScheme.error),
+              title: Text(l10n.deletePlaylistTitle, style: TextStyle(color: theme.colorScheme.error)),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'recalc':
+        await _recalculateAmbientColor();
+      case 'cover':
+        await _mobilePickCover();
+      case 'edit':
+        await _editPlaylist();
+      case 'delete':
+        await _confirmDeletePlaylist();
+    }
+  }
+
+  // Clear palette cache and re-extract ambient color from current cover.
+  Future<void> _recalculateAmbientColor() async {
+    final playlist = _playlist ?? widget.playlist;
+    final url = playlist.coverUrl;
+    if (url == null) return;
+    _paletteCache.remove(url);
+    _store.invalidate(url);
+    _ambientFor = null;
+    _maybeExtractAmbient(url);
+    if (mounted) {
+      showScrupToast(
+        AppLocalizations.of(context).colorsUpdated,
+        kind: ScrupToastKind.success,
+      );
+    }
+  }
+
+  // Pick a new cover image for the playlist.
+  Future<void> _mobilePickCover() async {
+    final playlist = _playlist ?? widget.playlist;
+    final images = XTypeGroup(
+      label: AppLocalizations.of(context).images,
+      extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'],
+    );
+    final file = await openFile(acceptedTypeGroups: [images]);
+    if (file == null || !mounted) return;
+    final newCover = await copyPlaylistCoverToAppDir(
+      playlist.id,
+      file.path,
+    );
+    if (!mounted) return;
+    // Clear old palette cache entries.
+    final oldUrl = playlist.coverUrl;
+    if (oldUrl != null) {
+      _paletteCache.remove(oldUrl);
+      _store.invalidate(oldUrl);
+    }
+    _ambientFor = null;
+    _coverVersion++;
+    await context.read<AppDatabase>().setPlaylistCover(playlist.id, newCover);
+    // Limpiar la portada local anterior (no deja huérfanos en disco).
+    if (oldUrl != null &&
+        CoverImage.isLocalPath(oldUrl) &&
+        oldUrl != newCover) {
+      final old = File(oldUrl);
+      if (await old.exists()) await old.delete();
+    }
+  }
+
+  // Confirm and delete the playlist.
+  Future<void> _confirmDeletePlaylist() async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.deletePlaylistTitle),
+        content: Text(l10n.confirmDeletePlaylist((_playlist ?? widget.playlist).name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await context.read<AppDatabase>().deletePlaylist(widget.playlist.id);
+    if (mounted) widget.onBack();
   }
 
   ThemeData _themeWithPlaylistColor(ThemeData base, Color color) {
@@ -793,8 +977,22 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     }
 
     // Mobile: full-bleed layout inspired by forawn_mobile.
+    // Igual que en desktop, el theme de la playlist (acento ambiente) se
+    // aplica a TODA la vista: sin este wrapper, los botones e iconos caían al
+    // theme global (acento de la CANCIÓN en reproducción), no al de la
+    // playlist.
     if (Binaries.isMobile) {
-      return _buildMobilePlaylistDetail(context, theme, l10n, playlist, count, currentId);
+      return Theme(
+        data: theme,
+        child: _buildMobilePlaylistDetail(
+          context,
+          theme,
+          l10n,
+          playlist,
+          count,
+          currentId,
+        ),
+      );
     }
 
     return Theme(

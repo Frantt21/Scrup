@@ -171,6 +171,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get removeFromPlaylist => '从播放列表中移除';
 
   @override
+  String get changeCover => '更换封面';
+
+  @override
   String get editPlaylist => '编辑播放列表';
 
   @override
