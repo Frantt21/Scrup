@@ -513,7 +513,8 @@ class YtDlpService {
     );
   }
 
-  // Streaming on Android: try yt-dlp first, fallback to InnerTube HTTP.
+  // Streaming on Android: use yt-dlp --get-url to extract the audio URL,
+  // then download via HTTP for progressive playback (no blocking wait).
   Future<StreamingDownload> _startStreamingAndroid(
     String videoId, {
     required String outputDir,
@@ -523,30 +524,117 @@ class YtDlpService {
     await Binaries.ensureAndroidToolchain();
     debugPrint('[yt-dlp] stream(jni) $videoId');
 
-    // Try yt-dlp first; on failure fall back to InnerTube HTTP download.
+    // Step 1: Get streaming URL via yt-dlp --get-url (fast, no download).
+    String? streamUrl;
     try {
-      final result = await _run(
-        _downloadArgs(videoId, outputDir),
-        timeout: const Duration(minutes: 3),
-      );
-      final path = (result.stdout as String).trim();
-      if (path.isNotEmpty && await File(path).exists()) {
-        return StreamingDownload(
-          playablePath: Future.value(path),
-          finalPath: Future.value(path),
-          cancel: () {},
-        );
+      final getUrlArgs = <String>[
+        '--no-playlist',
+        '--no-warnings',
+        '-f', 'best',
+        '--get-url',
+        'https://www.youtube.com/watch?v=$videoId',
+      ];
+      if (_isAndroid) {
+        getUrlArgs.add('--no-check-certificates');
+      }
+      final result = await _run(getUrlArgs, timeout: const Duration(seconds: 30));
+      final url = (result.stdout as String).trim();
+      if (url.isNotEmpty && url.startsWith('http')) {
+        streamUrl = url;
+        debugPrint('[yt-dlp] got URL for $videoId (${url.length} chars)');
       }
     } catch (e) {
-      debugPrint('[yt-dlp] jni streaming failed, trying InnerTube: $e');
+      debugPrint('[yt-dlp] --get-url failed: $e');
     }
 
-    // InnerTube HTTP fallback.
+    // Step 2: Stream the audio via HTTP (progressive download).
+    if (streamUrl != null) {
+      return _streamHttp(
+        streamUrl,
+        videoId,
+        outputDir: outputDir,
+        onProgress: onProgress,
+      );
+    }
+
+    // Step 3: Fallback — InnerTube HTTP streaming.
+    debugPrint('[yt-dlp] url fetch failed, trying InnerTube fallback');
     return _startStreamingInnerTube(
       videoId,
       outputDir: outputDir,
       title: title,
       onProgress: onProgress,
+    );
+  }
+
+  // Downloads an audio URL via HTTP with progressive streaming.
+  // The partial file is completed as soon as enough data arrives for playback.
+  Future<StreamingDownload> _streamHttp(
+    String url,
+    String videoId, {
+    required String outputDir,
+    void Function(double? percent)? onProgress,
+  }) async {
+    final doneCompleter = Completer<String>();
+    final partialCompleter = Completer<String>();
+    var cancelled = false;
+    final started = DateTime.now();
+    final outputPath = p.join(outputDir, '$videoId.webm');
+    final partialPath = '$outputPath.part';
+
+    unawaited(() async {
+      try {
+        final req = await HttpClient().getUrl(Uri.parse(url));
+        final res = await req.close();
+        if (res.statusCode != 200) {
+          throw YtDlpException('HTTP ${res.statusCode} streaming audio');
+        }
+        final totalLen = res.contentLength;
+        var received = 0;
+        final sink = File(partialPath).openWrite();
+        await for (final chunk in res) {
+          if (cancelled) {
+            await sink.close();
+            try {
+              File(partialPath).deleteSync();
+            } catch (_) {}
+            return;
+          }
+          sink.add(chunk);
+          received += chunk.length;
+          // Complete partial after 1MB or 6s — enough for playback to start.
+          final elapsedMs = DateTime.now().difference(started).inMilliseconds;
+          if (!partialCompleter.isCompleted &&
+              (received >= 1024 * 1024 ||
+               (elapsedMs >= 6000 && received >= 64 * 1024))) {
+            partialCompleter.complete(partialPath);
+          }
+          if (totalLen > 0) {
+            onProgress?.call(received / totalLen);
+          }
+        }
+        await sink.close();
+        File(partialPath).renameSync(outputPath);
+        if (!doneCompleter.isCompleted) doneCompleter.complete(outputPath);
+        if (!partialCompleter.isCompleted) partialCompleter.complete(outputPath);
+        debugPrint('[stream] HTTP download done: $outputPath ($received bytes)');
+      } catch (e) {
+        debugPrint('[stream] HTTP download error: $e');
+        final msg = e is YtDlpException ? e.message : '$e';
+        if (!doneCompleter.isCompleted) doneCompleter.completeError(YtDlpException(msg));
+        if (!partialCompleter.isCompleted) partialCompleter.completeError(YtDlpException(msg));
+      }
+    }());
+
+    return StreamingDownload(
+      playablePath: partialCompleter.future,
+      finalPath: doneCompleter.future,
+      cancel: () {
+        cancelled = true;
+        try {
+          File(partialPath).deleteSync();
+        } catch (_) {}
+      },
     );
   }
 
