@@ -100,7 +100,6 @@ class YtDlpService {
     ];
     if (_isAndroid) {
       args.add('--no-check-certificates');
-      args.addAll(['--extractor-args', 'youtube:player_client=web_embedded']);
       final cookies = Binaries.cookiesPath;
       if (cookies != null) {
         args.add('--cookies');
