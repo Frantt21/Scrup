@@ -12,6 +12,7 @@ import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
 import '../services/settings_store.dart';
 import 'views/home_view.dart';
+import 'views/library_view.dart';
 import 'views/lyrics_view.dart';
 import 'views/playlist_detail_view.dart';
 import 'views/search_view.dart';
@@ -402,7 +403,9 @@ class _AppShellState extends State<AppShell> {
     return Listener(
       onPointerDown: _handlePointerDown,
       child: Scaffold(
-      body: Stack(
+      body: SafeArea(
+        top: mobile,
+        child: Stack(
         children: [
           Column(
             children: [
@@ -432,7 +435,7 @@ class _AppShellState extends State<AppShell> {
               // ── Móvil: mini-player + NavigationBar ──────────────
               if (mobile && !_fullscreen) ...[
                 MiniPlayer(
-                  onOpenNowPlaying: () => unawaited(_setFullscreen(true)),
+                  onOpenNowPlaying: () {},
                   onOpenQueue: _openQueueMobile,
                 ),
                 _buildMobileNavBar(),
@@ -454,6 +457,7 @@ class _AppShellState extends State<AppShell> {
               ),
             ),
         ],
+      ),
       ),
     ),
     );
@@ -520,15 +524,18 @@ class _AppShellState extends State<AppShell> {
       children: [
         IndexedStack(
           index: _showLyrics
-              ? 4
+              ? 5
               : (openPlaylist != null
-                    ? 2
-                    : (_showSettings ? 3 : _selectedIndex)),
+                    ? 3
+                    : (_showSettings ? 4 : _selectedIndex)),
           children: [
             HomeView(onSearch: _submitSearch),
             SearchView(
               searchRequest: _searchRequest,
               onBack: _backToHome,
+            ),
+            LibraryView(
+              onSelectPlaylist: _selectPlaylist,
             ),
             if (openPlaylist != null)
               PlaylistDetailView(
@@ -570,16 +577,16 @@ class _AppShellState extends State<AppShell> {
 
   void _openQueueMobile() => _setQueueOpen(!_queueOpen);
 
-  // Barra de navegación inferior de Android (Inicio / Buscar / Ajustes).
+  // Barra de navegación inferior de Android (Inicio / Buscar / Librería / Ajustes).
   Widget _buildMobileNavBar() {
+    final l10n = AppLocalizations.of(context);
     return NavigationBar(
       selectedIndex: _mobileNavIndex,
       onDestinationSelected: (i) {
         setState(() {
           _openPlaylist = null;
           _showLyrics = false;
-          if (i == 2) {
-            // Ajustes vive en la pila de vistas (index 3 vía _showSettings).
+          if (i == 3) {
             _showSettings = true;
           } else {
             _showSettings = false;
@@ -587,21 +594,26 @@ class _AppShellState extends State<AppShell> {
           }
         });
       },
-      destinations: const [
+      destinations: [
         NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: 'Inicio',
+          icon: const Icon(Icons.home_outlined),
+          selectedIcon: const Icon(Icons.home_rounded),
+          label: l10n.home,
         ),
         NavigationDestination(
-          icon: Icon(Icons.search_outlined),
-          selectedIcon: Icon(Icons.search_rounded),
-          label: 'Buscar',
+          icon: const Icon(Icons.search_outlined),
+          selectedIcon: const Icon(Icons.search_rounded),
+          label: l10n.searchTitle,
         ),
         NavigationDestination(
-          icon: Icon(Icons.settings_outlined),
-          selectedIcon: Icon(Icons.settings_rounded),
-          label: 'Ajustes',
+          icon: const Icon(Icons.library_music_outlined),
+          selectedIcon: const Icon(Icons.library_music_rounded),
+          label: l10n.library,
+        ),
+        NavigationDestination(
+          icon: const Icon(Icons.settings_outlined),
+          selectedIcon: const Icon(Icons.settings_rounded),
+          label: l10n.settings,
         ),
       ],
     );
@@ -609,7 +621,7 @@ class _AppShellState extends State<AppShell> {
 
   // Índice activo de la NavigationBar móvil: mapea el estado real de la app.
   int get _mobileNavIndex {
-    if (_showSettings) return 2;
+    if (_showSettings) return 3;
     return _selectedIndex;
   }
 }

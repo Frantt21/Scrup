@@ -1,6 +1,8 @@
 {
   "@@locale": "ko",
   "appTitle": "Scrup",
+  "home": "홈",
+  "library": "라이브러리",
   "settings": "설정",
   "backToPlaylists": "플레이리스트로 돌아가기",
   "playbackErrorWithDetails": "재생 오류: {details}",

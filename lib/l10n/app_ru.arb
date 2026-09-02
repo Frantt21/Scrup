@@ -1,6 +1,8 @@
 {
   "@@locale": "ru",
   "appTitle": "Scrup",
+  "home": "Главная",
+  "library": "Библиотека",
   "settings": "Настройки",
   "backToPlaylists": "Вернуться к плейлистам",
   "playbackErrorWithDetails": "Ошибка воспроизведения: {details}",

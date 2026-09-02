@@ -12,6 +12,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appTitle => 'Scrup';
 
   @override
+  String get home => 'Home';
+
+  @override
+  String get library => 'Library';
+
+  @override
   String get settings => 'Settings';
 
   @override

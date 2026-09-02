@@ -12,6 +12,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get appTitle => 'Scrup';
 
   @override
+  String get home => '홈';
+
+  @override
+  String get library => '라이브러리';
+
+  @override
   String get settings => '설정';
 
   @override

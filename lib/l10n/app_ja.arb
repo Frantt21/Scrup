@@ -1,6 +1,8 @@
 {
   "@@locale": "ja",
   "appTitle": "Scrup",
+  "home": "ホーム",
+  "library": "ライブラリ",
   "settings": "設定",
   "backToPlaylists": "プレイリストに戻る",
   "playbackErrorWithDetails": "再生エラー: {details}",

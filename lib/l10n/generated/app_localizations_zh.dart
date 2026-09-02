@@ -12,6 +12,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appTitle => 'Scrup';
 
   @override
+  String get home => '主页';
+
+  @override
+  String get library => '资料库';
+
+  @override
   String get settings => '设置';
 
   @override

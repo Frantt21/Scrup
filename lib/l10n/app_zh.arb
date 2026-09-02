@@ -1,6 +1,8 @@
 {
   "@@locale": "zh",
   "appTitle": "Scrup",
+  "home": "主页",
+  "library": "资料库",
   "settings": "设置",
   "backToPlaylists": "返回播放列表",
   "playbackErrorWithDetails": "播放错误：{details}",

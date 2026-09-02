@@ -115,6 +115,18 @@ abstract class AppLocalizations {
   /// **'Scrup'**
   String get appTitle;
 
+  /// No description provided for @home.
+  ///
+  /// In es, this message translates to:
+  /// **'Inicio'**
+  String get home;
+
+  /// No description provided for @library.
+  ///
+  /// In es, this message translates to:
+  /// **'Biblioteca'**
+  String get library;
+
   /// No description provided for @settings.
   ///
   /// In es, this message translates to:

@@ -12,6 +12,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get appTitle => 'Scrup';
 
   @override
+  String get home => 'Inicio';
+
+  @override
+  String get library => 'Biblioteca';
+
+  @override
   String get settings => 'Configuración';
 
   @override

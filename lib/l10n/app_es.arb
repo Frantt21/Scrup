@@ -1,6 +1,8 @@
 {
   "@@locale": "es",
   "appTitle": "Scrup",
+  "home": "Inicio",
+  "library": "Biblioteca",
   "settings": "Configuración",
   "backToPlaylists": "Volver a playlists",
   "playbackErrorWithDetails": "Error de reproducción: {details}",

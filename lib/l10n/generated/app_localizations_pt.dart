@@ -12,6 +12,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get appTitle => 'Scrup';
 
   @override
+  String get home => 'Inicio';
+
+  @override
+  String get library => 'Biblioteca';
+
+  @override
   String get settings => 'Configurações';
 
   @override
@@ -685,6 +691,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get appTitle => 'Scrup';
+
+  @override
+  String get home => 'Inicio';
+
+  @override
+  String get library => 'Biblioteca';
 
   @override
   String get settings => 'Configurações';

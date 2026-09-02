@@ -531,6 +531,211 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
     );
   }
 
+  // Mobile playlist detail: full-bleed cover header with dominant color bg.
+  Widget _buildMobilePlaylistDetail(
+    BuildContext context,
+    ThemeData theme,
+    AppLocalizations l10n,
+    Playlist playlist,
+    int count,
+    String? currentId,
+  ) {
+    final bgColor = _ambientColor ?? theme.colorScheme.surface;
+    final coverUrl = playlist.coverUrl;
+
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: Stack(
+        children: [
+          CustomScrollView(
+            slivers: [
+              // Full-width cover image header with gradient overlay
+              SliverAppBar(
+                expandedHeight: MediaQuery.of(context).size.width,
+                pinned: false,
+                floating: false,
+                snap: false,
+                stretch: true,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                automaticallyImplyLeading: false,
+                flexibleSpace: FlexibleSpaceBar(
+                  stretchModes: const [
+                    StretchMode.zoomBackground,
+                    StretchMode.blurBackground,
+                  ],
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (coverUrl != null && coverUrl.isNotEmpty)
+                        CoverImage(
+                          source: coverUrl,
+                          fit: BoxFit.cover,
+                          fallback: Container(
+                            color: bgColor,
+                            child: const Center(
+                              child: Icon(Icons.queue_music_rounded, size: 120),
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          color: bgColor,
+                          child: const Center(
+                            child: Icon(Icons.queue_music_rounded, size: 120),
+                          ),
+                        ),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              bgColor.withValues(alpha: 0.1),
+                              bgColor.withValues(alpha: 0.6),
+                              bgColor,
+                            ],
+                            stops: const [0.0, 0.6, 1.0],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Playlist info + action buttons
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                  child: Column(
+                    children: [
+                      Text(
+                        playlist.name,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (playlist.description != null &&
+                          playlist.description!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          playlist.description!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                      Text(
+                        '$count tracks',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: count == 0 ? null : _playAll,
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(0, 44),
+                            ),
+                            icon: const Icon(Icons.play_arrow_rounded),
+                            label: Text(l10n.play),
+                          ),
+                          const SizedBox(width: 12),
+                          FilledButton.tonalIcon(
+                            onPressed: count == 0 ? null : _playShuffled,
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(0, 44),
+                            ),
+                            icon: const Icon(Icons.shuffle_rounded),
+                            label: Text(l10n.shuffle),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Track list
+              if (_tracks.isEmpty)
+                SliverFillRemaining(
+                  child: Center(
+                    child: Text(
+                      'No tracks',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.only(bottom: 100),
+                  sliver: SliverList.builder(
+                    itemCount: _tracks.length,
+                    itemBuilder: (context, i) {
+                      final track = _tracks[i];
+                      return TrackTile(
+                        track: track,
+                        onPlay: () {
+                          final start = _tracks.indexWhere((t) => t.id == track.id);
+                          playQueue(
+                            context,
+                            _tracks,
+                            startIndex: start < 0 ? 0 : start,
+                            playlistId: widget.playlist.id,
+                          );
+                        },
+                        isCurrent: track.id == currentId,
+                        isPlaying: _playing,
+                        accentColor: _trackColorFor(track) ?? _ambientColor,
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+          // Floating back button
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface.withValues(alpha: 0.8),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                        onPressed: widget.onBack,
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   ThemeData _themeWithPlaylistColor(ThemeData base, Color color) {
     final onPrimary =
         ThemeData.estimateBrightnessForColor(color) == Brightness.dark
@@ -587,25 +792,25 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
       );
     }
 
+    // Mobile: full-bleed layout inspired by forawn_mobile.
+    if (Binaries.isMobile) {
+      return _buildMobilePlaylistDetail(context, theme, l10n, playlist, count, currentId);
+    }
+
     return Theme(
       data: theme,
       child: Container(
         constraints: const BoxConstraints.expand(),
-        // En móvil usamos todo el espacio (sin cristal flotante).
-        margin: Binaries.isMobile
-            ? EdgeInsets.zero
-            : const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
+        margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          boxShadow: Binaries.isMobile
-              ? const []
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.45),
-                    blurRadius: 28,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.45),
+              blurRadius: 28,
+              offset: const Offset(0, 12),
+            ),
+          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
@@ -614,9 +819,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView> {
               borderRadius: BorderRadius.circular(18),
               color:
                   (playlistColor != null
-                          // Tinte SOLO del tono: se mezclan los colores opacos
-                          // (sin alpha) y luego se aplica el mismo alpha del
-                          // sidebar, para que la translucidez coincida exactamente.
                           ? Color.lerp(
                               theme.colorScheme.surfaceContainerHighest,
                               playlistColor,

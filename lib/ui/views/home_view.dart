@@ -48,9 +48,11 @@ class _HomeViewState extends State<HomeView> {
   bool _playing = false;
   Timer? _nullTrackTimer;
 
-  /// Tamaño fijo de las tarjetas (~200px); las columnas se deducen del ancho.
+  /// Card size and grid layout (desktop ~200px, mobile compact).
   static const _cardExtent = 200.0;
   static const _rows = 2;
+  static const _mobileCardExtent = 110.0;
+  static const _mobileRows = 3;
 
   @override
   void initState() {
@@ -108,13 +110,14 @@ class _HomeViewState extends State<HomeView> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Columnas que caben en el ancho disponible (tarjetas de ~200px).
-        final cols = ((constraints.maxWidth - 32) / (_cardExtent + 12))
-            .floor()
-            .clamp(1, 10);
-        final visible = _recent.length.clamp(0, cols * _rows);
-
         final bool mobile = Binaries.isMobile;
+        // Desktop: cards ~200px. Mobile: 3 columns, 3 rows.
+        final cols = mobile
+            ? 3
+            : ((constraints.maxWidth - 32) / (_cardExtent + 12)).floor().clamp(1, 10);
+        final rows = mobile ? _mobileRows : _rows;
+        final visible = _recent.length.clamp(0, cols * rows);
+
         final Widget scroll = CustomScrollView(
                 slivers: [
                   // Barra de búsqueda (sin título ni subtítulo)
@@ -173,9 +176,9 @@ class _HomeViewState extends State<HomeView> {
                       sliver: SliverGrid(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: cols,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 1,
+                          mainAxisSpacing: mobile ? 8 : 12,
+                          crossAxisSpacing: mobile ? 8 : 12,
+                          childAspectRatio: mobile ? 0.9 : 1,
                         ),
                         delegate: SliverChildBuilderDelegate((context, i) {
                           final track = _recent[i];

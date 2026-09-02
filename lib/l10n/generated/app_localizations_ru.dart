@@ -12,6 +12,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appTitle => 'Scrup';
 
   @override
+  String get home => 'Главная';
+
+  @override
+  String get library => 'Библиотека';
+
+  @override
   String get settings => 'Настройки';
 
   @override
