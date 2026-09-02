@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 class BinaryDownloadStatus {
   const BinaryDownloadStatus({
@@ -48,277 +47,37 @@ class Binaries {
   // El ABI se resuelve en runtime según el dispositivo (aarch64 en arm64
   // reales, x86_64 en emulador) porque los módulos binarios de CPython
   // (lib-dynload: zlib, _ssl, ...) son específicos de ABI.
-  static String _androidToolchainAbi = 'aarch64';
   static const String _androidToolchainChannel = 'com.scrup.music.toolchain';
 
-  /// Resuelve el ABI de la toolchain CPython según el dispositivo (vía
-  /// Build.SUPPORTED_ABIS en Kotlin). Devuelve 'aarch64' o 'x86_64'.
-  static Future<String> _resolveAndroidAbi() async {
+  // On Android, youtubedl-android handles Python/yt-dlp/FFmpeg extraction.
+  // No custom toolchain needed — the library bundles everything.
+  static bool _androidToolchainReady = false;
+
+  // ytDlpScript is no longer used on Android with youtubedl-android.
+  static String? get ytDlpScript => null;
+
+  /// Initializes youtubedl-android (once). The library extracts Python 3.8,
+  // yt-dlp, FFmpeg, and QuickJS from native libs bundled in the APK.
+  static Future<bool> ensureAndroidToolchain() async {
+    if (!Platform.isAndroid) return false;
+    if (_androidToolchainReady) return true;
     try {
       const ch = MethodChannel(_androidToolchainChannel);
-      final abi = await ch.invokeMethod<String>('getAbi');
-      if (abi != null && abi.isNotEmpty) {
-        _androidToolchainAbi = abi;
-        debugPrint('[Scrup] ABI detected: $abi');
-      } else {
-        debugPrint('[Scrup] ABI channel returned null/empty, using default: $_androidToolchainAbi');
-      }
-    } catch (e) {
-      debugPrint('[Scrup] ABI detection failed ($e), using default: $_androidToolchainAbi');
-    }
-    return _androidToolchainAbi;
-  }
-
-  static String? _androidToolchainRoot;
-  static Future<bool>? _androidToolchainFuture;
-
-  /// En Android el binario a ejecutar es `<root>/python3` y yt-dlp se pasa
-  /// como primer argumento (zipapp); en el resto de plataformas es nulo y los
-  /// procesos deben invocar directamente [`ytdlpPath`].
-  static String? get ytDlpScript {
-    if (!Platform.isAndroid) return null;
-    final root = _androidToolchainRoot;
-    if (root == null) return null;
-    return p.join(root, 'yt-dlp');
-  }
-
-  /// Inicia (una sola vez) la extracción de la toolchain CPython/yt-dlp desde
-  /// los assets nativos. No bloquea el arranque: los primeros usos fallarán
-  /// con "yt-dlp no encontrado" hasta que termine (unos segundos).
-  static Future<bool> ensureAndroidToolchain() {
-    if (!Platform.isAndroid) return Future.value(false);
-    return _androidToolchainFuture ??= _extractAndroidToolchain();
-  }
-
-  static Future<bool> _extractAndroidToolchain() async {
-    final channel = const MethodChannel(_androidToolchainChannel);
-    try {
-      final filesDir = await getApplicationSupportDirectory();
-      await _resolveAndroidAbi();
-      final root = p.join(filesDir.path, 'toolchain', _androidToolchainAbi);
-      final marker = p.join(
-        filesDir.path,
-        '.scrup_toolchain_v2_${_androidToolchainAbi}',
-      );
-      if (File(marker).existsSync()) {
-        debugPrint('[Scrup] toolchain marker existe ($_androidToolchainAbi)');
-        _androidToolchainRoot = root;
-        return true;
-      }
-
-      // Leer el inventario (asset nativo).
-      final manifestPath = '$_androidToolchainAbi/manifest.json';
-      final manifestBytes = await _readMany(channel, [manifestPath]);
-      final mb = manifestBytes[manifestPath];
-      if (mb == null) return _failToolchain('manifest no leído');
-      final map = jsonDecode(utf8.decode(mb)) as Map<String, dynamic>;
-      final files = (map['files'] as List<dynamic>? ?? []).cast<String>();
-      if (files.isEmpty) return _failToolchain('manifest sin archivos');
-
-      // Copiar por LOTES (≤ 12 archivos por invocación) para no superar el
-      // límite de ~1MB del Binder por transacción de MethodChannel.
-      // Los assets que no existan en el APK (directorios de stdlib que
-      // aapt2 rechaza por comenzar con '_') se avisan pero no abortan:
-      // yt-dlp funciona perfectamente sin ellos.
-      const batchSize = 12;
-      const essentialBaseNames = {'python3', 'yt-dlp'};
-      var missingEssential = <String>[];
-      var written = 0;
-      var skipped = 0;
-      for (var i = 0; i < files.length; i += batchSize) {
-        final batch = files.sublist(
-          i,
-          i + batchSize > files.length ? files.length : i + batchSize,
-        );
-        final keys = [for (final rel in batch) '$_androidToolchainAbi/$rel'];
-        final data = await _readMany(channel, keys);
-        for (final rel in batch) {
-          final bytes = data['$_androidToolchainAbi/$rel'];
-          if (bytes == null) {
-            skipped++;
-            // Solo registrar como error si es un archivo esencial.
-            final bn = p.basename(rel);
-            if (essentialBaseNames.contains(bn)) {
-              missingEssential.add(rel);
-            }
-            continue;
-          }
-          final target = File(p.join(root, rel));
-          await target.parent.create(recursive: true);
-          await target.writeAsBytes(bytes);
-          written++;
-        }
-      }
-      if (missingEssential.isNotEmpty) {
-        debugPrint(
-            '[Scrup] toolchain: ${missingEssential.length} asset(s) esencial(es'
-            ' perdido(s): ${missingEssential.join(", ")}');
-      }
-
-      // Ensure executables have +x and correct SELinux label.
-      _ensureExecutable(p.join(root, 'python3'));
-      _ensureExecutable(p.join(root, 'yt-dlp'));
-
-      await Directory(p.join(root, 'tmp')).create();
-      await File(marker).writeAsString('ok');
-
-      final ytdlpOk = File(p.join(root, 'yt-dlp')).existsSync();
-      final stdlibOk = Directory(p.join(root, 'lib', 'python3.14')).existsSync();
-      if (!ytdlpOk || !stdlibOk) {
-        return _failToolchain(
-            'missing yt-dlp/stdlib (yt-dlp=$ytdlpOk, stdlib=$stdlibOk)');
-      }
-
-      // aapt2 strips directories starting with '_' from APK assets.
-      // Re-create critical ones (zipfile._path) from a bundled shim so
-      // that yt-dlp can import zipfile correctly on Python 3.14+.
-      _patchAaptStrippedModules(root);
-
-      // Health check: verify Python can actually import the stdlib.
-      final healthOk = await _healthCheck(channel, root);
-      if (!healthOk) {
-        // Try re-extracting once (corrupt files from a previous run).
-        debugPrint('[Scrup] toolchain health check failed, re-extracting...');
-        try {
-          await File(marker).delete();
-        } catch (_) {}
-        _androidToolchainRoot = null;
-        _androidToolchainFuture = null;
-        return false;
-      }
-
-      _androidToolchainRoot = root;
-      final skippedNote =
-          skipped > 0 ? ' — $skipped recursos stdlib no empaquetados por aapt2' : '';
-      debugPrint(
-          '[Scrup] toolchain android lista en $root '
-          '($written archivos copiados, $skipped omitidos$skippedNote)');
+      await ch.invokeMethod<void>('ytdlpInit');
+      _androidToolchainReady = true;
+      debugPrint('[Scrup] youtubedl-android ready');
       return true;
-    } catch (e, st) {
-      debugPrint('[Scrup] toolchain android falló: $e');
-      assert(() {
-        debugPrint(st.toString());
-        return true;
-      }());
+    } catch (e) {
+      debugPrint('[Scrup] youtubedl-android init failed: $e');
       return false;
     }
   }
 
-  static bool _failToolchain(String why) {
-    debugPrint('[Scrup] toolchain android incompleta: $why');
-    return false;
-  }
+  // Android env vars are managed by youtubedl-android internally.
+  static Map<String, String> androidToolchainEnv() => const {};
 
-  // aapt2 strips _-prefixed dirs from APK assets. This creates a shim
-  // for zipfile._path (Python 3.14+) so yt-dlp can import zipfile.
-  static void _patchAaptStrippedModules(String root) {
-    final stdlibDir = p.join(root, 'lib', 'python3.14');
-    if (!Directory(stdlibDir).existsSync()) return;
-
-    // zipfile._path is critical for yt-dlp. Check if it was stripped.
-    final zipfileDir = p.join(stdlibDir, 'zipfile');
-    final pathPkg = p.join(zipfileDir, '_path');
-    final pathMod = p.join(zipfileDir, '_path.py');
-    if (Directory(pathPkg).existsSync()) return; // already present
-    if (File(pathMod).existsSync()) return;      // already flattened
-
-    // Create a minimal _path.py shim.
-    debugPrint('[Scrup] patching missing zipfile._path (aapt2 strip workaround)');
-    try {
-      File(pathMod).writeAsStringSync('''
-import os as _os
-import sys as _sys
-
-class Path:
-    """Minimal Path shim for zipfile on Android."""
-    __slots__ = ('_path',)
-    def __init__(self, root, *parts):
-        self._path = _os.path.join(root, *parts) if parts else root
-    def __truediv__(self, other):
-        return Path(self._path, other)
-    def __str__(self):
-        return self._path
-    def __repr__(self):
-        return f'Path({self._path!r})'
-    def open(self, mode='r', *a, **kw):
-        return open(self._path, mode, *a, **kw)
-    def exists(self):
-        return _os.path.exists(self._path)
-    def is_dir(self):
-        return _os.path.isdir(self._path)
-    def is_file(self):
-        return _os.path.isfile(self._path)
-    def stat(self):
-        return _os.stat(self._path)
-    def iterdir(self):
-        for name in _os.listdir(self._path):
-            yield Path(self._path, name)
-    def resolve(self):
-        return Path(_os.path.realpath(self._path))
-
-class CompleteDirs:
-    def __init__(self, root):
-        self._root = root
-    def open(self, *a, **kw):
-        return open(self._root, *a, **kw)
-    def __truediv__(self, other):
-        return Path(self._root, other)
-''');
-    } catch (e) {
-      debugPrint('[Scrup] failed to create _path.py shim: $e');
-    }
-  }
-
-  // Validates that libpython loads correctly for this ABI.
-  static Future<bool> _healthCheck(MethodChannel channel, String root) async {
-    try {
-      // Configure Python (needed before pythonHello works).
-      await channel.invokeMethod<void>('pythonConfigure', {
-        'home': root,
-        'pythonPath': p.join(root, 'lib', 'python3.14'),
-      });
-      final msg = await channel
-          .invokeMethod<String>('pythonHello')
-          .timeout(const Duration(seconds: 10));
-      final ok = msg != null && msg.isNotEmpty;
-      debugPrint('[Scrup] toolchain health: ${ok ? 'OK' : 'FAIL'} ($msg)');
-      return ok;
-    } catch (e) {
-      debugPrint('[Scrup] toolchain health check failed: $e');
-      return false;
-    }
-  }
-
-  static Future<Map<String, Uint8List>> _readMany(
-    MethodChannel channel,
-    List<String> keys,
-  ) async {
-    final raw = await channel.invokeMethod<Map<Object?, Object?>>(
-      'readMany',
-      {'paths': keys},
-    );
-    if (raw == null) return const {};
-    final out = <String, Uint8List>{};
-    raw.forEach((k, v) {
-      if (k is String && v is Uint8List) out[k] = v;
-    });
-    return out;
-  }
-
-  /// Variables de entorno necesarias para ejecutar el python3 de Android
-  /// (loader de bionic: LD_LIBRARY_PATH para encontrar libpython/openssl).
-  static Map<String, String> androidToolchainEnv() {
-    if (!Platform.isAndroid) return const {};
-    final root = _androidToolchainRoot;
-    if (root == null) return const {};
-    return {
-      'LD_LIBRARY_PATH': p.join(root, 'lib'),
-      'PYTHONHOME': root,
-      'PYTHONUTF8': '1',
-      'PYTHONNOUSERSITE': '1',
-      'TMPDIR': p.join(root, 'tmp'),
-    };
-  }
+  /// Cookies path — youtubedl-android handles its own SSL/cookies internally.
+  static String? get cookiesPath => null;
 
   static String? get projectRoot {
     final candidates = <String>{
@@ -675,16 +434,8 @@ class CompleteDirs:
 
   static String? get ytdlpPath {
     if (_ytdlpPath != null) return _ytdlpPath;
-    // En Android yt-dlp se ejecuta con el python3 de la toolchain extraída;
-    // el script se pasa aparte (ver ytDlpScript).
-    if (Platform.isAndroid) {
-      final root = _androidToolchainRoot;
-      if (root == null) return null;
-      final exe = p.join(root, 'python3');
-      if (!File(exe).existsSync()) return null;
-      _ytdlpPath = exe;
-      return _ytdlpPath;
-    }
+    // On Android, yt-dlp is handled by youtubedl-android (not a local binary).
+    if (Platform.isAndroid) return null;
     final env = Platform.environment['SCRUP_YTDLP_PATH'];
     if (env != null && env.isNotEmpty) {
       _ytdlpPath = env;

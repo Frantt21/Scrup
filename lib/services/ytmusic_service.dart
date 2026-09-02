@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/track.dart';
@@ -372,6 +373,70 @@ class YtMusicService {
       seconds = seconds * 60 + p;
     }
     return seconds;
+  }
+
+  /// Fetches audio stream URLs from InnerTube player endpoint.
+  /// Returns the URL of the best available adaptive audio format.
+  /// Used on Android where yt-dlp may not work.
+  static const _playerEndpoint = 'https://music.youtube.com/youtubei/v1/player';
+  static const _playerApiKey = 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w';
+
+  Future<String?> getAudioStreamUrl(String videoId) async {
+    final body = jsonEncode({
+      'videoId': videoId,
+      'context': _context(),
+      'params': 'CgIQBg==',
+    });
+    http.Response res;
+    try {
+      res = await _client
+          .post(
+            Uri.parse('$_playerEndpoint?prettyPrint=false'),
+            headers: const {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0',
+              'X-YouTube-Client-Name': '67',
+              'X-YouTube-Client-Version': '1.20240403.01.00',
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {
+      return null;
+    }
+    if (res.statusCode != 200) {
+      debugPrint('[innertube] player HTTP ${res.statusCode}');
+      return null;
+    }
+    final Map<String, dynamic> data;
+    try {
+      data = jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (_) {
+      return null;
+    }
+    final status = data['playabilityStatus']?['status'];
+    final reason = data['playabilityStatus']?['reason'] ?? '';
+    debugPrint('[innertube] player status=$status reason=$reason');
+    if (status != 'OK') return null;
+    final streamingData = data['streamingData'];
+    if (streamingData == null) return null;
+    // Prefer adaptive audio-only formats (lower bitrate first for smaller files).
+    final adaptive = streamingData['adaptiveFormats'] as List<dynamic>? ?? [];
+    for (final fmt in adaptive) {
+      if (fmt is! Map<String, dynamic>) continue;
+      final mimeType = fmt['mimeType'] as String? ?? '';
+      if (!mimeType.startsWith('audio/')) continue;
+      final url = fmt['url'] as String?;
+      if (url != null && url.isNotEmpty) return url;
+    }
+    // Fallback: combined formats
+    final formats = streamingData['formats'] as List<dynamic>? ?? [];
+    for (final fmt in formats) {
+      if (fmt is! Map<String, dynamic>) continue;
+      final url = fmt['url'] as String?;
+      if (url != null && url.isNotEmpty) return url;
+    }
+    return null;
   }
 
   void close() => _client.close();

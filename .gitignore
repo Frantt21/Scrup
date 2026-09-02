@@ -63,3 +63,5 @@ RELEASE_LINUX.md
 /installer
 linux/flatpak/com.scrup.scrup.yml
 /linux/flatpak
+assets/www.youtube.com_cookies.txt
+/ytdlnis-main

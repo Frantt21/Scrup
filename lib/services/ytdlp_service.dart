@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/binaries.dart';
 import '../core/track.dart';
+import 'ytmusic_service.dart';
 
 class YtDlpException implements Exception {
   final String message;
@@ -90,14 +91,22 @@ class YtDlpService {
       '--newline',
       '--no-mtime',
       '-f',
-      'bestaudio/best',
+      _isAndroid ? 'best' : 'bestaudio/best',
       '-o',
       p.join(outputDir, '%(id)s.%(ext)s'),
       '--print',
       'after_move:filepath',
       'https://www.youtube.com/watch?v=$videoId',
     ];
-    if (_isAndroid) args.add('--no-check-certificates');
+    if (_isAndroid) {
+      args.add('--no-check-certificates');
+      args.addAll(['--extractor-args', 'youtube:player_client=web_embedded']);
+      final cookies = Binaries.cookiesPath;
+      if (cookies != null) {
+        args.add('--cookies');
+        args.add(cookies);
+      }
+    }
     return args;
   }
 
@@ -287,7 +296,14 @@ class YtDlpService {
       '--skip-download',
       '-J',
     ];
-    if (_isAndroid) args.add('--no-check-certificates');
+    if (_isAndroid) {
+      args.add('--no-check-certificates');
+      final cookies = Binaries.cookiesPath;
+      if (cookies != null) {
+        args.add('--cookies');
+        args.add(cookies);
+      }
+    }
     final result = await _run(args);
 
     final Map<String, dynamic> json;
@@ -498,10 +514,7 @@ class YtDlpService {
     );
   }
 
-  // Descarga streaming en Android vía el driver JNI (libpython embebido).
-  // yt-dlp corre en el executor nativo (bloqueando su hilo); aquí resolvemos
-  // el playback cuando el .part/archivo final es reproducible y reportamos
-  // progreso leyendo el log que el driver va escribiendo.
+  // Streaming on Android: try yt-dlp first, fallback to InnerTube HTTP.
   Future<StreamingDownload> _startStreamingAndroid(
     String videoId, {
     required String outputDir,
@@ -511,99 +524,98 @@ class YtDlpService {
     await Binaries.ensureAndroidToolchain();
     debugPrint('[yt-dlp] stream(jni) $videoId');
 
-    final partialCompleter = Completer<String>();
+    // Try yt-dlp first; on failure fall back to InnerTube HTTP download.
+    try {
+      final result = await _run(
+        _downloadArgs(videoId, outputDir),
+        timeout: const Duration(minutes: 3),
+      );
+      final path = (result.stdout as String).trim();
+      if (path.isNotEmpty && await File(path).exists()) {
+        return StreamingDownload(
+          playablePath: Future.value(path),
+          finalPath: Future.value(path),
+          cancel: () {},
+        );
+      }
+    } catch (e) {
+      debugPrint('[yt-dlp] jni streaming failed, trying InnerTube: $e');
+    }
+
+    // InnerTube HTTP fallback.
+    return _startStreamingInnerTube(
+      videoId,
+      outputDir: outputDir,
+      title: title,
+      onProgress: onProgress,
+    );
+  }
+
+  // InnerTube HTTP streaming fallback for Android.
+  // Gets audio URL from InnerTube player endpoint and downloads via HTTP.
+  Future<StreamingDownload> _startStreamingInnerTube(
+    String videoId, {
+    required String outputDir,
+    String? title,
+    void Function(double? percent)? onProgress,
+  }) async {
+    debugPrint('[innertube] stream $videoId');
     final doneCompleter = Completer<String>();
+    final partialCompleter = Completer<String>();
     var cancelled = false;
 
-    // Lanza la descarga en background vía el canal JNI.
     unawaited(() async {
       try {
-        await _run(
-          _downloadArgs(videoId, outputDir),
-          timeout: const Duration(minutes: 10),
-        );
-        final finalPath = await _findFinal(outputDir, videoId);
-        if (finalPath == null) {
-          final err =
-              'La descarga de "${title ?? videoId}" no produjo un archivo.';
-          if (!doneCompleter.isCompleted) {
-            doneCompleter.completeError(YtDlpException(err));
+        final url = await YtMusicService().getAudioStreamUrl(videoId);
+        if (url == null) {
+          throw YtDlpException('InnerTube no devolvió URL de audio para $videoId');
+        }
+        debugPrint('[innertube] got audio URL, downloading...');
+        // Download to .part first, rename on completion.
+        final outputPath = p.join(outputDir, '$videoId.webm');
+        final partialPath = '$outputPath.part';
+        final req = await HttpClient().getUrl(Uri.parse(url));
+        final res = await req.close();
+        if (res.statusCode != 200) {
+          throw YtDlpException('HTTP ${res.statusCode} downloading audio');
+        }
+        final totalLen = res.contentLength;
+        var received = 0;
+        final sink = File(partialPath).openWrite();
+        await for (final chunk in res) {
+          if (cancelled) {
+            await sink.close();
+            try { File(partialPath).deleteSync(); } catch (_) {}
+            return;
           }
-          if (!partialCompleter.isCompleted) {
-            partialCompleter.completeError(YtDlpException(err));
+          sink.add(chunk);
+          received += chunk.length;
+          if (!partialCompleter.isCompleted &&
+              (received >= 1024 * 1024 ||
+               (totalLen > 0 && received >= totalLen))) {
+            partialCompleter.complete(partialPath);
           }
-        } else {
-          if (!doneCompleter.isCompleted) {
-            doneCompleter.complete(finalPath);
-          }
-          if (!partialCompleter.isCompleted) {
-            partialCompleter.complete(finalPath);
+          if (totalLen > 0) {
+            onProgress?.call(received / totalLen);
           }
         }
+        await sink.close();
+        // Rename .part to final.
+        File(partialPath).renameSync(outputPath);
+        if (!doneCompleter.isCompleted) doneCompleter.complete(outputPath);
+        if (!partialCompleter.isCompleted) partialCompleter.complete(outputPath);
       } catch (e) {
+        debugPrint('[innertube] stream error: $e');
         final msg = e is YtDlpException ? e.message : '$e';
-        if (!cancelled) {
-          if (!doneCompleter.isCompleted) {
-            doneCompleter.completeError(YtDlpException(msg));
-          }
-          if (!partialCompleter.isCompleted) {
-            partialCompleter.completeError(YtDlpException(msg));
-          }
-        }
-      }
-    }());
-
-    // Polling: resuelve playback cuando hay datos reproducibles y reporta
-    // progreso desde el log que el driver va escribiendo.
-    unawaited(() async {
-      final started = DateTime.now();
-      final logPath = await _jniLogPath();
-      var lastReported = -1;
-      final progressRe = RegExp(r'\[download\]\s+(\d+(?:\.\d+)?)%');
-      while (!doneCompleter.isCompleted) {
-        if (!partialCompleter.isCompleted) {
-          final finalPath = await _findFinal(outputDir, videoId);
-          if (finalPath != null) {
-            partialCompleter.complete(finalPath);
-          } else {
-            final partial = await _findPartial(outputDir, videoId);
-            if (partial != null) {
-              final size = await partial.length();
-              final elapsedMs =
-                  DateTime.now().difference(started).inMilliseconds;
-              if (size >= 1024 * 1024 ||
-                  (elapsedMs >= 6000 && size >= 64 * 1024)) {
-                partialCompleter.complete(partial.path);
-              }
-            }
-          }
-        }
-        try {
-          final f = File(logPath);
-          if (await f.exists()) {
-            final cur = await f.readAsString();
-            final ms = progressRe.allMatches(cur).toList();
-            if (ms.isNotEmpty) {
-              final p = double.parse(ms.last.group(1)!);
-              final r = p.round();
-              if (r != lastReported) {
-                lastReported = r;
-                onProgress?.call(p / 100);
-              }
-            }
-          }
-        } catch (_) {}
-        await Future<void>.delayed(const Duration(milliseconds: 400));
+        if (!doneCompleter.isCompleted) doneCompleter.completeError(YtDlpException(msg));
+        if (!partialCompleter.isCompleted) partialCompleter.completeError(YtDlpException(msg));
       }
     }());
 
     return StreamingDownload(
       playablePath: partialCompleter.future,
       finalPath: doneCompleter.future,
-      cancel: () {
-        cancelled = true;
-        unawaited(_jniCancel());
-      },
+      cancel: () { cancelled = true; },
     );
   }
 

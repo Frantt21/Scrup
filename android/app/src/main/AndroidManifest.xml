@@ -12,7 +12,8 @@
         android:label="Scrup"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:extractNativeLibs="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
