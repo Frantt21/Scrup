@@ -174,7 +174,12 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
 
     final double p = widget.percentage.clamp(0.0, 1.0);
     final w = MediaQuery.sizeOf(context).width;
-    final fullH = widget.height;
+    // Referencia de altura FINAL (pantalla completa) para dimensionar el arte.
+    final double fullH = MediaQuery.sizeOf(context).height;
+    // Progreso de ESCALA del arte derivado de la ALTURA REAL del panel
+    // (60 → fullH), no del porcentaje posiblemente curvado. Así el artwork
+    // empieza a escalar desde el primer instante y sigue siempre al panel.
+    final double hp = ((widget.height - 60) / (fullH - 60)).clamp(0.0, 1.0);
 
     // Tamaño del artwork expandido (grande, 1:1), limitado por la altura
     // disponible para dejar espacio a header + bloque de controles.
@@ -198,19 +203,22 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
           _sharedArtwork(
             showing: showing,
             theme: theme,
-            p: p,
+            p: hp,
             artSide: artSide,
             artLeft: artLeft,
             artTop: artTop,
             w: w,
           ),
 
-          // ── Contenido COMPACTO (se desvanece al expandir) ─────────
+          // ── Contenido COMPACTO (la barra se va al INICIO de la transición) ──
           Positioned.fill(
             child: IgnorePointer(
-              ignoring: p > 0.02,
+              ignoring: p > 0.05,
               child: Opacity(
-                opacity: (1 - p).clamp(0.0, 1.0),
+                // Se desvanece rápido: desaparece por completo ya al ~15% de
+                // la expansión (no se queda desvaneciéndose durante toda la
+                // transición).
+                opacity: ((1 - p * 6.7)).clamp(0.0, 1.0),
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: SizedBox(
@@ -222,19 +230,8 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                       ),
                       child: Stack(
                         children: [
-                          // Fila centrada verticalmente (título/controles).
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(70, 0, 8, 0),
-                              child: _compactRow(
-                                theme: theme,
-                                accent: accent,
-                                showing: showing,
-                                loading: loading,
-                              ),
-                            ),
-                          ),
-                          // Progreso personalizado (relleno blanco en la base).
+                          // Progreso en la base, DETRÁS de los elementos
+                          // (sólo sobre el fondo, no sobre título/controles).
                           Align(
                             alignment: Alignment.bottomLeft,
                             child: FractionallySizedBox(
@@ -247,6 +244,18 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                               heightFactor: 1.0,
                               child: Container(
                                 color: Colors.black.withValues(alpha: 0.25),
+                              ),
+                            ),
+                          ),
+                          // Fila centrada verticalmente (título/controles).
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(70, 0, 8, 0),
+                              child: _compactRow(
+                                theme: theme,
+                                accent: accent,
+                                showing: showing,
+                                loading: loading,
                               ),
                             ),
                           ),
@@ -274,9 +283,28 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                   dur: dur,
                   total: total,
                   w: w,
-                  p: p,
+                  hp: hp,
                   artSide: artSide,
                   artTop: artTop,
+                ),
+              ),
+            ),
+          ),
+
+          // ── Letras MONTADAS (sólo en el expandido): sheet draggable que se
+          //    abre arrastrándola. Vive FUERA del SafeArea para que el fondo
+          //    plano del sheet se extienda también sobre la barra de
+          //    navegación del sistema.
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: p < 0.98,
+              child: Opacity(
+                opacity: p,
+                child: _LyricsPeek(
+                  track: track,
+                  accent: accent,
+                  open: _lyricsOpen,
+                  onChanged: (v) => setState(() => _lyricsOpen = v),
                 ),
               ),
             ),
@@ -436,86 +464,74 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     required Duration? dur,
     required double total,
     required double w,
-    required double p,
+    required double hp,
     required double artSide,
     required double artTop,
   }) {
     final safeTop = MediaQuery.paddingOf(context).top;
     // El arte está en coords de pantalla completa; el contenido de la columna
     // vive debajo del header (52) + SafeArea. El espaciador coloca los
-    // controles justo debajo del borde inferior del arte, y lo sigue durante
-    // la transición (sin huecos ni solapamientos).
-    final double artBottomP = lerp(7, artTop, p) + lerp(46, artSide, p);
+    // controles justo debajo del borde inferior del arte, siguiéndolo con la
+    // misma escala (`hp`) para que arranquen juntos desde el primer instante.
+    final double artBottomP = lerp(7, artTop, hp) + lerp(46, artSide, hp);
     final double controlsTop = (artBottomP - 52 - safeTop).clamp(0.0, double.infinity);
 
     return SafeArea(
-      child: Stack(
+      child: Column(
         children: [
-          Column(
-            children: [
-              // ── Header: [v] cierre ────────────────────────────────────
-              SizedBox(
-                height: 52,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          size: 28,
-                        ),
-                        color: Colors.white.withValues(alpha: 0.9),
-                        tooltip: 'Cerrar',
-                        onPressed: widget.onClose,
-                      ),
-                    ],
+          // ── Header: [v] cierre ────────────────────────────────────
+          SizedBox(
+            height: 52,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 28,
+                    ),
+                    color: Colors.white.withValues(alpha: 0.9),
+                    tooltip: 'Cerrar',
+                    onPressed: widget.onClose,
                   ),
-                ),
+                ],
               ),
-              // ── Contenido: controles justo debajo del arte heredado ─────
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            SizedBox(height: controlsTop),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: _centerColumn(
-                                context,
-                                theme: theme,
-                                cs: cs,
-                                accent: accent,
-                                track: track,
-                                dur: dur,
-                                total: total,
-                                w: w,
-                                p: p,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
-          // ── Letras MONTADAS: sheet draggable que se abre arrastrándola ──
-          _LyricsPeek(
-            track: track,
-            accent: accent,
-            open: _lyricsOpen,
-            onChanged: (v) => setState(() => _lyricsOpen = v),
+          // ── Contenido: controles justo debajo del arte heredado ─────
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.max,
+                      children: [
+                        SizedBox(height: controlsTop),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: _centerColumn(
+                            context,
+                            theme: theme,
+                            cs: cs,
+                            accent: accent,
+                            track: track,
+                            dur: dur,
+                            total: total,
+                            w: w,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -531,7 +547,6 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     required Duration? dur,
     required double total,
     required double w,
-    required double p,
   }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -825,13 +840,17 @@ class _LyricsPeekState extends State<_LyricsPeek> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Fondo PLANO: acento oscurecido (no translúcido), para que el sheet
+    // contraste con el acento del player y se extienda sobre la barra de
+    // navegación.
+    final Color sheetColor = Color.lerp(widget.accent, Colors.black, 0.35)!;
     return Align(
       alignment: Alignment.bottomCenter,
       child: LayoutBuilder(
         builder: (context, c) {
           final maxH = c.maxHeight;
           final collapsed = 48.0;
-          final openH = maxH * 0.74;
+          final openH = maxH * 0.80;
           final sheetH = collapsed + (_open * (openH - collapsed));
 
           return AnimatedContainer(
@@ -839,10 +858,10 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                 ? Duration.zero
                 : const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
-            width: double.infinity,
             height: sheetH,
+            width: double.infinity,
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.35),
+              color: sheetColor,
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(20),
               ),
@@ -894,13 +913,11 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                     ),
                   ),
                 ),
-                // Contenido (sólo cuando hay hueco).
-                if (sheetH > collapsed + 1)
-                  Expanded(
-                    child: _open >= 0.5
-                        ? LyricsView(embedded: true)
-                        : const SizedBox.shrink(),
-                  ),
+                // Letras SIEMPRE MONTADAS (no aparecen de golpe); el
+                // [AnimatedContainer] las revela escalando la altura.
+                Expanded(
+                  child: LyricsView(embedded: true),
+                ),
               ],
             ),
           );
