@@ -781,6 +781,24 @@ abstract class AppLocalizations {
   /// **'Recalcular colores'**
   String get recalcColors;
 
+  /// No description provided for @playlistCoverStyle.
+  ///
+  /// In es, this message translates to:
+  /// **'Estilo de portada'**
+  String get playlistCoverStyle;
+
+  /// No description provided for @playlistCoverStyleFull.
+  ///
+  /// In es, this message translates to:
+  /// **'Portada completa'**
+  String get playlistCoverStyleFull;
+
+  /// No description provided for @playlistCoverStyleFlat.
+  ///
+  /// In es, this message translates to:
+  /// **'Acento plano'**
+  String get playlistCoverStyleFlat;
+
   /// No description provided for @colorsUpdated.
   ///
   /// In es, this message translates to:

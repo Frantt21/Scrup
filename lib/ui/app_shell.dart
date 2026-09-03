@@ -542,7 +542,10 @@ class _AppShellState extends State<AppShell> {
                     ? 3
                     : (_showSettings ? 4 : _selectedIndex)),
           children: [
-            SafeArea(top: true, child: HomeView(onSearch: _submitSearch, onOpenPlaylist: _selectPlaylist)),
+            // Home sin SafeArea superior (edge-to-edge): el degradado de
+            // acento del inicio se extiende detrás de la barra de estado.
+            // El propio HomeView aplica el inset superior a su contenido.
+            HomeView(onSearch: _submitSearch, onOpenPlaylist: _selectPlaylist),
             SafeArea(
               top: true,
               child: SearchView(

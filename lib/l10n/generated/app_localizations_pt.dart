@@ -379,6 +379,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get recalcColors => 'Recalcular cores';
 
   @override
+  String get playlistCoverStyle => 'Estilo de portada';
+
+  @override
+  String get playlistCoverStyleFull => 'Portada completa';
+
+  @override
+  String get playlistCoverStyleFlat => 'Acento plano';
+
+  @override
   String get colorsUpdated => 'Cores atualizados';
 
   @override

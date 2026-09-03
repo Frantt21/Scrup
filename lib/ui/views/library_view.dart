@@ -191,6 +191,7 @@ class _LibraryViewState extends State<LibraryView> {
               child: _searchOpen
                   ? Row(
                       key: const ValueKey('search_open'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         IconButton.filledTonal(
                           onPressed: _closeSearch,
@@ -227,6 +228,7 @@ class _LibraryViewState extends State<LibraryView> {
                     )
                   : Row(
                       key: const ValueKey('header_normal'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Text(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -55,10 +56,14 @@ class _HomeViewState extends State<HomeView> {
   bool _playing = false;
   Timer? _nullTrackTimer;
 
+  /// Playlist activa en reproducción (para el indicador de "en reproducción"
+  /// en las tarjetas de playlists recientes).
+  int? _activePlaylistId;
+  VoidCallback? _onActivePlaylistChanged;
+
   /// Card size and grid layout (desktop ~200px, mobile compact).
   static const _cardExtent = 200.0;
   static const _rows = 2;
-  static const _mobileRows = 3;
 
   @override
   void initState() {
@@ -82,6 +87,7 @@ class _HomeViewState extends State<HomeView> {
     final player = context.read<PlayerService>();
     _currentTrack = player.currentTrackValue;
     _playing = player.isPlaying;
+    _activePlaylistId = player.activePlaylistId.value;
     _trackSub = player.currentTrack.listen((t) {
       if (!mounted) return;
       if (t == null) {
@@ -98,6 +104,10 @@ class _HomeViewState extends State<HomeView> {
       if (!mounted) return;
       setState(() => _playing = p);
     });
+    _onActivePlaylistChanged = () {
+      if (mounted) setState(() => _activePlaylistId = player.activePlaylistId.value);
+    };
+    player.activePlaylistId.addListener(_onActivePlaylistChanged!);
   }
 
   @override
@@ -107,6 +117,11 @@ class _HomeViewState extends State<HomeView> {
     _playingSub?.cancel();
     _recentPlaylistsSub?.cancel();
     _nullTrackTimer?.cancel();
+    if (_onActivePlaylistChanged != null) {
+      context.read<PlayerService>().activePlaylistId.removeListener(
+        _onActivePlaylistChanged!,
+      );
+    }
     super.dispose();
   }
 
@@ -131,51 +146,55 @@ class _HomeViewState extends State<HomeView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final bool mobile = Binaries.isMobile;
-        // Desktop: cards ~200px. Mobile: exactamente 3 FILAS × 2 COLUMNAS.
+        // Insets superiores: en móvil la vista se dibuja edge-to-edge (la
+        // barra de estado queda detrás del degradado de acento), así que el
+        // contenido se hunde con este inset para no quedar bajo la barra.
+        final double topInset = MediaQuery.paddingOf(context).top;
+        // Desktop: cards ~200px. Mobile: exactamente 3 COLUMNAS × 2 FILAS.
         final cols = mobile
-            ? 2
+            ? 3
             : ((constraints.maxWidth - 32) / (_cardExtent + 12)).floor().clamp(1, 10);
-        final rows = mobile ? _mobileRows : _rows;
+        final rows = mobile ? _rows : _rows;
         final visible = _recent.length.clamp(0, cols * rows);
 
         final recentPlaylists = _recentPlaylists;
 
+        final Widget searchField = TextField(
+          onSubmitted: _submitSearch,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: l10n.searchHint,
+            prefixIcon: const Icon(Icons.search_rounded),
+            filled: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(28),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+        );
+
         final Widget scroll = CustomScrollView(
                 slivers: [
-                  // Barra de búsqueda (sin título ni subtítulo), encima del
-                  // degradado de acento del inicio.
-                  SliverToBoxAdapter(
-                    child: Padding(
-padding: EdgeInsets.fromLTRB(
-                            mobile ? 16 : 24, mobile ? 16 : 20,
-                            mobile ? 16 : 24, 16),
-                      child: TextField(
-                        onSubmitted: _submitSearch,
-                        textInputAction: TextInputAction.search,
-                        decoration: InputDecoration(
-                          hintText: l10n.searchHint,
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          filled: true,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(28),
-                            borderSide: BorderSide.none,
+                  // En móvil: búsqueda FIJA (flotante) que al scrollear adopta
+                  // un estilo glass translúcido con blur SOLO en el input (el
+                  // cuerpo nunca se ve desenfocado). En desktop se mantiene
+                  // scrolleable dentro del panel.
+                  mobile
+                      ? SliverPersistentHeader(
+                          pinned: true,
+                          delegate: _HomeSearchHeaderDelegate(
+                            topInset: topInset,
+                            onSubmit: _submitSearch,
+                            hintText: l10n.searchHint,
                           ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 12,
+                        )
+                      : SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                            child: searchField,
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  if (recentPlaylists.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: _RecentPlaylistsRow(
-                        playlists: recentPlaylists,
-                        accent: themeController.accentColor ??
-                            theme.colorScheme.primary,
-                        onOpen: _openPlaylist,
-                      ),
-                    ),
                   if (!_loaded)
                     const SliverToBoxAdapter(
                       child: Padding(
@@ -209,9 +228,9 @@ padding: EdgeInsets.fromLTRB(
                       sliver: SliverGrid(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: cols,
-                          mainAxisSpacing: mobile ? 8 : 12,
-                          crossAxisSpacing: mobile ? 8 : 12,
-                          childAspectRatio: mobile ? 0.9 : 1,
+                          mainAxisSpacing: mobile ? 10 : 12,
+                          crossAxisSpacing: mobile ? 10 : 12,
+                          childAspectRatio: 1,
                         ),
                         delegate: SliverChildBuilderDelegate((context, i) {
                           final track = _recent[i];
@@ -222,6 +241,18 @@ padding: EdgeInsets.fromLTRB(
                             isPlaying: _playing,
                           );
                         }, childCount: visible),
+                      ),
+                    ),
+                  // Recent playlists (DESPUÉS del grid de recientes)
+                  if (recentPlaylists.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _RecentPlaylistsRow(
+                        playlists: recentPlaylists,
+                        accent: themeController.accentColor ??
+                            theme.colorScheme.primary,
+                        activePlaylistId: _activePlaylistId,
+                        isPlaying: _playing,
+                        onOpen: _openPlaylist,
                       ),
                     ),
                 ],
@@ -485,10 +516,10 @@ class _RecentCardState extends State<_RecentCard> {
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            // Borde de 1px con el acento de la canción (siempre visible);
+            // Borde de 2px con el acento de la canción (siempre visible);
             // en hover se refuerza. Sin sombra/pulsación cuadrada.
             border: Border.all(
-              width: 1,
+              width: 2,
               color: _hovered
                   ? accent.withValues(alpha: 0.9)
                   : accent.withValues(alpha: 0.45),
@@ -654,23 +685,96 @@ class _TopAccentGradient extends StatelessWidget {
     return IgnorePointer(
       child: Align(
         alignment: Alignment.topCenter,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                color.withValues(alpha: 0.35),
-                color.withValues(alpha: 0.18),
-                color.withValues(alpha: 0.0),
-              ],
+        // Solo el ~1/4 superior: el degradado se desvanece hacia abajo y el
+        // resto del inicio queda sin tinte (antes ocupaba todo el alto).
+        child: FractionallySizedBox(
+          heightFactor: 0.27,
+          widthFactor: 1,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  color.withValues(alpha: 0.35),
+                  color.withValues(alpha: 0.18),
+                  color.withValues(alpha: 0.0),
+                ],
+              ),
             ),
           ),
-          child: const SizedBox.expand(),
         ),
       ),
     );
   }
+}
+
+/// Búsqueda FIJA y FLOTANTE del Inicio (móvil): siempre arriba, sin fondo a
+/// lo ancho (el cuerpo nunca se ve desenfocado). Es una píldora redondeada que
+/// en el tope se ve translúcida sobre el degradado y, al hacer scroll, adopta
+/// un estilo glass con blur confinado SOLO al propio input de búsqueda.
+class _HomeSearchHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final double topInset;
+  final ValueChanged<String> onSubmit;
+  final String hintText;
+
+  const _HomeSearchHeaderDelegate({
+    required this.topInset,
+    required this.onSubmit,
+    required this.hintText,
+  });
+
+  @override
+  double get minExtent => maxExtent;
+
+  @override
+  double get maxExtent => topInset + 16 + 56 + 8;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final theme = Theme.of(context);
+    final blurred = shrinkOffset > 8;
+
+    const radius = 28.0;
+
+    // La píldora en sí: ClipRRect + BackdropFilter + fondo translúcido, de
+    // modo que el blur queda limitado al área del input (componentes, nada
+    // de fondo a lo ancho). En el tope (sin scroll) es solo translúcida.
+    Widget pill = ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blurred ? 18 : 0, sigmaY: blurred ? 18 : 0),
+        child: ColoredBox(
+          color: theme.colorScheme.surface.withValues(
+            alpha: blurred ? 0.55 : 0.35,
+          ),
+          child: TextField(
+            onSubmitted: onSubmit,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: hintText,
+              prefixIcon: const Icon(Icons.search_rounded),
+              filled: false,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, topInset + 16, 16, 8),
+      child: pill,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _HomeSearchHeaderDelegate oldDelegate) => true;
 }
 
 /// Fila horizontal ÚNICA y scrolleable de playlists recientes, con cards más
@@ -678,11 +782,15 @@ class _TopAccentGradient extends StatelessWidget {
 class _RecentPlaylistsRow extends StatelessWidget {
   final List<Playlist> playlists;
   final Color accent;
+  final int? activePlaylistId;
+  final bool isPlaying;
   final ValueChanged<Playlist> onOpen;
 
   const _RecentPlaylistsRow({
     required this.playlists,
     required this.accent,
+    required this.activePlaylistId,
+    required this.isPlaying,
     required this.onOpen,
   });
 
@@ -705,18 +813,21 @@ class _RecentPlaylistsRow extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 132,
+          height: 158,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: playlists.length,
             itemBuilder: (context, i) {
               final playlist = playlists[i];
+              final isCurrent = playlist.id == activePlaylistId;
               return Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: _RecentPlaylistCard(
                   playlist: playlist,
                   accent: accent,
+                  isCurrent: isCurrent,
+                  isPlaying: isPlaying,
                   onTap: () => onOpen(playlist),
                 ),
               );
@@ -728,15 +839,21 @@ class _RecentPlaylistsRow extends StatelessWidget {
   }
 }
 
-/// Card grande de playlist reciente: portada 1:1 con acento plano de fondo.
+/// Card grande de playlist reciente: portada 1:1 con el título DENTRO del
+/// card (sobre el artwork, como las recientes) y el indicador de
+/// "en reproducción" cuando la playlist está sonando.
 class _RecentPlaylistCard extends StatelessWidget {
   final Playlist playlist;
   final Color accent;
+  final bool isCurrent;
+  final bool isPlaying;
   final VoidCallback onTap;
 
   const _RecentPlaylistCard({
     required this.playlist,
     required this.accent,
+    required this.isCurrent,
+    required this.isPlaying,
     required this.onTap,
   });
 
@@ -744,63 +861,83 @@ class _RecentPlaylistCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasCover = playlist.coverUrl != null && playlist.coverUrl!.isNotEmpty;
+    final width = 140.0;
 
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
-        width: 96,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: SizedBox(
-                width: 96,
-                height: 96,
-                child: hasCover
-                    ? CoverImage(
-                        source: playlist.coverUrl!,
-                        fit: BoxFit.cover,
-                        fallback: _coverFallback(theme),
-                      )
-                    : Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [accent, accent.withValues(alpha: 0.6)],
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.queue_music_rounded,
-                          size: 32,
-                          color: Colors.white.withValues(alpha: 0.9),
-                        ),
-                      ),
+        width: width,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Portada completa 1:1
+              if (hasCover)
+                CoverImage(
+                  source: playlist.coverUrl!,
+                  fit: BoxFit.cover,
+                  cacheWidth: 300,
+                  fallback: Container(
+                    color: theme.colorScheme.surfaceContainerHigh,
+                    child: Icon(
+                      Icons.queue_music_rounded,
+                      size: 40,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [accent, accent.withValues(alpha: 0.6)],
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.queue_music_rounded,
+                    size: 44,
+                    color: Colors.white.withValues(alpha: 0.9),
+                  ),
+                ),
+              // Gradiente inferior para legibilidad del texto
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black54],
+                    stops: [0.5, 1.0],
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              playlist.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
+              // Título dentro del card (esquina inferior)
+              Positioned(
+                left: 10,
+                right: 10,
+                bottom: 10,
+                child: Text(
+                  playlist.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
-          ],
+              // Indicador de "en reproducción" (igual que desktop)
+              if (isCurrent)
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: NowPlayingBars(active: isPlaying, size: 13),
+                ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _coverFallback(ThemeData theme) {
-    return Container(
-      color: theme.colorScheme.surfaceContainerHigh,
-      child: Icon(
-        Icons.queue_music_rounded,
-        size: 32,
-        color: theme.colorScheme.onSurfaceVariant,
       ),
     );
   }

@@ -594,6 +594,19 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
 
     final playlistColor = _ambientColor;
 
+    // Estilo "acento plano": el fondo de TODO el detalle (header, título,
+    // botones y lista) comparte un único color derivado del acento, para que
+    // NO haya costura entre el contenedor del artwork y el contenido.
+    final bool flat = _flatHeader;
+    final Color flatColor = playlistColor == null
+        ? bgColor
+        : (Color.lerp(
+                theme.colorScheme.surface,
+                playlistColor,
+                0.55,
+              ) ??
+            bgColor);
+
     Widget mobileRowFor(BuildContext context, int i) {
       final list = _filterActive ? _visibleTracks : _tracks;
       final track = list[i];
@@ -632,7 +645,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
         }
       },
       child: Scaffold(
-        backgroundColor: bgColor,
+        backgroundColor: flat ? flatColor : bgColor,
         body: Stack(
           children: [
             CustomScrollView(
@@ -642,7 +655,12 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
               slivers: [
                 // Full-width cover image header with gradient overlay
                 SliverAppBar(
-                  expandedHeight: MediaQuery.sizeOf(context).width,
+                  // En flat (acento plano) el header es más compacto: solo el
+                  // alto necesario para la portada 1:1, evitando el enorme
+                  // hueco vacío antes del título.
+                  expandedHeight: flat
+                      ? MediaQuery.sizeOf(context).width * 0.7
+                      : MediaQuery.sizeOf(context).width,
                   pinned: false,
                   floating: false,
                   snap: false,
@@ -663,27 +681,36 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                           ? [
                               // Estilo 2 (acento plano + portada 1:1)
                               ColoredBox(
-                                color: playlistColor ?? bgColor,
+                                color: flatColor,
                               ),
                               if (coverUrl != null && coverUrl.isNotEmpty)
-                                Center(
-                                  child: FractionallySizedBox(
-                                    widthFactor: 0.56,
-                                    heightFactor: 0.62,
-                                    child: AspectRatio(
-                                      aspectRatio: 1,
-                                      child: CoverImage(
-                                        key: ValueKey(
-                                          'cover_${coverUrl}_$_coverVersion',
-                                        ),
-                                        source: coverUrl,
-                                        fit: BoxFit.cover,
-                                        fallback: Container(
-                                          color: bgColor,
-                                          child: const Center(
-                                            child: Icon(
-                                              Icons.queue_music_rounded,
-                                              size: 80,
+                                Padding(
+                                  // Empuja la portada un poco hacia abajo:
+                                  // el toolbar flotante / la barra de estado la
+                                  // dejan muy pegada al tope en modo flat.
+                                  padding: const EdgeInsets.only(top: 44),
+                                  child: Center(
+                                    child: FractionallySizedBox(
+                                      widthFactor: 0.58,
+                                      child: AspectRatio(
+                                        aspectRatio: 1,
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(18),
+                                          child: CoverImage(
+                                            key: ValueKey(
+                                              'cover_${coverUrl}_$_coverVersion',
+                                            ),
+                                            source: coverUrl,
+                                            fit: BoxFit.cover,
+                                            fallback: Container(
+                                              color: Colors.black26,
+                                              child: const Center(
+                                                child: Icon(
+                                                  Icons.queue_music_rounded,
+                                                  size: 80,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -698,24 +725,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                     size: 120,
                                   ),
                                 ),
-                              // Fundido inferior hacia el fondo del cuerpo
-                              Align(
-                                alignment: Alignment.bottomCenter,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        bgColor,
-                                      ],
-                                      stops: const [0.0, 0.45],
-                                    ),
-                                  ),
-                                  child: const SizedBox.expand(),
-                                ),
-                              ),
                             ]
                           : [
                               // Estilo 1 (portada full-bleed + degradado)
@@ -768,7 +777,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                 // Playlist info + action buttons
                 SliverToBoxAdapter(
                   child: Container(
-                    color: bgColor,
+                    color: flat ? flatColor : bgColor,
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
                       child: Column(
@@ -795,10 +804,11 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                           ],
                           const SizedBox(height: 4),
                           Text(
-                            '$count tracks',
+                            _countAndDuration,
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
+                            textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 16),
                           Row(
@@ -1013,14 +1023,6 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                               ),
                               const Spacer(),
                               _floatingCircleBtn(
-                                _flatHeader
-                                    ? Icons.photo_rounded
-                                    : Icons.grid_view_rounded,
-                                theme,
-                                _toggleFlatHeader,
-                              ),
-                              const SizedBox(width: 4),
-                              _floatingCircleBtn(
                                 Icons.search_rounded,
                                 theme,
                                 count == 0 ? () {} : _openFilter,
@@ -1098,6 +1100,21 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
               onTap: () => Navigator.pop(ctx, 'recalc'),
             ),
             ListTile(
+              leading: Icon(
+                _flatHeader ? Icons.grid_view_rounded : Icons.photo_rounded,
+              ),
+              title: Text(l10n.playlistCoverStyle),
+              subtitle: Text(
+                _flatHeader
+                    ? l10n.playlistCoverStyleFlat
+                    : l10n.playlistCoverStyleFull,
+              ),
+              trailing: Icon(
+                _flatHeader ? Icons.check_rounded : Icons.chevron_right_rounded,
+              ),
+              onTap: () => Navigator.pop(ctx, 'style'),
+            ),
+            ListTile(
               leading: const Icon(Icons.image_rounded),
               title: Text(l10n.changeCover),
               onTap: () => Navigator.pop(ctx, 'cover'),
@@ -1121,6 +1138,8 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
     switch (action) {
       case 'recalc':
         await _recalculateAmbientColor();
+      case 'style':
+        _toggleFlatHeader();
       case 'cover':
         await _mobilePickCover();
       case 'edit':
