@@ -6,22 +6,21 @@ import 'package:provider/provider.dart';
 import '../../core/track.dart';
 import '../../services/player_service.dart';
 import '../theme_controller.dart';
-import '../views/lyrics_view.dart';
 import 'cover_image.dart';
 
 /// Contenido del miniplayer ARRASTRABLE (librería `miniplayer`) en Android:
 /// un solo widget que se adapta a la `percentage` actuales.
 ///
-/// La transición recogido↔expandido es un **morph** suave: un mismo artwork
-/// compartido (absoluto) escala y se reubica desde la barra compacta hasta el
-/// centro del player expandido, mientras el contenido cruza con opacidad.
+/// La transición recogido↔expandido es un **morph** suave: el MISMO artwork
+/// compartido (absoluto en un Stack) escala y se reubica desde la barra
+/// compacta hasta el player expandido, mientras el contenido cruza con
+/// opacidad. El fondo es el acento plano en ambos estados.
 ///
 /// - **Recogido** (p≈0): barra compacta (artwork 46px, título/artista,
-///   play/next/cola y la línea de progreso).
+///   play/next/cola centrados verticalmente y línea de progreso).
 /// - **Expandido** (p≈1): pantalla completa con header dentro de [SafeArea]
-///   (botón de cierre `[v]` y letras `[...]`), arte y controles centrados
-///   (sin rebote), y un contenedor ARRASTRABLE de letras con el estilo/lógica
-///   de escritorio ([LyricsView]).
+///   (botón de cierre `[v]`), arte grande 1:1 heredado (el mismo de la barra)
+///   y controles centrados debajo (sin rebote).
 class MobilePlayerOverlay extends StatefulWidget {
   /// Altura actual del panel (desde el builder de `Miniplayer`).
   final double height;
@@ -58,9 +57,6 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
   bool _buffering = false;
   bool _dragging = false;
   double _dragValue = 0;
-
-  // Panel de letras (peek arrastrable) dentro del player expandido.
-  bool _lyricsOpen = false;
 
   final List<StreamSubscription> _subs = [];
   Timer? _ticker;
@@ -178,47 +174,29 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     final w = MediaQuery.sizeOf(context).width;
     final fullH = widget.height;
 
-    // Tamaño del artwork expandido (72% del ancho, limitado por altura).
-    final double artSide = (w * 0.72)
-        .clamp(0.0, (fullH * 0.52).clamp(0.0, double.infinity));
+    // Tamaño del artwork expandido (grande, 1:1), limitado por la altura
+    // disponible para dejar espacio a header + controles.
+    final double artSide = (w * 0.82)
+        .clamp(120.0, ((fullH - 300).clamp(120.0, double.infinity)));
 
-    // ────────────────────────────────────────────────────────────────
-    // MORPH: el artwork es un único elemento absoluto que escala y se
-    // reubica entre la barra compacta (46px, izquierda, arriba) y el
-    // centro del player expandido. El resto cruza con opacidad.
-    // ────────────────────────────────────────────────────────────────
+    // Posición expandida del arte: justo debajo del header, centrado en X.
+    final double artLeft = (w - artSide) / 2;
+    final double artTop = 76.0;
+
     return Material(
       clipBehavior: Clip.antiAlias,
-      color: cs.surfaceContainerHigh,
+      color: accent,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Fondo acento de la barra compacta (se desvanece al expandir).
-          Positioned.fill(
-            child: Opacity(
-              opacity: p < 0.02 ? 1.0 : 0.0,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      accent.withValues(alpha: 0.35),
-                      accent.withValues(alpha: 0.1),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // ── Artwork COMPARTIDO (absoluto, escala y se mueve) ─────
-          _buildSharedArtwork(
+          // ── Artwork COMPARTIDO: el mismo elemento en ambos estados ──
+          _sharedArtwork(
             showing: showing,
             theme: theme,
-            accent: accent,
             p: p,
             artSide: artSide,
+            artLeft: artLeft,
+            artTop: artTop,
             w: w,
           ),
 
@@ -233,11 +211,42 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                   child: SizedBox(
                     height: 60,
                     width: w,
-                    child: _compactRow(
-                      theme: theme,
-                      accent: accent,
-                      showing: showing,
-                      loading: loading,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.12),
+                      ),
+                      child: Stack(
+                        children: [
+                          // Fila centrada verticalmente (título/controles).
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(70, 0, 8, 0),
+                              child: _compactRow(
+                                theme: theme,
+                                accent: accent,
+                                showing: showing,
+                                loading: loading,
+                              ),
+                            ),
+                          ),
+                          // Progreso personalizado (relleno blanco en la base).
+                          Align(
+                            alignment: Alignment.bottomLeft,
+                            child: FractionallySizedBox(
+                              widthFactor: _dur != null &&
+                                      _dur!.inMilliseconds > 0
+                                  ? (_pos.inMilliseconds /
+                                          _dur!.inMilliseconds)
+                                      .clamp(0.0, 1.0)
+                                  : 0.0,
+                              heightFactor: 1.0,
+                              child: Container(
+                                color: Colors.white.withValues(alpha: 0.85),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -256,12 +265,11 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                   theme: theme,
                   cs: cs,
                   accent: accent,
-                  showing: showing,
-                  loading: loading,
                   track: track,
                   dur: dur,
                   total: total,
                   w: w,
+                  p: p,
                   artSide: artSide,
                 ),
               ),
@@ -272,22 +280,21 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     );
   }
 
-  /// Artwork absoluto que escala de 46px (barra) a `artSide` (centrado).
-  Widget _buildSharedArtwork({
+  /// Artwork heredado: escala y se reubica entre la barra (46px, arriba-izq.)
+  /// y el expandido (grande, centrado debajo del header).
+  Widget _sharedArtwork({
     required Track? showing,
     required ThemeData theme,
-    required Color accent,
     required double p,
     required double artSide,
+    required double artLeft,
+    required double artTop,
     required double w,
   }) {
-    final size = lerpDoubleFrom(46, artSide, p);
-    final radius = lerpDoubleFrom(6, 18, p);
-    final left = lerpDoubleFrom(12, (w - artSide) / 2, p);
-    final top = lerpDoubleFrom(7, 64, p);
-    final progress = _dur != null && _dur!.inMilliseconds > 0
-        ? (_pos.inMilliseconds / _dur!.inMilliseconds).clamp(0.0, 1.0)
-        : 0.0;
+    final size = lerp(46, artSide, p);
+    final radius = lerp(6, 18, p);
+    final left = lerp(12, artLeft, p);
+    final top = lerp(7, artTop, p);
 
     return Positioned(
       left: left,
@@ -296,179 +303,140 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
       height: size,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (showing == null)
-              ColoredBox(
-                color: theme.colorScheme.surfaceContainerHighest,
+        child: showing == null
+            ? ColoredBox(
+                color: Colors.black.withValues(alpha: 0.18),
                 child: Center(
                   child: Icon(
                     Icons.music_note_rounded,
-                    size: lerpDoubleFrom(22, 56, p),
-                    color: theme.colorScheme.onSurfaceVariant,
+                    size: lerp(22, 56, p),
+                    color: Colors.white.withValues(alpha: 0.8),
                   ),
                 ),
               )
-            else
-              Container(
-                decoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.35 * p),
-                      blurRadius: 28,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(radius),
-                  child: CoverImage(
-                    source: (showing.thumbnailUrl != null)
-                        ? (Track.hiResThumbnail(showing.thumbnailUrl) ??
-                            showing.thumbnailUrl)
-                        : null,
-                    fit: BoxFit.cover,
-                    fallback: ColoredBox(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: Center(
-                        child: Icon(
-                          Icons.music_note_rounded,
-                          size: lerpDoubleFrom(22, 56, p),
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
+            : CoverImage(
+                source: showing.thumbnailUrl != null
+                    ? (Track.hiResThumbnail(showing.thumbnailUrl) ??
+                        showing.thumbnailUrl)
+                    : null,
+                fit: BoxFit.cover,
+                fallback: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  child: Center(
+                    child: Icon(
+                      Icons.music_note_rounded,
+                      size: lerp(22, 56, p),
+                      color: Colors.white.withValues(alpha: 0.8),
                     ),
                   ),
                 ),
               ),
-            if (p < 0.02)
-              Positioned.fill(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: AnimatedFractionallySizedBox(
-                    duration: const Duration(milliseconds: 450),
-                    curve: Curves.easeOutCubic,
-                    heightFactor: 1.0,
-                    widthFactor: progress,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.35),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }
 
-  double lerpDoubleFrom(double a, double b, double t) =>
-      a + (b - a) * t.clamp(0.0, 1.0);
+  double lerp(double a, double b, double t) => a + (b - a) * t.clamp(0.0, 1.0);
 
-  /// Fila compacta (título/artista/controles) sobre el artwork compartido.
+  /// Fila compacta (título/artista/controles), ya centrada verticalmente.
   Widget _compactRow({
     required ThemeData theme,
     required Color accent,
     required Track? showing,
     required bool loading,
   }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(70, 0, 8, 0),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                showing?.title ?? 'Scrup',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: showing == null
+                      ? Colors.white.withValues(alpha: 0.8)
+                      : Colors.white,
+                ),
+              ),
+              if (showing != null && showing.artist.isNotEmpty)
                 Text(
-                  showing?.title ?? 'Scrup',
+                  loading ? 'Cargando…' : showing.artist,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: showing == null
-                        ? theme.colorScheme.onSurfaceVariant
-                        : null,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.85),
                   ),
                 ),
-                if (showing != null && showing.artist.isNotEmpty)
-                  Text(
-                    loading ? 'Cargando…' : showing.artist,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+              if (showing == null)
+                Text(
+                  'Nada en reproducción',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.85),
                   ),
-                if (showing == null)
-                  Text(
-                    'Nada en reproducción',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
-            ),
+                ),
+            ],
           ),
-          if (loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
-              ),
-            )
-          else if (showing != null) ...[
-            IconButton(
-              icon: Icon(
-                _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              ),
-              tooltip: _playing ? 'Pausar' : 'Reproducir',
-              onPressed: () => _player.togglePlayPause(),
+        ),
+        if (loading)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
             ),
-            IconButton(
-              icon: const Icon(Icons.skip_next_rounded),
-              tooltip: 'Siguiente',
-              onPressed: _player.next,
+          )
+        else if (showing != null) ...[
+          IconButton(
+            color: Colors.white,
+            icon: Icon(
+              _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
             ),
-            IconButton(
-              icon: const Icon(Icons.queue_music_rounded),
-              tooltip: 'Cola',
-              onPressed: widget.onOpenQueue,
-            ),
-          ],
+            tooltip: _playing ? 'Pausar' : 'Reproducir',
+            onPressed: () => _player.togglePlayPause(),
+          ),
+          IconButton(
+            color: Colors.white,
+            icon: const Icon(Icons.skip_next_rounded),
+            tooltip: 'Siguiente',
+            onPressed: _player.next,
+          ),
+          IconButton(
+            color: Colors.white,
+            icon: const Icon(Icons.queue_music_rounded),
+            tooltip: 'Cola',
+            onPressed: widget.onOpenQueue,
+          ),
         ],
-      ),
+      ],
     );
   }
 
   // -----------------------------------------------------------------
-  // PLAYER EXPANDIDO (pantalla completa, sin arte: el arte es compartido)
+  // PLAYER EXPANDIDO (pantalla completa)
   // -----------------------------------------------------------------
   Widget _buildExpanded(
     BuildContext context, {
     required ThemeData theme,
     required ColorScheme cs,
     required Color accent,
-    required Track? showing,
-    required bool loading,
     required Track? track,
     required Duration? dur,
     required double total,
     required double w,
+    required double p,
     required double artSide,
   }) {
     return SafeArea(
       child: Column(
         children: [
-          // ── Header dentro del SafeArea: [v] cierre   ...   [...] ──
+          // ── Header: [v] cierre ────────────────────────────────────
           SizedBox(
             height: 52,
             child: Padding(
@@ -480,39 +448,30 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                       Icons.keyboard_arrow_down_rounded,
                       size: 28,
                     ),
-                    color: cs.onSurfaceVariant,
+                    color: Colors.white.withValues(alpha: 0.9),
                     tooltip: 'Cerrar',
                     onPressed: widget.onClose,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.lyrics_rounded),
-                    color: _lyricsOpen ? accent : cs.onSurfaceVariant,
-                    tooltip: 'Letras',
-                    onPressed: () => setState(() => _lyricsOpen = true),
                   ),
                 ],
               ),
             ),
           ),
-          // ── Contenido central centrado: título + controles (sin arte
-          //    porque el arte compartido ya está centrado encima) ─────
-          Expanded(
+          // ── Contenido: controles justo debajo del arte heredado. El
+          //    espaciado crece con `p`, siguiendo el borde inferior del arte
+          //    en su transición (sin huecos, sin esperarle).
+          Flexible(
             child: LayoutBuilder(
               builder: (context, constraints) {
                 return SingleChildScrollView(
                   physics: const ClampingScrollPhysics(),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      // Empujamos la columna hacia abajo para dejar hueco al
-                      // arte compartido (que está centrado un poco más arriba).
                       minHeight: constraints.maxHeight,
                     ),
-                    child: Column(
-                      children: [
-                        SizedBox(
-                            height: artSide > 0 ? artSide + 12 : 0),
-                        _centerColumn(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _centerColumn(
                           context,
                           theme: theme,
                           cs: cs,
@@ -521,20 +480,15 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                           dur: dur,
                           total: total,
                           w: w,
+                          p: p,
+                          artSide: artSide,
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 );
               },
             ),
-          ),
-          // ── Panel ARRASTRABLE de letras (peek) ─────────────────────
-          _LyricsPeek(
-            open: _lyricsOpen,
-            onToggle: (v) => setState(() => _lyricsOpen = v),
-            accent: accent,
-            cs: cs,
           ),
         ],
       ),
@@ -550,11 +504,17 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     required Duration? dur,
     required double total,
     required double w,
+    required double p,
+    required double artSide,
   }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(height: 16),
+        // Deja hueco al arte heredado (que está por encima en el Stack). El
+        // hueco crece con `p` para seguir el borde inferior del arte durante
+        // la transición (sin huecos estáticos ni esperas).
+        SizedBox(height: lerp(64, artSide, p)),
+        const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Text(
@@ -564,7 +524,9 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
             textAlign: TextAlign.center,
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w800,
-              color: track == null ? cs.onSurfaceVariant : null,
+              color: track == null
+                  ? Colors.white.withValues(alpha: 0.8)
+                  : Colors.white,
             ),
           ),
         ),
@@ -576,7 +538,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: cs.onSurfaceVariant,
+              color: Colors.white.withValues(alpha: 0.85),
             ),
           ),
         ],
@@ -596,8 +558,8 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                   overlayShape: const RoundSliderOverlayShape(
                     overlayRadius: 14,
                   ),
-                  activeTrackColor: accent,
-                  inactiveTrackColor: cs.surfaceContainerHighest,
+                  activeTrackColor: Colors.white,
+                  inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
                 ),
                 child: Slider(
                   value: total <= 0 ? 0 : _progressValue.clamp(0.0, total),
@@ -623,13 +585,13 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                           ? Duration(milliseconds: _dragValue.round())
                           : _pos),
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: cs.onSurfaceVariant,
+                        color: Colors.white.withValues(alpha: 0.85),
                       ),
                     ),
                     Text(
                       _fmt(dur),
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: cs.onSurfaceVariant,
+                        color: Colors.white.withValues(alpha: 0.85),
                       ),
                     ),
                   ],
@@ -697,132 +659,6 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
   }
 }
 
-// ─── Panel de letras arrastrable (peek) ────────────────────────────────
-class _LyricsPeek extends StatefulWidget {
-  final bool open;
-  final ValueChanged<bool> onToggle;
-  final Color accent;
-  final ColorScheme cs;
-
-  const _LyricsPeek({
-    required this.open,
-    required this.onToggle,
-    required this.accent,
-    required this.cs,
-  });
-
-  @override
-  State<_LyricsPeek> createState() => _LyricsPeekState();
-}
-
-/// Contenedor que sobresale unos píxeles con un grip; se arrastra hacia
-/// arriba para revelar las letras (reusa la lógica de escritorio de
-/// [LyricsView]). Como un scroll interno gana al gesto del panel padre,
-/// el arrastre aquí expande/colapsa SOLO las letras, sin colapsar el player.
-class _LyricsPeekState extends State<_LyricsPeek> {
-  bool _dragging = false;
-  double _dragStartExtent = 0;
-  double _dragDelta = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxH = MediaQuery.sizeOf(context).height * 0.42;
-    final peekH = 46.0;
-    final clampedExtent = (widget.open ? maxH + _dragDelta : _dragDelta)
-        .clamp(peekH, maxH);
-
-    final height = widget.open || _dragging
-        ? clampedExtent
-        : peekH.toDouble();
-
-    return AnimatedContainer(
-      duration: _dragging
-          ? Duration.zero
-          : const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-      height: height,
-      decoration: BoxDecoration(
-        color: widget.cs.surfaceContainerHighest,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(20),
-        ),
-        border: Border(
-          top: BorderSide(
-            color: widget.cs.outlineVariant.withValues(alpha: 0.4),
-          ),
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          // Grip + título de la sección (arrastrable).
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragStart: (d) {
-              setState(() {
-                _dragging = true;
-                _dragStartExtent = widget.open ? maxH : peekH;
-                _dragDelta = 0;
-              });
-            },
-            onVerticalDragUpdate: (d) {
-              setState(() => _dragDelta = d.primaryDelta ?? 0);
-            },
-            onVerticalDragEnd: (_) {
-              setState(() {
-                _dragging = false;
-                final extent =
-                    (_dragStartExtent + _dragDelta).clamp(peekH, maxH);
-                widget.onToggle(extent > maxH * 0.5);
-              });
-            },
-            onTap: () => widget.onToggle(!widget.open),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: widget.cs.onSurfaceVariant.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Icon(
-                    Icons.lyrics_rounded,
-                    size: 18,
-                    color: widget.accent,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Letras',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: widget.cs.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Contenido: letras (solo montadas cuando el panel está abierto).
-          Expanded(
-            child: Offstage(
-              offstage: !widget.open,
-              child: TickerMode(
-                enabled: widget.open,
-                child: const LyricsView(embedded: true),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ControlButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onPressed;
@@ -836,10 +672,9 @@ class _ControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return IconButton(
       iconSize: size,
-      color: cs.onSurface,
+      color: Colors.white.withValues(alpha: 0.9),
       onPressed: onPressed,
       icon: Icon(icon),
     );
@@ -861,19 +696,12 @@ class _PlayPauseButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: accent,
+        color: Colors.white,
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: 0.4),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       child: IconButton(
         iconSize: 40,
-        color: Color.lerp(accent, Colors.black, 0.4) ?? Colors.black,
+        color: accent,
         onPressed: onPressed,
         icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
       ),
@@ -896,10 +724,11 @@ class _ModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return IconButton(
       iconSize: 22,
-      color: active ? accent : cs.onSurfaceVariant,
+      color: active
+          ? Colors.white
+          : Colors.white.withValues(alpha: 0.6),
       onPressed: onPressed,
       icon: Icon(icon),
     );
