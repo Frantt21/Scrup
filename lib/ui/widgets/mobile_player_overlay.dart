@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/track.dart';
 import '../../services/player_service.dart';
 import '../theme_controller.dart';
+import '../views/lyrics_view.dart';
 import 'cover_image.dart';
 
 /// Contenido del miniplayer ARRASTRABLE (librería `miniplayer`) en Android:
@@ -57,6 +58,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
   bool _buffering = false;
   bool _dragging = false;
   double _dragValue = 0;
+  bool _lyricsOpen = false;
 
   final List<StreamSubscription> _subs = [];
   Timer? _ticker;
@@ -175,13 +177,16 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     final fullH = widget.height;
 
     // Tamaño del artwork expandido (grande, 1:1), limitado por la altura
-    // disponible para dejar espacio a header + controles.
-    final double artSide = (w * 0.82)
-        .clamp(120.0, ((fullH - 300).clamp(120.0, double.infinity)));
+    // disponible para dejar espacio a header + bloque de controles.
+    final double headerH = 64.0;
+    final double controlsBand = 300.0;
+    final double availH = (fullH - headerH - controlsBand).clamp(120.0, double.infinity);
+    final double artSide = (w * 0.82).clamp(120.0, availH);
 
-    // Posición expandida del arte: justo debajo del header, centrado en X.
+    // Posición expandida del arte: centrado en X y centrado verticalmente
+    // en la franja entre el header y el bloque de controles.
     final double artLeft = (w - artSide) / 2;
-    final double artTop = 76.0;
+    final double artTop = headerH + (availH - artSide) / 2;
 
     return Material(
       clipBehavior: Clip.antiAlias,
@@ -241,7 +246,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                                   : 0.0,
                               heightFactor: 1.0,
                               child: Container(
-                                color: Colors.white.withValues(alpha: 0.85),
+                                color: Colors.black.withValues(alpha: 0.25),
                               ),
                             ),
                           ),
@@ -271,6 +276,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                   w: w,
                   p: p,
                   artSide: artSide,
+                  artTop: artTop,
                 ),
               ),
             ),
@@ -432,63 +438,84 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     required double w,
     required double p,
     required double artSide,
+    required double artTop,
   }) {
+    final safeTop = MediaQuery.paddingOf(context).top;
+    // El arte está en coords de pantalla completa; el contenido de la columna
+    // vive debajo del header (52) + SafeArea. El espaciador coloca los
+    // controles justo debajo del borde inferior del arte, y lo sigue durante
+    // la transición (sin huecos ni solapamientos).
+    final double artBottomP = lerp(7, artTop, p) + lerp(46, artSide, p);
+    final double controlsTop = (artBottomP - 52 - safeTop).clamp(0.0, double.infinity);
+
     return SafeArea(
-      child: Column(
+      child: Stack(
         children: [
-          // ── Header: [v] cierre ────────────────────────────────────
-          SizedBox(
-            height: 52,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 28,
-                    ),
-                    color: Colors.white.withValues(alpha: 0.9),
-                    tooltip: 'Cerrar',
-                    onPressed: widget.onClose,
+          Column(
+            children: [
+              // ── Header: [v] cierre ────────────────────────────────────
+              SizedBox(
+                height: 52,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 28,
+                        ),
+                        color: Colors.white.withValues(alpha: 0.9),
+                        tooltip: 'Cerrar',
+                        onPressed: widget.onClose,
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-          // ── Contenido: controles justo debajo del arte heredado. El
-          //    espaciado crece con `p`, siguiendo el borde inferior del arte
-          //    en su transición (sin huecos, sin esperarle).
-          Flexible(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _centerColumn(
-                          context,
-                          theme: theme,
-                          cs: cs,
-                          accent: accent,
-                          track: track,
-                          dur: dur,
-                          total: total,
-                          w: w,
-                          p: p,
-                          artSide: artSide,
+              // ── Contenido: controles justo debajo del arte heredado ─────
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            SizedBox(height: controlsTop),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: _centerColumn(
+                                context,
+                                theme: theme,
+                                cs: cs,
+                                accent: accent,
+                                track: track,
+                                dur: dur,
+                                total: total,
+                                w: w,
+                                p: p,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ),
-                );
-              },
-            ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+          // ── Letras MONTADAS: sheet draggable que se abre arrastrándola ──
+          _LyricsPeek(
+            track: track,
+            accent: accent,
+            open: _lyricsOpen,
+            onChanged: (v) => setState(() => _lyricsOpen = v),
           ),
         ],
       ),
@@ -505,16 +532,10 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     required double total,
     required double w,
     required double p,
-    required double artSide,
   }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Deja hueco al arte heredado (que está por encima en el Stack). El
-        // hueco crece con `p` para seguir el borde inferior del arte durante
-        // la transición (sin huecos estáticos ni esperas).
-        SizedBox(height: lerp(64, artSide, p)),
-        const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Text(
@@ -731,6 +752,160 @@ class _ModeButton extends StatelessWidget {
           : Colors.white.withValues(alpha: 0.6),
       onPressed: onPressed,
       icon: Icon(icon),
+    );
+  }
+}
+
+/// Panel de letras MONTADO en el player expandido: siempre visible como un
+/// handle en la base, que se abre ("despliega") arrastrándolo hacia arriba y
+/// se cierra arrastrándolo hacia abajo o pulsando el handle/la «X».
+///
+/// El sheet se desliza por encima de los controles (como en forawn_mobile),
+/// cubriéndolos mientras está abierto, y muestra las letras con
+/// [LyricsView] en modo `embedded`.
+class _LyricsPeek extends StatefulWidget {
+  final Track? track;
+  final Color accent;
+  final bool open;
+  final ValueChanged<bool> onChanged;
+
+  const _LyricsPeek({
+    required this.track,
+    required this.accent,
+    required this.open,
+    required this.onChanged,
+  });
+
+  @override
+  State<_LyricsPeek> createState() => _LyricsPeekState();
+}
+
+class _LyricsPeekState extends State<_LyricsPeek> {
+  /// 0 = recogido (solo handle), 1 = abierto. Se anima con [AnimatedContainer].
+  double _open = 0.0;
+  bool _dragging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _open = widget.open ? 1.0 : 0.0;
+  }
+
+  @override
+  void didUpdateWidget(covariant _LyricsPeek oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.open != oldWidget.open && !_dragging) {
+      _open = widget.open ? 1.0 : 0.0;
+    }
+  }
+
+  void _onDragStart(DragStartDetails d) {
+    _dragging = true;
+  }
+
+  void _onDragUpdate(DragUpdateDetails d, double refH) {
+    setState(() {
+      _open = (_open - d.delta.dy / (refH * 0.7)).clamp(0.0, 1.0);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    _dragging = false;
+    final target = _open > 0.5;
+    setState(() => _open = target ? 1.0 : 0.0);
+    if (target != widget.open) widget.onChanged(target);
+  }
+
+  void _toggle() {
+    final target = _open < 0.5;
+    setState(() => _open = target ? 1.0 : 0.0);
+    widget.onChanged(target);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final maxH = c.maxHeight;
+          final collapsed = 48.0;
+          final openH = maxH * 0.74;
+          final sheetH = collapsed + (_open * (openH - collapsed));
+
+          return AnimatedContainer(
+            duration: _dragging
+                ? Duration.zero
+                : const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            width: double.infinity,
+            height: sheetH,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.35),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
+            ),
+            child: Column(
+              children: [
+                // Handle (siempre visible, ~48px). El arrastre está acotado
+                // al handle para no chocar con el scroll de las letras.
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragStart: _onDragStart,
+                  onVerticalDragUpdate: (d) => _onDragUpdate(d, maxH),
+                  onVerticalDragEnd: _onDragEnd,
+                  onTap: _toggle,
+                  child: SizedBox(
+                    height: 48,
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 14),
+                        Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Letras',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            _open >= 0.5
+                                ? Icons.keyboard_arrow_down_rounded
+                                : Icons.keyboard_arrow_up_rounded,
+                          ),
+                          color: Colors.white.withValues(alpha: 0.9),
+                          onPressed: _toggle,
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                    ),
+                  ),
+                ),
+                // Contenido (sólo cuando hay hueco).
+                if (sheetH > collapsed + 1)
+                  Expanded(
+                    child: _open >= 0.5
+                        ? LyricsView(embedded: true)
+                        : const SizedBox.shrink(),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
