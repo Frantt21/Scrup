@@ -93,6 +93,11 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
   @override
   void initState() {
     super.initState();
+    // Carga síncrona del estilo de header (evita el parpadeo de ~50ms que
+    // causaba la lectura async). Si el cache aún no está disponible, mantiene
+    // el valor por defecto (false = full-bleed) y lo ajusta al cargar.
+    _flatHeader =
+        context.read<SettingsStore>().flatPlaylistHeaderCache ?? false;
     final db = context.read<AppDatabase>();
     _playlist = widget.playlist;
     _playlistStream = db.watchPlaylist(widget.playlist.id);
@@ -659,7 +664,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                   // alto necesario para la portada 1:1, evitando el enorme
                   // hueco vacío antes del título.
                   expandedHeight: flat
-                      ? MediaQuery.sizeOf(context).width * 0.7
+                      ? MediaQuery.sizeOf(context).width * 0.95
                       : MediaQuery.sizeOf(context).width,
                   pinned: false,
                   floating: false,
@@ -685,13 +690,14 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                               ),
                               if (coverUrl != null && coverUrl.isNotEmpty)
                                 Padding(
-                                  // Empuja la portada un poco hacia abajo:
-                                  // el toolbar flotante / la barra de estado la
-                                  // dejan muy pegada al tope en modo flat.
-                                  padding: const EdgeInsets.only(top: 44),
+                                  // Más margen superior: el toolbar flotante y
+                                  // la barra de estado dejan la portada muy
+                                  // pegada al tope en modo flat.
+                                  padding: const EdgeInsets.only(top: 110),
                                   child: Center(
                                     child: FractionallySizedBox(
-                                      widthFactor: 0.58,
+                                      widthFactor: 0.6,
+                                      alignment: Alignment.topCenter,
                                       child: AspectRatio(
                                         aspectRatio: 1,
                                         child: ClipRRect(
@@ -925,8 +931,10 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
               left: 0,
               right: 0,
               child: SafeArea(
+                // Padding ALINEADO con los demás screens: los headers de
+                // Library/Home/Settings usan fromLTRB(16,16,16,8).
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
                     switchInCurve: Curves.easeOutCubic,

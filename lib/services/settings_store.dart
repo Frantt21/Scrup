@@ -24,6 +24,12 @@ class SettingsStore {
 
   SharedPreferences? _prefs;
 
+  /// Caché en memoria del estilo de header del detalle de playlist: permite
+  /// leer el valor de forma SÍNCRONA al entrar, evitando el parpadeo de ~50ms
+  /// que causaba la lectura async de prefs.
+  bool? _flatPlaylistHeaderCache;
+  bool? get flatPlaylistHeaderCache => _flatPlaylistHeaderCache;
+
   Future<SharedPreferences> get _instance async =>
       _prefs ??= await SharedPreferences.getInstance();
 
@@ -220,12 +226,16 @@ class SettingsStore {
   Future<void> saveFlatPlaylistHeader(bool flat) async {
     final prefs = await _instance;
     await prefs.setBool(_flatPlaylistHeaderKey, flat);
+    _flatPlaylistHeaderCache = flat;
   }
 
   /// `null` si el usuario nunca cambió el estilo (por defecto: full-bleed).
+  /// También cachea el resultado para lectura síncrona.
   Future<bool?> loadFlatPlaylistHeader() async {
     final prefs = await _instance;
-    return prefs.getBool(_flatPlaylistHeaderKey);
+    final value = prefs.getBool(_flatPlaylistHeaderKey);
+    _flatPlaylistHeaderCache = value;
+    return value;
   }
 
   // Saves track id + position in a single write to avoid race conditions.

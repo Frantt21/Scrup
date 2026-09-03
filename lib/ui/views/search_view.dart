@@ -22,10 +22,14 @@ class SearchView extends StatefulWidget {
   /// idéntica.
   final ValueNotifier<String?>? searchRequest;
 
+  /// Señal de foco: al notificarse, la vista enfoca el campo de búsqueda
+  /// (se usa cuando se llega a la búsqueda desde el botón del header).
+  final ValueNotifier<int>? focusRequest;
+
   /// Vuelve al inicio (ya no hay barra lateral).
   final VoidCallback? onBack;
 
-  const SearchView({super.key, this.searchRequest, this.onBack});
+  const SearchView({super.key, this.searchRequest, this.focusRequest, this.onBack});
 
   @override
   State<SearchView> createState() => _SearchViewState();
@@ -34,6 +38,7 @@ class SearchView extends StatefulWidget {
 class _SearchViewState extends State<SearchView> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
+  final _searchFocus = FocusNode();
 
   List<Track> _results = const [];
   bool _searching = false;
@@ -56,6 +61,7 @@ class _SearchViewState extends State<SearchView> {
     super.initState();
     // Búsqueda lanzada desde la pantalla de inicio
     widget.searchRequest?.addListener(_onExternalSearch);
+    widget.focusRequest?.addListener(_onFocusRequest);
     // Indicador de "en reproducción" en las filas de resultados
     final player = context.read<PlayerService>();
     _currentTrack = player.currentTrackValue;
@@ -86,6 +92,14 @@ class _SearchViewState extends State<SearchView> {
     widget.searchRequest?.value = null;
     _searchController.text = q;
     _search(q);
+  }
+
+  /// Enfoca el campo de búsqueda (al llegar desde el botón del header).
+  void _onFocusRequest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _searchFocus.requestFocus();
+    });
   }
 
   Future<void> _search(String query) async {
@@ -123,15 +137,16 @@ class _SearchViewState extends State<SearchView> {
   @override
   void dispose() {
     widget.searchRequest?.removeListener(_onExternalSearch);
+    widget.focusRequest?.removeListener(_onFocusRequest);
     _trackSub?.cancel();
     _playingSub?.cancel();
     _nullTrackTimer?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -162,6 +177,7 @@ class _SearchViewState extends State<SearchView> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _searchController,
+                      focusNode: _searchFocus,
                       onSubmitted: _search,
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
@@ -241,6 +257,7 @@ class _SearchViewState extends State<SearchView> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _searchController,
+                      focusNode: _searchFocus,
                       onSubmitted: _search,
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(

@@ -1,8 +1,9 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:miniplayer/miniplayer.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -19,7 +20,7 @@ import 'views/search_view.dart';
 import 'views/settings_view.dart';
 import 'widgets/custom_title_bar.dart';
 import 'widgets/fullscreen_player_view.dart';
-import 'widgets/mini_player.dart';
+import 'widgets/mobile_player_overlay.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/playlists_sidebar.dart';
 import 'widgets/queue_panel.dart';
@@ -42,6 +43,11 @@ class _AppShellState extends State<AppShell> {
   bool _showSettings = false;
   int _settingsOpenCount = 0;
   final ValueNotifier<String?> _searchRequest = ValueNotifier<String?>(null);
+  final ValueNotifier<int> _searchFocusRequest = ValueNotifier<int>(0);
+  // Progreso de expansión (0..1) del miniplayer; mueve la NavigationBar.
+  final ValueNotifier<double> _playerExpansion = ValueNotifier<double>(0);
+  // Control del miniplayer (permite colapsarlo programáticamente).
+  final MiniplayerController _miniController = MiniplayerController();
   bool _queueOpen = false;
   bool _queueUserToggled = false;
   bool _showLyrics = false;
@@ -62,7 +68,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    // Errores de reproducción globales (URL expirada, 403, etc.)
+    // Errores de reproducci�n globales (URL expirada, 403, etc.)
     _errorSub = context.read<PlayerService>().errors.listen((message) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
@@ -73,14 +79,14 @@ class _AppShellState extends State<AppShell> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Sidecars (yt-dlp/ffmpeg) descend on desktop; on mobile the toolchain
-      // lives in the app bundle (asset copy) — handled elsewhere.
+      // lives in the app bundle (asset copy) � handled elsewhere.
       if (!Binaries.isDesktop) return;
       final yt = Binaries.ytdlpPath;
       final ff = Binaries.ffmpegPath;
       if (yt == null || ff == null) {
         if (!mounted) return;
         final initial =
-            'Descargando binarios de audio… Esto puede tardar unos segundos.';
+            'Descargando binarios de audio� Esto puede tardar unos segundos.';
         showScrupToast(
           initial,
           kind: ScrupToastKind.info,
@@ -156,7 +162,7 @@ class _AppShellState extends State<AppShell> {
       }
     }
 
-    // ── Playback ─────────────────────────────────────────────────
+    // -- Playback -------------------------------------------------
     if (key == LogicalKeyboardKey.space) {
       player.togglePlayPause();
       return true;
@@ -195,7 +201,7 @@ class _AppShellState extends State<AppShell> {
       return true;
     }
 
-    // ── Navigation ────────────────────────────────────────────────
+    // -- Navigation ------------------------------------------------
     if (key == LogicalKeyboardKey.keyL) {
       setState(() => _showLyrics = !_showLyrics);
       return true;
@@ -213,7 +219,7 @@ class _AppShellState extends State<AppShell> {
       return true;
     }
 
-    // ── Modes ─────────────────────────────────────────────────────
+    // -- Modes -----------------------------------------------------
     if (key == LogicalKeyboardKey.keyS) {
       player.toggleShuffle();
       return true;
@@ -227,7 +233,7 @@ class _AppShellState extends State<AppShell> {
       return true;
     }
 
-    // ── Favorites ─────────────────────────────────────────────────
+    // -- Favorites -------------------------------------------------
     if (key == LogicalKeyboardKey.keyF) {
       _toggleFavorite();
       return true;
@@ -254,23 +260,23 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  /// Botones laterales del ratón: button 4 (back) = canción anterior,
-  /// button 5 (forward) = siguiente canción.
+  /// Botones laterales del rat�n: button 4 (back) = canci�n anterior,
+  /// button 5 (forward) = siguiente canci�n.
   void _handlePointerDown(PointerDownEvent event) {
     final player = context.read<PlayerService>();
     // event.buttons es un bitmask: bit 3 = button 4, bit 4 = button 5.
     if (event.buttons & 0x10 != 0) {
-      // Button 5 (forward): siguiente canción.
+      // Button 5 (forward): siguiente canci�n.
       player.next();
     } else if (event.buttons & 0x08 != 0) {
-      // Button 4 (back): canción anterior.
+      // Button 4 (back): canci�n anterior.
       player.previous();
     }
   }
 
   /// Entra/sale de pantalla completa: oculta la title bar, monta el
   /// reproductor dedicado y pide al WM el modo nativo. La salida animada la
-  /// gestiona el overlay (reverse → onExited → desmontar).
+  /// gestiona el overlay (reverse ? onExited ? desmontar).
   Future<void> _setFullscreen(bool on) async {
     if (_fullscreen == on) return;
     setState(() {
@@ -284,14 +290,14 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  /// Restaura el panel de la cola al estado en que quedó la última sesión
+  /// Restaura el panel de la cola al estado en que qued� la �ltima sesi�n
   /// (best-effort: si falla, arranca cerrado).
   Future<void> _loadQueuePref() async {
     try {
       final saved = await context.read<SettingsStore>().loadQueueOpen();
       if (!mounted || saved == null || _queueUserToggled) return;
-      // Móvil: la cola ya no es un panel persistente (se abre/cierra como
-      // bottom sheet), así que siempre arranca cerrada.
+      // M�vil: la cola ya no es un panel persistente (se abre/cierra como
+      // bottom sheet), as� que siempre arranca cerrada.
       setState(() => _queueOpen = Binaries.isMobile ? false : saved);
     } catch (_) {
       // La preferencia nunca debe impedir el arranque.
@@ -304,12 +310,22 @@ class _AppShellState extends State<AppShell> {
     HardwareKeyboard.instance.removeHandler(_handleKey);
     Binaries.downloadStatus.removeListener(_onBinaryDownloadStatus);
     _searchRequest.dispose();
+    _searchFocusRequest.dispose();
+    _playerExpansion.dispose();
+    _miniController.dispose();
     super.dispose();
   }
 
   void _submitSearch(String query) {
     _searchRequest.value = query;
     setState(() => _selectedIndex = 1);
+  }
+
+  /// Navega a la vista Buscar sin consulta previa (desde el bot�n del header
+  /// de Inicio).
+  void _openSearch() {
+    setState(() => _selectedIndex = 1);
+    _searchFocusRequest.value++;
   }
 
   void _backToHome() {
@@ -404,7 +420,7 @@ class _AppShellState extends State<AppShell> {
 
     return Listener(
       onPointerDown: _handlePointerDown,
-      // Sin SafeArea global (edge-to-edge): cada vista móvil maneja su propio
+      // Sin SafeArea global (edge-to-edge): cada vista m�vil maneja su propio
       // inset superior, y la playlist detail dibuja el artwork DEBAJO de la
       // barra de estado (igual que forawn_mobile). La NavigationBar lleva su
       // propio SafeArea inferior para no pisar la barra de gestos de Android.
@@ -424,9 +440,14 @@ class _AppShellState extends State<AppShell> {
                 ),
               Expanded(
                 child: mobile
-                    // ── Móvil: sin title bar ni sidebars; todo el espacio ──
-                    ? _buildMobileContent()
-                    // ── Desktop: sidebar + contenido + cola ──────────────
+                    // -- M�vil: sin title bar ni sidebars; todo el espacio --
+                    ? Padding(
+                        // El mini-player compacto (60dp) ahora es un overlay;
+                        // dejamos ese margen inferior para no tapar contenido.
+                        padding: const EdgeInsets.only(bottom: 60),
+                        child: _buildMobileContent(),
+                      )
+                    // -- Desktop: sidebar + contenido + cola --------------
                     : Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -439,19 +460,57 @@ class _AppShellState extends State<AppShell> {
                         ],
                       ),
               ),
-              // ── Móvil: mini-player + NavigationBar ──────────────
-              if (mobile && !_fullscreen) ...[
-                MiniPlayer(
-                  onOpenNowPlaying: () {},
-                  onOpenQueue: _openQueueMobile,
+              // -- Móvil: el mini-player es ahora un OVERLAY arrastrable que
+              // se posiciona justo encima de la NavigationBar (en el Stack
+              // del body); aquí solo queda la NavigationBar.
+              if (mobile && !_fullscreen)
+                ValueListenableBuilder<double>(
+                  valueListenable: _playerExpansion,
+                  builder: (context, p, _) => Transform.translate(
+                    // La barra baja con la expansión del player y sale por
+                    // abajo, cediéndole todo el espacio a pantalla completa.
+                    offset: Offset(0, 64 * p),
+                    child: _buildMobileNavBar(),
+                  ),
                 ),
-                // Sin SafeArea extra: la NavigationBar queda al borde y la
-                // barra de gestos translúcida se superpone; así mantiene su
-                // altura compacta (64dp) en edge-to-edge.
-                _buildMobileNavBar(),
-              ],
             ],
           ),
+          if (mobile && !_fullscreen)
+            ValueListenableBuilder<double>(
+              valueListenable: _playerExpansion,
+              builder: (context, p, _) => Positioned(
+                // El borde inferior baja con la expansión (64 -> 0) para que el
+                // player use toda la pantalla, cubriendo la NavigationBar.
+                left: 0,
+                right: 0,
+                bottom: 64 * (1 - p),
+                child: Miniplayer(
+                  minHeight: 60,
+                  maxHeight: MediaQuery.sizeOf(context).height,
+                  elevation: 8,
+                  curve: Curves.easeOutCubic,
+                  duration: const Duration(milliseconds: 320),
+                  controller: _miniController,
+                  backgroundColor: Theme.of(context)
+                      .colorScheme
+                      .surfaceContainerHigh,
+                  builder: (height, percentage) {
+                    // Comparte el progreso con la NavigationBar (post-frame
+                    // para no disparar rebuilds durante el build).
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _playerExpansion.value = percentage;
+                    });
+                    return MobilePlayerOverlay(
+                      height: height,
+                      percentage: percentage,
+                      onOpenQueue: _openQueueMobile,
+                      onClose: () => _miniController
+                          .animateToHeight(state: PanelState.MIN),
+                    );
+                  },
+                ),
+              ),
+            ),
           if (_showFsOverlay)
             Positioned.fill(
               // El fullscreen player usa su propio layout: mantiene SafeArea
@@ -461,7 +520,7 @@ class _AppShellState extends State<AppShell> {
                   active: _fullscreen,
                   lyricsPanel: TickerMode(
                     enabled: true,
-                    // Embebido: sin margen/sombra/fondo — las letras flotan
+                    // Embebido: sin margen/sombra/fondo � las letras flotan
                     // sobre las olas del fondo fullscreen.
                     child: LyricsView(key: _fsLyricsKey, embedded: true),
                   ),
@@ -488,9 +547,10 @@ class _AppShellState extends State<AppShell> {
                     ? 2
                     : (_showSettings ? 3 : _selectedIndex)),
           children: [
-            HomeView(onSearch: _submitSearch, onOpenPlaylist: _selectPlaylist),
+            HomeView(onSearch: _submitSearch, onOpenSearch: _openSearch, onOpenPlaylist: _selectPlaylist),
             SearchView(
               searchRequest: _searchRequest,
+              focusRequest: _searchFocusRequest,
               onBack: _backToHome,
             ),
             if (openPlaylist != null)
@@ -529,7 +589,7 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  // Contenido móvil: la pila de vistas sin player flotante (el mini-player
+  // Contenido m�vil: la pila de vistas sin player flotante (el mini-player
   // vive abajo) y la cola como overlay a pantalla completa.
   Widget _buildMobileContent() {
     final openPlaylist = _openPlaylist;
@@ -543,13 +603,14 @@ class _AppShellState extends State<AppShell> {
                     : (_showSettings ? 4 : _selectedIndex)),
           children: [
             // Home sin SafeArea superior (edge-to-edge): el degradado de
-            // acento del inicio se extiende detrás de la barra de estado.
+            // acento del inicio se extiende detr�s de la barra de estado.
             // El propio HomeView aplica el inset superior a su contenido.
-            HomeView(onSearch: _submitSearch, onOpenPlaylist: _selectPlaylist),
+            HomeView(onSearch: _submitSearch, onOpenSearch: _openSearch, onOpenPlaylist: _selectPlaylist),
             SafeArea(
               top: true,
               child: SearchView(
                 searchRequest: _searchRequest,
+                focusRequest: _searchFocusRequest,
                 onBack: _backToHome,
               ),
             ),
@@ -559,7 +620,7 @@ class _AppShellState extends State<AppShell> {
                 onSelectPlaylist: _selectPlaylist,
               ),
             ),
-            // Sin SafeArea superior: el artwork del detail va detrás de la
+            // Sin SafeArea superior: el artwork del detail va detr�s de la
             // barra de estado (edge-to-edge), como en forawn_mobile.
             if (openPlaylist != null)
               PlaylistDetailView(
@@ -585,7 +646,7 @@ class _AppShellState extends State<AppShell> {
                   ),
           ],
         ),
-        // NOTE: la cola móvil ya NO se dibuja como overlay a pantalla
+        // NOTE: la cola m�vil ya NO se dibuja como overlay a pantalla
         // completa: `_setQueueOpen(true)` abre un bottom sheet arrastrable
         // (`QueueSheet`).
       ],
@@ -593,7 +654,7 @@ class _AppShellState extends State<AppShell> {
     return content;
   }
 
-  /// Abre/cierra la cola. En móvil (Android) NO es un screen: se abre un
+  /// Abre/cierra la cola. En m�vil (Android) NO es un screen: se abre un
   /// contenedor arrastrable (bottom sheet) y se cierra al deslizarlo abajo,
   /// con el scrim o con back.
   Future<void> _setQueueOpen(bool next) async {
@@ -620,9 +681,9 @@ class _AppShellState extends State<AppShell> {
 
   void _openQueueMobile() => _setQueueOpen(!_queueOpen);
 
-  // Barra de navegación inferior de Android (Inicio / Buscar / Librería / Ajustes).
-  // Barra propia compacta de 64dp: el NavigationBar M3 añade internamente un
-  // SafeArea (inset inferior) que lo hacía MÁS ALTO en edge-to-edge. Solo
+  // Barra de navegaci�n inferior de Android (Inicio / Buscar / Librer�a / Ajustes).
+  // Barra propia compacta de 64dp: el NavigationBar M3 a�ade internamente un
+  // SafeArea (inset inferior) que lo hac�a M�S ALTO en edge-to-edge. Solo
   // iconos (sin etiquetas) y sin efecto de pulso al presionar.
   Widget _buildMobileNavBar() {
     final cs = Theme.of(context).colorScheme;
@@ -638,7 +699,7 @@ class _AppShellState extends State<AppShell> {
         height: 64,
         child: Padding(
           // Respiro inferior: separa un poco los iconos de los botones de
-          // navegación del sistema (gestos / 3 botones) en edge-to-edge.
+          // navegaci�n del sistema (gestos / 3 botones) en edge-to-edge.
           padding: const EdgeInsets.only(bottom: 6),
           child: Row(
             children: [
@@ -681,7 +742,7 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  // Índice activo de la NavigationBar móvil: mapea el estado real de la app.
+  // �ndice activo de la NavigationBar m�vil: mapea el estado real de la app.
   int get _mobileNavIndex {
     if (_showSettings) return 3;
     return _selectedIndex;

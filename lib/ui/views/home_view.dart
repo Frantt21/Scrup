@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -31,11 +30,20 @@ class HomeView extends StatefulWidget {
   /// vista Buscar y le pasa la consulta).
   final ValueChanged<String>? onSearch;
 
+  /// Se llama al pulsar el botón de búsqueda del header (AppShell navega a la
+  /// vista Buscar sin consulta previa).
+  final VoidCallback? onOpenSearch;
+
   /// Se llama al tocar una playlist reciente del inicio (AppShell abre su
   /// detalle).
   final ValueChanged<Playlist>? onOpenPlaylist;
 
-  const HomeView({super.key, this.onSearch, this.onOpenPlaylist});
+  const HomeView({
+    super.key,
+    this.onSearch,
+    this.onOpenSearch,
+    this.onOpenPlaylist,
+  });
 
   @override
   State<HomeView> createState() => _HomeViewState();
@@ -176,17 +184,37 @@ class _HomeViewState extends State<HomeView> {
 
         final Widget scroll = CustomScrollView(
                 slivers: [
-                  // En móvil: búsqueda FIJA (flotante) que al scrollear adopta
-                  // un estilo glass translúcido con blur SOLO en el input (el
-                  // cuerpo nunca se ve desenfocado). En desktop se mantiene
-                  // scrolleable dentro del panel.
+                  // En móvil: header ALINEADO con los demás screens: título
+                  // "Scrup" a la izquierda + botón de búsqueda que navega a la
+                  // vista Buscar. Al ser edge-to-edge, el header se hunde con
+                  // el inset de la barra de estado (topInset) igual que las
+                  // otras vistas con SafeArea. En desktop se mantiene el campo
+                  // de búsqueda scrolleable dentro del panel.
                   mobile
-                      ? SliverPersistentHeader(
-                          pinned: true,
-                          delegate: _HomeSearchHeaderDelegate(
-                            topInset: topInset,
-                            onSubmit: _submitSearch,
-                            hintText: l10n.searchHint,
+                      ? SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              16, topInset + 16, 16, 8,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Scrup',
+                                    style: theme.textTheme.headlineSmall
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ),
+                                IconButton.filledTonal(
+                                  onPressed: widget.onOpenSearch,
+                                  icon: const Icon(Icons.search_rounded),
+                                  tooltip: l10n.searchHint,
+                                ),
+                              ],
+                            ),
                           ),
                         )
                       : SliverToBoxAdapter(
@@ -228,8 +256,8 @@ class _HomeViewState extends State<HomeView> {
                       sliver: SliverGrid(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: cols,
-                          mainAxisSpacing: mobile ? 10 : 12,
-                          crossAxisSpacing: mobile ? 10 : 12,
+                          mainAxisSpacing: mobile ? 6 : 12,
+                          crossAxisSpacing: mobile ? 6 : 12,
                           childAspectRatio: 1,
                         ),
                         delegate: SliverChildBuilderDelegate((context, i) {
@@ -516,14 +544,16 @@ class _RecentCardState extends State<_RecentCard> {
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            // Borde de 2px con el acento de la canción (siempre visible);
-            // en hover se refuerza. Sin sombra/pulsación cuadrada.
-            border: Border.all(
-              width: 2,
-              color: _hovered
-                  ? accent.withValues(alpha: 0.9)
-                  : accent.withValues(alpha: 0.45),
-            ),
+            // Borde de 2px SOLO en la canción en reproducción (con el acento
+            // de su artwork). El resto de las recientes no llevan borde.
+            border: widget.isCurrent
+                ? Border.all(
+                    width: 2,
+                    color: accent.withValues(
+                      alpha: _hovered ? 0.9 : 0.7,
+                    ),
+                  )
+                : null,
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(13),
@@ -707,74 +737,6 @@ class _TopAccentGradient extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Búsqueda FIJA y FLOTANTE del Inicio (móvil): siempre arriba, sin fondo a
-/// lo ancho (el cuerpo nunca se ve desenfocado). Es una píldora redondeada que
-/// en el tope se ve translúcida sobre el degradado y, al hacer scroll, adopta
-/// un estilo glass con blur confinado SOLO al propio input de búsqueda.
-class _HomeSearchHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final double topInset;
-  final ValueChanged<String> onSubmit;
-  final String hintText;
-
-  const _HomeSearchHeaderDelegate({
-    required this.topInset,
-    required this.onSubmit,
-    required this.hintText,
-  });
-
-  @override
-  double get minExtent => maxExtent;
-
-  @override
-  double get maxExtent => topInset + 16 + 56 + 8;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    final theme = Theme.of(context);
-    final blurred = shrinkOffset > 8;
-
-    const radius = 28.0;
-
-    // La píldora en sí: ClipRRect + BackdropFilter + fondo translúcido, de
-    // modo que el blur queda limitado al área del input (componentes, nada
-    // de fondo a lo ancho). En el tope (sin scroll) es solo translúcida.
-    Widget pill = ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blurred ? 18 : 0, sigmaY: blurred ? 18 : 0),
-        child: ColoredBox(
-          color: theme.colorScheme.surface.withValues(
-            alpha: blurred ? 0.55 : 0.35,
-          ),
-          child: TextField(
-            onSubmitted: onSubmit,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: hintText,
-              prefixIcon: const Icon(Icons.search_rounded),
-              filled: false,
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, topInset + 16, 16, 8),
-      child: pill,
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant _HomeSearchHeaderDelegate oldDelegate) => true;
 }
 
 /// Fila horizontal ÚNICA y scrolleable de playlists recientes, con cards más
