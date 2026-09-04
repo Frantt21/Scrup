@@ -197,7 +197,9 @@ class _HomeViewState extends State<HomeView> {
                               16, topInset + 16, 16, 8,
                             ),
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              // Título y botón CENTRADOS verticalmente (no el
+                              // título arriba y los botones en medio).
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 Expanded(
                                   child: Text(

@@ -193,13 +193,15 @@ class _SettingsViewState extends State<SettingsView> {
     final settings = context.read<SettingsStore>();
     await settings.saveCacheMaxSize(mb);
     final cache = context.read<AudioCacheService>();
-    cache.maxSizeBytes =
-        mb != null ? mb * 1024 * 1024 : AudioCacheService.defaultMaxSize;
+    cache.maxSizeBytes = mb != null
+        ? mb * 1024 * 1024
+        : AudioCacheService.defaultMaxSize;
     await _refreshStats();
   }
 
   String get _cacheLimitLabel {
-    if (_cacheLimitMb == null) return _fmtBytes(AudioCacheService.defaultMaxSize);
+    if (_cacheLimitMb == null)
+      return _fmtBytes(AudioCacheService.defaultMaxSize);
     return _fmtBytes(_cacheLimitMb! * 1024 * 1024);
   }
 
@@ -228,10 +230,7 @@ class _SettingsViewState extends State<SettingsView> {
             child: Text(_fmtBytes(mb * 1024 * 1024)),
           ),
         const PopupMenuDivider(),
-        const PopupMenuItem<int>(
-          value: -1,
-          child: Text('Sin límite'),
-        ),
+        const PopupMenuItem<int>(value: -1, child: Text('Sin límite')),
       ],
     );
     if (selected == null || !mounted) return;
@@ -325,14 +324,34 @@ class _SettingsViewState extends State<SettingsView> {
         // El contenedor ya termina por encima del player (margen
         // inferior), así que aquí solo hace falta un respiro pequeño.
         padding: EdgeInsets.fromLTRB(
-            mobile ? 16 : 20, mobile ? 16 : 20, mobile ? 16 : 20, 12),
+          mobile ? 16 : 20,
+          mobile ? 16 : 20,
+          mobile ? 16 : 20,
+          12,
+        ),
         children: [
-          Text(
-            AppLocalizations.of(context).settings,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+          // En móvil el título va en una caja de la MISMA altura que las
+          // filas con botón de Inicio/Librería (48dp, centrada): así los
+          // glifos quedan a la misma altura visual que esos títulos.
+          mobile
+              ? SizedBox(
+                  height: 48,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      AppLocalizations.of(context).settings,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                )
+              : Text(
+                  AppLocalizations.of(context).settings,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
           const SizedBox(height: 20),
           _buildLanguageSection(theme),
           SizedBox(height: mobile ? 8 : 16),
@@ -541,10 +560,7 @@ class _SettingsViewState extends State<SettingsView> {
             },
           ),
           Padding(
-            padding: EdgeInsets.only(
-              top: 8,
-              left: Binaries.isMobile ? 0 : 16,
-            ),
+            padding: EdgeInsets.only(top: 8, left: Binaries.isMobile ? 0 : 16),
             child: ValueListenableBuilder<bool>(
               valueListenable: service.connected,
               builder: (context, connected, _) => Row(
@@ -709,8 +725,9 @@ class _SettingsViewState extends State<SettingsView> {
                 ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  color: theme.colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.35),
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.35,
+                  ),
                   border: Border.all(
                     color: Colors.white.withValues(alpha: 0.06),
                   ),
@@ -761,14 +778,15 @@ class _SettingsViewState extends State<SettingsView> {
               ),
               FilledButton.icon(
                 onPressed: _clearing ? null : _clearCache,
-                style: FilledButton.styleFrom(
-                  backgroundColor: theme.colorScheme.error,
-                  foregroundColor: theme.colorScheme.onError,
-                ).copyWith(
-                  mouseCursor: WidgetStateProperty.all(
-                    SystemMouseCursors.click,
-                  ),
-                ),
+                style:
+                    FilledButton.styleFrom(
+                      backgroundColor: theme.colorScheme.error,
+                      foregroundColor: theme.colorScheme.onError,
+                    ).copyWith(
+                      mouseCursor: WidgetStateProperty.all(
+                        SystemMouseCursors.click,
+                      ),
+                    ),
                 icon: _clearing
                     ? const SizedBox(
                         width: 16,
@@ -850,8 +868,9 @@ class _SettingsViewState extends State<SettingsView> {
                   ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
-                    color: theme.colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.35),
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.35,
+                    ),
                     border: Border.all(
                       color: Colors.white.withValues(alpha: 0.06),
                     ),
@@ -881,9 +900,7 @@ class _SettingsViewState extends State<SettingsView> {
                 ? null
                 : _recalculatePalettes,
             style: FilledButton.styleFrom().copyWith(
-              mouseCursor: WidgetStateProperty.all(
-                SystemMouseCursors.click,
-              ),
+              mouseCursor: WidgetStateProperty.all(SystemMouseCursors.click),
             ),
             icon: _recalculating
                 ? const SizedBox(
@@ -972,33 +989,41 @@ class _SettingsViewState extends State<SettingsView> {
 
     // Categorías con sus atajos.
     final categories = <(String, List<(String, String)>)>[
-      (l10n.shortcutCategoryPlayback, [
-        ('Space', '_playPause'),
-        ('N', '_next'),
-        ('P', '_previous'),
-        ('→', '_seekForward'),
-        ('←', '_seekBackward'),
-        ('🖱️ ⏴', '_mouseBack'),
-        ('🖱️ ⏵', '_mouseForward'),
-        ('F', '_toggleFavorite'),
-      ]),
-      (l10n.shortcutCategoryVolume, [
-        ('↑', '_volumeUp'),
-        ('↓', '_volumeDown'),
-        ('M', '_mute'),
-      ]),
-      (l10n.shortcutCategoryNavigation, [
-        ('L', '_toggleLyrics'),
-        ('Q', '_toggleQueue'),
-        (',', '_toggleSettings'),
-        ('Esc', '_closePanel'),
-        ('F11', '_fullscreen'),
-      ]),
-      (l10n.shortcutCategoryModes, [
-        ('S', '_toggleShuffle'),
-        ('R', '_toggleRepeat'),
-        ('D', '_toggleRadio'),
-      ]),
+      (
+        l10n.shortcutCategoryPlayback,
+        [
+          ('Space', '_playPause'),
+          ('N', '_next'),
+          ('P', '_previous'),
+          ('→', '_seekForward'),
+          ('←', '_seekBackward'),
+          ('🖱️ ⏴', '_mouseBack'),
+          ('🖱️ ⏵', '_mouseForward'),
+          ('F', '_toggleFavorite'),
+        ],
+      ),
+      (
+        l10n.shortcutCategoryVolume,
+        [('↑', '_volumeUp'), ('↓', '_volumeDown'), ('M', '_mute')],
+      ),
+      (
+        l10n.shortcutCategoryNavigation,
+        [
+          ('L', '_toggleLyrics'),
+          ('Q', '_toggleQueue'),
+          (',', '_toggleSettings'),
+          ('Esc', '_closePanel'),
+          ('F11', '_fullscreen'),
+        ],
+      ),
+      (
+        l10n.shortcutCategoryModes,
+        [
+          ('S', '_toggleShuffle'),
+          ('R', '_toggleRepeat'),
+          ('D', '_toggleRadio'),
+        ],
+      ),
     ];
 
     return _SectionCard(
@@ -1042,9 +1067,7 @@ class _SettingsViewState extends State<SettingsView> {
                         entry.$1,
                         style: theme.textTheme.labelMedium?.copyWith(
                           fontWeight: FontWeight.w600,
-                          fontFeatures: const [
-                            FontFeature.tabularFigures(),
-                          ],
+                          fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),
                     ),

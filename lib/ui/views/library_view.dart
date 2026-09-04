@@ -228,7 +228,7 @@ class _LibraryViewState extends State<LibraryView> {
                     )
                   : Row(
                       key: const ValueKey('header_normal'),
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
                           child: Text(

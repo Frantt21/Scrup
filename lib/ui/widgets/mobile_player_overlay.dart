@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
+import '../../data/database.dart';
 import '../../services/player_service.dart';
+import '../playlist_actions.dart';
 import '../theme_controller.dart';
 import '../views/lyrics_view.dart';
 import 'cover_image.dart';
@@ -18,7 +20,7 @@ import 'cover_image.dart';
 /// opacidad. El fondo es el acento plano en ambos estados.
 ///
 /// - **Recogido** (p≈0): barra compacta (artwork 46px, título/artista,
-///   play/next/cola centrados verticalmente y línea de progreso).
+///   playlist/favorito centrados verticalmente y línea de progreso).
 /// - **Expandido** (p≈1): pantalla completa con header dentro de [SafeArea]
 ///   (botón de cierre `[v]`), arte grande 1:1 heredado (el mismo de la barra)
 ///   y controles centrados debajo (sin rebote).
@@ -64,6 +66,14 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
   bool _dragging = false;
   double _dragValue = 0;
   bool _lyricsOpen = false;
+  // Dirección de la animación de desplazamiento del artwork al cambiar de
+  // canción: -1 = siguiente (sale por la izquierda), +1 = anterior.
+  double _slideDir = -1;
+
+  // Favoritos (misma lógica que desktop/player_bar.dart):
+  int _favoritesId = -1;
+  bool _isFavorite = false;
+  StreamSubscription<bool>? _favSub;
 
   final List<StreamSubscription> _subs = [];
   Timer? _ticker;
@@ -80,6 +90,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
       _player.currentTrack.listen((t) {
         if (!mounted) return;
         setState(() => _track = t);
+        _refreshFavoriteState();
         if (t != null) _ticker ??= _startTicker();
       }),
       _player.playing.listen((p) {
@@ -103,6 +114,44 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     _player.preparingTrackId.addListener(_onPreparing);
     _onPreparing();
     if (_playing) _ticker = _startTicker();
+    unawaited(_setupFavorites(context.read<AppDatabase>()));
+  }
+
+  Future<void> _setupFavorites(AppDatabase db) async {
+    final id = await db.ensureFavoritesPlaylist();
+    if (!mounted) return;
+    _favoritesId = id;
+    final track = _track;
+    if (track == null) return;
+    _favSub = db.watchTrackInPlaylist(id, track.id).listen((inside) {
+      if (!mounted) return;
+      setState(() => _isFavorite = inside);
+    });
+  }
+
+  void _refreshFavoriteState() {
+    if (_favoritesId < 0) return;
+    final track = _track;
+    final db = context.read<AppDatabase>();
+    _favSub?.cancel();
+    if (!mounted) return;
+    setState(() => _isFavorite = false);
+    if (track == null) return;
+    _favSub = db.watchTrackInPlaylist(_favoritesId, track.id).listen((inside) {
+      if (!mounted) return;
+      setState(() => _isFavorite = inside);
+    });
+  }
+
+  Future<void> _toggleFavorite() async {
+    final track = _track;
+    if (track == null || _favoritesId < 0) return;
+    final db = context.read<AppDatabase>();
+    if (_isFavorite) {
+      await db.removeFromPlaylist(_favoritesId, track.id);
+    } else {
+      await db.addToPlaylist(_favoritesId, track);
+    }
   }
 
   void _setLyricsOpen(bool v) {
@@ -139,6 +188,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
   @override
   void dispose() {
     _player.preparingTrackId.removeListener(_onPreparing);
+    _favSub?.cancel();
     _ticker?.cancel();
     for (final s in _subs) {
       s.cancel();
@@ -195,9 +245,16 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     // Tamaño del artwork expandido (grande, 1:1), limitado por la altura
     // disponible para dejar espacio a header + bloque de controles.
     final double headerH = 64.0;
-    final double controlsBand = 300.0;
-    final double availH = (fullH - headerH - controlsBand).clamp(120.0, double.infinity);
-    final double artSide = (w * 0.82).clamp(120.0, availH);
+    // Banda de controles: espacio reservado bajo la franja del arte para el
+    // bloque de controles. Debe ser lo bastante PEQUEÑA para que el artwork
+    // conserve su tamaño completo (0.88 × ancho) en pantallas típicas; el
+    // arte se centra en la franja (availH) entre el header y esa banda.
+    final double controlsBand = 90.0;
+    final double availH = (fullH - headerH - controlsBand).clamp(
+      120.0,
+      double.infinity,
+    );
+    final double artSide = (w * 0.88).clamp(120.0, availH);
 
     // Posición expandida del arte: centrado en X y centrado verticalmente
     // en la franja entre el header y el bloque de controles.
@@ -261,11 +318,10 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                             bottom: 0,
                             child: FractionallySizedBox(
                               alignment: Alignment.centerLeft,
-                              widthFactor: _dur != null &&
-                                      _dur!.inMilliseconds > 0
-                                  ? (_pos.inMilliseconds /
-                                          _dur!.inMilliseconds)
-                                      .clamp(0.0, 1.0)
+                              widthFactor:
+                                  _dur != null && _dur!.inMilliseconds > 0
+                                  ? (_pos.inMilliseconds / _dur!.inMilliseconds)
+                                        .clamp(0.0, 1.0)
                                   : 0.0,
                               child: Container(
                                 height: 3,
@@ -331,41 +387,73 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
       top: top,
       width: size,
       height: size,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        // Al pausar el artwork se encoge un poco, escalando desde el centro.
-        child: AnimatedScale(
-          scale: playing ? 1.0 : 0.93,
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-          child: showing == null
-              ? ColoredBox(
-                  color: Colors.black.withValues(alpha: 0.18),
-                  child: Center(
-                    child: Icon(
-                      Icons.music_note_rounded,
-                      size: lerp(22, 56, p),
-                      color: Colors.white.withValues(alpha: 0.8),
-                    ),
-                  ),
-                )
-              : CoverImage(
-                  source: showing.thumbnailUrl != null
-                      ? (Track.hiResThumbnail(showing.thumbnailUrl) ??
-                          showing.thumbnailUrl)
-                      : null,
-                  fit: BoxFit.cover,
-                  fallback: ColoredBox(
-                    color: Colors.black.withValues(alpha: 0.18),
-                    child: Center(
-                      child: Icon(
-                        Icons.music_note_rounded,
-                        size: lerp(22, 56, p),
-                        color: Colors.white.withValues(alpha: 0.8),
+      // Al pausar el artwork se encoge un poco. El ESCALADO es del contenedor
+      // (ClipRRect), no de la imagen: así los bordes redondeados escalan con
+      // el contenedor y no se pierden al encoger el arte.
+      child: AnimatedScale(
+        scale: playing ? 1.0 : 0.93,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        // Doble toque: like / quitar like (igual que el corazón). Deslizar
+        // horizontal: siguiente / anterior, con animación de desplazamiento.
+        child: GestureDetector(
+          onDoubleTap: _toggleFavorite,
+          onHorizontalDragEnd: (details) {
+            final v = details.primaryVelocity ?? 0;
+            if (v < -350) {
+              _slideDir = -1;
+              _player.next();
+            } else if (v > 350) {
+              _slideDir = 1;
+              _player.previous();
+            }
+          },
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: Offset(_slideDir, 0),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              );
+            },
+            child: ClipRRect(
+              key: ValueKey(showing?.id ?? 'placeholder'),
+              borderRadius: BorderRadius.circular(radius),
+              child: showing == null
+                  ? ColoredBox(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      child: Center(
+                        child: Icon(
+                          Icons.music_note_rounded,
+                          size: lerp(22, 56, p),
+                          color: Colors.white.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    )
+                  : CoverImage(
+                      source: showing.thumbnailUrl != null
+                          ? (Track.hiResThumbnail(showing.thumbnailUrl) ??
+                                showing.thumbnailUrl)
+                          : null,
+                      fit: BoxFit.cover,
+                      fallback: ColoredBox(
+                        color: Colors.black.withValues(alpha: 0.18),
+                        child: Center(
+                          child: Icon(
+                            Icons.music_note_rounded,
+                            size: lerp(22, 56, p),
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
+            ),
+          ),
         ),
       ),
     );
@@ -384,6 +472,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
       children: [
         Expanded(
           child: Column(
+            // Título/artista a la IZQUIERDA (junto al artwork), no centrados.
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -444,10 +533,18 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
             onPressed: _player.next,
           ),
           IconButton(
-            color: Colors.white,
-            icon: const Icon(Icons.queue_music_rounded),
-            tooltip: 'Cola',
-            onPressed: widget.onOpenQueue,
+            color: _isFavorite
+                ? Colors.white
+                : Colors.white.withValues(alpha: 0.85),
+            icon: Icon(
+              _isFavorite
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+            ),
+            tooltip: _isFavorite
+                ? 'Quitar de favoritos'
+                : 'Agregar a favoritos',
+            onPressed: _toggleFavorite,
           ),
         ],
       ],
@@ -478,9 +575,9 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     final double artBottomP = lerp(7, artTop, hp) + lerp(46, artSide, hp);
     // Separación extra entre el arte heredado y el contenedor de título /
     // controles en el player expandido.
-    const double artControlsGap = 28.0;
-    final double controlsTop =
-        (artBottomP - 52 - safeTop + artControlsGap).clamp(0.0, double.infinity);
+    const double artControlsGap = 24.0;
+    final double controlsTop = (artBottomP - 52 - safeTop + artControlsGap)
+        .clamp(0.0, double.infinity);
 
     // Stack a pantalla completa: el CONTENIDO (header + controles) vive en un
     // [SafeArea] propio (nunca bajo los controles del sistema); el sheet de
@@ -492,12 +589,13 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
         SafeArea(
           child: Column(
             children: [
-              // ── Header: [v] cierre ────────────────────────────────────
+              // ── Header: [v] cierre + cola ───────────────────────────
               SizedBox(
                 height: 52,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(
                         icon: const Icon(
@@ -508,47 +606,43 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                         tooltip: 'Cerrar',
                         onPressed: widget.onClose,
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.queue_music_rounded, size: 24),
+                        color: Colors.white.withValues(alpha: 0.9),
+                        tooltip: 'Cola',
+                        onPressed: widget.onOpenQueue,
+                      ),
                     ],
                   ),
                 ),
               ),
               // ── Contenido: controles debajo del arte heredado ─────
+              // IMPORTANTE: el espaciador que baja el bloque hasta quedar
+              // justo debajo del arte va FUERA del scrollable (como un hueco
+              // simple). Si viviera dentro del SingleChildScrollView, el
+              // viewport del scroll taparía TODO el artwork (área vacía) y
+              // los gestos del arte (doble toque / deslizar) nunca llegarían.
+              SizedBox(height: controlsTop),
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            SizedBox(height: controlsTop),
-                            // Todo el bloque (títulos, barra de progreso,
-                            // tiempos y controles) centrado con el MISMO ancho
-                            // que el artwork expandido -> los bordes de todos
-                            // los elementos coinciden con los del artwork.
-                            Center(
-                              child: SizedBox(
-                                width: artSide,
-                                child: _centerColumn(
-                                  context,
-                                  theme: theme,
-                                  cs: cs,
-                                  accent: accent,
-                                  track: track,
-                                  dur: dur,
-                                  total: total,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: Center(
+                    child: SizedBox(
+                      // MISMO ancho que el artwork: la barra de progreso y
+                      // los botones de los extremos quedan alineados con los
+                      // bordes del arte.
+                      width: artSide,
+                      child: _centerColumn(
+                        context,
+                        theme: theme,
+                        cs: cs,
+                        accent: accent,
+                        track: track,
+                        dur: dur,
+                        total: total,
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -585,108 +679,133 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text(
-            track?.title ?? 'Scrup',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: track == null
-                  ? Colors.white.withValues(alpha: 0.8)
-                  : Colors.white,
+        // [playlist] Titulo/artista [favorito]: los botones flanquean el
+        // título centrado (como pidió el usuario).
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.playlist_add_rounded),
+              color: Colors.white,
+              tooltip: 'Agregar a playlist',
+              onPressed: track == null
+                  ? null
+                  : () => showAddToPlaylistDialog(context, track),
             ),
-          ),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    track?.title ?? 'Scrup',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: track == null
+                          ? Colors.white.withValues(alpha: 0.8)
+                          : Colors.white,
+                    ),
+                  ),
+                  if (track != null && track.artist.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        track.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: Icon(
+                _isFavorite
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+              ),
+              color: _isFavorite
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.85),
+              tooltip: _isFavorite
+                  ? 'Quitar de favoritos'
+                  : 'Agregar a favoritos',
+              onPressed: _toggleFavorite,
+            ),
+          ],
         ),
-        if (track != null && track.artist.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            track.artist,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.85),
+        const SizedBox(height: 12),
+        // Barra de progreso (limpia, sin dot) a TODO el ancho del bloque
+        // (= ancho del artwork): sus extremos coinciden con los del arte.
+        // Los números de duración van DEBAJO, en los extremos de la barra.
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SliderTheme(
+              // Barra LIMPIA, como en desktop: línea fina sin dot ni
+              // indicador; se arrastra/toca la propia línea.
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
+                showValueIndicator: ShowValueIndicator.never,
+                activeTrackColor: Colors.white,
+                inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
+              ),
+              child: Slider(
+                value: total <= 0 ? 0 : _progressValue.clamp(0.0, total),
+                max: total <= 0 ? 1 : total,
+                onChangeStart: (_) => setState(() => _dragging = true),
+                onChanged: (v) => setState(() => _dragValue = v),
+                onChangeEnd: (v) {
+                  _player.seek(Duration(milliseconds: v.round()));
+                  setState(() {
+                    _dragging = false;
+                    _pos = Duration(milliseconds: v.round());
+                  });
+                },
+              ),
             ),
-          ),
-        ],
-        const SizedBox(height: 16),
-        // Progreso + tiempos: UNA fila (tiempo | barra | tiempo) como en
-        // desktop -> los números comparten borde con la barra, y todo el
-        // bloque ya está constreñido al ancho del artwork (artSide).
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 44,
-                child: Text(
-                  _fmt(_dragging
-                      ? Duration(milliseconds: _dragValue.round())
-                      : _pos),
-                  maxLines: 1,
-                  overflow: TextOverflow.clip,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SliderTheme(
-                  // Barra LIMPIA, como en desktop: línea fina sin dot ni
-                  // indicador; se arrastra/toca la propia línea.
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 3,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 0,
+            // Separación del tiempo respecto a la barra: no queda pegado.
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _fmt(
+                      _dragging
+                          ? Duration(milliseconds: _dragValue.round())
+                          : _pos,
                     ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 0,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
-                    showValueIndicator: ShowValueIndicator.never,
-                    activeTrackColor: Colors.white,
-                    inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
                   ),
-                  child: Slider(
-                    value: total <= 0 ? 0 : _progressValue.clamp(0.0, total),
-                    max: total <= 0 ? 1 : total,
-                    onChangeStart: (_) => setState(() => _dragging = true),
-                    onChanged: (v) => setState(() => _dragValue = v),
-                    onChangeEnd: (v) {
-                      _player.seek(Duration(milliseconds: v.round()));
-                      setState(() {
-                        _dragging = false;
-                        _pos = Duration(milliseconds: v.round());
-                      });
-                    },
+                  Text(
+                    _fmt(dur),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
-                ),
+                ],
               ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 44,
-                child: Text(
-                  _fmt(dur),
-                  maxLines: 1,
-                  overflow: TextOverflow.clip,
-                  textAlign: TextAlign.right,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
-        // Transporte
+        // Transporte: spaceBetween para que el primero y el último botón
+        // queden en los EXTREMOS del bloque (alineados con el artwork).
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _ModeButton(
               icon: Icons.shuffle_rounded,
@@ -696,7 +815,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
             ),
             _ControlButton(
               icon: Icons.skip_previous_rounded,
-              size: 34,
+              size: 40,
               onPressed: track == null ? null : _player.previous,
             ),
             _PlayPauseButton(
@@ -706,7 +825,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
             ),
             _ControlButton(
               icon: Icons.skip_next_rounded,
-              size: 34,
+              size: 40,
               onPressed: track == null ? null : _player.next,
             ),
             _ModeButton(
@@ -750,7 +869,7 @@ class _ControlButton extends StatelessWidget {
   const _ControlButton({
     required this.icon,
     required this.onPressed,
-    this.size = 30,
+    this.size = 38,
   });
 
   @override
@@ -778,12 +897,9 @@ class _PlayPauseButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
       child: IconButton(
-        iconSize: 40,
+        iconSize: 46,
         color: accent,
         onPressed: onPressed,
         icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
@@ -808,10 +924,8 @@ class _ModeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      iconSize: 22,
-      color: active
-          ? Colors.white
-          : Colors.white.withValues(alpha: 0.6),
+      iconSize: 26,
+      color: active ? Colors.white : Colors.white.withValues(alpha: 0.6),
       onPressed: onPressed,
       icon: Icon(icon),
     );
@@ -861,32 +975,53 @@ class _LyricsPeekState extends State<_LyricsPeek> {
     }
   }
 
-  /// Sensibilidad del arrastre: el recorrido completo del sheet equivale a
-  /// ~1/3 de la altura de referencia (antes ~0.7), y el umbral de snap baja a
-  /// 0.4 -> abrir/cerrar requiere ~13-20% de la pantalla en vez de ~35-40%.
-  static const double _dragSens = 0.33;
-  static const double _snapThreshold = 0.4;
+  /// Comportamiento: el sheet SIGUE al dedo 1:1 (recorre exactamente lo que
+  /// recorre el dedo, nunca más rápido). Al soltar, un recorrido CORTO hacia
+  /// arriba lo abre COMPLETO (y uno corto hacia abajo lo cierra del todo):
+  /// el umbral es por DISTANCIA recorrida, no por sensibilidad.
+  // Recorrido mínimo (fracción de la altura de referencia) para abrir/cerrar
+  // COMPLETO al soltar: ~4.5% de la pantalla (~40dp efectivos tras el slop
+  // del touch) en vez de ~35-40%.
+  static const double _snapTravelFrac = 0.045;
+
+  double _dragDist = 0;
+  double _dragStartOpen = 0;
+  double _refH = 1;
 
   void _onDragStart(DragStartDetails d) {
     _dragging = true;
+    _dragDist = 0;
+    _dragStartOpen = _open;
   }
 
-  void _onDragUpdate(DragUpdateDetails d, double refH) {
+  /// [travel] = recorrido total del sheet (recogido → abierto): el sheet se
+  /// mueve 1:1 con el dedo sobre ese recorrido.
+  void _onDragUpdate(DragUpdateDetails d, double refH, double travel) {
+    _refH = refH;
+    _dragDist += d.delta.dy;
     setState(() {
-      _open = (_open - d.delta.dy / (refH * _dragSens)).clamp(0.0, 1.0);
+      _open = (_dragStartOpen - _dragDist / travel).clamp(0.0, 1.0);
     });
   }
 
   void _onDragEnd(DragEndDetails d) {
     _dragging = false;
     final double vel = d.primaryVelocity ?? 0.0;
+    final double snapTravel = _refH * _snapTravelFrac;
     final bool target;
     if (vel.abs() > 400) {
       // Flick rápido: abre al arrastrar arriba y cierra al arrastrar abajo,
       // sin depender de la distancia recorrida.
       target = vel < 0;
+    } else if (_dragDist <= -snapTravel) {
+      // Recorrido corto hacia arriba -> se abre COMPLETO.
+      target = true;
+    } else if (_dragDist >= snapTravel) {
+      // Recorrido corto hacia abajo -> se cierra del todo.
+      target = false;
     } else {
-      target = _open > _snapThreshold;
+      // Movimiento mínimo: mantén el estado actual.
+      target = _open >= 0.5;
     }
     setState(() => _open = target ? 1.0 : 0.0);
     if (target != widget.open) widget.onChanged(target);
@@ -924,7 +1059,10 @@ class _LyricsPeekState extends State<_LyricsPeek> {
           final double bottomInset = MediaQuery.paddingOf(context).bottom;
           final collapsed = 48.0 + bottomInset;
           final openH = maxH * 0.80;
-          final sheetH = collapsed + (_open * (openH - collapsed));
+          // Recorrido total del sheet (recogido → abierto): se usa para que
+          // el sheet siga al dedo 1:1 durante el arrastre.
+          final double travel = openH - collapsed;
+          final sheetH = collapsed + (_open * travel);
 
           return AnimatedContainer(
             duration: _dragging
@@ -952,7 +1090,7 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onVerticalDragStart: _onDragStart,
-                  onVerticalDragUpdate: (d) => _onDragUpdate(d, maxH),
+                  onVerticalDragUpdate: (d) => _onDragUpdate(d, maxH, travel),
                   onVerticalDragEnd: _onDragEnd,
                   onTap: _toggle,
                   child: SizedBox(
@@ -994,9 +1132,7 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                 ),
                 // Letras SIEMPRE MONTADAS (no aparecen de golpe); el
                 // [AnimatedContainer] las revela escalando la altura.
-                Expanded(
-                  child: LyricsView(embedded: true),
-                ),
+                Expanded(child: LyricsView(embedded: true)),
               ],
             ),
           );

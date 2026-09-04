@@ -406,15 +406,6 @@ class _CreateCell extends StatelessWidget {
                 color: theme.colorScheme.primary,
               ),
             ),
-            Text(
-              l10n.newPlaylistHint,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontSize: 11,
-              ),
-            ),
           ],
         ),
       ),

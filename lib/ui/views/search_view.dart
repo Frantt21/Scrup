@@ -29,7 +29,12 @@ class SearchView extends StatefulWidget {
   /// Vuelve al inicio (ya no hay barra lateral).
   final VoidCallback? onBack;
 
-  const SearchView({super.key, this.searchRequest, this.focusRequest, this.onBack});
+  const SearchView({
+    super.key,
+    this.searchRequest,
+    this.focusRequest,
+    this.onBack,
+  });
 
   @override
   State<SearchView> createState() => _SearchViewState();
@@ -167,11 +172,20 @@ class _SearchViewState extends State<SearchView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Móvil: header sin botón (la navegación vive en la
-                    // NavigationBar inferior).
-                    Text(
-                      l10n.searchTitle,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
+                    // NavigationBar inferior). El título va en una caja de la
+                    // MISMA altura que las filas con botón de Inicio/Librería
+                    // (48dp, centrada): así los glifos quedan a la misma
+                    // altura visual que esos títulos.
+                    SizedBox(
+                      height: 48,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          l10n.searchTitle,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -212,107 +226,108 @@ class _SearchViewState extends State<SearchView> {
             ],
           )
         : Container(
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.45),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withValues(
-              alpha: 0.72,
+            margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 24, 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.72,
+                  ),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back_rounded),
-                          tooltip: l10n.backToHome,
-                          onPressed: widget.onBack,
-                        ),
-                        Text(
-                          l10n.searchTitle,
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocus,
-                      onSubmitted: _search,
-                      textInputAction: TextInputAction.search,
-                      decoration: InputDecoration(
-                        hintText: l10n.searchHint,
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        suffixIcon: _searching
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 24, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.arrow_back_rounded),
+                                tooltip: l10n.backToHome,
+                                onPressed: widget.onBack,
+                              ),
+                              Text(
+                                l10n.searchTitle,
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
                                 ),
-                              )
-                            : null,
-                        filled: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(28),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                        ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _searchController,
+                            focusNode: _searchFocus,
+                            onSubmitted: _search,
+                            textInputAction: TextInputAction.search,
+                            decoration: InputDecoration(
+                              hintText: l10n.searchHint,
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon: _searching
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                              filled: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(28),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            height: 34,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _recentSearches.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: 8),
+                              itemBuilder: (context, i) {
+                                final q = _recentSearches[i];
+                                return ActionChip(
+                                  label: Text(q),
+                                  onPressed: () {
+                                    _searchController.text = q;
+                                    _search(q);
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 34,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _recentSearches.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (context, i) {
-                          final q = _recentSearches[i];
-                          return ActionChip(
-                            label: Text(q),
-                            onPressed: () {
-                              _searchController.text = q;
-                              _search(q);
-                            },
-                          );
-                        },
-                      ),
-                    ),
+                    Expanded(child: _buildBody(theme)),
                   ],
                 ),
               ),
-              Expanded(child: _buildBody(theme)),
-            ],
-          ),
-        ),
-      ),
-    );
+            ),
+          );
 
     return body;
   }
