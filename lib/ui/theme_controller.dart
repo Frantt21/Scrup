@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:palette_generator/palette_generator.dart';
 
 import '../core/track.dart';
+import '../core/app_log.dart';
 import '../services/artwork_cache_service.dart';
 import '../services/artwork_palette_service.dart';
 import '../services/palette_cache_store.dart';
@@ -20,6 +21,12 @@ class ThemeController extends ChangeNotifier {
   ThemeController(this._player, {this.paletteCache, this.artworkCache}) {
     _onTrackChanged(_player.currentTrackValue);
     _sub = _player.currentTrack.listen(_onTrackChanged);
+    // La cola ya sabe cuál es la siguiente pista: se precarga su acento
+    // (y de paso su artwork en disco) para que al cambiar de canción el
+    // color esté en caché y la transición no pase por el lila por defecto.
+    _player.queue.addListener(_onQueueChanged);
+    _player.queueIndex.addListener(_onQueueChanged);
+    _onQueueChanged();
   }
 
   final PlayerService _player;
@@ -64,6 +71,11 @@ class ThemeController extends ChangeNotifier {
   void _onTrackChanged(Track? track) {
     final token = ++_token;
     final url = track?.thumbnailUrl;
+    appLog(
+      'ACCENT',
+      'track=${shortId(track?.id)} url=${shortUrl(url)} '
+      'tok=$token cur=${colorHex(_accentColor)}',
+    );
 
     _debounce?.cancel();
 
@@ -84,6 +96,7 @@ class ThemeController extends ChangeNotifier {
 
     final stored = paletteCache?.get(url);
     if (stored != null) {
+      appLog('ACCENT', 'STORE-HIT ${shortUrl(url)} → ${colorHex(stored)} (70ms)');
       _paletteCache[url] = stored;
       _debounce = Timer(kAccentDelay, () {
         if (token == _token) _setAccent(stored);
@@ -92,6 +105,7 @@ class ThemeController extends ChangeNotifier {
     }
     if (_paletteCache.containsKey(url)) {
       final mem = _paletteCache[url];
+      appLog('ACCENT', 'MEM ${shortUrl(url)} → ${colorHex(mem)}');
       if (mem != null) {
         _debounce = Timer(kAccentDelay, () {
           if (token == _token) _setAccent(mem);
@@ -100,10 +114,12 @@ class ThemeController extends ChangeNotifier {
       return;
     }
     if (paletteCache?.isFailed(url) ?? false) {
+      appLog('ACCENT', 'FAILED-mark ${shortUrl(url)} → HOLD ${colorHex(_accentColor)}');
       _paletteCache[url] = null;
       return;
     }
 
+    appLog('ACCENT', 'MISS ${shortUrl(url)} → extract en 600ms');
     _debounce = Timer(const Duration(milliseconds: 600), () {
       if (token != _token) return;
       _extract(token, url);
@@ -113,6 +129,7 @@ class ThemeController extends ChangeNotifier {
   void _extract(int token, String url) {
     final stored = paletteCache?.get(url);
     if (stored != null) {
+      appLog('ACCENT', 'EXTRACT store-hit tardío ${shortUrl(url)}');
       _paletteCache[url] = stored;
       _debounce = Timer(kAccentDelay, () {
         if (token == _token) _setAccent(stored);
@@ -120,11 +137,13 @@ class ThemeController extends ChangeNotifier {
       return;
     }
     if (paletteCache?.isFailed(url) ?? false) {
+      appLog('ACCENT', 'EXTRACT failed-mark tardío ${shortUrl(url)} → HOLD');
       _paletteCache[url] = null;
       return;
     }
     if (_paletteCache.containsKey(url)) {
       final cached = _paletteCache[url];
+      appLog('ACCENT', 'EXTRACT mem tardía ${shortUrl(url)} → ${colorHex(cached)}');
       if (cached != null) {
         _debounce = Timer(kAccentDelay, () {
           if (token == _token) _setAccent(cached);
@@ -132,10 +151,12 @@ class ThemeController extends ChangeNotifier {
       }
       return;
     }
+    appLog('ACCENT', 'EXTRACT fetch red ${shortUrl(url)}');
     unawaited(_loadPalette(url, token));
   }
 
   Future<void> _loadPalette(String url, int token) async {
+    final t0 = DateTime.now();
     Color? color;
     try {
       final store = paletteCache;
@@ -164,17 +185,79 @@ class ThemeController extends ChangeNotifier {
       color = null;
     }
     _paletteCache[url] = color;
+    final ms = DateTime.now().difference(t0).inMilliseconds;
     if (color != null) {
       paletteCache?.put(url, color);
     } else {
       paletteCache?.markFailed(url);
     }
-    if (token == _token) _setAccent(color);
+    appLog(
+      'ACCENT',
+      'FETCH ${shortUrl(url)} → ${colorHex(color)} en ${ms}ms '
+      'tok=$token curTok=$_token',
+    );
+    // Si la extracción falla, se CONSERVA el acento anterior: ponerlo en
+    // null haría que el player/miniplayer cayeran al lila por defecto en
+    // mitad de la transición entre canciones.
+    if (token == _token && color != null) _setAccent(color);
+  }
+
+  /// URLs con precarga de acento en curso (evita descargas duplicadas).
+  final Set<String> _warming = {};
+
+  /// Precarga el acento de las 2 pistas siguientes de la cola (sin tocar el
+  /// acento visible). Como efecto colateral también deja el artwork en el
+  /// caché de disco ([ArtworkCacheService]).
+  void _onQueueChanged() {
+    final queue = _player.queue.value;
+    final index = _player.queueIndex.value;
+    if (queue.isEmpty) return;
+    final upcoming = <String>[];
+    for (var i = 1; i <= 2; i++) {
+      final next = index + i;
+      if (next < 0 || next >= queue.length) break;
+      upcoming.add(shortId(queue[next].id));
+      warmAccent(queue[next].thumbnailUrl);
+    }
+    if (upcoming.isNotEmpty) {
+      appLog('WARM', 'cola idx=$index → warm $upcoming');
+    }
+  }
+
+  /// Prepara el acento de [url] en caché sin cambiar el color visible.
+  /// Es seguro llamarlo desde los widgets cuando aparece una pista "en
+  /// preparación": si el color ya está listo, el cambio de canción lo toma
+  /// al instante y no hay paso por el color por defecto.
+  void warmAccent(String? url) {
+    if (url == null || url.isEmpty) return;
+    final store = paletteCache;
+    if (store == null) return;
+    if (store.get(url) != null) return;
+    if (_paletteCache.containsKey(url)) return;
+    if (store.isFailed(url)) return;
+    if (!_warming.add(url)) return;
+    appLog('WARM', 'start ${shortUrl(url)}');
+    unawaited(
+      ArtworkPaletteService.accentFor(
+        url,
+        store,
+        artworkCache: artworkCache,
+      ).then((color) {
+        appLog('WARM', 'done ${shortUrl(url)} → ${colorHex(color)}');
+        if (color != null) {
+          _paletteCache[url] = color;
+          // accentFor ya lo guardó en el store.
+        } else {
+          store.markFailed(url);
+        }
+      }).catchError((_) => null).whenComplete(() => _warming.remove(url)),
+    );
   }
 
   void _setAccent(Color? color) {
     final prev = _accentColor;
     if (prev == color) return;
+    appLog('ACCENT', 'SET ${colorHex(prev)} → ${colorHex(color)}');
     _accentColor = color;
     _seededFor = null;
     notifyListeners();
@@ -260,6 +343,8 @@ class ThemeController extends ChangeNotifier {
   void dispose() {
     _debounce?.cancel();
     _sub?.cancel();
+    _player.queue.removeListener(_onQueueChanged);
+    _player.queueIndex.removeListener(_onQueueChanged);
     super.dispose();
   }
 }

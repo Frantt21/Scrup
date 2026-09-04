@@ -214,11 +214,28 @@ class LyricsService {
   }
 
   // Fetches lyrics: KPoe → Unison → LRCLIB, with SQLite cache.
-  Future<SyncedLyrics?> fetchLyrics(String title, String artist) async {
+  // Single-flight: las N vistas de letras montadas a la vez (player +
+  // sheet) comparten UNA sola petición en curso por canción.
+  final Map<String, Future<SyncedLyrics?>> _inFlight = {};
+
+  Future<SyncedLyrics?> fetchLyrics(String title, String artist) {
+    final cacheKey = _key(title, artist);
+    if (_cache.containsKey(cacheKey)) return Future.value(_cache[cacheKey]);
+    if (_notFound.contains(cacheKey)) return Future.value(null);
+    return _inFlight.putIfAbsent(
+      cacheKey,
+      () => _fetchUncached(title, artist, cacheKey)
+          .whenComplete(() => _inFlight.remove(cacheKey)),
+    );
+  }
+
+  Future<SyncedLyrics?> _fetchUncached(
+    String title,
+    String artist,
+    String cacheKey,
+  ) async {
     try {
-      final cacheKey = _key(title, artist);
-      if (_cache.containsKey(cacheKey)) return _cache[cacheKey];
-      if (_notFound.contains(cacheKey)) return null;      final stored = await _db.getStoredLrc(title, artist);
+      final stored = await _db.getStoredLrc(title, artist);
       if (stored != null) {
         // Check if it's JSON (word-by-word) or plain LRC
         final lyrics = _parseStoredLyrics(stored, title, artist);

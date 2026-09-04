@@ -15,6 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/lyrics_search_result.dart';
 import '../../core/track.dart';
+import '../../core/app_log.dart';
 import '../../core/synced_lyrics.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/audio_cache_service.dart';
@@ -69,6 +70,10 @@ class _LyricsViewState extends State<LyricsView>
 
   int _fetchToken = 0;
 
+  /// Clave título/artista de las letras en curso (evita refetch en
+  /// republicaciones del mismo tema).
+  String? _fetchKey;
+
   @override
   void initState() {
     super.initState();
@@ -83,6 +88,14 @@ class _LyricsViewState extends State<LyricsView>
 
     _trackSub = player.currentTrack.listen((t) {
       if (!mounted) return;
+      // Republicaciones del MISMO tema (enriquecido) no recargan letras:
+      // mismo título/artista = mismas letras; evita tormentas de setState.
+      final newKey = t == null ? null : '${t.title}\n${t.artist}';
+      if (newKey == _fetchKey) {
+        if (_track?.id != t?.id) setState(() => _track = t);
+        return;
+      }
+      _fetchKey = newKey;
       setState(() {
         _track = t;
         _lyrics = null;
@@ -131,7 +144,10 @@ class _LyricsViewState extends State<LyricsView>
     unawaited(_loadTrackOffset(_track));
 
     final track = _track;
-    if (track != null) _fetchLyrics(track);
+    if (track != null) {
+      _fetchKey = '${track.title}\n${track.artist}';
+      _fetchLyrics(track);
+    }
   }
 
   Future<void> _loadSweepPref() async {
@@ -194,6 +210,8 @@ class _LyricsViewState extends State<LyricsView>
   Future<void> _fetchLyrics(Track? track) async {
     if (track == null) return;
     final token = ++_fetchToken;
+    final t0 = DateTime.now();
+    appLog('LYRICS', 'fetch ${shortId(track.id)}');
     setState(() => _loading = true);
     try {
       final lyrics = await context.read<LyricsService>().fetchLyrics(
@@ -201,6 +219,12 @@ class _LyricsViewState extends State<LyricsView>
         track.artist,
       );
       if (!mounted || token != _fetchToken) return;
+      final ms = DateTime.now().difference(t0).inMilliseconds;
+      appLog(
+        'LYRICS',
+        'ready ${shortId(track.id)} en ${ms}ms '
+        'lineas=${lyrics?.lines.length ?? 0}',
+      );
       setState(() {
         _lyrics = lyrics;
         _loading = false;

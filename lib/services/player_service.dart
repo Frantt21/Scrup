@@ -7,6 +7,7 @@ import 'package:media_kit/src/models/audio_device.dart';
 
 import '../core/queue_shuffle.dart';
 import '../core/track.dart';
+import '../core/app_log.dart';
 
 /// Loop modes (own enum to avoid clash with Flutter's RepeatMode).
 enum LoopMode { off, all, one }
@@ -626,6 +627,7 @@ class PlayerService {
     final track = _queue[index];
     _clearPlaybackState();
     preparingTrackId.value = track.id;
+    appLog('TRACK', 'preparing id=${track.id} idx=$index');
     try {
       // Pause (not stop) to avoid spurious completed event.
       await _player.pause();
@@ -640,6 +642,7 @@ class PlayerService {
       if (token != _playToken) return false;
       await _player.play();
       _publishTrack(track);
+      appLog('TRACK', 'published id=${track.id} dur=${track.duration}');
       unawaited(_notifyPlayed(track));
       unawaited(_enrichThenApply(track, enrichFuture, token));
       _schedulePreloads();
@@ -739,6 +742,11 @@ class PlayerService {
     final enriched = await enrichFuture;
     if (token != _playToken) return;
     if (enriched == null || enriched.id != original.id) return;
+    appLog(
+      'TRACK',
+      'enriched id=${enriched.id} dur=${enriched.duration} '
+      'art=${enriched.thumbnailUrl != original.thumbnailUrl ? 'NEW' : 'same'}',
+    );
     _publishTrack(enriched);
     final cb = onEnriched;
     if (cb != null) {

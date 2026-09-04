@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
+import '../../core/app_log.dart';
 import '../../data/database.dart';
 import '../../services/artwork_cache_service.dart';
 import '../../services/player_service.dart';
@@ -66,6 +67,13 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
   Duration? _dur;
   bool _playing = false;
   bool _buffering = false;
+  // Último acento/track logueado (el build corre en cada frame del morph;
+  // solo se loguea el CAMBIO para no inundar logcat).
+  Color? _lastLoggedAccent;
+  String? _lastLoggedTrackId;
+
+  /// Superficie neutra pre-acento: funde desde negro, nunca lila.
+  static const Color _kIdleSurface = Colors.transparent;
   bool _dragging = false;
   double _dragValue = 0;
   bool _lyricsOpen = false;
@@ -279,6 +287,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
 
   void _onPreparing() {
     final id = _player.preparingTrackId.value;
+    appLog('PREP', 'overlay id=${shortId(id)} active=$_preparingActive');
     // Consume la dirección del usuario ANTES de que el artwork cambie al
     // track que se está preparando (así la animación sale con el gesto). Si
     // la preparación se CANCELA (id null tras una preparación activa), se
@@ -302,6 +311,13 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
         }
       }
     });
+    // La pista entrante ya se conoce: se precarga su acento (y artwork) en
+    // paralelo a la carga del audio, para que al publicarse la pista el
+    // color esté en caché y la transición no pase por el lila por defecto.
+    final incoming = _preparing;
+    if (incoming != null) {
+      context.read<ThemeController>().warmAccent(incoming.thumbnailUrl);
+    }
   }
 
   Timer? _startTicker() {
@@ -353,7 +369,11 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final themeController = context.watch<ThemeController>();
-    final accent = themeController.accentColor ?? theme.colorScheme.primary;
+    // Sin acento todavía (arranque en frío / sin pista): neutro en vez del
+    // lila del tema — el fondo funde desde negro al primer color real y el
+    // lila por defecto jamás aparece en una transición.
+    final accent =
+        themeController.accentColor ?? _kIdleSurface;
     final cs = theme.colorScheme;
 
     final track = _track;
@@ -364,6 +384,15 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     final Track? showing = _preparingActive && _preparing != null
         ? _preparing
         : track;
+    if (_lastLoggedAccent != accent || _lastLoggedTrackId != showing?.id) {
+      appLog(
+        'UI',
+        'overlay accent=${colorHex(accent)} '
+        'showing=${shortId(showing?.id)} themePrimary=${colorHex(theme.colorScheme.primary)}',
+      );
+      _lastLoggedAccent = accent;
+      _lastLoggedTrackId = showing?.id;
+    }
     final bool loading = track == null && _preparingActive;
     final dur = _dur;
     final total = _maxProgress;
@@ -1228,6 +1257,7 @@ class _AccentBackground extends StatefulWidget {
 class _AccentBackgroundState extends State<_AccentBackground>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
+  late final Animation<double> _anim;
   late Color _from;
   late Color _to;
 
@@ -1238,6 +1268,9 @@ class _AccentBackgroundState extends State<_AccentBackground>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
+    // Misma curva que el sheet de letras y el miniplayer: los tres fundidos
+    // corren en fase (misma duración y curva, arrancan en el mismo frame).
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
     _from = widget.color;
     _to = widget.color;
   }
@@ -1248,7 +1281,13 @@ class _AccentBackgroundState extends State<_AccentBackground>
     if (widget.color != oldWidget.color) {
       // Si estaba animando, parte del color REAL mostrado (no del objetivo
       // anterior) hacia el nuevo acento.
-      final current = _ctrl.isAnimating ? _lerpAccent(_ctrl.value) : _to;
+      final current = _ctrl.isAnimating
+          ? Color.lerp(_from, _to, _anim.value)!
+          : _to;
+      appLog(
+        'UI',
+        'bg-anim ${colorHex(current)} → ${colorHex(widget.color)}',
+      );
       _from = current;
       _to = widget.color;
       _ctrl.forward(from: 0);
@@ -1261,27 +1300,18 @@ class _AccentBackgroundState extends State<_AccentBackground>
     super.dispose();
   }
 
-  Color _lerpAccent(double t) {
-    final ha = HSLColor.fromColor(_from);
-    final hb = HSLColor.fromColor(_to);
-    // Camino más corto entre matices (evita el gris intermedio del lerp RGB).
-    var dh = (hb.hue - ha.hue) % 360.0;
-    if (dh > 180.0) dh -= 360.0;
-    return HSLColor.fromAHSL(
-      _from.a + (_to.a - _from.a) * t,
-      (ha.hue + dh * t) % 360.0,
-      ha.saturation + (hb.saturation - ha.saturation) * t,
-      ha.lightness + (hb.lightness - ha.lightness) * t,
-    ).toColor();
-  }
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (context, child) {
+        // Crossfade RGB directo origen→destino (== fundido entre capas).
+        // A propósito NO se interpola en HSL: el camino por el círculo de
+        // matiz generaba un tercer color vívido intermedio (p. ej.
+        // morado→azul pasaba por azul oscuro) que se leía como un paso
+        // extra de la transición.
         final color = (_ctrl.isAnimating || _ctrl.value > 0)
-            ? _lerpAccent(_ctrl.value)
+            ? Color.lerp(_from, _to, _anim.value)!
             : _to;
         return ColoredBox(color: color, child: child);
       },
@@ -1346,6 +1376,9 @@ class _LyricsPeekState extends State<_LyricsPeek> {
   double _dragStartOpen = 0;
   double _refH = 1;
 
+  /// Color previo del sheet para el fundido (igual que el fondo del player).
+  Color? _sheetPrev;
+
   void _onDragStart(DragStartDetails d) {
     _dragging = true;
     _dragDist = 0;
@@ -1394,10 +1427,8 @@ class _LyricsPeekState extends State<_LyricsPeek> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Fondo PLANO: acento oscurecido (no translúcido), para que el sheet
-    // contraste con el acento del player y se extienda sobre la barra de
-    // navegación.
-    final Color sheetColor = Color.lerp(widget.accent, Colors.black, 0.35)!;
+    // (El color del sheet lo calcula el tween del `LayoutBuilder`: fondo
+    // plano = acento oscurecido para contrastar con el player.)
     return Align(
       alignment: Alignment.bottomCenter,
       child: LayoutBuilder(
@@ -1422,26 +1453,45 @@ class _LyricsPeekState extends State<_LyricsPeek> {
           final double travel = openH - collapsed;
           final sheetH = collapsed + (_open * travel);
 
-          return AnimatedContainer(
-            duration: _dragging
-                ? Duration.zero
-                : const Duration(milliseconds: 220),
+          // El COLOR del sheet se anima con el mismo tween que el fondo del
+          // player (350ms, easeOutCubic): antes cambiaba al instante y se
+          // adelantaba al fondo. El AnimatedContainer interior conserva SOLO
+          // la animación de altura; el color lo pinta el tween exterior para
+          // no encadenar dos animaciones implícitas.
+          final Color target =
+              Color.lerp(widget.accent, Colors.black, 0.35)!;
+          final Color begin = _sheetPrev ?? target;
+          if (_sheetPrev != target) {
+            appLog('UI', 'sheet ${colorHex(_sheetPrev)} → ${colorHex(target)}');
+            _sheetPrev = target;
+          }
+          return TweenAnimationBuilder<Color?>(
+            key: ValueKey(target),
+            tween: ColorTween(begin: begin, end: target),
+            duration: const Duration(milliseconds: 350),
             curve: Curves.easeOutCubic,
-            height: sheetH,
-            width: double.infinity,
-            // El fondo del sheet llega al borde real de la pantalla
-            // (edge-to-edge); el padding inferior = inset del sistema para que
-            // el contenido (handle + letras) nunca quede bajo los botones de
-            // navegación (gestos / 3 botones). El alto colapsado ya incluye el
-            // inset (ver arriba), así que no hay overflow.
-            padding: EdgeInsets.only(bottom: bottomInset),
-            decoration: BoxDecoration(
-              color: sheetColor,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
-            ),
-            child: Column(
+            builder: (context, color, _) {
+              return AnimatedContainer(
+                duration: _dragging
+                    ? Duration.zero
+                    : const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                height: sheetH,
+                width: double.infinity,
+                decoration: const BoxDecoration(color: Colors.transparent),
+                child: Container(
+                  // El padding del inset va DENTRO de la caja con color para
+                  // que el fondo llegue al borde real de la pantalla
+                  // (edge-to-edge, bajo la barra de navegación) y solo el
+                  // contenido (handle + letras) respete el inset.
+                  padding: EdgeInsets.only(bottom: bottomInset),
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                  ),
+                  child: Column(
               children: [
                 // Handle (siempre visible, ~48px). El arrastre está acotado
                 // al handle para no chocar con el scroll de las letras.
@@ -1491,8 +1541,11 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                 // Letras SIEMPRE MONTADAS (no aparecen de golpe); el
                 // [AnimatedContainer] las revela escalando la altura.
                 Expanded(child: LyricsView(embedded: true)),
-              ],
-            ),
+                    ],
+                  ),
+                ),
+              );
+            },
           );
         },
       ),

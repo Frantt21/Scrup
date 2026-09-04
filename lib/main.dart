@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'core/binaries.dart';
+import 'core/app_log.dart';
 import 'core/track.dart';
 import 'data/database.dart';
 import 'l10n/generated/app_localizations.dart';
@@ -33,6 +34,7 @@ import 'ui/widgets/scrup_toasts.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  installJankMonitor();
 
   // OS media controls: SMTC (Win), Now Playing (macOS), MPRIS (Linux).
   ScrupAudioHandler audioHandler;
@@ -312,7 +314,7 @@ class ScrupApp extends StatelessWidget {
             player.shuffle.value = initialShuffleEnabled;
             player.repeatMode.value = initialRepeatMode;
             player.radio.value = initialRadioEnabled;
-            context.read<ScrupAudioHandler>().attach(player);
+            context.read<ScrupAudioHandler>().attach(player, db: db);
             player.currentTrack.listen((t) {
               if (t != null) settings.saveLastTrackId(t.id);
             });
@@ -392,49 +394,59 @@ class ScrupApp extends StatelessWidget {
           create: (_) => LocaleController(initialLocale),
         ),
       ],
-      child: Consumer<LocaleController>(
-        builder: (context, localeController, _) {
-          return MaterialApp(
-            title: 'Scrup',
-            debugShowCheckedModeBanner: false,
-            locale: localeController.locale,
-            supportedLocales: AppLocalizations.supportedLocales,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            themeAnimationDuration: const Duration(milliseconds: 700),
-            themeAnimationCurve: Curves.easeInOut,
-            // Tema ESTÁTICO: no se re-siembra con el acento de la pista en
-            // cada cambio (eso retintaba TODA la app y sumaba parpadeos al
-            // cambiar de canción). El acento del artwork lo consumen las
-            // superficies del reproductor directamente vía ThemeController.
-            theme: _appTheme,
-            builder: (context, child) {
-              Widget core = Stack(
-                children: [
-                  child ?? const SizedBox.shrink(),
-                  const ScrupToastHost(),
-                ],
+      child: Consumer<ThemeController>(
+        builder: (context, themeController, _) {
+          return Consumer<LocaleController>(
+            builder: (context, localeController, _) {
+              return MaterialApp(
+                title: 'Scrup',
+                debugShowCheckedModeBanner: false,
+                // Gráfica de rendimiento UI/GPU (ver `kShowPerfOverlay`).
+                showPerformanceOverlay: kShowPerfOverlay,
+                locale: localeController.locale,
+                supportedLocales: AppLocalizations.supportedLocales,
+                localizationsDelegates:
+                    AppLocalizations.localizationsDelegates,
+                // Ventana CORTA a propósito: durante la animación del tema
+                // AnimatedTheme reconstruye todo el árbol dependiente en cada
+                // frame; 700ms de eso tiraba frames en cada cambio de canción.
+                // Las superficies del player animan su propio fundido (350ms).
+                themeAnimationDuration: const Duration(milliseconds: 200),
+                themeAnimationCurve: Curves.easeInOut,
+                // Tema semillado con el acento de la pista actual: tiñe el
+                // primary y demás elementos derivados en TODA la app. El
+                // cambio entre canciones se anima (700ms) sin saltos.
+                theme: _buildTheme(themeController.accentColor),
+                builder: (context, child) {
+                  Widget core = Stack(
+                    children: [
+                      child ?? const SizedBox.shrink(),
+                      const ScrupToastHost(),
+                    ],
+                  );
+                  if (Platform.isLinux) {
+                    core = _LinuxRoundedCorners(child: core);
+                  }
+                  if (Binaries.isMobile) {
+                    // Reaplica el estilo de barras en cada build (persistente
+                    // también para rutas empujadas).
+                    core = AnnotatedRegion<SystemUiOverlayStyle>(
+                      value: _systemOverlayStyle,
+                      child: core,
+                    );
+                  }
+                  return core;
+                },
+                home: const AppShell(),
               );
-              if (Platform.isLinux) {
-                core = _LinuxRoundedCorners(child: core);
-              }
-              if (Binaries.isMobile) {
-                // Reaplica el estilo de barras en cada build (persistente
-                // también para rutas empujadas).
-                core = AnnotatedRegion<SystemUiOverlayStyle>(
-                  value: _systemOverlayStyle,
-                  child: core,
-                );
-              }
-              return core;
             },
-            home: const AppShell(),
           );
         },
       ),
     );
   }
 
-  static ThemeData _buildTheme(Color? accent) {
+  ThemeData _buildTheme(Color? accent) {
     final seed = accent ?? kDefaultAccent;
     final fromSeed = ColorScheme.fromSeed(
       seedColor: seed,
@@ -517,12 +529,6 @@ class ScrupApp extends StatelessWidget {
     );
   }
 }
-
-/// Tema estático de la app: se construye UNA vez (con el acento por defecto)
-/// y ya no cambia al pasar de canción. Las superficies del reproductor
-/// (player, miniplayer, letras) consumen el acento del artwork vía
-/// [ThemeController] directamente; el resto de la app conserva su tema fijo.
-final ThemeData _appTheme = ScrupApp._buildTheme(null);
 
 /// Controla el cierre de la ventana junto a `setPreventClose(true)` (ver
 /// main): al pedir cerrar, ejecuta [flush] —el guardado pendiente de la cola

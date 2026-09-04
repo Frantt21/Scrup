@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../theme_controller.dart';
 
 import '../../core/track.dart';
+import '../../core/app_log.dart';
 import '../../services/player_service.dart';
 import 'cover_image.dart';
 
@@ -37,6 +38,13 @@ class _MiniPlayerState extends State<MiniPlayer> {
   final List<StreamSubscription> _subs = [];
   VoidCallback? _onPreparingChanged;
   VoidCallback? _onQueueChanged;
+
+  Color? _lastLoggedAccent;
+  String? _lastLoggedTrackId;
+
+  /// Acento anterior para el fundido: el tween arranca del color REAL
+  /// previo (no de transparente) hacia el nuevo.
+  Color? _prevAccent;
 
   @override
   void initState() {
@@ -93,6 +101,11 @@ class _MiniPlayerState extends State<MiniPlayer> {
         _preparing = found;
         _preparingActive = active;
       });
+      // Igual que en el player extendido: precarga el acento de la pista
+      // entrante para que la transición no pase por el color por defecto.
+      if (found != null) {
+        context.read<ThemeController>().warmAccent(found.thumbnailUrl);
+      }
     }
   }
 
@@ -127,7 +140,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
     final theme = Theme.of(context);
     final player = context.read<PlayerService>();
     final themeController = context.watch<ThemeController>();
-    final accent = themeController.accentColor ?? theme.colorScheme.primary;
+    // Igual que el extendido: sin acento aún, tinte neutro invisible en vez
+    // del lila del tema.
+    final accent = themeController.accentColor ?? Colors.transparent;
 
     // El mini-player está SIEMPRE montado a altura fija (barra persistente):
     //   · track != null            → reproducción normal.
@@ -136,11 +151,25 @@ class _MiniPlayerState extends State<MiniPlayer> {
     // Así nunca desaparece al cambiar de canción ni durante la carga.
     final Track? showing = track ?? (_preparingActive ? _preparing : null);
     final bool loading = track == null && _preparingActive;
+    if (_lastLoggedAccent != accent || _lastLoggedTrackId != showing?.id) {
+      appLog(
+        'UI',
+        'mini accent=${colorHex(accent)} showing=${shortId(showing?.id)} '
+        'loading=$loading',
+      );
+      _lastLoggedAccent = accent;
+      _lastLoggedTrackId = showing?.id;
+    }
 
     final progress = _duration != null && _duration!.inMilliseconds > 0
         ? (_position.inMilliseconds / _duration!.inMilliseconds).clamp(0.0, 1.0)
         : 0.0;
 
+    // Fundido RGB origen→destino (igual que el extendido): `ValueKey`
+    // reinicia la animación en cada cambio de acento partiendo del color
+    // previo real, sin salto a transparente ni tercer color intermedio.
+    final begin = _prevAccent ?? accent;
+    _prevAccent = accent;
     return Material(
       clipBehavior: Clip.antiAlias,
       // Mismo acento del player desktop, en PLANO (sin degradado): base
@@ -150,8 +179,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
         children: [
           Positioned.fill(
             child: TweenAnimationBuilder<Color?>(
-              tween: ColorTween(end: accent),
-              duration: const Duration(milliseconds: 700),
+              key: ValueKey(accent),
+              tween: ColorTween(begin: begin, end: accent),
+              duration: const Duration(milliseconds: 350),
               curve: Curves.easeOutCubic,
               builder: (context, color, _) {
                 return DecoratedBox(
