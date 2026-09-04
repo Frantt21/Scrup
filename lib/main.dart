@@ -63,8 +63,7 @@ Future<void> main() async {
     // Intercept close to flush pending data before exit.
     try {
       await windowManager.setPreventClose(true);
-    } catch (_) {
-    }
+    } catch (_) {}
     final windowOptions = WindowOptions(
       size: const Size(1400, 800),
       minimumSize: const Size(1440, 800),
@@ -109,12 +108,14 @@ Future<void> main() async {
       try {
         await Binaries.ensureAndroidToolchain();
         const ch = MethodChannel('com.scrup.music.toolchain');
-        final logPath =
-            p.join((await getApplicationSupportDirectory()).path, 'ver.log');
-        final res = await ch.invokeMethod<Map<dynamic, dynamic>>(
-          'ytDlpRun',
-          {'args': <String>['--version'], 'logPath': logPath},
+        final logPath = p.join(
+          (await getApplicationSupportDirectory()).path,
+          'ver.log',
         );
+        final res = await ch.invokeMethod<Map<dynamic, dynamic>>('ytDlpRun', {
+          'args': <String>['--version'],
+          'logPath': logPath,
+        });
         final code = (res?['exitCode'] as num?)?.toInt() ?? 1;
         final out = (res?['output'] as String?) ?? '';
         debugPrint('[TEMP-VERSION] exitCode=$code output=${out.trim()}');
@@ -254,9 +255,7 @@ class ScrupApp extends StatelessWidget {
           create: (context) =>
               AudioCacheService(ytdlp: context.read<YtDlpService>()),
         ),
-        Provider<ArtworkCacheService>(
-          create: (_) => ArtworkCacheService(),
-        ),
+        Provider<ArtworkCacheService>(create: (_) => ArtworkCacheService()),
         Provider<SearchService>(
           create: (context) =>
               SearchService(ytDlp: context.read<YtDlpService>()),
@@ -393,58 +392,57 @@ class ScrupApp extends StatelessWidget {
           create: (_) => LocaleController(initialLocale),
         ),
       ],
-      child: Consumer<ThemeController>(
-        builder: (context, themeController, _) {
-          return Consumer<LocaleController>(
-            builder: (context, localeController, _) {
-              final app = MaterialApp(
-                title: 'Scrup',
-                debugShowCheckedModeBanner: false,
-                locale: localeController.locale,
-                supportedLocales: AppLocalizations.supportedLocales,
-                localizationsDelegates: AppLocalizations.localizationsDelegates,
-                themeAnimationDuration: const Duration(milliseconds: 700),
-                themeAnimationCurve: Curves.easeInOut,
-                theme: _buildTheme(themeController.accentColor),
-                builder: (context, child) {
-                  Widget core = Stack(
-                    children: [
-                      child ?? const SizedBox.shrink(),
-                      const ScrupToastHost(),
-                    ],
-                  );
-                  if (Platform.isLinux) {
-                    core = _LinuxRoundedCorners(child: core);
-                  }
-                  if (Binaries.isMobile) {
-                    // Reaplica el estilo de barras en cada build (persistente
-                    // también para rutas empujadas).
-                    core = AnnotatedRegion<SystemUiOverlayStyle>(
-                      value: _systemOverlayStyle,
-                      child: core,
-                    );
-                  }
-                  return core;
-                },
-                home: const AppShell(),
+      child: Consumer<LocaleController>(
+        builder: (context, localeController, _) {
+          return MaterialApp(
+            title: 'Scrup',
+            debugShowCheckedModeBanner: false,
+            locale: localeController.locale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            themeAnimationDuration: const Duration(milliseconds: 700),
+            themeAnimationCurve: Curves.easeInOut,
+            // Tema ESTÁTICO: no se re-siembra con el acento de la pista en
+            // cada cambio (eso retintaba TODA la app y sumaba parpadeos al
+            // cambiar de canción). El acento del artwork lo consumen las
+            // superficies del reproductor directamente vía ThemeController.
+            theme: _appTheme,
+            builder: (context, child) {
+              Widget core = Stack(
+                children: [
+                  child ?? const SizedBox.shrink(),
+                  const ScrupToastHost(),
+                ],
               );
-              return app;
+              if (Platform.isLinux) {
+                core = _LinuxRoundedCorners(child: core);
+              }
+              if (Binaries.isMobile) {
+                // Reaplica el estilo de barras en cada build (persistente
+                // también para rutas empujadas).
+                core = AnnotatedRegion<SystemUiOverlayStyle>(
+                  value: _systemOverlayStyle,
+                  child: core,
+                );
+              }
+              return core;
             },
+            home: const AppShell(),
           );
         },
       ),
     );
   }
 
-  ThemeData _buildTheme(Color? accent) {
+  static ThemeData _buildTheme(Color? accent) {
     final seed = accent ?? kDefaultAccent;
     final fromSeed = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: Brightness.dark,
     );
     // Neutral seeds (B/W artwork): force primary to silver.
-    final isNeutral = HSLColor.fromColor(seed).saturation <
-        kDefaultAccentNeutralThreshold;
+    final isNeutral =
+        HSLColor.fromColor(seed).saturation < kDefaultAccentNeutralThreshold;
     final scheme = isNeutral
         ? fromSeed.copyWith(primary: seed, onPrimary: const Color(0xFF1A1A1A))
         : fromSeed;
@@ -519,6 +517,12 @@ class ScrupApp extends StatelessWidget {
     );
   }
 }
+
+/// Tema estático de la app: se construye UNA vez (con el acento por defecto)
+/// y ya no cambia al pasar de canción. Las superficies del reproductor
+/// (player, miniplayer, letras) consumen el acento del artwork vía
+/// [ThemeController] directamente; el resto de la app conserva su tema fijo.
+final ThemeData _appTheme = ScrupApp._buildTheme(null);
 
 /// Controla el cierre de la ventana junto a `setPreventClose(true)` (ver
 /// main): al pedir cerrar, ejecuta [flush] —el guardado pendiente de la cola

@@ -66,6 +66,79 @@ class ArtworkPaletteService {
     }
   }
 
+  // ── Acento ÚNICO (barato) ────────────────────────────────────────────
+  // Para las superficies que pintan su fondo con el acento (player,
+  // miniplayer, letras): UN solo color del artwork, sin tríos ni paletas
+  // completas. Cacheado por URL como el resto.
+
+  /// Acento para [url]: del caché o extrayéndolo ahora (bytes → un color).
+  /// Devuelve `null` si no hay bytes o la extracción falla.
+  static Future<Color?> accentFor(
+    String url,
+    PaletteCacheStore store, {
+    bool force = false,
+    ArtworkCacheService? artworkCache,
+  }) async {
+    if (!force) {
+      final cached = store.get(url);
+      if (cached != null) return cached;
+    } else {
+      store.invalidate(url);
+    }
+    final bytes = await _fetchBytes(url, artworkCache: artworkCache);
+    if (bytes == null) return null;
+    return accentFromBytes(url, bytes, store);
+  }
+
+  /// Extrae el acento único de unos bytes ya descargados (decode en
+  /// isolate) y lo guarda en el caché.
+  static Future<Color?> accentFromBytes(
+    String url,
+    Uint8List bytes,
+    PaletteCacheStore store,
+  ) async {
+    try {
+      final swatches = await extractSwatches(bytes);
+      final accent = accentFromSwatches(swatches);
+      if (accent != null) store.put(url, accent);
+      return accent;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Un solo color: el primer swatch (por población) con saturación REAL;
+  /// si el artwork es monocromo (B/N, JPEG con ruido de croma), una plata
+  /// neutra derivada del dominante.
+  static Color? accentFromSwatches(List<Color?> swatches) {
+    final candidates = swatches.whereType<Color>().toList();
+    if (candidates.isEmpty) return null;
+    for (final c in candidates) {
+      if (HSLColor.fromColor(c).saturation >= kMonoSaturationThreshold) {
+        return c;
+      }
+    }
+    return neutralSilver(
+      candidates.first,
+      minLightness: 0.60,
+      maxLightness: 0.82,
+    );
+  }
+
+  static const double kMonoSaturationThreshold = 0.22;
+
+  static Color neutralSilver(
+    Color src, {
+    required double minLightness,
+    required double maxLightness,
+  }) {
+    final hsl = HSLColor.fromColor(src);
+    return hsl
+        .withSaturation(0)
+        .withLightness(hsl.lightness.clamp(minLightness, maxLightness))
+        .toColor();
+  }
+
   // Decodes and quantizes pixels in a background isolate.
   static Future<List<Color>> extractSwatches(Uint8List bytes) async {
     return Isolate.run(() => _decodeAndQuantize(bytes));
@@ -92,7 +165,7 @@ class ArtworkPaletteService {
       final r = rgba[i];
       final g = rgba[i + 1];
       final b = rgba[i + 2];
-        final key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+      final key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
       sumsR[key] = (sumsR[key] ?? 0) + r;
       sumsG[key] = (sumsG[key] ?? 0) + g;
       sumsB[key] = (sumsB[key] ?? 0) + b;
@@ -228,7 +301,8 @@ class ArtworkPaletteService {
   static Color? accentFromTrio(List<Color> trio) {
     if (trio.isEmpty) return null;
     final hsl = HSLColor.fromColor(trio.first);
-    if (hsl.saturation >= kMinSaturation && hsl.lightness >= kDarknessThreshold) {
+    if (hsl.saturation >= kMinSaturation &&
+        hsl.lightness >= kDarknessThreshold) {
       return trio.first;
     }
     return hsl.withSaturation(0).withLightness(0.72).toColor();

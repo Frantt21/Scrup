@@ -17,11 +17,7 @@ const double kDefaultAccentNeutralThreshold = 0.10;
 
 /// Derives the app accent color from the current track's artwork.
 class ThemeController extends ChangeNotifier {
-  ThemeController(
-    this._player, {
-    this.paletteCache,
-    this.artworkCache,
-  }) {
+  ThemeController(this._player, {this.paletteCache, this.artworkCache}) {
     _onTrackChanged(_player.currentTrackValue);
     _sub = _player.currentTrack.listen(_onTrackChanged);
   }
@@ -45,7 +41,8 @@ class ThemeController extends ChangeNotifier {
   Color get seededPrimary {
     final seed = _accentColor ?? kDefaultAccent;
     if (_seededFor != seed) {
-      if (HSLColor.fromColor(seed).saturation < kDefaultAccentNeutralThreshold) {
+      if (HSLColor.fromColor(seed).saturation <
+          kDefaultAccentNeutralThreshold) {
         _seededPrimary = seed;
       } else {
         _seededPrimary = ColorScheme.fromSeed(
@@ -71,8 +68,16 @@ class ThemeController extends ChangeNotifier {
     _debounce?.cancel();
 
     if (url == null) {
-      _debounce = Timer(kAccentDelay, () {
-        if (token == _token) _setAccent(null);
+      // El reproductor emite `null` en CADA cambio de canción mientras
+      // prepara la siguiente (no solo al detenerse). Si aquí se pusiera el
+      // acento en null, el fondo pasaría por el color neutro de respaldo
+      // entre pista y pista ("parpadeo" de colores intermedios). Se mantiene
+      // el acento actual; solo si de verdad se queda sin pista (1.5s sin una
+      // nueva) se vuelve al default.
+      _debounce = Timer(const Duration(milliseconds: 1500), () {
+        if (token == _token && _player.currentTrackValue == null) {
+          _setAccent(null);
+        }
       });
       return;
     }
@@ -135,12 +140,13 @@ class ThemeController extends ChangeNotifier {
     try {
       final store = paletteCache;
       if (store != null) {
-        await ArtworkPaletteService.trioFor(
+        // Ruta BARATA: un solo color del artwork (sin tríos), cacheado por
+        // URL. Extrae con un único salto y sin retintar toda la app.
+        color = await ArtworkPaletteService.accentFor(
           url,
           store,
           artworkCache: artworkCache,
         );
-        color = store.get(url);
       } else {
         final resp = await http
             .get(
@@ -149,12 +155,10 @@ class ThemeController extends ChangeNotifier {
             )
             .timeout(const Duration(seconds: 10));
         if (resp.statusCode != 200) throw Exception('HTTP ${resp.statusCode}');
-        final trio = await ArtworkPaletteService.extractSwatches(
+        final swatches = await ArtworkPaletteService.extractSwatches(
           resp.bodyBytes,
         );
-        color = ArtworkPaletteService.accentFromTrio(
-          ArtworkPaletteService.pickTrio(trio),
-        );
+        color = ArtworkPaletteService.accentFromSwatches(swatches);
       }
     } catch (_) {
       color = null;
@@ -249,22 +253,8 @@ class ThemeController extends ChangeNotifier {
   }
 
   @visibleForTesting
-  static Color? accentFromSwatches(List<Color?> swatches) {
-    final candidates = swatches.whereType<Color>().toList();
-    if (candidates.isEmpty) return null;
-
-    for (final c in candidates) {
-      if (HSLColor.fromColor(c).saturation >= kMonochromeSaturationThreshold) {
-        return c;
-      }
-    }
-
-    return neutralSilver(
-      candidates.first,
-      minLightness: 0.60,
-      maxLightness: 0.82,
-    );
-  }
+  static Color? accentFromSwatches(List<Color?> swatches) =>
+      ArtworkPaletteService.accentFromSwatches(swatches);
 
   @override
   void dispose() {

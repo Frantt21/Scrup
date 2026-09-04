@@ -72,13 +72,16 @@ class PlayerService {
   Duration get positionValue => _lastPosition;
 
   final ValueNotifier<String?> preparingTrackId = ValueNotifier<String?>(null);
-  final ValueNotifier<LoopMode> repeatMode = ValueNotifier<LoopMode>(LoopMode.off);
+  final ValueNotifier<LoopMode> repeatMode = ValueNotifier<LoopMode>(
+    LoopMode.off,
+  );
   final ValueNotifier<bool> shuffle = ValueNotifier<bool>(false);
   final ValueNotifier<bool> radio = ValueNotifier<bool>(true);
   final ValueNotifier<int?> activePlaylistId = ValueNotifier<int?>(null);
   final ValueNotifier<double> volume = ValueNotifier<double>(1.0);
-  final ValueNotifier<AudioDevice> audioDevice =
-      ValueNotifier<AudioDevice>(AudioDevice.auto());
+  final ValueNotifier<AudioDevice> audioDevice = ValueNotifier<AudioDevice>(
+    AudioDevice.auto(),
+  );
   final ValueNotifier<List<AudioDevice>> audioDevices =
       ValueNotifier<List<AudioDevice>>(const []);
 
@@ -173,7 +176,7 @@ class PlayerService {
     });
     _player.stream.buffering.listen(_bufferingController.add);
     _player.stream.volume.listen((v) {
-          // media_kit reports 0-100; normalize to 0-1.
+      // media_kit reports 0-100; normalize to 0-1.
       volume.value = (v / 100.0).clamp(0.0, 1.0);
     });
     _player.stream.error.listen((e) {
@@ -281,7 +284,6 @@ class PlayerService {
       _publishTrack(track);
       return true;
     } catch (_) {
-
       return false;
     } finally {
       if (token == _playToken) preparingTrackId.value = null;
@@ -350,21 +352,17 @@ class PlayerService {
 
   Future<void> togglePlayPause() => _playing ? _player.pause() : _player.play();
 
-
   Future<void> play() => _player.play();
-
 
   Future<void> pause() => _player.pause();
 
   Future<void> seek(Duration position) => _player.seek(position);
-
 
   Future<void> setVolume(double v) async {
     final clamped = v.clamp(0.0, 1.0);
     volume.value = clamped;
     await _player.setVolume(clamped * 100);
   }
-
 
   Future<void> setAudioDevice(AudioDevice device) async {
     await _player.setAudioDevice(device);
@@ -460,7 +458,8 @@ class PlayerService {
     if (oldIndex < 0 ||
         oldIndex >= _queue.length ||
         newIndex < 0 ||
-        newIndex >= _queue.length) return;
+        newIndex >= _queue.length)
+      return;
 
     final moved = _queue.removeAt(oldIndex);
     _queue.insert(newIndex, moved);
@@ -568,7 +567,12 @@ class PlayerService {
     }
   }
 
-  static const int _preloadAhead = 2;
+  // Cuántas pistas siguientes se precargan. Las primeras 2 arrancan de
+  // inmediato; el propio servicio de caché limita la concurrencia
+  // ([AudioCacheService.maxConcurrentPreloads] = 2) y encola el resto en
+  // orden, así las 3-5 nunca compiten por ancho de banda con las 2
+  // prioritarias.
+  static const int _preloadAhead = 5;
 
   // Preloads the next N tracks in the queue (background, best-effort).
   void _schedulePreloads() {
