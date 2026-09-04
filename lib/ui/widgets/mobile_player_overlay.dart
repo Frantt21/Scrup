@@ -35,12 +35,17 @@ class MobilePlayerOverlay extends StatefulWidget {
   /// Cierra (colapsa) el player expandido.
   final VoidCallback onClose;
 
+  /// Notifica a la app cuando se abre/cierra el sheet de letras (para que
+  /// bloquee el tap/arrastre del panel expandido mientras está abierto).
+  final ValueChanged<bool>? onLyricsOpenChanged;
+
   const MobilePlayerOverlay({
     super.key,
     required this.height,
     required this.percentage,
     required this.onOpenQueue,
     required this.onClose,
+    this.onLyricsOpenChanged,
   });
 
   @override
@@ -98,6 +103,12 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     _player.preparingTrackId.addListener(_onPreparing);
     _onPreparing();
     if (_playing) _ticker = _startTicker();
+  }
+
+  void _setLyricsOpen(bool v) {
+    if (_lyricsOpen == v) return;
+    setState(() => _lyricsOpen = v);
+    widget.onLyricsOpenChanged?.call(v);
   }
 
   void _onPreparing() {
@@ -208,6 +219,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
             artLeft: artLeft,
             artTop: artTop,
             w: w,
+            playing: _playing,
           ),
 
           // ── Contenido COMPACTO (la barra se va al INICIO de la transición) ──
@@ -292,8 +304,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
               ),
             ),
           ),
-
-          ],
+        ],
       ),
     );
   }
@@ -308,6 +319,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     required double artLeft,
     required double artTop,
     required double w,
+    required bool playing,
   }) {
     final size = lerp(46, artSide, p);
     final radius = lerp(6, 18, p);
@@ -321,24 +333,13 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
       height: size,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        child: showing == null
-            ? ColoredBox(
-                color: Colors.black.withValues(alpha: 0.18),
-                child: Center(
-                  child: Icon(
-                    Icons.music_note_rounded,
-                    size: lerp(22, 56, p),
-                    color: Colors.white.withValues(alpha: 0.8),
-                  ),
-                ),
-              )
-            : CoverImage(
-                source: showing.thumbnailUrl != null
-                    ? (Track.hiResThumbnail(showing.thumbnailUrl) ??
-                        showing.thumbnailUrl)
-                    : null,
-                fit: BoxFit.cover,
-                fallback: ColoredBox(
+        // Al pausar el artwork se encoge un poco, escalando desde el centro.
+        child: AnimatedScale(
+          scale: playing ? 1.0 : 0.93,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          child: showing == null
+              ? ColoredBox(
                   color: Colors.black.withValues(alpha: 0.18),
                   child: Center(
                     child: Icon(
@@ -347,8 +348,25 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                       color: Colors.white.withValues(alpha: 0.8),
                     ),
                   ),
+                )
+              : CoverImage(
+                  source: showing.thumbnailUrl != null
+                      ? (Track.hiResThumbnail(showing.thumbnailUrl) ??
+                          showing.thumbnailUrl)
+                      : null,
+                  fit: BoxFit.cover,
+                  fallback: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    child: Center(
+                      child: Icon(
+                        Icons.music_note_rounded,
+                        size: lerp(22, 56, p),
+                        color: Colors.white.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }
@@ -464,10 +482,15 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     final double controlsTop =
         (artBottomP - 52 - safeTop + artControlsGap).clamp(0.0, double.infinity);
 
-    return SafeArea(
-      child: Stack(
-        children: [
-          Column(
+    // Stack a pantalla completa: el CONTENIDO (header + controles) vive en un
+    // [SafeArea] propio (nunca bajo los controles del sistema); el sheet de
+    // letras va FUERA del SafeArea inferior para que su fondo llegue al borde
+    // real de la pantalla (edge-to-edge) y su contenido se ajusta solo con el
+    // inset del sistema (ver [_LyricsPeek]).
+    return Stack(
+      children: [
+        SafeArea(
+          child: Column(
             children: [
               // ── Header: [v] cierre ────────────────────────────────────
               SizedBox(
@@ -503,17 +526,22 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                           mainAxisSize: MainAxisSize.max,
                           children: [
                             SizedBox(height: controlsTop),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: _centerColumn(
-                                context,
-                                theme: theme,
-                                cs: cs,
-                                accent: accent,
-                                track: track,
-                                dur: dur,
-                                total: total,
-                                w: w,
+                            // Todo el bloque (títulos, barra de progreso,
+                            // tiempos y controles) centrado con el MISMO ancho
+                            // que el artwork expandido -> los bordes de todos
+                            // los elementos coinciden con los del artwork.
+                            Center(
+                              child: SizedBox(
+                                width: artSide,
+                                child: _centerColumn(
+                                  context,
+                                  theme: theme,
+                                  cs: cs,
+                                  accent: accent,
+                                  track: track,
+                                  dur: dur,
+                                  total: total,
+                                ),
                               ),
                             ),
                           ],
@@ -525,22 +553,23 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
               ),
             ],
           ),
-          // ── Letras MONTADAS: sheet draggable que se abre arrastrándola.
-          //    DENTRO del SafeArea: respeta la barra de navegación del
-          //    sistema (la barra queda transparente por detrás).
-          //    Va en un [Positioned.fill] (no en un [Positioned] sin altura)
-          //    para que el LayoutBuilder interno reciba una altura ACOTADA:
-          //    con altura infinita el cálculo del sheet da NaN y no se pinta.
-          Positioned.fill(
-            child: _LyricsPeek(
-              track: track,
-              accent: accent,
-              open: _lyricsOpen,
-              onChanged: (v) => setState(() => _lyricsOpen = v),
-            ),
+        ),
+        // ── Letras MONTADAS: sheet draggable que se abre arrastrándola.
+        //    FUERA del SafeArea inferior: su fondo llega al borde real de la
+        //    pantalla (edge-to-edge, por detrás de la barra transparente del
+        //    sistema); el contenido respeta el inset dentro del propio sheet.
+        //    Va en un [Positioned.fill] (no en un [Positioned] sin altura)
+        //    para que el LayoutBuilder interno reciba una altura ACOTADA:
+        //    con altura infinita el cálculo del sheet da NaN y no se pinta.
+        Positioned.fill(
+          child: _LyricsPeek(
+            track: track,
+            accent: accent,
+            open: _lyricsOpen,
+            onChanged: (v) => _setLyricsOpen(v),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -552,13 +581,12 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     required Track? track,
     required Duration? dur,
     required double total,
-    required double w,
   }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Text(
             track?.title ?? 'Scrup',
             maxLines: 1,
@@ -585,58 +613,71 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
           ),
         ],
         const SizedBox(height: 16),
-        // Progreso + tiempos
-        SizedBox(
-          width: w - 48,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+        // Progreso + tiempos: UNA fila (tiempo | barra | tiempo) como en
+        // desktop -> los números comparten borde con la barra, y todo el
+        // bloque ya está constreñido al ancho del artwork (artSide).
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
             children: [
-              SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 3,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 7,
+              SizedBox(
+                width: 44,
+                child: Text(
+                  _fmt(_dragging
+                      ? Duration(milliseconds: _dragValue.round())
+                      : _pos),
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 14,
-                  ),
-                  activeTrackColor: Colors.white,
-                  inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
-                ),
-                child: Slider(
-                  value: total <= 0 ? 0 : _progressValue.clamp(0.0, total),
-                  max: total <= 0 ? 1 : total,
-                  onChangeStart: (_) => setState(() => _dragging = true),
-                  onChanged: (v) => setState(() => _dragValue = v),
-                  onChangeEnd: (v) {
-                    _player.seek(Duration(milliseconds: v.round()));
-                    setState(() {
-                      _dragging = false;
-                      _pos = Duration(milliseconds: v.round());
-                    });
-                  },
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _fmt(_dragging
-                          ? Duration(milliseconds: _dragValue.round())
-                          : _pos),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.85),
-                      ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: SliderTheme(
+                  // Barra LIMPIA, como en desktop: línea fina sin dot ni
+                  // indicador; se arrastra/toca la propia línea.
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 0,
                     ),
-                    Text(
-                      _fmt(dur),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.85),
-                      ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 0,
                     ),
-                  ],
+                    showValueIndicator: ShowValueIndicator.never,
+                    activeTrackColor: Colors.white,
+                    inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
+                  ),
+                  child: Slider(
+                    value: total <= 0 ? 0 : _progressValue.clamp(0.0, total),
+                    max: total <= 0 ? 1 : total,
+                    onChangeStart: (_) => setState(() => _dragging = true),
+                    onChanged: (v) => setState(() => _dragValue = v),
+                    onChangeEnd: (v) {
+                      _player.seek(Duration(milliseconds: v.round()));
+                      setState(() {
+                        _dragging = false;
+                        _pos = Duration(milliseconds: v.round());
+                      });
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 44,
+                child: Text(
+                  _fmt(dur),
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
+                  textAlign: TextAlign.right,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
               ),
             ],
@@ -820,19 +861,33 @@ class _LyricsPeekState extends State<_LyricsPeek> {
     }
   }
 
+  /// Sensibilidad del arrastre: el recorrido completo del sheet equivale a
+  /// ~1/3 de la altura de referencia (antes ~0.7), y el umbral de snap baja a
+  /// 0.4 -> abrir/cerrar requiere ~13-20% de la pantalla en vez de ~35-40%.
+  static const double _dragSens = 0.33;
+  static const double _snapThreshold = 0.4;
+
   void _onDragStart(DragStartDetails d) {
     _dragging = true;
   }
 
   void _onDragUpdate(DragUpdateDetails d, double refH) {
     setState(() {
-      _open = (_open - d.delta.dy / (refH * 0.7)).clamp(0.0, 1.0);
+      _open = (_open - d.delta.dy / (refH * _dragSens)).clamp(0.0, 1.0);
     });
   }
 
   void _onDragEnd(DragEndDetails d) {
     _dragging = false;
-    final target = _open > 0.5;
+    final double vel = d.primaryVelocity ?? 0.0;
+    final bool target;
+    if (vel.abs() > 400) {
+      // Flick rápido: abre al arrastrar arriba y cierra al arrastrar abajo,
+      // sin depender de la distancia recorrida.
+      target = vel < 0;
+    } else {
+      target = _open > _snapThreshold;
+    }
     setState(() => _open = target ? 1.0 : 0.0);
     if (target != widget.open) widget.onChanged(target);
   }
@@ -860,7 +915,14 @@ class _LyricsPeekState extends State<_LyricsPeek> {
           final double maxH = c.maxHeight.isFinite
               ? c.maxHeight
               : MediaQuery.sizeOf(context).height;
-          final collapsed = 48.0;
+          // Inset inferior del sistema (gestos ~24dp, 3 botones ~48-60dp): el
+          // sheet se apoya en el borde real de la pantalla (su fondo llega
+          // abajo del todo), pero su CONTENIDO (handle + letras) respeta el
+          // inset y nunca queda bajo los botones de navegación. Por eso el
+          // alto colapsado incluye el inset: handle de 48dp arriba + banda de
+          // fondo del sheet por debajo hasta el borde.
+          final double bottomInset = MediaQuery.paddingOf(context).bottom;
+          final collapsed = 48.0 + bottomInset;
           final openH = maxH * 0.80;
           final sheetH = collapsed + (_open * (openH - collapsed));
 
@@ -871,6 +933,12 @@ class _LyricsPeekState extends State<_LyricsPeek> {
             curve: Curves.easeOutCubic,
             height: sheetH,
             width: double.infinity,
+            // El fondo del sheet llega al borde real de la pantalla
+            // (edge-to-edge); el padding inferior = inset del sistema para que
+            // el contenido (handle + letras) nunca quede bajo los botones de
+            // navegación (gestos / 3 botones). El alto colapsado ya incluye el
+            // inset (ver arriba), así que no hay overflow.
+            padding: EdgeInsets.only(bottom: bottomInset),
             decoration: BoxDecoration(
               color: sheetColor,
               borderRadius: const BorderRadius.vertical(

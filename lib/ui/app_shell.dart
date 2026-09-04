@@ -48,6 +48,9 @@ class _AppShellState extends State<AppShell> {
   final ValueNotifier<double> _playerExpansion = ValueNotifier<double>(0);
   // Control del miniplayer (permite colapsarlo programáticamente).
   final MiniplayerController _miniController = MiniplayerController();
+  // Bloquea el tap/arrastre del panel expandido mientras el sheet de letras
+  // está abierto (para no cerrar el player al intentar cerrar las letras).
+  final ValueNotifier<bool> _lyricsPanelLock = ValueNotifier<bool>(false);
   bool _queueOpen = false;
   bool _queueUserToggled = false;
   bool _showLyrics = false;
@@ -313,6 +316,7 @@ class _AppShellState extends State<AppShell> {
     _searchFocusRequest.dispose();
     _playerExpansion.dispose();
     _miniController.dispose();
+    _lyricsPanelLock.dispose();
     super.dispose();
   }
 
@@ -417,6 +421,11 @@ class _AppShellState extends State<AppShell> {
     );
 
     final bool mobile = Binaries.isMobile;
+    // Altura de la NavigationBar inferior + inset del sistema (edge-to-edge):
+    // con gestos el inset es pequeño, con 3 botones es más alto. La barra
+    // crece con el inset para que sus iconos queden SIEMPRE por encima de los
+    // controles de navegación del sistema (nunca debajo de ellos).
+    final double navBarH = 64 + MediaQuery.paddingOf(context).bottom;
 
     return Listener(
       onPointerDown: _handlePointerDown,
@@ -469,7 +478,7 @@ class _AppShellState extends State<AppShell> {
                   builder: (context, p, _) => Transform.translate(
                     // La barra baja con la expansión del player y sale por
                     // abajo, cediéndole todo el espacio a pantalla completa.
-                    offset: Offset(0, 64 * p),
+                    offset: Offset(0, navBarH * p),
                     child: _buildMobileNavBar(),
                   ),
                 ),
@@ -479,11 +488,11 @@ class _AppShellState extends State<AppShell> {
             ValueListenableBuilder<double>(
               valueListenable: _playerExpansion,
               builder: (context, p, _) => Positioned(
-                // El borde inferior baja con la expansión (64 -> 0) para que el
-                // player use toda la pantalla, cubriendo la NavigationBar.
+                // El borde inferior baja con la expansión (navBarH -> 0) para
+                // que el player use toda la pantalla, cubriendo la barra.
                 left: 0,
                 right: 0,
-                bottom: 64 * (1 - p),
+                bottom: navBarH * (1 - p),
                 child: Miniplayer(
                   minHeight: 60,
                   maxHeight: MediaQuery.sizeOf(context).height,
@@ -491,6 +500,7 @@ class _AppShellState extends State<AppShell> {
                   curve: Curves.easeOutCubic,
                   duration: const Duration(milliseconds: 320),
                   controller: _miniController,
+                  lockPanel: _lyricsPanelLock,
                   backgroundColor: Theme.of(context)
                       .colorScheme
                       .surfaceContainerHigh,
@@ -506,6 +516,10 @@ class _AppShellState extends State<AppShell> {
                       onOpenQueue: _openQueueMobile,
                       onClose: () => _miniController
                           .animateToHeight(state: PanelState.MIN),
+                      // Al abrir/cerrar las letras se bloquea/desbloquea el
+                      // panel para que el player no se cierre por arrastre.
+                      onLyricsOpenChanged: (open) =>
+                          _lyricsPanelLock.value = open,
                     );
                   },
                 ),
@@ -693,14 +707,19 @@ class _AppShellState extends State<AppShell> {
       (Icons.library_music_rounded, 2),
       (Icons.settings_rounded, 3),
     ];
+    // Inset inferior del sistema: en edge-to-edge la barra se extiende POR
+    // DEBAJO de los controles de navegación (transparentes); los iconos
+    // quedan en la franja de 64dp superior, siempre por encima de gestos / 3
+    // botones.
+    final double bottomInset = MediaQuery.paddingOf(context).bottom;
     return Material(
       color: Colors.black,
       child: SizedBox(
-        height: 64,
+        height: 64 + bottomInset,
         child: Padding(
           // Respiro inferior: separa un poco los iconos de los botones de
           // navegaci�n del sistema (gestos / 3 botones) en edge-to-edge.
-          padding: const EdgeInsets.only(bottom: 6),
+          padding: EdgeInsets.only(bottom: 6 + bottomInset),
           child: Row(
             children: [
               for (final d in defs)

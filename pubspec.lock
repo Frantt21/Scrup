@@ -648,10 +648,9 @@ packages:
   miniplayer:
     dependency: "direct main"
     description:
-      name: miniplayer
-      sha256: "6e12c27aef7432fc16508460a6dc824f3edfeb01761bd0dbfbccc84d516121bf"
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/miniplayer"
+      relative: true
+    source: path
     version: "1.0.1"
   native_toolchain_c:
     dependency: transitive

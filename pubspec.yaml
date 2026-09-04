@@ -41,6 +41,15 @@ dev_dependencies:
   build_runner: ^2.15.1
   flutter_launcher_icons: ^0.14.4
 
+# miniplayer vendoreado (third_party/miniplayer) con parches propios:
+# - un toque sobre el player expandido NO lo cierra (solo expande desde la
+#   barra compacta);
+# - lockPanel: bloquea el tap/arrastre del panel expandido mientras el sheet
+#   de letras está abierto (para no cerrar el player al cerrar las letras).
+dependency_overrides:
+  miniplayer:
+    path: third_party/miniplayer
+
 # Iconos de lanzador (Android): se generan desde assets/app-logo.png con
 # "dart run flutter_launcher_icons". Mantiene el icono de la app en mobile.
 flutter_launcher_icons:
