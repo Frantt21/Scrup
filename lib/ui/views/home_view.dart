@@ -129,6 +129,9 @@ class _HomeViewState extends State<HomeView> {
         return;
       }
       _nullTrackTimer?.cancel();
+      // Las republicaciones del MISMO tema (p. ej. enrich al completar) solo
+      // cambian metadatos; el indicador "en reproducción" usa el id → skip.
+      if (t.id == _currentTrack?.id) return;
       setState(() => _currentTrack = t);
     });
     _playingSub = player.playing.listen((p) {
@@ -172,7 +175,6 @@ class _HomeViewState extends State<HomeView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final themeController = context.watch<ThemeController>();
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -301,8 +303,6 @@ class _HomeViewState extends State<HomeView> {
                     SliverToBoxAdapter(
                       child: _RecentPlaylistsRow(
                         playlists: recentPlaylists,
-                        accent: themeController.accentColor ??
-                            theme.colorScheme.primary,
                         activePlaylistId: _activePlaylistId,
                         isPlaying: _playing,
                         onOpen: _openPlaylist,
@@ -317,7 +317,7 @@ class _HomeViewState extends State<HomeView> {
           return Stack(
             fit: StackFit.expand,
             children: [
-              _TopAccentGradient(accent: themeController.accentColor),
+              _TopAccentGradient(),
               scroll,
             ],
           );
@@ -329,7 +329,7 @@ class _HomeViewState extends State<HomeView> {
         final Widget inner = Stack(
           fit: StackFit.expand,
           children: [
-            _TopAccentGradient(accent: themeController.accentColor),
+            _TopAccentGradient(),
             scroll,
           ],
         );
@@ -730,13 +730,17 @@ class _EmptyHint extends StatelessWidget {
 /// Degradado de acento en el TOP del Inicio: ocupa ~1/4 del alto y se
 /// desvanece hacia abajo hasta transparente. Solo en el inicio.
 class _TopAccentGradient extends StatelessWidget {
-  final Color? accent;
-
-  const _TopAccentGradient({this.accent});
+  const _TopAccentGradient();
 
   @override
   Widget build(BuildContext context) {
-    final color = accent ?? Theme.of(context).colorScheme.primary;
+    // Hoja reactiva aislada: escucha SOLO el acento. Antes el HomeView
+    // entero hacía `context.watch<ThemeController>()` en su build y cada
+    // cambio de acento (uno por cambio de pista) reconstruía TODO el scroll
+    // + grid, incluso con el player encima.
+    final color =
+        context.watch<ThemeController>().accentColor ??
+        Theme.of(context).colorScheme.primary;
     return IgnorePointer(
       child: Align(
         alignment: Alignment.topCenter,
@@ -768,14 +772,12 @@ class _TopAccentGradient extends StatelessWidget {
 /// grandes que las recientes (estilo forawn_mobile).
 class _RecentPlaylistsRow extends StatelessWidget {
   final List<Playlist> playlists;
-  final Color accent;
   final int? activePlaylistId;
   final bool isPlaying;
   final ValueChanged<Playlist> onOpen;
 
   const _RecentPlaylistsRow({
     required this.playlists,
-    required this.accent,
     required this.activePlaylistId,
     required this.isPlaying,
     required this.onOpen,
@@ -786,6 +788,10 @@ class _RecentPlaylistsRow extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     if (playlists.isEmpty) return const SizedBox.shrink();
+    // Acento propio (watch local): un cambio de acento reconstruye solo esta
+    // fila, no todo el HomeView.
+    final accent = context.watch<ThemeController>().accentColor ??
+        theme.colorScheme.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

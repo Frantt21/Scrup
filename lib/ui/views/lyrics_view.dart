@@ -918,13 +918,13 @@ class _LyricsSyncDialogState extends State<_LyricsSyncDialog> {
   }
 }
 
-/// Diálogo de búsqueda manual en LRCLIB: campo de búsqueda, resultados y
-/// acciones por resultado (usar / editar la letra con sus timestamps).
+/// Diálogo de búsqueda manual: campo de búsqueda, resultados y acciones por
+/// resultado (usar / editar la letra con sus timestamps).
 class _LyricsSearchDialog extends StatefulWidget {
   final String initialQuery;
 
-  /// Título/artista reales de la pista en reproducción: KPoe y Unison
-  /// exigen campos separados y con la query libre no encuentran nada.
+  /// Título/artista reales de la pista en reproducción: KPoe exige campos
+  /// separados y con la query libre no encuentra nada.
   final String? titleHint;
   final String? artistHint;
   final Color? accentColor;
@@ -947,14 +947,15 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
   String? _error;
   String _selectedProvider = 'all';
 
-  /// Opciones de proveedor: (valor, etiqueta).
-  static const _providerValues = ['all', 'kpoe', 'unison', 'lrclib'];
+  /// Opciones de proveedor: SOLO las dos fuentes activas (KPoe → LRCLIB).
+  /// Se eliminó Unison (cadena automática y manual) para que Android no
+  /// haga consultas en serie que tardaban muchísimo.
+  static const _providerValues = ['all', 'kpoe', 'lrclib'];
 
   String _providerLabel(String value, AppLocalizations l10n) {
     return switch (value) {
       'all' => l10n.providerAll,
       'kpoe' => l10n.providerKpoe,
-      'unison' => l10n.providerUnison,
       'lrclib' => l10n.providerLrclib,
       _ => value,
     };

@@ -3,33 +3,31 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
-/// Logs de depuración del pipeline de acento/paleta y transiciones.
+/// Instrumentación de diagnóstico del pipeline de acento/paleta y
+/// transiciones (salida por logcat: `adb logcat -d | grep SCPR`).
 ///
-/// Salida por logcat: `adb logcat -d | grep SCPR`.
-const bool kPaletteLog = true;
+/// TODA la instrumentación está APAGADA para la release limpia: sin logs
+/// SCPR, sin monitor de jank, sin contadores de frames/rebuilds, sin
+/// perfilador de builds y sin la gráfica de rendimiento sobre la app. El
+/// código queda pero con `const false` el compilador lo elimina en release.
+const bool kPaletteLog = false;
 
 /// Muestra la gráfica de rendimiento (hilos UI/GPU) sobre la app.
-/// Para cazar frames perdidos a ojo durante las transiciones.
-const bool kShowPerfOverlay = true;
+const bool kShowPerfOverlay = false;
 
 /// Loguea por logcat cada frame que exceda ~2 vsynchs (SCPR[JANK] con
-/// tiempos de build y raster): permite cazar al culpable sin mirar la
-/// pantalla.
-const bool kJankLog = true;
+/// tiempos de build y raster).
+const bool kJankLog = false;
 
 /// Perfilador de builds de Flutter (SOLO debug): loguea cada widget
-/// construido con su tiempo. Muy verboso; es la red de arrastre para ver
-/// QUÉ widget se come los frames.
-const bool kProfileBuilds = true;
+/// construido con su tiempo.
+const bool kProfileBuilds = false;
 
-/// Contador de frames PRODUCIDOS cada 5s (SCPR[FRAMES]): mide la demanda
-/// real de frames sin forzar ninguno. En reposo debe tender a ~0-10;
-/// si marca cientos, algo sigue pidiendo frames sin parar.
-const bool kFrameCount = true;
+/// Contador de frames PRODUCIDOS cada 5s (SCPR[FRAMES]).
+const bool kFrameCount = false;
 
-/// Contadores de rebuilds por widget (SCPR[BUILDS] cada 5s): demuestra QUÉ
-/// widgets se reconstruyen sin parar (padre que arrastra a todos los hijos).
-const bool kBuildCount = true;
+/// Contadores de rebuilds por widget (SCPR[BUILDS] cada 5s).
+const bool kBuildCount = false;
 
 /// EXPERIMENTO: sin letras (no fetch, no ticker de suavizado, no rebuilds).
 /// El contenedor/sheet se conserva (misma geometría) pero vacío.
@@ -56,6 +54,16 @@ const bool kFlatBlackPlayer = false;
 /// `recordPlay` → reemite recientes → rebuild del grid.
 /// RESUELTO de otra forma (debounce fuera de ventana): flag apagado.
 const bool kHideHomeRecents = false;
+
+/// EXPERIMENTO: NO monta el stream de audio (`_player.open`/`play`). El
+/// pipeline completo corre igual (cola, resolve, enrich, publish → artwork,
+/// acento y letras cargan) pero la reproducción es SIMULADA con un ticker
+/// (playing + posición avanzando) para medir los Hz con solo colores,
+/// artwork y letras en carga. Si con esto los Hz no mueren, el culpable del
+/// jank es el montaje/decodificación del audio.
+/// APAGADO: el audio vuelve a montarse normal (veredicto: el culpable del
+/// jank de la transición era el prefetch EAGER de portadas, no el audio).
+const bool kNoAudioMount = false;
 
 final DateTime _boot = DateTime.now();
 

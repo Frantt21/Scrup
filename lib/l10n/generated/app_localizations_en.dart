@@ -693,13 +693,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get provider => 'Provider:';
 
   @override
-  String get providerAll => 'All (KPoe + Unison + LRCLIB)';
+  String get providerAll => 'All (KPoe + LRCLIB)';
 
   @override
   String get providerKpoe => 'KPoe · word by word';
-
-  @override
-  String get providerUnison => 'Unison';
 
   @override
   String get providerLrclib => 'LRCLIB · line';

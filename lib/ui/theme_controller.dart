@@ -16,6 +16,17 @@ const Color kDefaultAccent = Color(0xFFC084FC);
 
 const double kDefaultAccentNeutralThreshold = 0.10;
 
+/// Normaliza la URL del artwork a la variante hi-res — la MISMA clave que
+/// usa el `CoverImage` del reproductor. Así el warm/extracción del acento
+/// descarga UN solo set de bytes (hi-res) que sirve a la vez para el color
+/// Y para el caché de disco del artwork: al publicarse la pista, la portada
+/// sale del caché sin descarga adicional (el mismo lazy que usan la
+/// búsqueda/playlists, sin prefetch adelantado).
+String? _hiResUrl(String? url) {
+  if (url == null || url.isEmpty) return null;
+  return Track.hiResThumbnail(url) ?? url;
+}
+
 /// Derives the app accent color from the current track's artwork.
 class ThemeController extends ChangeNotifier {
   ThemeController(this._player, {this.paletteCache, this.artworkCache}) {
@@ -78,7 +89,7 @@ class ThemeController extends ChangeNotifier {
     // EXPERIMENTO kFlatBlackPlayer: sin acento, sin trabajo de paleta.
     if (kFlatBlackPlayer) return;
     final token = ++_token;
-    final url = track?.thumbnailUrl;
+    final url = _hiResUrl(track?.thumbnailUrl);
     appLog(
       'ACCENT',
       'track=${shortId(track?.id)} url=${shortUrl(url)} '
@@ -210,6 +221,13 @@ class ThemeController extends ChangeNotifier {
     if (token == _token && color != null) _setAccent(color);
   }
 
+  /// URL (hi-res) de la pista en PREPARACIÓN: su acento se aplica como
+  /// acento visible en cuanto esté disponible, ANTES de la publicación, para
+  /// que el fondo transicione en fase con el artwork (que ya cambia durante
+  /// la preparación). Sin esto el acento esperaba al publish y llegaba con
+  /// ~300-400ms de retraso respecto al arte.
+  String? _preparingUrl;
+
   /// URLs con precarga de acento en curso (evita descargas duplicadas).
   final Set<String> _warming = {};
 
@@ -225,7 +243,7 @@ class ThemeController extends ChangeNotifier {
       final next = index + i;
       if (next < 0 || next >= queue.length) break;
       upcoming.add(shortId(queue[next].id));
-      warmAccent(queue[next].thumbnailUrl);
+      warmAccent(_hiResUrl(queue[next].thumbnailUrl));
     }
     if (upcoming.isNotEmpty) {
       appLog('WARM', 'cola idx=$index → warm $upcoming');
@@ -238,29 +256,50 @@ class ThemeController extends ChangeNotifier {
   /// al instante y no hay paso por el color por defecto.
   void warmAccent(String? url) {
     if (kFlatBlackPlayer) return;
-    if (url == null || url.isEmpty) return;
+    final hiUrl = _hiResUrl(url);
+    if (hiUrl == null || hiUrl.isEmpty) return;
     final store = paletteCache;
     if (store == null) return;
-    if (store.get(url) != null) return;
-    if (_paletteCache.containsKey(url)) return;
-    if (store.isFailed(url)) return;
-    if (!_warming.add(url)) return;
-    appLog('WARM', 'start ${shortUrl(url)}');
+    if (store.get(hiUrl) != null) return;
+    if (_paletteCache.containsKey(hiUrl)) return;
+    if (store.isFailed(hiUrl)) return;
+    if (!_warming.add(hiUrl)) return;
+    appLog('WARM', 'start ${shortUrl(hiUrl)}');
     unawaited(
       ArtworkPaletteService.accentFor(
-        url,
+        hiUrl,
         store,
         artworkCache: artworkCache,
       ).then((color) {
-        appLog('WARM', 'done ${shortUrl(url)} → ${colorHex(color)}');
+        appLog('WARM', 'done ${shortUrl(hiUrl)} → ${colorHex(color)}');
         if (color != null) {
-          _paletteCache[url] = color;
-          // accentFor ya lo guardó en el store.
+          _paletteCache[hiUrl] = color;
+          // Si es la pista en preparación, se aplica YA (el fondo transiciona
+          // en fase con el artwork, sin esperar al publish).
+          if (hiUrl == _preparingUrl) _setAccent(color);
         } else {
-          store.markFailed(url);
+          store.markFailed(hiUrl);
         }
-      }).catchError((_) => null).whenComplete(() => _warming.remove(url)),
+      }).catchError((_) => null).whenComplete(() => _warming.remove(hiUrl)),
     );
+  }
+
+  /// La pista en preparación cambió: su acento se aplica como visible en
+  /// cuanto esté listo (caché o extracción en curso), adelantándose al
+  /// publish para que el fondo y el artwork transicionen juntos.
+  void setPreparingTrack(String? url) {
+    if (kFlatBlackPlayer) return;
+    final hi = _hiResUrl(url);
+    if (hi == _preparingUrl) return;
+    _preparingUrl = hi;
+    if (hi == null) return;
+    final store = paletteCache;
+    final stored = store?.get(hi);
+    if (stored != null) {
+      _setAccent(stored);
+    } else {
+      warmAccent(hi);
+    }
   }
 
   void _setAccent(Color? color) {

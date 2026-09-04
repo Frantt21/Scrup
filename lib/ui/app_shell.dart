@@ -649,7 +649,15 @@ class _AppShellState extends State<AppShell> {
               top: true,
               child: SettingsView(key: ValueKey(_settingsOpenCount)),
             ),
-            _showFsOverlay
+            // La página de letras del IndexedStack SOLO se monta cuando se
+            // muestra: en móvil, colapsado/reposo, este LyricsView vivía
+            // SIEMPRE montado (invisible) y en CADA cambio de pista hacía su
+            // propio fetch + parse + build (duplicando al del player) → pico
+            // de build ~+400ms tras playAt (SCPR[JANK]). El TickerMode no
+            // bastaba: mutea tickers, no las suscripciones ni los builds.
+            // (En desktop se conserva montado para no refetchear al alternar
+            // el panel de letras.)
+            _showFsOverlay || (Binaries.isMobile && !_showLyrics)
                 ? const SizedBox.shrink()
                 : SafeArea(
                     top: true,

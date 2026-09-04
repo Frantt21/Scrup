@@ -350,8 +350,7 @@
   "shortcutMouseBack": "Previous track (mouse)",
   "shortcutMouseForward": "Next track (mouse)",
   "provider": "Provider:",
-  "providerAll": "All (KPoe + Unison + LRCLIB)",
+  "providerAll": "All (KPoe + LRCLIB)",
   "providerKpoe": "KPoe · word by word",
-  "providerUnison": "Unison",
   "providerLrclib": "LRCLIB · line"
 }

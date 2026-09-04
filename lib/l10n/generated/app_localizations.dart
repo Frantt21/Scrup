@@ -1366,7 +1366,7 @@ abstract class AppLocalizations {
   /// No description provided for @providerAll.
   ///
   /// In es, this message translates to:
-  /// **'Todos (KPoe + Unison + LRCLIB)'**
+  /// **'Todos (KPoe + LRCLIB)'**
   String get providerAll;
 
   /// No description provided for @providerKpoe.
@@ -1374,12 +1374,6 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'KPoe · palabra a palabra'**
   String get providerKpoe;
-
-  /// No description provided for @providerUnison.
-  ///
-  /// In es, this message translates to:
-  /// **'Unison'**
-  String get providerUnison;
 
   /// No description provided for @providerLrclib.
   ///

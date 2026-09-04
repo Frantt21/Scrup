@@ -5,18 +5,17 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart' hide Track;
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'core/binaries.dart';
-import 'core/app_log.dart';
 import 'core/track.dart';
 import 'data/database.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'services/audio_cache_service.dart';
 import 'services/artwork_cache_service.dart';
+import 'services/just_audio_backend.dart';
+import 'services/media_kit_backend.dart';
 import 'services/search_service.dart';
 import 'services/discord/discord_presence_service.dart';
 import 'services/lyrics_service.dart';
@@ -34,11 +33,6 @@ import 'ui/widgets/scrup_toasts.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
-  installJankMonitor();
-  installFrameCounter();
-  // Perfilador de builds (solo surte efecto en debug): canta cada widget
-  // que se construye con su costo. Ver `kProfileBuilds`.
-  debugProfileBuildsEnabled = kProfileBuilds;
 
   // OS media controls: SMTC (Win), Now Playing (macOS), MPRIS (Linux).
   ScrupAudioHandler audioHandler;
@@ -108,27 +102,6 @@ Future<void> main() async {
   // encontrado" hasta que termine (unos segundos).
   if (Binaries.isMobile) {
     unawaited(Binaries.ensureAndroidToolchain());
-
-    // TEMP: prueba offline de la pipeline JNI (yt-dlp --version, sin red).
-    unawaited(() async {
-      try {
-        await Binaries.ensureAndroidToolchain();
-        const ch = MethodChannel('com.scrup.music.toolchain');
-        final logPath = p.join(
-          (await getApplicationSupportDirectory()).path,
-          'ver.log',
-        );
-        final res = await ch.invokeMethod<Map<dynamic, dynamic>>('ytDlpRun', {
-          'args': <String>['--version'],
-          'logPath': logPath,
-        });
-        final code = (res?['exitCode'] as num?)?.toInt() ?? 1;
-        final out = (res?['output'] as String?) ?? '';
-        debugPrint('[TEMP-VERSION] exitCode=$code output=${out.trim()}');
-      } catch (e) {
-        debugPrint('[TEMP-VERSION] ERROR $e');
-      }
-    }());
   }
 
   final database = AppDatabase();
@@ -282,6 +255,12 @@ class ScrupApp extends StatelessWidget {
             // se cancela y reprograma en cada cambio de la cola.
             Timer? queueDebounce;
             final player = PlayerService(
+              // Android: just_audio (ExoPlayer) — reutiliza el pipeline de
+              // audio entre pistas y las transiciones no derriban el
+              // reproductor. Desktop/flatpak: media_kit (libmpv).
+              audioBackend: Platform.isAndroid
+                  ? JustAudioBackend()
+                  : MediaKitBackend(),
               resolveSource: (track) async {
                 final source = await cache.ensureStreaming(
                   track.id,
@@ -400,14 +379,13 @@ class ScrupApp extends StatelessWidget {
       ],
       child: Consumer<ThemeController>(
         builder: (context, themeController, _) {
-          appLog('THEME', 'seed=${colorHex(themeController.themeSeed)}');
           return Consumer<LocaleController>(
             builder: (context, localeController, _) {
               return MaterialApp(
                 title: 'Scrup',
                 debugShowCheckedModeBanner: false,
-                // Gráfica de rendimiento UI/GPU (ver `kShowPerfOverlay`).
-                showPerformanceOverlay: kShowPerfOverlay,
+                // Sin gráfica de rendimiento sobre la app (release limpia).
+                showPerformanceOverlay: false,
                 locale: localeController.locale,
                 supportedLocales: AppLocalizations.supportedLocales,
                 localizationsDelegates:

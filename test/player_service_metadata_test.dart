@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart' hide Track;
 import 'package:scrup/core/track.dart';
+import 'package:scrup/services/media_kit_backend.dart';
 import 'package:scrup/services/player_service.dart';
 
 /// Genera un WAV mudo de [seconds] segundos (16-bit PCM mono 8kHz) para que
@@ -53,6 +54,7 @@ void main() {
     await wav.writeAsBytes(_silentWav(30));
     enriched.clear();
     player = PlayerService(
+      audioBackend: MediaKitBackend(),
       resolveSource: (track) async => PlayableSource(wav.path, isLocal: true),
       onEnriched: (track) async => enriched.add(track),
     );

@@ -350,8 +350,7 @@
   "shortcutMouseBack": "Canción anterior (ratón)",
   "shortcutMouseForward": "Siguiente canción (ratón)",
   "provider": "Proveedor:",
-  "providerAll": "Todos (KPoe + Unison + LRCLIB)",
+  "providerAll": "Todos (KPoe + LRCLIB)",
   "providerKpoe": "KPoe · palabra a palabra",
-  "providerUnison": "Unison",
   "providerLrclib": "LRCLIB · línea"
 }

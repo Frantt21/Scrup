@@ -10,6 +10,8 @@ dependencies:
   audio_service: ^0.18.18
   audio_service_mpris: ^0.2.0
   audio_service_win: 0.0.3
+  audio_session: ^0.1.25
+  just_audio: ^0.9.43
   crypto: ^3.0.3
   drift: ^2.34.3
   drift_flutter: ^0.3.1
