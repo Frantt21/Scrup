@@ -230,23 +230,6 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                       ),
                       child: Stack(
                         children: [
-                          // Progreso en la base, DETRÁS de los elementos
-                          // (sólo sobre el fondo, no sobre título/controles).
-                          Align(
-                            alignment: Alignment.bottomLeft,
-                            child: FractionallySizedBox(
-                              widthFactor: _dur != null &&
-                                      _dur!.inMilliseconds > 0
-                                  ? (_pos.inMilliseconds /
-                                          _dur!.inMilliseconds)
-                                      .clamp(0.0, 1.0)
-                                  : 0.0,
-                              heightFactor: 1.0,
-                              child: Container(
-                                color: Colors.black.withValues(alpha: 0.25),
-                              ),
-                            ),
-                          ),
                           // Fila centrada verticalmente (título/controles).
                           Center(
                             child: Padding(
@@ -256,6 +239,25 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                                 accent: accent,
                                 showing: showing,
                                 loading: loading,
+                              ),
+                            ),
+                          ),
+                          // Progreso: línea fina en la base, DETRÁS de todo.
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: _dur != null &&
+                                      _dur!.inMilliseconds > 0
+                                  ? (_pos.inMilliseconds /
+                                          _dur!.inMilliseconds)
+                                      .clamp(0.0, 1.0)
+                                  : 0.0,
+                              child: Container(
+                                height: 3,
+                                color: Colors.black.withValues(alpha: 0.35),
                               ),
                             ),
                           ),
@@ -291,25 +293,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
             ),
           ),
 
-          // ── Letras MONTADAS (sólo en el expandido): sheet draggable que se
-          //    abre arrastrándola. Vive FUERA del SafeArea para que el fondo
-          //    plano del sheet se extienda también sobre la barra de
-          //    navegación del sistema.
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: p < 0.98,
-              child: Opacity(
-                opacity: p,
-                child: _LyricsPeek(
-                  track: track,
-                  accent: accent,
-                  open: _lyricsOpen,
-                  onChanged: (v) => setState(() => _lyricsOpen = v),
-                ),
-              ),
-            ),
-          ),
-        ],
+          ],
       ),
     );
   }
@@ -474,63 +458,85 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     // controles justo debajo del borde inferior del arte, siguiéndolo con la
     // misma escala (`hp`) para que arranquen juntos desde el primer instante.
     final double artBottomP = lerp(7, artTop, hp) + lerp(46, artSide, hp);
-    final double controlsTop = (artBottomP - 52 - safeTop).clamp(0.0, double.infinity);
+    // Separación extra entre el arte heredado y el contenedor de título /
+    // controles en el player expandido.
+    const double artControlsGap = 28.0;
+    final double controlsTop =
+        (artBottomP - 52 - safeTop + artControlsGap).clamp(0.0, double.infinity);
 
     return SafeArea(
-      child: Column(
+      child: Stack(
         children: [
-          // ── Header: [v] cierre ────────────────────────────────────
-          SizedBox(
-            height: 52,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 28,
-                    ),
-                    color: Colors.white.withValues(alpha: 0.9),
-                    tooltip: 'Cerrar',
-                    onPressed: widget.onClose,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // ── Contenido: controles justo debajo del arte heredado ─────
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        SizedBox(height: controlsTop),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: _centerColumn(
-                            context,
-                            theme: theme,
-                            cs: cs,
-                            accent: accent,
-                            track: track,
-                            dur: dur,
-                            total: total,
-                            w: w,
-                          ),
+          Column(
+            children: [
+              // ── Header: [v] cierre ────────────────────────────────────
+              SizedBox(
+                height: 52,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 28,
                         ),
-                      ],
-                    ),
+                        color: Colors.white.withValues(alpha: 0.9),
+                        tooltip: 'Cerrar',
+                        onPressed: widget.onClose,
+                      ),
+                    ],
                   ),
-                );
-              },
+                ),
+              ),
+              // ── Contenido: controles debajo del arte heredado ─────
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            SizedBox(height: controlsTop),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: _centerColumn(
+                                context,
+                                theme: theme,
+                                cs: cs,
+                                accent: accent,
+                                track: track,
+                                dur: dur,
+                                total: total,
+                                w: w,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+          // ── Letras MONTADAS: sheet draggable que se abre arrastrándola.
+          //    DENTRO del SafeArea: respeta la barra de navegación del
+          //    sistema (la barra queda transparente por detrás).
+          //    Va en un [Positioned.fill] (no en un [Positioned] sin altura)
+          //    para que el LayoutBuilder interno reciba una altura ACOTADA:
+          //    con altura infinita el cálculo del sheet da NaN y no se pinta.
+          Positioned.fill(
+            child: _LyricsPeek(
+              track: track,
+              accent: accent,
+              open: _lyricsOpen,
+              onChanged: (v) => setState(() => _lyricsOpen = v),
             ),
           ),
         ],
@@ -848,7 +854,12 @@ class _LyricsPeekState extends State<_LyricsPeek> {
       alignment: Alignment.bottomCenter,
       child: LayoutBuilder(
         builder: (context, c) {
-          final maxH = c.maxHeight;
+          // Altura de referencia: si el padre no acota la altura (p. ej. un
+          // [Positioned] sin top/height), usa la pantalla para que el cálculo
+          // del sheet sea finito (con ∞ el resultado es NaN y no se pinta).
+          final double maxH = c.maxHeight.isFinite
+              ? c.maxHeight
+              : MediaQuery.sizeOf(context).height;
           final collapsed = 48.0;
           final openH = maxH * 0.80;
           final sheetH = collapsed + (_open * (openH - collapsed));
