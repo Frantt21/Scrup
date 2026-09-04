@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../../services/artwork_cache_service.dart';
+import '../../core/app_log.dart';
 
 /// Renderiza una imagen que puede venir de una URL de red (artwork de
 /// YouTube/Deezer) o de un archivo local del dispositivo (portada de
@@ -130,9 +131,14 @@ class _CoverImageState extends State<CoverImage> {
 
   @override
   Widget build(BuildContext context) {
+    // EXPERIMENTO kNoArtwork: siempre fallback (sin I/O, descargas,
+    // decodes ni subidas a GPU).
+    if (kNoArtwork) return widget.fallback;
     final src = widget.source;
     if (src == null || src.isEmpty || !_checked) return widget.fallback;
 
+    // gaplessPlayback: al cambiar de pista conserva el arte anterior hasta
+    // que el nuevo decodifica (sin parpadeo a vacío en la transición).
     if (CoverImage.isLocalPath(src)) {
       return Image.file(
         File(src),
@@ -140,6 +146,7 @@ class _CoverImageState extends State<CoverImage> {
         width: widget.width,
         height: widget.height,
         cacheWidth: widget.cacheWidth,
+        gaplessPlayback: true,
         errorBuilder: (_, _, _) => widget.fallback,
       );
     }
@@ -151,6 +158,7 @@ class _CoverImageState extends State<CoverImage> {
         width: widget.width,
         height: widget.height,
         cacheWidth: widget.cacheWidth,
+        gaplessPlayback: true,
         errorBuilder: (_, _, _) => widget.fallback,
       );
     }
@@ -160,6 +168,7 @@ class _CoverImageState extends State<CoverImage> {
       width: widget.width,
       height: widget.height,
       cacheWidth: widget.cacheWidth,
+      gaplessPlayback: true,
       errorBuilder: (_, _, _) => widget.fallback,
     );
   }

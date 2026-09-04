@@ -114,7 +114,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
     return Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (!mounted) return;
       final pos = player.positionValue;
-      if (pos != _position) setState(() => _position = pos);
+      if (pos.inSeconds != _position.inSeconds || pos < _position) {
+        setState(() => _position = pos);
+      }
     });
   }
 
@@ -136,6 +138,8 @@ class _MiniPlayerState extends State<MiniPlayer> {
 
   @override
   Widget build(BuildContext context) {
+    countBuild('mini');
+    final buildSw = Stopwatch()..start();
     final track = _track;
     final theme = Theme.of(context);
     final player = context.read<PlayerService>();
@@ -170,7 +174,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
     // previo real, sin salto a transparente ni tercer color intermedio.
     final begin = _prevAccent ?? accent;
     _prevAccent = accent;
-    return Material(
+    final Widget page = Material(
       clipBehavior: Clip.antiAlias,
       // Mismo acento del player desktop, en PLANO (sin degradado): base
       // translúcida + acento uniforme en todo el fondo del mini-player.
@@ -239,6 +243,8 @@ class _MiniPlayerState extends State<MiniPlayer> {
                               : CoverImage(
                                   source: showing.thumbnailUrl,
                                   fit: BoxFit.cover,
+                                  // 46dp a ~3x: 150px crudos, sin full-res.
+                                  cacheWidth: 150,
                                   fallback: Container(
                                     color:
                                         theme.colorScheme.surfaceContainerHigh,
@@ -328,5 +334,10 @@ class _MiniPlayerState extends State<MiniPlayer> {
         ],
       ),
     );
+    final ms = buildSw.elapsedMilliseconds;
+    if (ms >= kBuildWatchdogMs) {
+      appLog('PERF', 'mini build ${ms}ms track=${shortId(_track?.id)}');
+    }
+    return page;
   }
 }

@@ -35,6 +35,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   installJankMonitor();
+  installFrameCounter();
+  // Perfilador de builds (solo surte efecto en debug): canta cada widget
+  // que se construye con su costo. Ver `kProfileBuilds`.
+  debugProfileBuildsEnabled = kProfileBuilds;
 
   // OS media controls: SMTC (Win), Now Playing (macOS), MPRIS (Linux).
   ScrupAudioHandler audioHandler;
@@ -396,6 +400,7 @@ class ScrupApp extends StatelessWidget {
       ],
       child: Consumer<ThemeController>(
         builder: (context, themeController, _) {
+          appLog('THEME', 'seed=${colorHex(themeController.themeSeed)}');
           return Consumer<LocaleController>(
             builder: (context, localeController, _) {
               return MaterialApp(
@@ -407,16 +412,20 @@ class ScrupApp extends StatelessWidget {
                 supportedLocales: AppLocalizations.supportedLocales,
                 localizationsDelegates:
                     AppLocalizations.localizationsDelegates,
-                // Ventana CORTA a propósito: durante la animación del tema
-                // AnimatedTheme reconstruye todo el árbol dependiente en cada
-                // frame; 700ms de eso tiraba frames en cada cambio de canción.
-                // Las superficies del player animan su propio fundido (350ms).
-                themeAnimationDuration: const Duration(milliseconds: 200),
+                // Duración CERO a propósito: AnimatedTheme reconstruye todo el
+                // árbol dependiente en CADA frame de la animación; con 200ms
+                // eran ~12 frames caros por cambio. El tinte dinámico se
+                // conserva (aplica de golpe en un solo rebuild) y la suavidad
+                // la ponen los fundidos de 350ms de las superficies.
+                // (Lección de forawn_mobile: chrome estático + acentos locales;
+                // aquí se mantiene el tinte global pero instantáneo.)
+                themeAnimationDuration: Duration.zero,
                 themeAnimationCurve: Curves.easeInOut,
                 // Tema semillado con el acento de la pista actual: tiñe el
-                // primary y demás elementos derivados en TODA la app. El
-                // cambio entre canciones se anima (700ms) sin saltos.
-                theme: _buildTheme(themeController.accentColor),
+                // primary y demás elementos derivados en TODA la app. La
+                // semilla llega ~400ms tras el acento de superficies para no
+                // apilar el re-theme sobre la ventana del cambio.
+                theme: _buildTheme(themeController.themeSeed),
                 builder: (context, child) {
                   Widget core = Stack(
                     children: [

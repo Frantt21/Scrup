@@ -319,6 +319,7 @@ class PlayerService {
   }
 
   Future<void> next() async {
+    if (!_beginSkip()) return;
     final hasNext = _queueIndex >= 0 && _queueIndex < _queue.length - 1;
     if (hasNext) {
       await _playAt(_nextIndex());
@@ -339,6 +340,7 @@ class PlayerService {
   }
 
   Future<void> previous() async {
+    if (!_beginSkip()) return;
     if (_lastPosition > const Duration(seconds: 3)) {
       await _player.seek(Duration.zero);
       return;
@@ -349,6 +351,23 @@ class PlayerService {
     }
 
     await _player.seek(Duration.zero);
+  }
+
+  // Anti-spam de next/prev: los toques (botones, notificación, teclado)
+  // que caen dentro de la ventana se ignoran; cada cambio aceptado ya pone
+  // en marcha pipeline async que se solaparía y multiplicaría el trabajo.
+  DateTime? _lastSkipAt;
+  static const Duration kSkipDebounce = Duration(milliseconds: 700);
+
+  bool _beginSkip() {
+    final now = DateTime.now();
+    final last = _lastSkipAt;
+    if (last != null && now.difference(last) < kSkipDebounce) {
+      appLog('TRACK', 'skip ignorado (debounce)');
+      return false;
+    }
+    _lastSkipAt = now;
+    return true;
   }
 
   Future<void> togglePlayPause() => _playing ? _player.pause() : _player.play();
@@ -585,6 +604,7 @@ class PlayerService {
       if (idx >= _queue.length) break;
       targets.add(_queue[idx]);
     }
+    appLog('PERF', 'preload x${targets.length} desde idx=$_queueIndex');
     for (final t in targets) {
       unawaited(_preloadTrack(fn, t));
     }
@@ -627,20 +647,27 @@ class PlayerService {
     final track = _queue[index];
     _clearPlaybackState();
     preparingTrackId.value = track.id;
+    final sw = Stopwatch()..start();
+    void lap(String what) =>
+        appLog('PERF', 'playAt $what +${sw.elapsedMilliseconds}ms id=${track.id}');
     appLog('TRACK', 'preparing id=${track.id} idx=$index');
     try {
       // Pause (not stop) to avoid spurious completed event.
       await _player.pause();
+      lap('paused');
       // Resolve source + enrich in parallel; play immediately, enrich later.
       final srcFuture = resolveSource(track);
       final enrichFuture = _enrich(track);
       final src = await srcFuture;
+      lap('source ok local=${src.isLocal}');
       if (token != _playToken) return false;
       _lastSourceIsLocal = src.isLocal;
       _openedAt = DateTime.now();
       await _player.open(Media(_mediaUri(src)));
+      lap('opened');
       if (token != _playToken) return false;
       await _player.play();
+      lap('playing');
       _publishTrack(track);
       appLog('TRACK', 'published id=${track.id} dur=${track.duration}');
       unawaited(_notifyPlayed(track));

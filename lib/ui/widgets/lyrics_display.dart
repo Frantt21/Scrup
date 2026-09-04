@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/synced_lyrics.dart';
+import '../../core/app_log.dart';
 import '../../l10n/generated/app_localizations.dart';
 
 const String kGapMarker = '•••';
@@ -304,6 +305,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    countBuild('lyricsD');
     final l10n = AppLocalizations.of(context);
     return Stack(
       children: [
@@ -498,6 +500,7 @@ class _KaraokeLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    countBuild('karaokeLine');
     const baseStyle = TextStyle(
       fontSize: 38,
       fontWeight: FontWeight.bold,
@@ -734,6 +737,7 @@ class _KaraokeWord extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    countBuild('karaokeWord');
     if (progress >= 1.0) {
       return Text(word, style: style.copyWith(color: activeColor));
     }

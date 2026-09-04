@@ -101,8 +101,11 @@ class _LyricsViewState extends State<LyricsView>
         _lyrics = null;
         _lyricsOffset = Duration.zero;
       });
-      unawaited(_loadTrackOffset(t).then((_) => _absorbAutoIntro(t)));
-      _fetchLyrics(t);
+      // EXPERIMENTO kNoLyrics: sin lógica de letras (ni fetch, ni offset).
+      if (!kNoLyrics) {
+        unawaited(_loadTrackOffset(t).then((_) => _absorbAutoIntro(t)));
+        _fetchLyrics(t);
+      }
     });
     _positionSub = player.position.listen((p) {
       if (!mounted) return;
@@ -118,7 +121,8 @@ class _LyricsViewState extends State<LyricsView>
       if (playing) {
         _smoothBasePosition = service.positionValue;
         _smoothBaseAt = DateTime.now();
-        if (!_smoothingTick.isActive) _smoothingTick.start();
+        // EXPERIMENTO kNoLyrics: sin ticker de suavizado.
+        if (!_smoothingTick.isActive && !kNoLyrics) _smoothingTick.start();
       } else {
         _smoothingTick.stop();
         _position.value = service.positionValue;
@@ -128,12 +132,17 @@ class _LyricsViewState extends State<LyricsView>
       if (!mounted || !_playing) return;
       final estimated =
           _smoothBasePosition + DateTime.now().difference(_smoothBaseAt);
-      _position.value = estimated;
+      // El ticker corre a 90Hz pero el karaoke/scroll no necesita más de
+      // ~30Hz: notificar cada frame reconstruía oyentes sin cambio visible.
+      if ((estimated - _position.value).abs() >=
+          const Duration(milliseconds: 33)) {
+        _position.value = estimated;
+      }
     });
     if (_playing) {
       _smoothBasePosition = player.positionValue;
       _smoothBaseAt = DateTime.now();
-      _smoothingTick.start();
+      if (!kNoLyrics) _smoothingTick.start();
     }
     _durationSub = player.duration.listen((d) {
       if (!mounted) return;
@@ -144,7 +153,7 @@ class _LyricsViewState extends State<LyricsView>
     unawaited(_loadTrackOffset(_track));
 
     final track = _track;
-    if (track != null) {
+    if (track != null && !kNoLyrics) {
       _fetchKey = '${track.title}\n${track.artist}';
       _fetchLyrics(track);
     }
@@ -212,7 +221,15 @@ class _LyricsViewState extends State<LyricsView>
     final token = ++_fetchToken;
     final t0 = DateTime.now();
     appLog('LYRICS', 'fetch ${shortId(track.id)}');
-    setState(() => _loading = true);
+    // El spinner solo si tarda: en hits de caché (ms) evita dos rebuilds
+    // inútiles por transición (loading + ready).
+    Timer? loadingTimer;
+    var loadingShown = false;
+    loadingTimer = Timer(const Duration(milliseconds: 150), () {
+      if (!mounted || token != _fetchToken) return;
+      loadingShown = true;
+      setState(() => _loading = true);
+    });
     try {
       final lyrics = await context.read<LyricsService>().fetchLyrics(
         track.title,
@@ -225,13 +242,15 @@ class _LyricsViewState extends State<LyricsView>
         'ready ${shortId(track.id)} en ${ms}ms '
         'lineas=${lyrics?.lines.length ?? 0}',
       );
+      loadingTimer.cancel();
       setState(() {
         _lyrics = lyrics;
         _loading = false;
       });
     } catch (_) {
       if (!mounted || token != _fetchToken) return;
-      setState(() => _loading = false);
+      loadingTimer.cancel();
+      if (loadingShown) setState(() => _loading = false);
     }
   }
 
@@ -352,12 +371,14 @@ class _LyricsViewState extends State<LyricsView>
 
   @override
   Widget build(BuildContext context) {
+    countBuild('lyrics');
+    final buildSw = Stopwatch()..start();
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final accent = context.watch<ThemeController>().accentColor;
 
     final embedded = widget.embedded;
-    return Container(
+    final Widget page = Container(
       margin: embedded
           ? EdgeInsets.zero
           : const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
@@ -385,6 +406,11 @@ class _LyricsViewState extends State<LyricsView>
               ),
             ),
     );
+    final ms = buildSw.elapsedMilliseconds;
+    if (ms >= kBuildWatchdogMs) {
+      appLog('PERF', 'lyrics build ${ms}ms emb=$embedded');
+    }
+    return page;
   }
 
   Widget _body(

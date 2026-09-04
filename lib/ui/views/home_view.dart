@@ -8,6 +8,7 @@ import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 
 import '../../core/binaries.dart';
+import '../../core/app_log.dart';
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
@@ -59,6 +60,19 @@ class _HomeViewState extends State<HomeView> {
   StreamSubscription<List<Playlist>>? _recentPlaylistsSub;
   List<Playlist> _recentPlaylists = const [];
 
+  /// Debounce de recientes: ELIMINADO (forawn-style: instantáneo). El delay
+  /// difería el rebuild pero se percibía como lag en la UI; con imágenes
+  /// cacheadas el rebuild es barato. Se conserva el skip si no cambió nada.
+  List<String> _recentIds = const [];
+
+  static bool _sameIds(List<String> a, List<Track> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i].id) return false;
+    }
+    return true;
+  }
+
   /// Pista en reproducción (para el indicador de "en reproducción").
   Track? _currentTrack;
   bool _playing = false;
@@ -76,21 +90,30 @@ class _HomeViewState extends State<HomeView> {
   @override
   void initState() {
     super.initState();
-    _recentStream = context.read<AppDatabase>().watchRecentlyPlayed(limit: 30);
-    _sub = _recentStream.listen((tracks) {
-      if (!mounted) return;
-      setState(() {
-        _recent = tracks;
-        _loaded = true;
+    // EXPERIMENTO kHideHomeRecents: sin suscripciones no hay datos ni
+    // rebuilds de recientes; se marca cargado para no mostrar el spinner.
+    if (kHideHomeRecents) {
+      _loaded = true;
+    } else {
+      _recentStream = context.read<AppDatabase>().watchRecentlyPlayed(limit: 30);
+      _sub = _recentStream.listen((tracks) {
+        if (!mounted) return;
+        // Skip si no cambió nada (emisiones redundantes del stream).
+        if (_loaded && _sameIds(_recentIds, tracks)) return;
+        _recentIds = [for (final t in tracks) t.id];
+        setState(() {
+          _recent = tracks;
+          _loaded = true;
+        });
       });
-    });
-    _recentPlaylistsSub = context
-        .read<AppDatabase>()
-        .watchRecentPlaylists(limit: 12)
-        .listen((playlists) {
-      if (!mounted) return;
-      setState(() => _recentPlaylists = playlists);
-    });
+      _recentPlaylistsSub = context
+          .read<AppDatabase>()
+          .watchRecentPlaylists(limit: 12)
+          .listen((playlists) {
+        if (!mounted) return;
+        setState(() => _recentPlaylists = playlists);
+      });
+    }
     // Indicador de "en reproducción" en las tarjetas
     final player = context.read<PlayerService>();
     _currentTrack = player.currentTrackValue;
@@ -825,7 +848,7 @@ class _RecentPlaylistCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasCover = playlist.coverUrl != null && playlist.coverUrl!.isNotEmpty;
-    final width = 140.0;
+    const width = 140.0;
 
     return GestureDetector(
       onTap: onTap,

@@ -42,11 +42,17 @@ class ThemeController extends ChangeNotifier {
   Color? _accentColor;
   Color? get accentColor => _accentColor;
 
+  /// Semilla del TEMA (MaterialApp): se aplica EN EL MISMO notify que el
+  /// acento (forawn-style: instantáneo, no diferido). Como el tema es
+  /// instantáneo (1 rebuild, sin animación), no hay tormenta que escalonar.
+  Color? _themeSeed;
+  Color? get themeSeed => _themeSeed;
+
   Color? _seededPrimary;
   Color? _seededFor;
 
   Color get seededPrimary {
-    final seed = _accentColor ?? kDefaultAccent;
+    final seed = _themeSeed ?? kDefaultAccent;
     if (_seededFor != seed) {
       if (HSLColor.fromColor(seed).saturation <
           kDefaultAccentNeutralThreshold) {
@@ -69,6 +75,8 @@ class ThemeController extends ChangeNotifier {
   static const Duration kAccentDelay = Duration(milliseconds: 70);
 
   void _onTrackChanged(Track? track) {
+    // EXPERIMENTO kFlatBlackPlayer: sin acento, sin trabajo de paleta.
+    if (kFlatBlackPlayer) return;
     final token = ++_token;
     final url = track?.thumbnailUrl;
     appLog(
@@ -229,6 +237,7 @@ class ThemeController extends ChangeNotifier {
   /// preparación": si el color ya está listo, el cambio de canción lo toma
   /// al instante y no hay paso por el color por defecto.
   void warmAccent(String? url) {
+    if (kFlatBlackPlayer) return;
     if (url == null || url.isEmpty) return;
     final store = paletteCache;
     if (store == null) return;
@@ -259,6 +268,7 @@ class ThemeController extends ChangeNotifier {
     if (prev == color) return;
     appLog('ACCENT', 'SET ${colorHex(prev)} → ${colorHex(color)}');
     _accentColor = color;
+    _themeSeed = color;
     _seededFor = null;
     notifyListeners();
   }

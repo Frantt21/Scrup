@@ -87,6 +87,18 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
   double _slideDir = 0;
   double _pendingSlide = 0;
 
+  /// Cuándo se pidió la dirección (para no aplicar un slide rancio si el
+  /// tap fue tragado por el debounce del servicio).
+  DateTime? _pendingSlideAt;
+
+  /// La dirección solo vale si el cambio llega justo tras el gesto; si el
+  /// tap se ignoró (debounce) y el cambio vino de otro lado, fundido.
+  bool get _slideFresh {
+    final at = _pendingSlideAt;
+    return at != null &&
+        DateTime.now().difference(at) < const Duration(milliseconds: 1500);
+  }
+
   // Corazón del doble toque: burst en el punto del toque sobre el artwork.
   int _heartBurst = 0;
   Offset _heartBurstPos = Offset.zero;
@@ -120,8 +132,9 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
         if (!mounted) return;
         // Consume la dirección pedida por el usuario (siguiente/anterior);
         // los cambios automáticos quedan en 0 (solo fundido).
-        _slideDir = _pendingSlide;
+        _slideDir = _slideFresh ? _pendingSlide : 0;
         _pendingSlide = 0;
+        _pendingSlideAt = null;
         setState(() => _track = t);
         _refreshFavoriteState();
         if (t != null) _ticker ??= _startTicker();
@@ -134,11 +147,11 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
         if (!mounted) return;
         setState(() => _buffering = b);
       }),
-      _player.position.listen((p) {
-        if (!mounted) return;
-        if (_dragging) return;
-        setState(() => _pos = p);
-      }),
+      // NOTA: sin listener de posición aquí a propósito. El _ticker de 500ms
+      // (`if (pos != _pos)`) ya refresca `_pos` para la barra/tiempos: un
+      // setState en CADA evento del stream (4Hz, incluso en pausa con el
+      // mismo valor) reconstruía todo el overlay sin parar y amplificaba
+      // cada transición. Ver SCPR[JANK].
       _player.duration.listen((d) {
         if (!mounted) return;
         setState(() => _dur = d);
@@ -160,6 +173,10 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     if (track == null) return;
     _favSub = db.watchTrackInPlaylist(id, track.id).listen((inside) {
       if (!mounted) return;
+      // Sin setState redundante: la mayoría de cambios de canción conservan
+      // el estado de favorito y reconstruir todo el overlay para nada quemaba
+      // frames en cada transición.
+      if (inside == _isFavorite) return;
       setState(() => _isFavorite = inside);
     });
   }
@@ -174,6 +191,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     if (track == null) return;
     _favSub = db.watchTrackInPlaylist(_favoritesId, track.id).listen((inside) {
       if (!mounted) return;
+      if (inside == _isFavorite) return;
       setState(() => _isFavorite = inside);
     });
   }
@@ -191,7 +209,8 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
   /// URLs usan la MISMA clave (hi-res) que el `CoverImage` del overlay para
   /// que el arte nuevo salga del caché al instante.
   Future<void> _prefetchArtworks() async {
-    if (!mounted) return;
+    // EXPERIMENTO kNoArtwork: sin descargas ni precaches de portadas.
+    if (kNoArtwork || !mounted) return;
     final q = _player.queue.value;
     final start = _player.queueIndex.value + 1;
     if (start < 0 || start >= q.length) return;
@@ -233,9 +252,14 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
       }
       if (!mounted || path == null) return;
       // Precachea en el image cache de Flutter: al cambiar de canción el
-      // decode ya está hecho y el arte aparece sin cortes.
+      // decode ya está hecho y el arte aparece sin cortes. OJO: con el MISMO
+      // tamaño que el display (`cacheWidth: 900` del artwork compartido); con
+      // otra clave el precache no sirve y se decodifica en la transición.
       try {
-        await precacheImage(FileImage(File(path)), context);
+        await precacheImage(
+          ResizeImage(FileImage(File(path)), width: 900),
+          context,
+        );
       } catch (_) {}
     } catch (_) {}
   }
@@ -244,11 +268,13 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
   /// entra desde la derecha (+1), anterior desde la izquierda (-1).
   void _goNext() {
     _pendingSlide = 1;
+    _pendingSlideAt = DateTime.now();
     _player.next();
   }
 
   void _goPrev() {
     _pendingSlide = -1;
+    _pendingSlideAt = DateTime.now();
     _player.previous();
   }
 
@@ -293,8 +319,9 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     // la preparación se CANCELA (id null tras una preparación activa), se
     // vuelve al arte anterior con solo fundido (sin slide "fantasma").
     if (id != null) {
-      _slideDir = _pendingSlide;
+      _slideDir = _slideFresh ? _pendingSlide : 0;
       _pendingSlide = 0;
+      _pendingSlideAt = null;
     } else if (_preparingActive) {
       _slideDir = 0;
     }
@@ -324,7 +351,12 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     return Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (!mounted || _dragging) return;
       final pos = _player.positionValue;
-      if (pos != _pos) setState(() => _pos = pos);
+      // Solo reconstruye al cambiar de SEGUNDO (los labels van a segundos y
+      // la barra a 1Hz es indistinguible): reconstruir el overlay completo
+      // 2×/seg solo por el progreso quemaba frames en cada transición.
+      if (pos.inSeconds != _pos.inSeconds || pos < _pos) {
+        setState(() => _pos = pos);
+      }
     });
   }
 
@@ -367,6 +399,8 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    countBuild('overlay');
+    final buildSw = Stopwatch()..start();
     final theme = Theme.of(context);
     final themeController = context.watch<ThemeController>();
     // Sin acento todavía (arranque en frío / sin pista): neutro en vez del
@@ -442,13 +476,10 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
             .clamp(8.0, 160.0);
     final double artTop = headerH + topSlack;
 
-    // El acento cambia al pasar de canción (la paleta del artwork se
-    // extrae en segundo plano): el fondo hace una transición SUAVE sobre una
-    // capa BARATA ([_AccentBackground], un ColoredBox con lerp HSL que no
-    // pasa por grises deslavados). El contenido vive como `child` y NO se
-    // reconstruye en cada frame de la animación, así no hay pérdida de
-    // frames al cambiar de canción.
-    return _AccentBackground(
+    // Fondo plano de acento con crossfade RGB al cambiar de pista (sin
+    // tercer color intermedio). El contenido vive como `child` y NO se
+    // reconstruye en cada frame de la animación.
+    final Widget page = _AccentBackground(
       color: accent,
       child: Material(
         type: MaterialType.transparency,
@@ -555,6 +586,11 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
         ),
       ),
     );
+    final ms = buildSw.elapsedMilliseconds;
+    if (ms >= kBuildWatchdogMs) {
+      appLog('PERF', 'overlay build ${ms}ms track=${shortId(_track?.id)}');
+    }
+    return page;
   }
 
   /// Artwork heredado: escala y se reubica entre la barra (46px, arriba-izq.)
@@ -647,6 +683,10 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                                     showing.thumbnailUrl)
                               : null,
                           fit: BoxFit.cover,
+                          // Arte compartido mini (46dp) ↔ expandido (~0.88×
+                          // ancho): 900px crudos bastan y evita decodificar y
+                          // subir a GPU la imagen full-res en cada cambio.
+                          cacheWidth: 900,
                           fallback: ColoredBox(
                             color: Colors.black.withValues(alpha: 0.18),
                             child: Center(
@@ -1237,13 +1277,12 @@ class _ModeButton extends StatelessWidget {
   }
 }
 
-/// Fondo del player con transición de acento suave.
+/// Fondo plano de acento con crossfade RGB al cambiar de pista.
 ///
-/// Anima SOLO un [ColoredBox] (capa barata): el contenido va como `child` y
-/// no se reconstruye en cada frame de la animación (evita pérdidas de frame
-/// al cambiar de canción). El lerp entre colores se hace en espacio HSL con
-/// el camino más corto del matiz: no pasa por los grises deslavados que da
-/// el lerp RGB ("el acento se aclara y luego llega al tono final").
+/// Anima SOLO un [ColoredBox] (capa barata, sin saveLayer): el contenido va
+/// como `child` y no se reconstruye en cada frame. A propósito NO se
+/// interpola en HSL (el camino por el círculo de matiz generaba un tercer
+/// color vívido intermedio).
 class _AccentBackground extends StatefulWidget {
   final Color color;
   final Widget child;
@@ -1281,13 +1320,9 @@ class _AccentBackgroundState extends State<_AccentBackground>
     if (widget.color != oldWidget.color) {
       // Si estaba animando, parte del color REAL mostrado (no del objetivo
       // anterior) hacia el nuevo acento.
-      final current = _ctrl.isAnimating
-          ? Color.lerp(_from, _to, _anim.value)!
-          : _to;
-      appLog(
-        'UI',
-        'bg-anim ${colorHex(current)} → ${colorHex(widget.color)}',
-      );
+      final current =
+          _ctrl.isAnimating ? Color.lerp(_from, _to, _anim.value)! : _to;
+      appLog('UI', 'bg-anim ${colorHex(current)} → ${colorHex(widget.color)}');
       _from = current;
       _to = widget.color;
       _ctrl.forward(from: 0);
@@ -1305,11 +1340,6 @@ class _AccentBackgroundState extends State<_AccentBackground>
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (context, child) {
-        // Crossfade RGB directo origen→destino (== fundido entre capas).
-        // A propósito NO se interpola en HSL: el camino por el círculo de
-        // matiz generaba un tercer color vívido intermedio (p. ej.
-        // morado→azul pasaba por azul oscuro) que se leía como un paso
-        // extra de la transición.
         final color = (_ctrl.isAnimating || _ctrl.value > 0)
             ? Color.lerp(_from, _to, _anim.value)!
             : _to;
@@ -1470,29 +1500,38 @@ class _LyricsPeekState extends State<_LyricsPeek> {
             tween: ColorTween(begin: begin, end: target),
             duration: const Duration(milliseconds: 350),
             curve: Curves.easeOutCubic,
-            builder: (context, color, _) {
-              return AnimatedContainer(
-                duration: _dragging
-                    ? Duration.zero
-                    : const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                height: sheetH,
-                width: double.infinity,
-                decoration: const BoxDecoration(color: Colors.transparent),
-                child: Container(
-                  // El padding del inset va DENTRO de la caja con color para
-                  // que el fondo llegue al borde real de la pantalla
-                  // (edge-to-edge, bajo la barra de navegación) y solo el
-                  // contenido (handle + letras) respete el inset.
-                  padding: EdgeInsets.only(bottom: bottomInset),
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
+            // El subárbol estático va en `child` (se construye UNA vez): por
+            // frame del fundido solo se reconstruye el DecoratedBox del
+            // color. Antes el builder reconstruía handle + letras en cada
+            // frame (tween a 90Hz = caída de fps en el cambio).
+            builder: (context, color, child) {
+              return DecoratedBox(
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
                   ),
-                  child: Column(
-              children: [
+                ),
+                child: child,
+              );
+            },
+            child: AnimatedContainer(
+              duration: _dragging
+                  ? Duration.zero
+                  : const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              height: sheetH,
+              width: double.infinity,
+              // El padding del inset va AQUÍ (dentro de la caja con color de
+              // arriba) para que el fondo llegue al borde real de la pantalla
+              // (edge-to-edge, bajo la barra de navegación) y solo el
+              // contenido (handle + letras) respete el inset.
+              padding: EdgeInsets.only(bottom: bottomInset),
+              decoration: const BoxDecoration(color: Colors.transparent),
+              child: Container(
+                decoration: const BoxDecoration(),
+                child: Column(
+                    children: [
                 // Handle (siempre visible, ~48px). El arrastre está acotado
                 // al handle para no chocar con el scroll de las letras.
                 GestureDetector(
@@ -1540,13 +1579,12 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                 ),
                 // Letras SIEMPRE MONTADAS (no aparecen de golpe); el
                 // [AnimatedContainer] las revela escalando la altura.
-                Expanded(child: LyricsView(embedded: true)),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
+                const Expanded(child: LyricsView(embedded: true)),
+              ],
+            ),
+          ),
+        ),
+    );
         },
       ),
     );
