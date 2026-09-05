@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -161,8 +162,12 @@ class _LyricsDisplayState extends State<LyricsDisplay>
       _userHasScrolled = false;
       _loadSweepSetting();
       _onPositionChanged();
+      // Al cambiar de letras (pista nueva, refetch a mitad de canción,
+      // restore con posición avanzada) se CENTRA la línea activa real en
+      // vez de saltar ciegamente al tope (jumpTo(0) dejaba la vista arriba
+      // con la línea focus fuera de pantalla en reproducciones a mitad).
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_controller.hasClients) _controller.jumpTo(0);
+        if (mounted) _snapToCurrentLine();
       });
     } else if (oldWidget.audioPath != widget.audioPath ||
         oldWidget.lyricsOffset != widget.lyricsOffset) {
@@ -172,6 +177,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
 
   @override
   void dispose() {
+    _openSnapTimer?.cancel();
     widget.positionNotifier.removeListener(_onPositionChanged);
     _controller.removeListener(_checkButtonVisibility);
     _controller.dispose();
@@ -264,6 +270,34 @@ class _LyricsDisplayState extends State<LyricsDisplay>
     setState(() => _showSyncButton = false);
   }
 
+  // ── Centrar al ABRIR ────────────────────────────────────────────────
+  // El sheet de letras se monta COLAPSADO (solo el handle) y luego crece:
+  // el snap de "viewport attach" corre en el mount (colapsado, sin renglones
+  // medibles) y NO vuelve a correr al abrir. Aquí se detecta el CRECIMIENTO
+  // del viewport (colapsado → abierto) vía ScrollMetricsNotification y se
+  // recentra la línea activa al abrir y otra vez al terminar la animación de
+  // altura del contenedor.
+  double _lastViewport = -1;
+  Timer? _openSnapTimer;
+
+  bool _onViewportMetrics(ScrollMetricsNotification n) {
+    final vp = n.metrics.viewportDimension;
+    final wasCompact = _lastViewport >= 0 && _lastViewport < 150;
+    _lastViewport = vp;
+    if (!wasCompact || vp < 150) return false;
+    // Cruzó de colapsado a abierto: centrar la línea focus (post-frame) y
+    // de nuevo al completar la animación de altura (~220ms) cuando los
+    // renglones ya tienen su altura real (las líneas largas envuelven).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _snapToCurrentLine();
+    });
+    _openSnapTimer?.cancel();
+    _openSnapTimer = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) _snapToCurrentLine();
+    });
+    return false;
+  }
+
   void _onActiveIndexChanged(int di) {
     if (di < 0 || !_controller.hasClients) return;
     if (_userHasScrolled) {
@@ -327,11 +361,13 @@ class _LyricsDisplayState extends State<LyricsDisplay>
               if (n.direction != ScrollDirection.idle) _userHasScrolled = true;
               return false;
             },
-            child: ScrollConfiguration(
-              behavior: ScrollConfiguration.of(
-                context,
-              ).copyWith(scrollbars: false),
-              child: ListView.builder(
+            child: NotificationListener<ScrollMetricsNotification>(
+              onNotification: _onViewportMetrics,
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(
+                  context,
+                ).copyWith(scrollbars: false),
+                child: ListView.builder(
                 controller: _controller,
                 // Embebido: primer renglón a la altura del top del artwork
                 // (aire inferior solo para el anclaje de auto-scroll);
@@ -404,6 +440,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
               ),
             ),
           ),
+        ),
         ),
         if (_showSyncButton)
           Positioned(

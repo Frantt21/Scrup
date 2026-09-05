@@ -68,16 +68,64 @@ class _LyricsViewState extends State<LyricsView>
   StreamSubscription<Duration?>? _durationSub;
   StreamSubscription<bool>? _playingSub;
 
+  late final PlayerService _player;
+
   int _fetchToken = 0;
 
   /// Clave título/artista de las letras en curso (evita refetch en
   /// republicaciones del mismo tema).
   String? _fetchKey;
 
+  /// Adopta [t] como pista de letras vigente: la muestra y lanza su fetch
+  /// si su título/artista cambió. Los metadatos (título/artista) se conocen
+  /// en cuanto la pista entra en PREPARACIÓN, así que las letras no esperan
+  /// a que el archivo de audio termine de descargar/montar.
+  void _adopt(Track? t) {
+    if (!mounted) return;
+    // Republicaciones del MISMO tema (enriquecido) no recargan letras:
+    // mismo título/artista = mismas letras; evita tormentas de setState.
+    final newKey = t == null ? null : '${t.title}\n${t.artist}';
+    if (newKey == _fetchKey) {
+      if (_track?.id != t?.id) setState(() => _track = t);
+      return;
+    }
+    _fetchKey = newKey;
+    setState(() {
+      _track = t;
+      _lyrics = null;
+      _lyricsOffset = Duration.zero;
+    });
+    // EXPERIMENTO kNoLyrics: sin lógica de letras (ni fetch, ni offset).
+    if (!kNoLyrics) {
+      unawaited(_loadTrackOffset(t).then((_) => _absorbAutoIntro(t)));
+      _fetchLyrics(t);
+    }
+  }
+
+  /// La pista en PREPARACIÓN cambió: su metadata ya es conocida durante la
+  /// descarga/montaje del audio. Si es una pista distinta de la publicada,
+  /// se adopta de inmediato (letras/fetch no esperan a que monte la pista).
+  void _onPreparingTrack() {
+    if (!mounted) return;
+    final preparing = _player.preparingTrack.value;
+    final current = _player.currentTrackValue;
+    if (preparing == null) {
+      // Preparación terminó SIN publicar (fallo/cancelación): sin pista
+      // publicada, se revierte al estado vacío. Si ya hay pista publicada
+      // (éxito), no hay nada que hacer (ya está adoptada por su key).
+      if (current == null) _adopt(null);
+      return;
+    }
+    if (current?.id == preparing.id) return; // ya publicada y adoptada
+    if (_track?.id == preparing.id) return; // ya adoptada durante el prepare
+    _adopt(preparing);
+  }
+
   @override
   void initState() {
     super.initState();
-    final player = context.read<PlayerService>();
+    _player = context.read<PlayerService>();
+    final player = _player;
     _track = player.currentTrackValue;
     _position.value = player.positionValue;
     final dur = player.durationValue;
@@ -86,27 +134,8 @@ class _LyricsViewState extends State<LyricsView>
     _silenceSkip = context.read<SilenceSkipService>();
     _silenceSkip.addListener(_onSilenceInfoChanged);
 
-    _trackSub = player.currentTrack.listen((t) {
-      if (!mounted) return;
-      // Republicaciones del MISMO tema (enriquecido) no recargan letras:
-      // mismo título/artista = mismas letras; evita tormentas de setState.
-      final newKey = t == null ? null : '${t.title}\n${t.artist}';
-      if (newKey == _fetchKey) {
-        if (_track?.id != t?.id) setState(() => _track = t);
-        return;
-      }
-      _fetchKey = newKey;
-      setState(() {
-        _track = t;
-        _lyrics = null;
-        _lyricsOffset = Duration.zero;
-      });
-      // EXPERIMENTO kNoLyrics: sin lógica de letras (ni fetch, ni offset).
-      if (!kNoLyrics) {
-        unawaited(_loadTrackOffset(t).then((_) => _absorbAutoIntro(t)));
-        _fetchLyrics(t);
-      }
-    });
+    _trackSub = player.currentTrack.listen(_adopt);
+    player.preparingTrack.addListener(_onPreparingTrack);
     _positionSub = player.position.listen((p) {
       if (!mounted) return;
       _smoothBasePosition = p;
@@ -152,10 +181,19 @@ class _LyricsViewState extends State<LyricsView>
     unawaited(_loadSweepPref());
     unawaited(_loadTrackOffset(_track));
 
-    final track = _track;
-    if (track != null && !kNoLyrics) {
-      _fetchKey = '${track.title}\n${track.artist}';
-      _fetchLyrics(track);
+    // Estado inicial: si hay una pista en preparación con metadata conocida
+    // (p. ej. restaurando sesión / canción descargándose), se adopta YA en
+    // lugar de esperar al publish. La pista publicada gana si existe.
+    if (!kNoLyrics) {
+      final published = player.currentTrackValue;
+      final preparing = player.preparingTrack.value;
+      if (published != null && preparing?.id != published.id) {
+        _adopt(published);
+      } else if (preparing != null) {
+        _onPreparingTrack();
+      } else if (published != null) {
+        _adopt(published);
+      }
     }
   }
 
@@ -209,18 +247,15 @@ class _LyricsViewState extends State<LyricsView>
     _positionSub?.cancel();
     _durationSub?.cancel();
     _playingSub?.cancel();
+    _player.preparingTrack.removeListener(_onPreparingTrack);
     _silenceSkip.removeListener(_onSilenceInfoChanged);
     _smoothingTick.dispose();
     _position.dispose();
     _duration.dispose();
     super.dispose();
-  }
-
-  Future<void> _fetchLyrics(Track? track) async {
+  }  Future<void> _fetchLyrics(Track? track) async {
     if (track == null) return;
     final token = ++_fetchToken;
-    final t0 = DateTime.now();
-    appLog('LYRICS', 'fetch ${shortId(track.id)}');
     // El spinner solo si tarda: en hits de caché (ms) evita dos rebuilds
     // inútiles por transición (loading + ready).
     Timer? loadingTimer;
@@ -236,12 +271,6 @@ class _LyricsViewState extends State<LyricsView>
         track.artist,
       );
       if (!mounted || token != _fetchToken) return;
-      final ms = DateTime.now().difference(t0).inMilliseconds;
-      appLog(
-        'LYRICS',
-        'ready ${shortId(track.id)} en ${ms}ms '
-        'lineas=${lyrics?.lines.length ?? 0}',
-      );
       loadingTimer.cancel();
       setState(() {
         _lyrics = lyrics;

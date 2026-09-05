@@ -232,8 +232,14 @@ class LyricsService {
     if (_notFound.contains(cacheKey)) return Future.value(null);
     return _inFlight.putIfAbsent(
       cacheKey,
-      () => _fetchUncached(title, artist, cacheKey)
-          .whenComplete(() => _inFlight.remove(cacheKey)),
+      // OJO: el closure debe devolver VOID. Si devuelve el resultado de
+      // `_inFlight.remove(...)` (el MISMO futuro, ya guardado por putIfAbsent),
+      // `whenComplete` ESPERA a ese futuro devuelto → el futuro se espera a sí
+      // mismo y NUNCA completa → el primer fetch por canción quedaba en loader
+      // infinito (los siguientes funcionaban porque _cache ya estaba poblado).
+      () => _fetchUncached(title, artist, cacheKey).whenComplete(() {
+        _inFlight.remove(cacheKey);
+      }),
     );
   }
 
@@ -287,7 +293,7 @@ class LyricsService {
       _notFound.add(cacheKey);
       await _db.markLyricsNotFound(title, artist);
       return null;
-    } catch (e) {
+    } catch (_) {
       return null;
     }
   }

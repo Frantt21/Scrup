@@ -533,8 +533,14 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
         builder: (context, _) {
           final showing = _showingNow;
           final playing = _nPlaying.value;
+          // La pausa INTERNA del cambio de canción (play → pause → play al
+          // hacer next/prev) NO debe encoger el arte: encogerse y volver a
+          // crecer en cada transición era el origen del "3 saltos" en el
+          // tramo final del scale-up. Solo una PAUSA REAL (sin pista en
+          // preparación) encoge el arte.
+          final bool shrink = !playing && !_nPreparingActive.value;
           return AnimatedScale(
-            scale: playing ? 1.0 : 0.93,
+            scale: shrink ? 0.93 : 1.0,
             duration: const Duration(milliseconds: 240),
             curve: Curves.easeOutCubic,
             // Doble toque: like / quitar like (+ corazón animado en el punto
