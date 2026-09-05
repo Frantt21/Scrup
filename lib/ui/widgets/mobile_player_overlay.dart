@@ -279,10 +279,18 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     _nPreparingActive.value = id != null;
     Track? found;
     if (id != null) {
-      for (final t in _player.queue.value) {
-        if (t.id == id) {
-          found = t;
-          break;
+      // `preparingTrack` conoce la pista aunque no esté en la cola
+      // (reproducción individual: la cola se limpia antes). Fallback al
+      // lookup en la cola por si el objeto aún no se publicó.
+      final pt = _player.preparingTrack.value;
+      if (pt != null && pt.id == id) {
+        found = pt;
+      } else {
+        for (final t in _player.queue.value) {
+          if (t.id == id) {
+            found = t;
+            break;
+          }
         }
       }
     }

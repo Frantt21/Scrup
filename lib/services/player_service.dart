@@ -73,6 +73,13 @@ class PlayerService {
   Duration get positionValue => _lastPosition;
 
   final ValueNotifier<String?> preparingTrackId = ValueNotifier<String?>(null);
+
+  /// Pista en preparación (objeto completo). Los widgets que no tienen
+  /// acceso a la cola (p. ej. reproducción individual de una búsqueda, donde
+  /// la cola se limpia antes) la usan para adelantar el acento/artwork sin
+  /// depender de encontrarla en `queue`. Se mantiene en sync con
+  /// [preparingTrackId] vía [_setPreparing].
+  final ValueNotifier<Track?> preparingTrack = ValueNotifier<Track?>(null);
   final ValueNotifier<LoopMode> repeatMode = ValueNotifier<LoopMode>(
     LoopMode.off,
   );
@@ -227,7 +234,7 @@ class PlayerService {
     _prematureRetries.clear();
     _notifyQueueChanged();
     _clearPlaybackState();
-    preparingTrackId.value = track.id;
+    _setPreparing(track);
     return _openPaused(track, token, positionSeconds: positionSeconds);
   }
 
@@ -262,7 +269,7 @@ class PlayerService {
     _notifyQueueChanged();
     final track = _queue[startIndex];
     _clearPlaybackState();
-    preparingTrackId.value = track.id;
+    _setPreparing(track);
     return _openPaused(track, token, positionSeconds: positionSeconds);
   }
 
@@ -302,7 +309,7 @@ class PlayerService {
     } catch (_) {
       return false;
     } finally {
-      if (token == _playToken) preparingTrackId.value = null;
+      if (token == _playToken) _setPreparing(null);
     }
   }
 
@@ -699,17 +706,25 @@ class PlayerService {
     _notifyQueueChanged();
     final track = _queue[index];
     _clearPlaybackState();
-    preparingTrackId.value = track.id;
+    _setPreparing(track);
     final sw = Stopwatch()..start();
     void lap(String what) =>
         appLog('PERF', 'playAt $what +${sw.elapsedMilliseconds}ms id=${track.id}');
     appLog('TRACK', 'preparing id=${track.id} idx=$index');
     try {
+      // Pausa el backend ANTES de resolver la fuente. Con just_audio es
+      // imprescindible: `playing` NO se resetea en setAudioSource y `play()`
+      // retorna temprano sin emitir si ya sonaba → `_playing` quedaría en
+      // false (UI en pausa/loading) con la pista nueva sonando. Al pausar
+      // aquí, just_audio emite playing=false y el open()+play() posterior
+      // emite true → el estado queda sincronizado. De paso corta la pista
+      // anterior al instante (con media_kit open() ya la cortaba; con
+      // just_audio setAudioSource no detiene la anterior mientras resolve
+      // descarga la nueva).
+      await _player.pause();
       // Resolve source + enrich in parallel; play immediately, enrich later.
-      // Sin `pause()` previa: el guard de `_openedAt` (completed espurio en
-      // <3s) ya lo cubre, y quitar el round-trip nativo hace el montaje más
-      // ligero. `open()` ya reproduce por defecto (play:true): sin `play()`
-      // extra (otro round-trip nativo de sobra).
+      // El guard de `_openedAt` (completed espurio en <3s) sigue cubriendo
+      // cualquier completed fantasma.
       final srcFuture = resolveSource(track);
       final enrichFuture = _enrich(track);
       final src = await srcFuture;
@@ -739,7 +754,7 @@ class PlayerService {
       }
       return false;
     } finally {
-      if (token == _playToken) preparingTrackId.value = null;
+      if (token == _playToken) _setPreparing(null);
     }
   }
 
@@ -747,8 +762,11 @@ class PlayerService {
   Future<bool> _openAndPlay(Track track) async {
     final token = ++_playToken;
     _clearPlaybackState();
-    preparingTrackId.value = track.id;
+    _setPreparing(track);
     try {
+      // Misma razón que en `_playAt`: pausar el backend mantiene el estado
+      // `playing` sincronizado (just_audio no emite en play() si ya sonaba).
+      await _player.pause();
       final srcFuture = resolveSource(track);
       final enrichFuture = _enrich(track);
       final src = await srcFuture;
@@ -769,7 +787,7 @@ class PlayerService {
       _errorController.add('No se pudo reproducir "${track.title}": $e');
       return false;
     } finally {
-      if (token == _playToken) preparingTrackId.value = null;
+      if (token == _playToken) _setPreparing(null);
     }
   }
 
@@ -806,6 +824,13 @@ class PlayerService {
     _fakeTimer = null;
     _playing = false;
     _playingController.add(false);
+  }
+
+  /// Publica la pista en preparación (id + objeto) y la limpia cuando
+  /// termina la preparación. Mantiene los dos notificadores en sync.
+  void _setPreparing(Track? track) {
+    preparingTrackId.value = track?.id;
+    preparingTrack.value = track;
   }
 
   // Resets playback state to blank while loading a new track.
@@ -896,6 +921,7 @@ class PlayerService {
     await _trackController.close();
     await _errorController.close();
     preparingTrackId.dispose();
+    preparingTrack.dispose();
     repeatMode.dispose();
     shuffle.dispose();
     radio.dispose();

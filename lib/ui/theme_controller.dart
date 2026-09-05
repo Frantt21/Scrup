@@ -38,6 +38,13 @@ class ThemeController extends ChangeNotifier {
     _player.queue.addListener(_onQueueChanged);
     _player.queueIndex.addListener(_onQueueChanged);
     _onQueueChanged();
+    // La pista en PREPARACIÓN se conoce aunque no esté en la cola (reproducción
+    // individual desde búsqueda/playlist, donde la cola se limpia antes): su
+    // acento se adelanta como visible y CANCELA el timer de "sin pista" — si
+    // la descarga de la pista (track sin archivo local) tarda más de 1.5s, ese
+    // timer ponía el acento en null (fondo negro) en mitad de la carga.
+    _player.preparingTrack.addListener(_onPreparingTrack);
+    _onPreparingTrack();
   }
 
   final PlayerService _player;
@@ -106,7 +113,12 @@ class ThemeController extends ChangeNotifier {
       // el acento actual; solo si de verdad se queda sin pista (1.5s sin una
       // nueva) se vuelve al default.
       _debounce = Timer(const Duration(milliseconds: 1500), () {
-        if (token == _token && _player.currentTrackValue == null) {
+        // `preparingTrackId != null` = hay una pista entrante en carga
+        // (p. ej. descargando el archivo porque no tiene pista local): la
+        // falta de pista PUBLICADA no debe anular un acento que ya tenemos.
+        if (token == _token &&
+            _player.currentTrackValue == null &&
+            _player.preparingTrackId.value == null) {
           _setAccent(null);
         }
       });
@@ -293,6 +305,11 @@ class ThemeController extends ChangeNotifier {
     if (hi == _preparingUrl) return;
     _preparingUrl = hi;
     if (hi == null) return;
+    // Una pista entrante CANCELA el timer de "sin pista" (1.5s de
+    // `_onTrackChanged(null)` tras `_clearPlaybackState`): si resolveSource
+    // tarda más de 1.5s (radio/red), el timer ponía el acento en null (fondo
+    // NEGRO) justo después de que el warm ya hubiera aplicado el color nuevo.
+    _debounce?.cancel();
     final store = paletteCache;
     final stored = store?.get(hi);
     if (stored != null) {
@@ -300,6 +317,15 @@ class ThemeController extends ChangeNotifier {
     } else {
       warmAccent(hi);
     }
+  }
+
+  /// La pista en preparación cambió: adelanta su acento como visible (igual
+  /// que hace el overlay desde la cola, pero SIN depender de encontrarla en
+  /// `queue` — cubre la reproducción individual donde la cola está vacía).
+  /// `setPreparingTrack` además cancela el timer de "sin pista".
+  void _onPreparingTrack() {
+    if (kFlatBlackPlayer) return;
+    setPreparingTrack(_player.preparingTrack.value?.thumbnailUrl);
   }
 
   void _setAccent(Color? color) {
@@ -394,6 +420,7 @@ class ThemeController extends ChangeNotifier {
     _sub?.cancel();
     _player.queue.removeListener(_onQueueChanged);
     _player.queueIndex.removeListener(_onQueueChanged);
+    _player.preparingTrack.removeListener(_onPreparingTrack);
     super.dispose();
   }
 }

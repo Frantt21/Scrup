@@ -102,14 +102,41 @@ class JustAudioBackend implements AudioBackend {
   Future<void> open(String uri, {bool play = true}) async {
     // setAudioSource NO reproduce por sí solo: el arranque lo hace play().
     await _player.setAudioSource(AudioSource.uri(Uri.parse(uri)));
-    if (play) await _player.play();
+    if (play) {
+      // CRÍTICO: NO esperar `play()`. just_audio publica `playing=true`
+      // SÍNCRONAMENTE (antes de sus awaits internos), pero su Future puede
+      // NO completar nunca: en ciertos estados de activación de la sesión el
+      // playCompleter interno queda sin resolver. Si `open()` lo esperara,
+      // el `_publishTrack` de PlayerService nunca correría → la UI quedaba
+      // en loading con la pista sonando y el acento caía a negro (bug
+      // reportado: botón de play congelado + background del color anterior
+      // o negro al cambiar de canción). Se dispara sin esperar: el estado
+      // llega por playingStream y la pista se publica ya.
+      unawaited(
+        _player.play().catchError((Object e) {
+          // Error de arranque: lo reporta el stream de errores del backend.
+          _errorController.add('No se pudo iniciar la reproducción: $e');
+        }),
+      );
+    }
   }
 
   @override
   Future<void> pause() => _player.pause();
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() {
+    // Misma razón que en `open()`: el Future de just_audio puede NO completar
+    // nunca (activación de sesión / playCompleter sin resolver). El toggle y
+    // el handler no deben quedarse colgados esperándolo; playing=true ya se
+    // emite SÍNCRONAMENTE antes de cualquier await interno de play().
+    unawaited(
+      _player.play().catchError((Object e) {
+        _errorController.add('No se pudo iniciar la reproducción: $e');
+      }),
+    );
+    return Future.value();
+  }
 
   @override
   Future<void> seek(Duration position) => _player.seek(position);
