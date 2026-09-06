@@ -345,13 +345,13 @@ class PlayerService {
     final hasNext = _queueIndex >= 0 && _queueIndex < _queue.length - 1;
     if (hasNext) {
       _registerSlide(1);
-      await _playAt(_nextIndex());
+      await _playAt(_nextIndex(), userSkip: true);
       return;
     }
 
     if (_queue.isNotEmpty && repeatMode.value == LoopMode.all) {
       _registerSlide(1);
-      await _playAt(0);
+      await _playAt(0, userSkip: true);
       return;
     }
 
@@ -376,7 +376,7 @@ class PlayerService {
     }
     if (_queueIndex > 0) {
       _registerSlide(-1);
-      await _playAt(_queueIndex - 1);
+      await _playAt(_queueIndex - 1, userSkip: true);
       return;
     }
 
@@ -395,9 +395,21 @@ class PlayerService {
 
   static const Duration _slideIntentMaxAge = Duration(milliseconds: 1500);
 
+  /// Peticiones de cambio animado iniciadas por el USUARIO (botones del
+  /// player/mini, teclas y notificación del OS): +1 siguiente, −1 anterior.
+  /// El overlay del artwork las escucha para reproducir el MISMO carrusel
+  /// que el arrastre (arte saliente + entrante), en vez del slide del
+  /// switcher. `sync: true` para que el overlay capture el arte VISIBLE
+  /// ANTES de que `next()`/`previous()` muevan preparing/publish.
+  final StreamController<double> _slideRequests =
+      StreamController<double>.broadcast(sync: true);
+
+  Stream<double> get slideRequests => _slideRequests.stream;
+
   void _registerSlide(double dir) {
     _slideIntent.value = dir;
     _slideIntentAt = DateTime.now();
+    _slideRequests.add(dir);
   }
 
   /// Devuelve (y resetea) la dirección pedida por el usuario si es reciente
@@ -420,6 +432,20 @@ class PlayerService {
   // en marcha pipeline async que se solaparía y multiplicaría el trabajo.
   DateTime? _lastSkipAt;
   static const Duration kSkipDebounce = Duration(milliseconds: 250);
+
+  /// Rate-limit de cambios de pista: mínimo entre dos _playAt reales. RECHAZA
+  /// en el acto (sin esperar): antes el rechazo dejaba la acción EN ESPERA y
+  /// luego la ejecutaba — 3 taps rápidos = 3 cambios acumulados (pasaba
+  /// canciones de más). Ahora el 2º/3º tap dentro de la ventana se descarta;
+  /// el auto-advance usa un timer trailing (ver [_scheduleAutoAdvance]) para
+  /// no quedar nunca sin reproducir.
+  static const Duration kMinTrackInterval = Duration(milliseconds: 320);
+
+  DateTime _lastPlayAt = DateTime(0);
+
+  /// Auto-advance diferido cuando el cambio cayó en la ventana de
+  /// rate-limit (una sola timer: se reemplaza, nunca se acumula).
+  Timer? _autoAdvanceTimer;
 
   bool _beginSkip() {
     final now = DateTime.now();
@@ -653,15 +679,22 @@ class PlayerService {
       return;
     }
 
-    // Next in queue.
-    if (_queueIndex >= 0 && _queueIndex < _queue.length - 1) {
-      await _playAt(_nextIndex());
-      return;
-    }
-
-    // Queue exhausted + repeat all: back to start.
-    if (_queue.isNotEmpty && repeatMode.value == LoopMode.all) {
-      await _playAt(0);
+    // Next in queue (o repeat all): DIFERIDO si el rate-limit está caliente.
+    // El auto-advance no puede morir en un rechazo (se quedaría sin
+    // reproducir nada), pero tampoco debe acumularse: un solo timer trailing
+    // que se reemplaza.
+    if (_queueIndex >= 0 &&
+        (_queueIndex < _queue.length - 1 ||
+            (_queue.isNotEmpty && repeatMode.value == LoopMode.all))) {
+      final target = _queueIndex < _queue.length - 1
+          ? _nextIndex()
+          : 0;
+      final wait = DateTime.now().difference(_lastPlayAt);
+      if (wait < kMinTrackInterval) {
+        _scheduleAutoAdvance(target, kMinTrackInterval - wait);
+      } else {
+        await _playAt(target);
+      }
       return;
     }
 
@@ -674,12 +707,21 @@ class PlayerService {
     }
   }
 
+  /// Auto-advance tras la ventana de rate-limit. Un solo timer: si otro
+  /// avance llega antes, este se CANCELA y se reprograma (nunca se acumulan
+  /// cambios pendientes).
+  void _scheduleAutoAdvance(int index, Duration delay) {
+    _autoAdvanceTimer?.cancel();
+    _autoAdvanceTimer = Timer(delay, () {
+      unawaited(_playAt(index));
+    });
+  }
+
   Future<void> _retryPrematureCut(Track current) async {
     _prematureRetries[current.id] = (_prematureRetries[current.id] ?? 0) + 1;
-    _errorController.add(
-      'La reproducción de "${current.title}" se interrumpió; '
-      'reintentando…',
-    );
+    // SIN toast: un retri automático no es un error del usuario (y en una
+    // ráfaga de skips encadenaba "conexión abortada" por cada intento).
+    appLog('TRACK', 'retry corte prematuro id=${current.id}');
     if (_queueIndex >= 0) {
       await _playAt(_queueIndex);
     } else {
@@ -739,8 +781,24 @@ class PlayerService {
   }
 
   // Plays track at index in queue. Falls back to next on failure.
-  Future<bool> _playAt(int index) async {
+  // [userSkip]: true en next/previous del usuario — son los ÚNICOS que
+  // pasan por el rate-limit (rechazo instantáneo, sin cola: los taps
+  // rápidos NO se acumulan). Las llamadas programáticas (playQueueAt,
+  // auto-advance, retry por fallo) NO se limitan: un rechazo aquí las
+  // dejaría colgadas (p. ej. playQueue justo tras playQueue en tests/UI).
+  Future<bool> _playAt(int index, {bool userSkip = false}) async {
     if (index < 0 || index >= _queue.length) return false;
+    if (userSkip) {
+      final sinceLast = DateTime.now().difference(_lastPlayAt);
+      if (sinceLast < kMinTrackInterval) {
+        appLog(
+          'TRACK',
+          'playAt rate-limited (${sinceLast.inMilliseconds}ms) — descartado',
+        );
+        return false;
+      }
+    }
+    _lastPlayAt = DateTime.now();
     final token = ++_playToken;
     _queueIndex = index;
     _notifyQueueChanged();
@@ -788,9 +846,14 @@ class PlayerService {
       _schedulePreloads();
       return true;
     } catch (e) {
-      _errorController.add('No se pudo reproducir "${track.title}": $e');
-      if (_queueIndex < _queue.length - 1) {
-        return _playAt(_queueIndex + 1);
+      // Error OBOLETO: si ya se pidió otra pista (token nuevo), este fallo
+      // es del intento viejo — no lo toast (era parte del spam "conexión
+      // abortada" en ráfagas de skips).
+      if (token == _playToken) {
+        _errorController.add('No se pudo reproducir "${track.title}": $e');
+        if (_queueIndex < _queue.length - 1) {
+          return _playAt(_queueIndex + 1);
+        }
       }
       return false;
     } finally {
@@ -963,6 +1026,8 @@ class PlayerService {
     preparingTrackId.dispose();
     preparingTrack.dispose();
     _slideIntent.dispose();
+    _autoAdvanceTimer?.cancel();
+    unawaited(_slideRequests.close());
     repeatMode.dispose();
     shuffle.dispose();
     radio.dispose();

@@ -162,6 +162,58 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
   bool _artDragCommit = false;
   bool _artCommitted = false;
 
+  // ── Slide dirigido por BOTONES/teclas/OS (mismo carrusel que el arrastre) ──
+
+  /// Arte SALIENTE durante el slide dirigido: snapshot del visible justo
+  /// antes del cambio, con la dirección de salida (−1 sale a la izquierda
+  /// en next, +1 sale a la derecha en prev).
+  Track? _outgoingTrack;
+  String? _outgoingUrl;
+  double _outgoingDir = 0;
+  double _outgoingT = 0;
+
+  /// Progress del slide dirigido (0..1) como notifier: reconstruye SOLO el
+  /// bloque del artwork en cada frame (igual que el arrastre).
+  final ValueNotifier<double> _nArtSlide = ValueNotifier<double>(0);
+
+  AnimationController? _slideCtrl;
+
+  StreamSubscription<double>? _slideReqSub;
+
+  /// Lanza el carrusel dirigido: captura el arte VISIBLE (snapshot),
+  /// anima la salida 280ms y libera al terminar.
+  void _startDirectedSlide(double dir) {
+    final showing = _showingNow;
+    _outgoingTrack = showing;
+    _outgoingUrl = showing?.thumbnailUrl;
+    _outgoingDir = -dir; // next (+1): sale a la izquierda; prev: a la derecha.
+    _disposeSlideCtrl();
+    final ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    _slideCtrl = ctrl;
+    ctrl.addListener(() {
+      if (!mounted) return;
+      _outgoingT = Curves.easeOutCubic.transform(ctrl.value);
+      _nArtSlide.value = _outgoingT;
+      if (ctrl.isCompleted) {
+        _outgoingTrack = null;
+        _outgoingUrl = null;
+        _outgoingDir = 0;
+        _outgoingT = 0;
+        _nArtSlide.value = 0;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _disposeSlideCtrl());
+      }
+    });
+    ctrl.forward();
+  }
+
+  void _disposeSlideCtrl() {
+    _slideCtrl?.dispose();
+    _slideCtrl = null;
+  }
+
   void setStateOnlyArt(VoidCallback fn) {
     fn();
     artDragN.value = _artDrag;
@@ -219,6 +271,14 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
 
   void _onArtDragStart(DragStartDetails d) {
     _disposeArtDragCtrl();
+    // Un arrastre cancela el slide dirigido en curso (el usuario toma el
+    // control: la capa saliente se libera al instante).
+    _disposeSlideCtrl();
+    _outgoingTrack = null;
+    _outgoingUrl = null;
+    _outgoingDir = 0;
+    _outgoingT = 0;
+    _nArtSlide.value = 0;
     _artCommitted = false;
     _artDragCommit = false;
     setStateOnlyArt(() {
@@ -355,6 +415,10 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
     ]);
     _player.preparingTrackId.addListener(_onPreparing);
     _onPreparing();
+    // Slide dirigido (botones/teclas/OS): mismo carrusel que el arrastre.
+    // `sync: true` del stream → llega ANTES de que el servicio publique la
+    // pista, así el snapshot del arte saliente es el aún visible.
+    _slideReqSub = _player.slideRequests.listen(_startDirectedSlide);
     if (_nPlaying.value) _ticker = _startTicker();
     unawaited(_setupFavorites(context.read<AppDatabase>()));
   }
@@ -606,8 +670,11 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
     _favSub?.cancel();
     _ticker?.cancel();
     _disposeArtDragCtrl();
+    _disposeSlideCtrl();
+    _slideReqSub?.cancel();
     artDragN.dispose();
     artDragNeighborN.dispose();
+    _nArtSlide.dispose();
     for (final s in _subs) {
       s.cancel();
     }
@@ -816,6 +883,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
           _nSlideDir,
           artDragN,
           artDragNeighborN,
+          _nArtSlide,
         ]),
         builder: (context, _) {
           final showing = _showingNow;
@@ -857,13 +925,27 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
                   // el AnimatedSwitcher de dentro solo hace el crossfade/slide
                   // cuando la pista cambia por BOTÓN, teclas o fin de pista).
                   Transform.translate(
-                    offset: Offset(_artDrag * 120, 0),
+                    offset: Offset(
+                      // Carrusel del arrastre…
+                      _artDrag * 120 +
+                          // …y entrada del slide dirigido (el nuevo entra
+                          // desde el lado del que salió el anterior).
+                          (_outgoingT > 0
+                              ? -_outgoingDir * (1 - _outgoingT) * 120
+                              : 0),
+                      0,
+                    ),
                     child: Transform.scale(
-                      scale: 1 - (_artDrag.abs() * 0.18),
+                      scale:
+                          1 -
+                          (_artDrag.abs() +
+                                  (_outgoingT > 0 ? (1 - _outgoingT) : 0)) *
+                              0.18,
                       child:                  AnimatedSwitcher(
-                    // Commit desde el carrusel: SIN animación (la transición
-                    // ya la hizo el dedo; animar encima se sobreponía).
-                    duration: _artDragCommit
+                    // Commit desde el carrusel O slide dirigido en curso:
+                    // SIN animación (la transición la hace el carrusel;
+                    // animar encima se sobreponía).
+                    duration: _artDragCommit || _nArtSlide.value > 0
                         ? Duration.zero
                         : const Duration(milliseconds: 280),
                     switchInCurve: Curves.easeOutCubic,
@@ -910,6 +992,39 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
                   ),
                     ),
                   ),
+                  // Arte SALIENTE del slide dirigido (botones/teclas/OS):
+                  // snapshot del arte visible antes del cambio, saliendo por
+                  // el lado contrario del que entra el nuevo — el mismo
+                  // movimiento que el carrusel del arrastre.
+                  if (_outgoingTrack != null && _outgoingT < 1)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Transform.translate(
+                          offset: Offset(_outgoingDir * _outgoingT * 120, 0),
+                          child: Opacity(
+                            opacity: (1 - _outgoingT).clamp(0.0, 1.0),
+                            child: Transform.scale(
+                              scale: 1 - _outgoingT * 0.18,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(radius),
+                                child: (_outgoingUrl == null ||
+                                        _outgoingUrl!.isEmpty)
+                                    ? _artPlaceholder(p)
+                                    : CoverImage(
+                                        source: Track.hiResThumbnail(
+                                              _outgoingUrl!,
+                                            ) ??
+                                            _outgoingUrl,
+                                        fit: BoxFit.cover,
+                                        cacheWidth: 900,
+                                        fallback: _artPlaceholder(p),
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   // Arte VECINO durante el arrastre: entra del lado hacia el
                   // que se arrastra (preview 1:1, aún sin cambiar de pista).
                   // Oculto tras el commit: el arte nuevo ya es el principal.

@@ -60,11 +60,20 @@ class ThemeController extends ChangeNotifier {
   Color? _accentColor;
   Color? get accentColor => _accentColor;
 
-  /// Semilla del TEMA (MaterialApp): se aplica EN EL MISMO notify que el
-  /// acento (forawn-style: instantáneo, no diferido). Como el tema es
-  /// instantáneo (1 rebuild, sin animación), no hay tormenta que escalonar.
+  /// Semilla del TEMA (MaterialApp) DESACOPLADA del acento: el acento pinta
+  /// las superficies del player (barato, 1 bloque); la semilla tiñe el
+  /// MaterialApp entero (`ColorScheme.fromSeed` + rebuild global). En el
+  /// CAMBIO de canción ese rebuild global era EL drop de frames — y solo se
+  /// notaba cuando el artwork/acento era distinto (mismo álbum = misma
+  /// semilla = cero rebuilds). Ahora la semilla sigue al acento con un
+  /// delay (350ms): los frames críticos de la transición corren sin él y el
+  /// tinte global entra cuando la transición ya se asentó.
   Color? _themeSeed;
   Color? get themeSeed => _themeSeed;
+
+  Timer? _seedFollowTimer;
+
+  static const Duration _seedFollowDelay = Duration(milliseconds: 350);
 
   Color? _seededPrimary;
   Color? _seededFor;
@@ -333,8 +342,18 @@ class ThemeController extends ChangeNotifier {
     if (prev == color) return;
     appLog('ACCENT', 'SET ${colorHex(prev)} → ${colorHex(color)}');
     _accentColor = color;
-    _themeSeed = color;
-    _seededFor = null;
+    // La semilla del tema sigue al acento DIFERIDA: el rebuild global del
+    // MaterialApp (ColorScheme.fromSeed) ya no compite con los frames de la
+    // transición de pista. Si la pista cambia de nuevo antes del delay, el
+    // timer se reemplaza (la semilla salta directo al último color).
+    _seedFollowTimer?.cancel();
+    _seedFollowTimer = Timer(_seedFollowDelay, () {
+      if (_themeSeed != _accentColor) {
+        _themeSeed = _accentColor;
+        _seededFor = null;
+        notifyListeners();
+      }
+    });
     notifyListeners();
   }
 
@@ -416,6 +435,7 @@ class ThemeController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _seedFollowTimer?.cancel();
     _debounce?.cancel();
     _sub?.cancel();
     _player.queue.removeListener(_onQueueChanged);

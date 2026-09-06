@@ -55,9 +55,26 @@ class _CoverImageState extends State<CoverImage> {
   /// Descargas de persistencia en curso por URL (dedupe entre instancias).
   static final Map<String, Future<void>> _persisting = {};
 
+  /// Memo url → ruta en disco (estático, sobrevive a remounts): las capas
+  /// del player (arte saliente del slide, preview del vecino en el arrastre)
+  /// montan un CoverImage NUEVO; sin memo, su primer build pintaba el
+  /// fallback (nota musical) hasta que el lookup async del caché terminaba —
+  /// el "flash" del icono default en cada cambio/arrastre. Con hit de memo
+  /// la primera build YA renderiza Image.file (además, el provider igual
+  /// cae en el image cache global de Flutter: decode cero).
+  static final Map<String, String> _pathMemo = {};
+
   @override
   void initState() {
     super.initState();
+    final src = widget.source;
+    if (src != null &&
+        src.isNotEmpty &&
+        !CoverImage.isLocalPath(src) &&
+        _pathMemo[src] != null) {
+      _cachedPath = _pathMemo[src];
+      _checked = true;
+    }
     _resolve();
   }
 
@@ -65,8 +82,10 @@ class _CoverImageState extends State<CoverImage> {
   void didUpdateWidget(CoverImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.source != widget.source) {
-      _cachedPath = null;
-      _checked = false;
+      // NO se resetea el estado aquí: mientras se resuelve la fuente nueva
+      // se sigue mostrando la imagen ANTERIOR (gapless) — poner _checked=false
+      // pintaba el fallback (placeholder con la nota musical) 1+ frames en
+      // CADA cambio de pista = el "flash" del artwork default.
       _resolve();
     }
   }
@@ -91,14 +110,21 @@ class _CoverImageState extends State<CoverImage> {
       return;
     }
     final path = await cache.filePathFor(src);
-    if (!mounted) return;
+    // La fuente pudo cambiar mientras se resolvía: el resultado viejo no
+    // debe pisar al de la fuente actual.
+    if (!mounted || src != widget.source) return;
     if (path != null) {
+      if (_pathMemo.length > 200) _pathMemo.clear();
+      _pathMemo[src] = path;
       setState(() {
         _cachedPath = path;
         _checked = true;
       });
     } else {
-      setState(() => _checked = true);
+      setState(() {
+        _cachedPath = null;
+        _checked = true;
+      });
       unawaited(_persistToCache(cache, src));
     }
   }

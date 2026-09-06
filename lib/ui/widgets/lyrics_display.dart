@@ -500,7 +500,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
 // ─── _ResyncScrollController ──────────────────────────────────────────
 
 // ─── _KaraokeLine ─────────────────────────────────────────────────────
-class _KaraokeLine extends StatelessWidget {
+class _KaraokeLine extends StatefulWidget {
   final LyricLine line;
   final bool isCurrent;
   final bool isGap;
@@ -526,14 +526,98 @@ class _KaraokeLine extends StatelessWidget {
     this.sweepUntilMs,
   });
 
+  @override
+  State<_KaraokeLine> createState() => _KaraokeLineState();
+}
+
+class _KaraokeLineState extends State<_KaraokeLine> {
+  // Tokens cacheados UNA vez por (línea, ventana): antes se recalculaban en
+  // CADA build (regex split + listas por cada línea visible a ~30Hz del
+  // ticker de posición) — trabajo puro desperdiciado que se notaba en el
+  // cambio de pista (todas las líneas visibles se reconstruyen a la vez).
+  _LineTokens? _tokens;
+
+  @override
+  void initState() {
+    super.initState();
+    _computeTokens();
+  }
+
+  @override
+  void didUpdateWidget(_KaraokeLine old) {
+    super.didUpdateWidget(old);
+    if (old.line != widget.line ||
+        old.startTime != widget.startTime ||
+        old.endTime != widget.endTime) {
+      _tokens = null;
+      _computeTokens();
+    }
+  }
+
+  void _computeTokens() {
+    final line = widget.line;
+    final lineStartMs = widget.startTime.inMilliseconds;
+    final lineEndMs = widget.endTime.inMilliseconds;
+    final words = line.words;
+
+    if (words != null && words.isNotEmpty && lineEndMs > lineStartMs) {
+      final n = words.length;
+
+      // Normalize timestamps: enforce non-decreasing order.
+      final starts = List<int>.filled(n, lineStartMs);
+      var prev = lineStartMs;
+      for (var i = 0; i < n; i++) {
+        var ws = words[i].timestamp.inMilliseconds;
+        if (ws < prev) ws = prev;
+        starts[i] = ws;
+        prev = ws;
+      }
+
+      // End times: next word's start, or 600ms grace for last word.
+      final toks = <_LineToken>[];
+      for (var i = 0; i < n; i++) {
+        final rawEnd = i < n - 1
+            ? starts[i + 1]
+            : math.max(lineEndMs, starts[i] + 600);
+        final we = math.max(rawEnd, starts[i] + 1);
+        for (final piece in words[i].text.trim().split(RegExp(r'\s+'))) {
+          if (piece.isEmpty) continue;
+          toks.add(_LineToken(piece, starts[i], we));
+        }
+      }
+      if (toks.isNotEmpty) {
+        _tokens = _LineTokens(toks, true);
+        return;
+      }
+    }
+    // No words: plain text tokens with zero time windows.
+    _tokens = _LineTokens([
+      for (final t in line.text.split(' '))
+        if (t.isNotEmpty) _LineToken(t, 0, 0),
+    ], false);
+  }
+
+  static Color _readableAccent(Color c) =>
+      c.computeLuminance() < 0.35 ? Color.lerp(c, Colors.white, 0.5)! : c;
+
   Color get _activeColor =>
       accentColor == null ? Colors.white : _readableAccent(accentColor!);
+
   Color get _inactiveColor => accentColor == null
       ? Colors.white.withValues(alpha: 0.3)
       : _readableAccent(accentColor!).withValues(alpha: 0.3);
 
-  static Color _readableAccent(Color c) =>
-      c.computeLuminance() < 0.35 ? Color.lerp(c, Colors.white, 0.5)! : c;
+  Color? get accentColor => widget.accentColor;
+
+  Duration get startTime => widget.startTime;
+
+  Duration get endTime => widget.endTime;
+
+  bool get isCurrent => widget.isCurrent;
+
+  bool get isGap => widget.isGap;
+
+  bool get isSweepEnabled => widget.isSweepEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -544,8 +628,17 @@ class _KaraokeLine extends StatelessWidget {
       height: 1.3,
       fontFamily: 'Roboto',
     );
-
-    final tokens = computeTokens();
+    final line = widget.line;
+    final startTime = widget.startTime;
+    final endTime = widget.endTime;
+    final isCurrent = widget.isCurrent;
+    final isGap = widget.isGap;
+    final isSweepEnabled = widget.isSweepEnabled;
+    final sweepUntilMs = widget.sweepUntilMs;
+    final offset = widget.offset;
+    final accentColor = widget.accentColor;
+    final positionNotifier = widget.positionNotifier;
+    final tokens = _tokens ?? computeTokens();
 
     // Highlight (isCurrent) is independent of sweep (this line finishes
     // even after losing focus).
@@ -633,9 +726,11 @@ class _KaraokeLine extends StatelessWidget {
     }
   }
 
-  // Computes token list shared by static and sweep modes.
+  // Fallback: solo debería usarse si initState aún no corrió (no en la
+  // práctica); mantiene el cálculo disponible por seguridad.
   // Splits provider words on internal spaces to normalize layout.
   _LineTokens computeTokens() {
+    final line = widget.line;
     final words = line.words;
     final lineStartMs = startTime.inMilliseconds;
     final lineEndMs = endTime.inMilliseconds;
