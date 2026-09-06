@@ -280,6 +280,9 @@ class ScrupApp extends StatelessWidget {
                 return searchService.search(query, limit: 10);
               },
               preload: (track) => cache.preload(track.id, title: track.title),
+              // Camino 2 del precache: pistas YA cacheadas → isolate que lee
+              // sus primeros bytes (page cache caliente para el mount).
+              prepareCached: cache.warmUpcoming,
               onEnriched: (track) async => db.updateTrackMetadata(track),
               onPlayed: (track) async => db.recordPlay(track),
               onShuffleChanged: (enabled) =>

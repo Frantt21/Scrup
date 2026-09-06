@@ -294,12 +294,17 @@ class _HomeViewState extends State<HomeView> {
                         child: _YourLikesBanner(
                           likes: _likes,
                           title: l10n.yourLikes,
-                          // Orden cronológico de like (el stream trae el
-                          // más reciente primero): el más antiguo suena
-                          // primero, como una playlist real.
-                          onPlay: () => unawaited(
-                            playQueue(context, _likes.reversed.toList()),
-                          ),
+                          // Abre la playlist de favoritos REAL (su detalle,
+                          // gestionado por el AppShell): no crea una cola
+                          // nueva ni toca la reproducción.
+                          onOpenPlaylist: () async {
+                            final db = context.read<AppDatabase>();
+                            final id = await db.ensureFavoritesPlaylist();
+                            final pl = await db.getPlaylist(id);
+                            if (pl != null && context.mounted) {
+                              _openPlaylist(pl);
+                            }
+                          },
                         ),
                       ),
                     ),
@@ -627,7 +632,7 @@ class _RecentCardState extends State<_RecentCard> {
                 : null,
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(18),
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -738,19 +743,18 @@ class _RecentCardState extends State<_RecentCard> {
   }
 }
 
-/// Aviso compacto cuando no hay reproducciones recientes.
 /// Banner "Tus me gusta" de home: título a la izquierda + las 3 últimas
-/// portadas de favoritos sobrepuestas a la derecha. Tocarlo reproduce los
-/// favoritos.
+/// portadas de favoritos sobrepuestas a la derecha. Tocarlo abre la
+/// playlist de favoritos (no crea una cola nueva).
 class _YourLikesBanner extends StatelessWidget {
   final List<Track> likes;
   final String title;
-  final VoidCallback onPlay;
+  final VoidCallback? onOpenPlaylist;
 
   const _YourLikesBanner({
     required this.likes,
     required this.title,
-    required this.onPlay,
+    required this.onOpenPlaylist,
   });
 
   @override
@@ -758,35 +762,33 @@ class _YourLikesBanner extends StatelessWidget {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
 
-    // Portadas sobrepuestas (la más reciente arriba): 44dp con borde del
-    // color del banner. Muestro hasta 3; el orden visual va de la más
-    // reciente (arriba) a la más antigua (abajo).
+    // Portadas sobrepuestas: CUADRADAS (mismo radio que el artwork del
+    // player, 18dp), SIN borde, y a TODO EL ALTO del banner. Apiladas con
+    // la más reciente ENCIMA.
+    const double coverRadius = 18.0;
+    // ALTURA FIJA de la pila: dentro de un sliver la altura no viene
+    // acotada (double.infinity en contexto sin límite = excepción de
+    // layout que dejaba el home entero en blanco tras el header).
+    const double bannerHeight = 72.0;
     final covers = <Widget>[];
     for (var i = 0; i < likes.length && i < 3; i++) {
       final t = likes[i];
       covers.add(
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: accent, width: 2),
-          ),
-          child: ClipOval(
-            child: SizedBox(
-              width: 44,
-              height: 44,
-              child: CoverImage(
-                source: t.thumbnailUrl != null
-                    ? (Track.hiResThumbnail(t.thumbnailUrl) ?? t.thumbnailUrl)
-                    : null,
-                fit: BoxFit.cover,
-                cacheWidth: 96,
-                fallback: ColoredBox(
-                  color: accent.withValues(alpha: 0.25),
-                  child: Icon(
-                    Icons.favorite_rounded,
-                    size: 20,
-                    color: theme.colorScheme.onPrimary,
-                  ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(coverRadius),
+          child: SizedBox.expand(
+            child: CoverImage(
+              source: t.thumbnailUrl != null
+                  ? (Track.hiResThumbnail(t.thumbnailUrl) ?? t.thumbnailUrl)
+                  : null,
+              fit: BoxFit.cover,
+              cacheWidth: 128,
+              fallback: ColoredBox(
+                color: accent.withValues(alpha: 0.25),
+                child: Icon(
+                  Icons.favorite_rounded,
+                  size: 20,
+                  color: theme.colorScheme.onPrimary,
                 ),
               ),
             ),
@@ -800,16 +802,14 @@ class _YourLikesBanner extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onPlay,
+        onTap: onOpenPlaylist,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.fromLTRB(14, 0, 8, 0),
+          // SIN padding vertical: las portadas ocupan todo el alto del card
+          // (el ClipRRect del banner recorta las esquinas por el radio 16).
           child: Row(
             children: [
-              Icon(
-                Icons.favorite_rounded,
-                color: accent,
-                size: 22,
-              ),
+              Icon(Icons.favorite_rounded, color: accent, size: 22),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -822,16 +822,17 @@ class _YourLikesBanner extends StatelessWidget {
                   ),
                 ),
               ),
-              // Portadas sobrepuestas: la más reciente ENCIMA de la pila.
+              // Pila: la más reciente encima, desplazadas 26px cada una.
               SizedBox(
-                width: 44 + (covers.length - 1) * 22.0,
-                height: 44,
+                width: 56 + (covers.length - 1) * 26.0,
+                height: bannerHeight,
                 child: Stack(
+                  clipBehavior: Clip.none,
                   children: [
                     for (var i = covers.length - 1; i >= 0; i--)
-                      Positioned(
-                        left: i * 22.0,
-                        top: 0,
+                      Positioned.fill(
+                        left: i * 26.0,
+                        right: (covers.length - 1 - i) * 26.0,
                         child: covers[i],
                       ),
                   ],

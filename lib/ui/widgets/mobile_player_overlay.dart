@@ -1463,27 +1463,26 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
             final fav = _nFav.value;
             return Row(
               children: [
-                // Botón de playlist: el ÁREA TÁCTIL (48dp) queda alineada al
-                // extremo IZQUIERDO del artwork (el IconButton desplazado
-                // compone la fila de verdad); SOLO EL GLIFO se vuelve a
-                // centrar dentro del área con [_flushGlyph]. Antes era al
-                // revés (área metida hacia adentro, glifo fuera) y el tap
-                // no coincidía con lo que se ve.
-                Transform.translate(
-                  offset: const Offset(-11, 0),
-                  child: IconButton(
-                    icon: _flushGlyph(
-                      right: false,
-                      icon: const Icon(Icons.playlist_add_rounded),
-                    ),
-                    // Contraste adaptativo: negro sobre acentos claros (igual
-                    // que el título, el favorito y el transporte).
-                    color: _staticWhite,
-                    tooltip: 'Agregar a playlist',
-                    onPressed: track == null
-                        ? null
-                        : () => showAddToPlaylistDialog(context, track),
+                // Botón de playlist: el BOTÓN COMPLETO (icono + área táctil
+                // de 48dp) queda alineado al extremo IZQUIERDO del artwork.
+                // El [_flushGlyph] solo compensa la holgura INTERNA del
+                // IconButton (el glifo se descentra 11px dentro del botón)
+                // para que el icono no parezca flotando; el botón entero
+                // ocupa el extremo. Sin desplazamientos externos: los
+                // Transform.translate extra empujaban el botón FUERA del
+                // artwork (desalineados hacia afuera).
+                IconButton(
+                  icon: _flushGlyph(
+                    right: false,
+                    icon: const Icon(Icons.playlist_add_rounded),
                   ),
+                  // Contraste adaptativo: negro sobre acentos claros (igual
+                  // que el título, el favorito y el transporte).
+                  color: _staticWhite,
+                  tooltip: 'Agregar a playlist',
+                  onPressed: track == null
+                      ? null
+                      : () => showAddToPlaylistDialog(context, track),
                 ),
                 Expanded(
                   child: Column(
@@ -1517,24 +1516,21 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
                     ],
                   ),
                 ),
-                Transform.translate(
-                  // Botón de favorito: espejo del de playlist — el ÁREA
-                  // TÁCTIL queda en el EXTREMO derecho del artwork y el
-                  // glifo se recentra dentro de ella con [_flushGlyph].
-                  offset: const Offset(11, 0),
-                  child: IconButton(
-                    icon: _flushGlyph(
-                      right: true,
-                      icon: Icon(
-                        fav
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                      ),
+                // Botón de favorito: espejo del de playlist — el BOTÓN
+                // COMPLETO en el extremo derecho del artwork, con su glifo
+                // re-centrado dentro del área táctil (sin translate extra).
+                IconButton(
+                  icon: _flushGlyph(
+                    right: true,
+                    icon: Icon(
+                      fav
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
                     ),
-                    color: fav ? _staticWhite : _staticWhiteA(0.85),
-                    tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                    onPressed: _toggleFavorite,
                   ),
+                  color: fav ? _staticWhite : _staticWhiteA(0.85),
+                  tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
+                  onPressed: _toggleFavorite,
                 ),
               ],
             );
@@ -2036,12 +2032,16 @@ class _LyricsPeekState extends State<_LyricsPeek> {
   // Claves internas de LyricsView: el botón vive aquí (Android no tiene
   // hover para mostrar los flotantes) pero PRESIONA el botón real del view,
   // así reutiliza sus diálogos y estado sin duplicar lógica.
-  static const Map<String, Key> _lyricsActionKeys = {
-    'karaoke': GlobalObjectKey('_lyrics_sweep_btn'),
-    'offset': GlobalObjectKey('_lyrics_sync_btn'),
-    'search': GlobalObjectKey('_lyrics_search_btn'),
-    'share': GlobalObjectKey('_lyrics_share_btn'),
-  };
+  // Puente al registro estático de LyricsView (el view ACTIVO rellena el
+  // mapa en cada build): los botones reutilizan diálogos/estado reales sin
+  // duplicar lógica ni claves globales frágiles. Quedan deshabilitados
+  // (null) cuando no procede (sin letras/sin pista).
+  static const List<String> _lyricsActions = [
+    'karaoke',
+    'offset',
+    'search',
+    'share',
+  ];
 
   IconData _lyricsActionIcon(String action) => switch (action) {
     'karaoke' => Icons.graphic_eq_rounded,
@@ -2050,7 +2050,7 @@ class _LyricsPeekState extends State<_LyricsPeek> {
     _ => Icons.share_rounded,
   };
 
-  String _lyricsActionTooltip(String action, ThemeData theme) {
+  String _lyricsActionTooltip(String action) {
     final l10n = AppLocalizations.of(context);
     return switch (action) {
       'karaoke' => l10n.karaokeSweepOn,
@@ -2061,16 +2061,7 @@ class _LyricsPeekState extends State<_LyricsPeek> {
   }
 
   void _runLyricsAction(String action) {
-    final key = _lyricsActionKeys[action];
-    if (key is GlobalObjectKey) {
-      key.currentContext?.visitAncestorElements((element) {
-        if (element.widget is IconButton) {
-          (element.widget as IconButton).onPressed?.call();
-          return false;
-        }
-        return true;
-      });
-    }
+    LyricsView.activeActions[action]?.call();
   }
 
   void _onDragStart(DragStartDetails d) {
@@ -2257,31 +2248,32 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                             },
                             child: _open >= 0.5
                                 ? Row(
-                                    key: const ValueKey('lyr-actions'),
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      for (final entry in
-                                          _lyricsActionKeys.entries)
-                                        IconButton(
-                                          key: entry.value,
-                                          visualDensity:
-                                              VisualDensity.compact,
-                                          icon: Icon(
-                                            _lyricsActionIcon(entry.key),
-                                            size: 20,
+                                      key: const ValueKey('lyr-actions'),
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        for (final action in _lyricsActions)
+                                          IconButton(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            icon: Icon(
+                                              _lyricsActionIcon(action),
+                                              size: 20,
+                                            ),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.9,
+                                            ),
+                                            tooltip: _lyricsActionTooltip(
+                                              action,
+                                            ),
+                                            onPressed:
+                                                LyricsView.activeActions[action] ==
+                                                    null
+                                                ? null
+                                                : () =>
+                                                      _runLyricsAction(action),
                                           ),
-                                          color: Colors.white.withValues(
-                                            alpha: 0.9,
-                                          ),
-                                          tooltip: _lyricsActionTooltip(
-                                            entry.key,
-                                            theme,
-                                          ),
-                                          onPressed: () =>
-                                              _runLyricsAction(entry.key),
-                                        ),
-                                    ],
-                                  )
+                                      ],
+                                    )
                                 : const SizedBox(width: 0, height: 0),
                           ),
                           IconButton(

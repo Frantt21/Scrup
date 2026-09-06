@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../core/app_log.dart';
 import 'ytdlp_service.dart';
 
 /// Local audio source: cached file or partial download for progressive playback.
@@ -125,6 +126,60 @@ class AudioCacheService {
       const Duration(seconds: 25),
     );
     return StreamingSource(path);
+  }
+
+  /// Cuántas pistas siguientes se "despiertan" de disco (page cache).
+  static const int maxWarmUpcoming = 5;
+
+  /// Bytes del header leídos por archivo: basta para que el SO traiga el
+  /// inicio del contenedor (moov/stco en m4a) a la page cache.
+  static const int _warmHeaderBytes = 1 << 20;
+
+  // Dedupe de pistas ya despertadas en esta sesión (set barato en memoria).
+  final Set<String> _warmedIds = {};
+
+  /// Camino 2 del precache: pistas YA cacheadas en disco. A diferencia de
+  /// [preload] (descarga), aquí no hay I/O de red: se abre cada archivo en
+  /// un ISOLATE y se leen sus primeros bytes para que el sistema operativo
+  /// los traiga a la page cache ANTES de que termine la pista actual — al
+  /// montar la pista, el backend (ExoPlayer) encuentra el header caliente
+  /// y el `open()` no toca disco en frío (sin jank en la transición).
+  void warmUpcoming(List<String> videoIds) {
+    for (final id in videoIds) {
+      if (_warmedIds.contains(id)) continue;
+      _warmedIds.add(id);
+      if (_warmedIds.length > 200) _warmedIds.clear();
+      unawaited(_warmOne(id));
+    }
+  }
+
+  Future<void> _warmOne(String videoId) async {
+    try {
+      final path = await cachedPath(videoId);
+      if (path == null) return; // no cacheado: lo cubre `preload` (descarga)
+      final warmPath = path;
+      final bytes = await Isolate.run(() => _readHeaderBytes(warmPath));
+      if (bytes > 0) {
+        appLog('PERF', 'warm header +${bytes}B id=$videoId');
+      }
+    } catch (_) {}
+  }
+
+  /// Lee los primeros [_warmHeaderBytes] del archivo (DENTRO del isolate:
+  /// todo el I/O de disco queda fuera del UI thread).
+  static int _readHeaderBytes(String path) {
+    final f = File(path);
+    if (!f.existsSync()) return 0;
+    final raf = f.openSync();
+    try {
+      final len = f.lengthSync();
+      final take = len > _warmHeaderBytes ? _warmHeaderBytes : len;
+      if (take <= 0) return 0;
+      final buf = List<int>.filled(take, 0, growable: false);
+      return raf.readIntoSync(buf, 0, take);
+    } finally {
+      raf.closeSync();
+    }
   }
 
   // Background preload with bandwidth-awareness and concurrency limit.

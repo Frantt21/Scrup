@@ -43,6 +43,13 @@ class PlayerService {
 
   final Future<void> Function(Track track)? preload;
 
+  /// Camino 2 del precache: "despertar" de page cache las próximas pistas
+  /// QUE YA ESTÁN en disco (las que no lo están las cubre [preload] con la
+  /// descarga). Lo implementa [AudioCacheService.warmUpcoming]: isolate que
+  /// lee los primeros bytes de cada archivo para que el backend los encuentre
+  /// calientes al montar la pista. `null` en plataformas donde no aplica.
+  final void Function(List<String> trackIds)? prepareCached;
+
   final Future<List<Track>> Function(Track track)? recommend;
   final Future<Track?> Function(Track track)? enrich;
   final Future<void> Function(Track track)? onPlayed;
@@ -158,6 +165,7 @@ class PlayerService {
   PlayerService({
     required AudioBackend audioBackend,
     required this.resolveSource,
+    required this.prepareCached,
     this.recommend,
     this.enrich,
     this.preload,
@@ -749,6 +757,13 @@ class PlayerService {
     appLog('PERF', 'preload x${targets.length} desde idx=$_queueIndex');
     for (final t in targets) {
       unawaited(_preloadTrack(fn, t));
+    }
+    // Camino 2: las pistas siguientes que YA están en disco se "despiertan"
+    // de page cache (isolate leyendo sus primeros bytes). Barato (sin red,
+    // fuera del UI thread) y se salta las que ya pasaron por aquí.
+    final warm = prepareCached;
+    if (warm != null) {
+      warm(targets.map((t) => t.id).toList());
     }
   }
 

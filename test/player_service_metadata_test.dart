@@ -56,6 +56,7 @@ void main() {
     player = PlayerService(
       audioBackend: MediaKitBackend(),
       resolveSource: (track) async => PlayableSource(wav.path, isLocal: true),
+      prepareCached: null,
       onEnriched: (track) async => enriched.add(track),
     );
   });

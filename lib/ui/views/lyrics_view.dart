@@ -35,6 +35,13 @@ class LyricsView extends StatefulWidget {
 
   const LyricsView({super.key, this.embedded = false});
 
+  /// Puente estático para el header del sheet de letras (Android): el sheet
+  /// llama a estas acciones SIN duplicar diálogos/estado. El view ACTIVO
+  /// rellena el mapa en cada build (callbacks con estado vivo) y lo limpia
+  /// al disponer. Sin GlobalObjectKey: pueden coexistir 2 instancias
+  /// montadas (página de letras + sheet) y la key duplicada revienta.
+  static final Map<String, VoidCallback?> activeActions = {};
+
   @override
   State<LyricsView> createState() => _LyricsViewState();
 }
@@ -258,6 +265,7 @@ class _LyricsViewState extends State<LyricsView>
 
   @override
   void dispose() {
+    LyricsView.activeActions.clear();
     _trackSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
@@ -434,6 +442,18 @@ class _LyricsViewState extends State<LyricsView>
     final l10n = AppLocalizations.of(context);
     final accent = context.watch<ThemeController>().accentColor;
 
+    // Registro de acciones para el header del sheet (Android): cada build
+    // refresca los callbacks con el estado VIVO de esta instancia (si hay
+    // dos montadas, la última en construir manda — solo una es visible).
+    LyricsView.activeActions['karaoke'] = () async {
+      final next = !_sweepEnabled;
+      setState(() => _sweepEnabled = next);
+      await context.read<SettingsStore>().setLyricsSweepEnabled(next);
+    };
+    LyricsView.activeActions['offset'] = _lyrics == null ? null : _showSyncDialog;
+    LyricsView.activeActions['search'] = _track == null ? null : _showSearchDialog;
+    LyricsView.activeActions['share'] = _lyrics == null ? null : _showShareDialog;
+
     final embedded = widget.embedded;
     final Widget page = Container(
       margin: embedded
@@ -550,10 +570,6 @@ class _LyricsViewState extends State<LyricsView>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      // Key pública: el header del sheet de letras (Android)
-                      // presiona ESTE botón real vía GlobalObjectKey, así
-                      // reutiliza diálogos/estado sin duplicar lógica.
-                      key: const GlobalObjectKey('_lyrics_sweep_btn'),
                       icon: Icon(
                         Icons.graphic_eq_rounded,
                         color: _sweepEnabled
@@ -572,19 +588,16 @@ class _LyricsViewState extends State<LyricsView>
                       },
                     ),
                     IconButton(
-                      key: const GlobalObjectKey('_lyrics_sync_btn'),
                       icon: const Icon(Icons.timer_rounded),
                       tooltip: l10n.syncLyricsTitle,
                       onPressed: _lyrics == null ? null : _showSyncDialog,
                     ),
                     IconButton(
-                      key: const GlobalObjectKey('_lyrics_search_btn'),
                       icon: const Icon(Icons.search_rounded),
                       tooltip: l10n.searchLyrics,
                       onPressed: _track == null ? null : _showSearchDialog,
                     ),
                     IconButton(
-                      key: const GlobalObjectKey('_lyrics_share_btn'),
                       icon: const Icon(Icons.share_rounded),
                       tooltip: l10n.shareLyrics,
                       onPressed: _lyrics == null ? null : _showShareDialog,

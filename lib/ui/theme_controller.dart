@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -268,6 +269,77 @@ class ThemeController extends ChangeNotifier {
     }
     if (upcoming.isNotEmpty) {
       appLog('WARM', 'cola idx=$index → warm $upcoming');
+    }
+    // Decode-precache de las próximas 5 portadas (no solo las 2 del acento).
+    _precacheUpcomingArtwork();
+  }
+
+  /// Cuántas portadas siguientes se decodifican por adelantado.
+  static const int _artworkPrecacheAhead = 5;
+
+  /// URLs ya pedidas al caché de imágenes de Flutter (dedupe; se limpia
+  /// cuando crece para no filtrar memoria en sesiones largas).
+  final Set<String> _precacheRequested = {};
+
+  /// Decode-precache del artwork de las próximas pistas: resuelve la MISMA
+  /// clave de imagen que usará el player (`ResizeImage(width: 900)` sobre el
+  /// FileImage del caché de disco, como el `cacheWidth: 900` de `CoverImage`)
+  /// y la mete en el image cache global de Flutter. Al cambiar de canción la
+  /// textura ya está decodificada y subida a GPU: el arte nuevo aparece sin
+  /// decode en caliente (esa decodificación sobre el UI thread era una parte
+  /// del drop de frames en transiciones con artwork distinto).
+  ///
+  /// Sin `BuildContext` (esto es un controller): se resuelve con una
+  /// `ImageConfiguration()` vacía — la anchura de decode la fija el
+  /// [ResizeImage], no la configuración.
+  void _precacheUpcomingArtwork() {
+    if (kNoArtwork) return;
+    final cache = artworkCache;
+    if (cache == null) return;
+    final queue = _player.queue.value;
+    final index = _player.queueIndex.value;
+    if (queue.isEmpty || index < 0) return;
+    for (var i = 1; i <= _artworkPrecacheAhead; i++) {
+      final next = index + i;
+      if (next >= queue.length) break;
+      final url = _hiResUrl(queue[next].thumbnailUrl);
+      if (url == null || _precacheRequested.contains(url)) continue;
+      _precacheRequested.add(url);
+      unawaited(_precacheOne(cache, url));
+    }
+    if (_precacheRequested.length > 100) _precacheRequested.clear();
+  }
+
+  Future<void> _precacheOne(ArtworkCacheService cache, String url) async {
+    try {
+      final path = await cache.filePathFor(url);
+      // Misma clave que renderizará CoverImage: hit exacto en el image cache.
+      final ImageProvider base = path != null
+          ? FileImage(File(path))
+          : NetworkImage(url); // aún sin bytes: la descarga la trae el warm
+      final provider = ResizeImage(base, width: 900);
+      final stream = provider.resolve(const ImageConfiguration());
+      final done = Completer<void>();
+      late final ImageStreamListener listener;
+      listener = ImageStreamListener(
+        (image, _) {
+          image.image.dispose(); // solo nos interesa el decode/cache
+          if (!done.isCompleted) done.complete();
+          stream.removeListener(listener);
+        },
+        onError: (_, __) {
+          if (!done.isCompleted) done.complete();
+          stream.removeListener(listener);
+        },
+      );
+      stream.addListener(listener);
+      await done.future.timeout(const Duration(seconds: 15), onTimeout: () {
+        stream.removeListener(listener);
+      });
+      appLog('WARM', 'precache art ${shortUrl(url)}');
+    } catch (_) {
+      // Fallo transitorio: permitir reintento en el próximo cambio de cola.
+      _precacheRequested.remove(url);
     }
   }
 
