@@ -218,5 +218,11 @@
   "shortcutMouseBack": "Música anterior (rato)",
   "shortcutMouseForward": "Próxima música (rato)",
   "searchArtistsSection": "Artista",
-  "searchArtistPlaying": "Reproduzindo {name}"
+  "searchArtistPlaying": "Reproduzindo {name}",
+  "artistTopTracks": "Populares",
+  "artistAlbums": "Álbuns e singles",
+  "artistSubscribers": "inscritos",
+  "artistDetailEmpty": "Não foi possível carregar este artista.",
+  "retry": "Tentar novamente",
+  "playAll": "Reproduzir tudo"
 }

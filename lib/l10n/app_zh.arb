@@ -218,5 +218,11 @@
   "shortcutMouseBack": "上一首 (鼠标)",
   "shortcutMouseForward": "下一首 (鼠标)",
   "searchArtistsSection": "歌手",
-  "searchArtistPlaying": "正在播放 {name}"
+  "searchArtistPlaying": "正在播放 {name}",
+  "artistTopTracks": "热门歌曲",
+  "artistAlbums": "专辑与单曲",
+  "artistSubscribers": "位订阅者",
+  "artistDetailEmpty": "无法加载此歌手。",
+  "retry": "重试",
+  "playAll": "播放全部"
 }

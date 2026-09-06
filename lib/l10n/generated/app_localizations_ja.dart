@@ -700,4 +700,22 @@ class AppLocalizationsJa extends AppLocalizations {
   String searchArtistPlaying(String name) {
     return '$name を再生中';
   }
+
+  @override
+  String get artistTopTracks => '人気の曲';
+
+  @override
+  String get artistAlbums => 'アルバムとシングル';
+
+  @override
+  String get artistSubscribers => '人のチャンネル登録者';
+
+  @override
+  String get artistDetailEmpty => 'このアーティストを読み込めませんでした。';
+
+  @override
+  String get retry => '再試行';
+
+  @override
+  String get playAll => 'すべて再生';
 }

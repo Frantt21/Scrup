@@ -218,5 +218,11 @@
   "shortcutMouseBack": "Предыдущий трек (мышь)",
   "shortcutMouseForward": "Следующий трек (мышь)",
   "searchArtistsSection": "Исполнитель",
-  "searchArtistPlaying": "Воспроизводится {name}"
+  "searchArtistPlaying": "Воспроизводится {name}",
+  "artistTopTracks": "Популярное",
+  "artistAlbums": "Альбомы и синглы",
+  "artistSubscribers": "подписчиков",
+  "artistDetailEmpty": "Не удалось загрузить этого исполнителя.",
+  "retry": "Повторить",
+  "playAll": "Слушать всё"
 }

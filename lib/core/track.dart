@@ -17,6 +17,19 @@ class Track {
   /// con su matching difuso. No se serializa: es proveniencia en memoria.
   final bool cleanMetadata;
 
+  /// Canal de YouTube del artista del resultado (`UC…`, extraído de la
+  /// navegación de la fila de InnerTube). Sirve para abrir el detalle del
+  /// artista sin una request extra. `null` = canal no conocido.
+  final String? artistChannelId;
+
+  /// Suscriptores del canal del artista (si InnerTube los trae en la fila).
+  final int? subscriberCount;
+
+  /// Reproducciones de la pista tal como las trae InnerTube ("1.2M plays").
+  /// Solo presente en listados que las exponen (tab de canciones del
+  /// artista). No forma parte de la identidad de la pista.
+  final String? playCountText;
+
   const Track({
     required this.id,
     required this.title,
@@ -25,6 +38,9 @@ class Track {
     this.thumbnailUrl,
     this.album,
     this.cleanMetadata = false,
+    this.artistChannelId,
+    this.subscriberCount,
+    this.playCountText,
   });
 
   factory Track.fromYtDlp(Map<String, dynamic> json) {
@@ -89,6 +105,9 @@ class Track {
     String? thumbnailUrl,
     String? album,
     bool? cleanMetadata,
+    String? artistChannelId,
+    int? subscriberCount,
+    String? playCountText,
   }) {
     return Track(
       id: id,
@@ -98,6 +117,9 @@ class Track {
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       album: album ?? this.album,
       cleanMetadata: cleanMetadata ?? this.cleanMetadata,
+      artistChannelId: artistChannelId ?? this.artistChannelId,
+      subscriberCount: subscriberCount ?? this.subscriberCount,
+      playCountText: playCountText ?? this.playCountText,
     );
   }
 }

@@ -712,6 +712,24 @@ class AppLocalizationsPt extends AppLocalizations {
   String searchArtistPlaying(String name) {
     return 'Reproduzindo $name';
   }
+
+  @override
+  String get artistTopTracks => 'Populares';
+
+  @override
+  String get artistAlbums => 'Álbuns e singles';
+
+  @override
+  String get artistSubscribers => 'inscritos';
+
+  @override
+  String get artistDetailEmpty => 'Não foi possível carregar este artista.';
+
+  @override
+  String get retry => 'Tentar novamente';
+
+  @override
+  String get playAll => 'Reproduzir tudo';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1392,4 +1410,22 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String searchArtistPlaying(String name) {
     return 'Reproduzindo $name';
   }
+
+  @override
+  String get artistTopTracks => 'Populares';
+
+  @override
+  String get artistAlbums => 'Álbuns e singles';
+
+  @override
+  String get artistSubscribers => 'inscritos';
+
+  @override
+  String get artistDetailEmpty => 'Não foi possível carregar este artista.';
+
+  @override
+  String get retry => 'Tentar novamente';
+
+  @override
+  String get playAll => 'Reproduzir tudo';
 }

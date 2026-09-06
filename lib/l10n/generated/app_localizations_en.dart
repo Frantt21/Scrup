@@ -711,4 +711,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String searchArtistPlaying(String name) {
     return 'Playing $name';
   }
+
+  @override
+  String get artistTopTracks => 'Popular';
+
+  @override
+  String get artistAlbums => 'Albums & singles';
+
+  @override
+  String get artistSubscribers => 'subscribers';
+
+  @override
+  String get artistDetailEmpty => 'Could not load this artist.';
+
+  @override
+  String get retry => 'Retry';
+
+  @override
+  String get playAll => 'Play all';
 }

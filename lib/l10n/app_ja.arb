@@ -218,5 +218,11 @@
   "shortcutMouseBack": "前の曲 (マウス)",
   "shortcutMouseForward": "次の曲 (マウス)",
   "searchArtistsSection": "アーティスト",
-  "searchArtistPlaying": "{name} を再生中"
+  "searchArtistPlaying": "{name} を再生中",
+  "artistTopTracks": "人気の曲",
+  "artistAlbums": "アルバムとシングル",
+  "artistSubscribers": "人のチャンネル登録者",
+  "artistDetailEmpty": "このアーティストを読み込めませんでした。",
+  "retry": "再試行",
+  "playAll": "すべて再生"
 }

@@ -698,4 +698,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String searchArtistPlaying(String name) {
     return '正在播放 $name';
   }
+
+  @override
+  String get artistTopTracks => '热门歌曲';
+
+  @override
+  String get artistAlbums => '专辑与单曲';
+
+  @override
+  String get artistSubscribers => '位订阅者';
+
+  @override
+  String get artistDetailEmpty => '无法加载此歌手。';
+
+  @override
+  String get retry => '重试';
+
+  @override
+  String get playAll => '播放全部';
 }

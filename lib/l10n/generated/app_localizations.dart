@@ -1398,6 +1398,42 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Reproduciendo {name}'**
   String searchArtistPlaying(String name);
+
+  /// No description provided for @artistTopTracks.
+  ///
+  /// In es, this message translates to:
+  /// **'Populares'**
+  String get artistTopTracks;
+
+  /// No description provided for @artistAlbums.
+  ///
+  /// In es, this message translates to:
+  /// **'Álbumes y sencillos'**
+  String get artistAlbums;
+
+  /// No description provided for @artistSubscribers.
+  ///
+  /// In es, this message translates to:
+  /// **'suscriptores'**
+  String get artistSubscribers;
+
+  /// No description provided for @artistDetailEmpty.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudo cargar este artista.'**
+  String get artistDetailEmpty;
+
+  /// No description provided for @retry.
+  ///
+  /// In es, this message translates to:
+  /// **'Reintentar'**
+  String get retry;
+
+  /// No description provided for @playAll.
+  ///
+  /// In es, this message translates to:
+  /// **'Reproducir todo'**
+  String get playAll;
 }
 
 class _AppLocalizationsDelegate

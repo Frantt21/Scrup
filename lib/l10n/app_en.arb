@@ -355,5 +355,11 @@
   "providerKpoe": "KPoe · word by word",
   "providerLrclib": "LRCLIB · line",
   "searchArtistsSection": "Artist",
-  "searchArtistPlaying": "Playing {name}"
+  "searchArtistPlaying": "Playing {name}",
+  "artistTopTracks": "Popular",
+  "artistAlbums": "Albums & singles",
+  "artistSubscribers": "subscribers",
+  "artistDetailEmpty": "Could not load this artist.",
+  "retry": "Retry",
+  "playAll": "Play all"
 }

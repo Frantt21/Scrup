@@ -218,5 +218,11 @@
   "shortcutMouseBack": "이전 곡 (마우스)",
   "shortcutMouseForward": "다음 곡 (마우스)",
   "searchArtistsSection": "아티스트",
-  "searchArtistPlaying": "{name} 재생 중"
+  "searchArtistPlaying": "{name} 재생 중",
+  "artistTopTracks": "인기 곡",
+  "artistAlbums": "앨범 및 싱글",
+  "artistSubscribers": "구독자",
+  "artistDetailEmpty": "이 아티스트를 불러올 수 없습니다.",
+  "retry": "다시 시도",
+  "playAll": "전체 재생"
 }

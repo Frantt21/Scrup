@@ -718,4 +718,22 @@ class AppLocalizationsRu extends AppLocalizations {
   String searchArtistPlaying(String name) {
     return 'Воспроизводится $name';
   }
+
+  @override
+  String get artistTopTracks => 'Популярное';
+
+  @override
+  String get artistAlbums => 'Альбомы и синглы';
+
+  @override
+  String get artistSubscribers => 'подписчиков';
+
+  @override
+  String get artistDetailEmpty => 'Не удалось загрузить этого исполнителя.';
+
+  @override
+  String get retry => 'Повторить';
+
+  @override
+  String get playAll => 'Слушать всё';
 }

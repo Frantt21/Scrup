@@ -8,6 +8,7 @@ import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/player_service.dart';
 import '../../services/search_service.dart';
+import 'artist_detail_view.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
 import '../widgets/cover_image.dart';
@@ -120,24 +121,18 @@ class _SearchViewState extends State<SearchView> {
       _hasSearched = true;
     });
     try {
-      // Canciones (30 por defecto) y artistas (InnerTube, búsqueda general)
-      // en PARALELO: ambas fuentes son rápidas, ninguna bloquea a la otra.
-      final results = context.read<SearchService>().search(q);
-      final artists = context.read<SearchService>().searchArtists(q, limit: 8);
-      final tracks = await results;
+      // Una sola request: InnerTube (filtro de canciones). Los artistas se
+      // DERIVAN de los resultados (cada fila trae el canal de su artista):
+      // sin la request extra de la búsqueda general, la búsqueda vuelve a
+      // su velocidad anterior (~0.3-1s en frío, instantánea con caché).
+      final tracks = await context.read<SearchService>().search(q);
       if (!mounted || token != _searchToken) return; // búsqueda obsoleta
-      // SIN enriquecimiento automático: InnerTube ya devuelve metadatos
-      // limpios (y Deezer solo vive en el editor manual de metadatos).
-      // Canciones YA: se pintan al llegar (~0.3-1s). Los artistas llegan
-      // unos ms después y aparecen encima SIN bloquear la lista.
-      if (!mounted || token != _searchToken) return;
+      final artistList = SearchService.deriveArtists(tracks, limit: 8);
       setState(() {
         _results = tracks;
+        _artists = artistList;
         _searching = false;
       });
-      final artistList = await artists;
-      if (!mounted || token != _searchToken) return;
-      setState(() => _artists = artistList);
     } catch (e) {
       if (!mounted || token != _searchToken) return;
       setState(() {
@@ -412,7 +407,7 @@ class _SearchViewState extends State<SearchView> {
           final artist = _artists[i];
           return _ArtistTile(
             artist: artist,
-            onTap: () => unawaited(_playArtist(artist)),
+            onTap: () => _openArtist(artist),
           );
         }
         final track = _results[i - _artists.length];
@@ -427,22 +422,14 @@ class _SearchViewState extends State<SearchView> {
     );
   }
 
-  /// Toca un artista → cola con sus mejores canciones: el catálogo del
-  /// artista se obtiene con el filtro de canciones de YT Music sobre su
-  /// nombre (canciones canónicas, sin covers/lives) y entra en caché como
-  /// cualquier búsqueda.
-  Future<void> _playArtist(YtmArtist artist) async {
-    final player = context.read<PlayerService>();
-    try {
-      final tracks = await context.read<SearchService>().search(
-        artist.name,
-        limit: 25,
-      );
-      if (tracks.isEmpty) return;
-      await player.playQueue(tracks);
-    } catch (_) {
-      // Sin catálogo no hay reproducción; el fallo no debe romper la view.
-    }
+  /// Toca un artista → screen de detalle (push a pantalla completa). El
+  /// detalle carga sus datos por sí mismo (cache 24h por canal).
+  void _openArtist(YtmArtist artist) {
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ArtistDetailView(artist: artist),
+      ),
+    );
   }
 }
 

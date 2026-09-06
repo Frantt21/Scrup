@@ -363,5 +363,11 @@
         "type": "String"
       }
     }
-  }
+  },
+  "artistTopTracks": "Populares",
+  "artistAlbums": "Álbumes y sencillos",
+  "artistSubscribers": "suscriptores",
+  "artistDetailEmpty": "No se pudo cargar este artista.",
+  "retry": "Reintentar",
+  "playAll": "Reproducir todo"
 }

@@ -4,20 +4,23 @@ import 'package:flutter/foundation.dart';
 
 import '../core/app_log.dart';
 import '../core/track.dart';
+import 'artist_cache_store.dart';
 import 'search_cache_store.dart';
 import 'ytdlp_service.dart';
 import 'ytmusic_service.dart';
 
-export 'ytmusic_service.dart' show YtmArtist;
+export 'ytmusic_service.dart' show YtmAlbum, YtmArtist, YtmArtistDetail;
 
 class SearchService {
   SearchService({
     YtMusicService? ytMusic,
     YtDlpService? ytDlp,
     SearchCacheStore? cache,
+    ArtistCacheStore? artistCache,
   }) : _ytMusic = ytMusic ?? YtMusicService(),
        _ytDlp = ytDlp ?? YtDlpService(),
-       _cache = cache;
+       _cache = cache,
+       _artistCache = artistCache;
 
   final YtMusicService _ytMusic;
   final YtDlpService _ytDlp;
@@ -25,6 +28,10 @@ class SearchService {
   /// Caché persistente (memoria + disco). `null` = desactivada (tests,
   /// embedded): las búsquedas van siempre a red.
   final SearchCacheStore? _cache;
+
+  /// Caché de detalles de artista (JSON por browseId, TTL 24h). `null` =
+  /// desactivada (tests): el detalle va siempre a red.
+  final ArtistCacheStore? _artistCache;
 
   // Dedup concurrent searches by key (multiple views / rapid resubmits).
   final Map<String, Future<List<Track>>> _inflight = {};
@@ -119,38 +126,110 @@ class SearchService {
     }
   }
 
-  /// Búsqueda de ARTISTAS vía InnerTube (búsqueda general, sección
-  /// "Artists"/"Top result"). Tolerante a fallos: error → lista vacía.
-  Future<List<YtmArtist>> searchArtists(String query, {int limit = 8}) async {
-    final q = query.trim();
-    if (q.isEmpty) return const [];
-    final cached = await _cache?.getForSource('artists', q, limit);
-    if (cached != null) {
-      return [
-        for (final t in cached)
-          if (t.thumbnailUrl != null)
-            YtmArtist(
-              browseId: t.id,
-              name: t.title,
-              thumbnailUrl: t.thumbnailUrl,
-            ),
-      ];
+  /// Deriva los artistas de una búsqueda desde los PROPIOS resultados, sin
+  /// ninguna request extra: cada fila de InnerTube trae el canal del artista
+  /// en su navegación. Agrupa por canal, cuenta coincidencias y ordena:
+  /// 1º por nº de canciones del artista en los resultados (relevancia),
+  /// 2º por suscriptores (el resultado más popular del mismo canal). Con
+  /// eso no hace falta la búsqueda general de InnerTube (que era una
+  /// request ADICIONAL por búsqueda y la encarecía).
+  static List<YtmArtist> deriveArtists(List<Track> results, {int limit = 8}) {
+    if (results.isEmpty) return const [];
+    // Por canal: mejor YtmArtist (más subs vista) + nº de coincidencias.
+    final byChannel = <String, ({int hits, YtmArtist artist})>{};
+    for (final t in results) {
+      final ch = t.artistChannelId;
+      if (ch == null || ch.isEmpty) continue;
+      final name = t.artist.trim();
+      if (name.isEmpty || name.toLowerCase() == 'youtube music') continue;
+      final prev = byChannel[ch];
+      final subs = (t.subscriberCount ?? 0) > (prev?.artist.subscriberCount ?? 0)
+          ? t.subscriberCount
+          : prev?.artist.subscriberCount;
+      final thumb = t.thumbnailUrl ?? prev?.artist.thumbnailUrl;
+      byChannel[ch] = (
+        hits: (prev?.hits ?? 0) + 1,
+        artist: YtmArtist(
+          browseId: ch,
+          name: name,
+          thumbnailUrl: thumb,
+          subscriberCount: subs,
+        ),
+      );
     }
-    final artists = await _ytMusic.searchArtists(q, limit: limit);
-    if (artists.isNotEmpty && _cache != null) {
-      // Reusa el store de Track: id=browseId, title=nombre, thumb=miniatura.
-      final asTracks = [
-        for (final a in artists)
-          Track(
-            id: a.browseId,
-            title: a.name,
-            artist: '',
-            thumbnailUrl: a.thumbnailUrl,
-          ),
-      ];
-      unawaited(_cache.put(q, limit, asTracks, source: 'artists'));
+    final artists = byChannel.values.toList()
+      ..sort((a, b) {
+        final byHits = b.hits.compareTo(a.hits);
+        if (byHits != 0) return byHits;
+        return (b.artist.subscriberCount ?? 0)
+            .compareTo(a.artist.subscriberCount ?? 0);
+      });
+    return [
+      for (final e in artists.take(limit)) e.artist,
+    ];
+  }
+
+  /// Detalle del artista (top canciones + álbumes + suscriptores) con su
+  /// PROPIO caché en disco (JSON por artista, TTL 24h — el catálogo de un
+  /// artista casi no cambia en un día; entra/salir del screen es gratis).
+  Future<YtmArtistDetail?> fetchArtistDetail(
+    String browseId, {
+    String? name,
+  }) async {
+    final id = browseId.trim();
+    if (id.isEmpty) return null;
+    final cached = await _artistCache?.read(id);
+    if (cached != null) return cached;
+    try {
+      var detail = await _ytMusic.fetchArtist(id);
+      if (detail.name.isEmpty && name != null) {
+        detail = YtmArtistDetail(
+          browseId: detail.browseId,
+          name: name,
+          thumbnailUrl: detail.thumbnailUrl,
+          subscriberCount: detail.subscriberCount,
+          tracks: detail.tracks,
+          albums: detail.albums,
+          audienceText: detail.audienceText,
+        );
+      }
+      // Una SOLA request: la home WEB_REMIX ya trae el shelf "Top songs"
+      // (con reproducciones y portada limpia) y los carruseles de álbumes.
+      if (detail.tracks.isNotEmpty || detail.albums.isNotEmpty) {
+        unawaited(_artistCache?.write(detail));
+      }
+      return detail;
+    } catch (_) {
+      // Memoiza el fallo 10 min: sin red, reabrir el screen no relanza la
+      // request en cada intento.
+      _artistCache?.markFailure(id);
+      return null;
     }
-    return artists;
+  }
+
+  /// Tracklist de un álbum (browseId VL… playlist o MPREb_… página de
+  /// álbum) para el screen de artista: lee con InnerTube browse y cachea
+  /// (fuente 'album', misma TTL de 6h — abrir un álbum dos veces es gratis).
+  Future<List<Track>> fetchAlbumTracks(String playlistId) async {
+    final raw = playlistId.trim();
+    if (raw.isEmpty) return const [];
+    // Normaliza MPREb_<id> → <id>: la playlist equivalente comparte el id.
+    final id = raw.startsWith('MPREb_') ? raw.substring(6) : raw;
+    final cached = await _cache?.getForSource('album', id, 50);
+    if (cached != null) return cached;
+    for (final attempt in [id, if (raw != id) raw]) {
+      try {
+        final pl = await _ytMusic.fetchPlaylist(attempt, maxTracks: 50);
+        final tracks = pl.tracks.take(50).toList();
+        if (tracks.isNotEmpty) {
+          unawaited(_cache?.put(id, 50, tracks, source: 'album'));
+          return tracks;
+        }
+      } catch (_) {
+        // Prueba la siguiente forma del id.
+      }
+    }
+    return const [];
   }
 
   /// Canciones primero y después vídeos generales, descartando ids ya

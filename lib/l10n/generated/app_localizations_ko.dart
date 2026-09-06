@@ -700,4 +700,22 @@ class AppLocalizationsKo extends AppLocalizations {
   String searchArtistPlaying(String name) {
     return '$name 재생 중';
   }
+
+  @override
+  String get artistTopTracks => '인기 곡';
+
+  @override
+  String get artistAlbums => '앨범 및 싱글';
+
+  @override
+  String get artistSubscribers => '구독자';
+
+  @override
+  String get artistDetailEmpty => '이 아티스트를 불러올 수 없습니다.';
+
+  @override
+  String get retry => '다시 시도';
+
+  @override
+  String get playAll => '전체 재생';
 }

@@ -27,6 +27,10 @@ class TrackTile extends StatelessWidget {
   final Color? accentColor;
   final bool showDuration;
 
+  /// Texto opcional para añadir a la línea del artista (p. ej. "1.2M
+  /// plays"). Se muestra atenuado tras el nombre, separado con " · ".
+  final String? subtitleSuffix;
+
   const TrackTile({
     super.key,
     required this.track,
@@ -37,6 +41,7 @@ class TrackTile extends StatelessWidget {
     this.isPlaying = false,
     this.accentColor,
     this.showDuration = true,
+    this.subtitleSuffix,
   });
 
   String get _durationText {
@@ -114,7 +119,12 @@ class TrackTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    track.artist.isEmpty ? l10n.unknownArtist : track.artist,
+                    subtitleSuffix == null || subtitleSuffix!.isEmpty
+                        ? (track.artist.isEmpty
+                              ? l10n.unknownArtist
+                              : track.artist)
+                        : '${track.artist.isEmpty ? l10n.unknownArtist : track.artist}'
+                            ' · $subtitleSuffix',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(

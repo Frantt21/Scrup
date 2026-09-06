@@ -16,6 +16,7 @@ import 'services/audio_cache_service.dart';
 import 'services/artwork_cache_service.dart';
 import 'services/just_audio_backend.dart';
 import 'services/media_kit_backend.dart';
+import 'services/artist_cache_store.dart';
 import 'services/search_cache_store.dart';
 import 'services/search_service.dart';
 import 'services/discord/discord_presence_service.dart';
@@ -242,6 +243,8 @@ class ScrupApp extends StatelessWidget {
             // Caché persistente de búsquedas: repetir una búsqueda (o abrir
             // la app y repetir la de ayer) responde de disco al instante.
             cache: SearchCacheStore(),
+            // Detalles de artista: un JSON por canal (TTL 24h).
+            artistCache: ArtistCacheStore(),
           ),
         ),
         Provider<LyricsService>(

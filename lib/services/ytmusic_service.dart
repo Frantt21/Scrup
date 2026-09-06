@@ -13,6 +13,9 @@ class YtMusicResult {
     required this.artist,
     this.durationSeconds,
     this.thumbnailUrl,
+    this.channelId,
+    this.channelSubscribers,
+    this.playCountText,
   });
 
   final String videoId;
@@ -20,6 +23,17 @@ class YtMusicResult {
   final String artist;
   final int? durationSeconds;
   final String? thumbnailUrl;
+
+  /// Canal del artista (`UC…`) extraído de la navegación de la fila: con él
+  /// se abre el detalle del artista SIN una request extra por resultado.
+  final String? channelId;
+
+  /// Suscriptores si la fila los traía (0 si hubo canal pero sin texto).
+  final int? channelSubscribers;
+
+  /// Reproducciones/vistas de la fila tal como llegan ("1.2M plays").
+  /// `null` si la fila no las traía (p. ej. resultados de búsqueda).
+  final String? playCountText;
 
   Duration? get duration =>
       durationSeconds == null ? null : Duration(seconds: durationSeconds!);
@@ -32,6 +46,9 @@ class YtMusicResult {
     duration: duration,
     thumbnailUrl: thumbnailUrl,
     cleanMetadata: true,
+    artistChannelId: channelId,
+    subscriberCount: channelSubscribers,
+    playCountText: playCountText,
   );
 }
 
@@ -51,11 +68,62 @@ class YtmArtist {
     required this.browseId,
     required this.name,
     this.thumbnailUrl,
+    this.subscriberCount,
   });
 
   final String browseId;
   final String name;
   final String? thumbnailUrl;
+
+  /// Suscriptores del canal (si la fila los traía). `null` = desconocido.
+  final int? subscriberCount;
+}
+
+/// Detalle de un artista leído de su página de canal (`browse` de InnerTube):
+/// top canciones y álbumes detectados en la página.
+class YtmArtistDetail {
+  const YtmArtistDetail({
+    required this.browseId,
+    required this.name,
+    required this.tracks,
+    required this.albums,
+    this.thumbnailUrl,
+    this.subscriberCount,
+    this.songsParams,
+    this.audienceText,
+  });
+
+  final String browseId;
+  final String name;
+  final String? thumbnailUrl;
+  final int? subscriberCount;
+  final List<YtMusicResult> tracks;
+  final List<YtmAlbum> albums;
+
+  /// `params` del tab de canciones detectado en la home: con él se hace una
+  /// segunda lectura que trae las canciones con duración y reproducciones.
+  final String? songsParams;
+
+  /// "218M monthly audience" del header (métrica real de YT Music).
+  final String? audienceText;
+}
+
+/// Álbum detectado en la página del artista: playlistId reproducible (se
+/// vuelve a leer con `fetchPlaylist`) + miniatura.
+class YtmAlbum {
+  const YtmAlbum({
+    required this.playlistId,
+    required this.title,
+    this.thumbnailUrl,
+    this.year,
+  });
+
+  final String playlistId;
+  final String title;
+  final String? thumbnailUrl;
+
+  /// Año (cuando la fila lo trae).
+  final String? year;
 }
 
 /// Public YouTube/YT Music playlist read via InnerTube browse.
@@ -201,6 +269,409 @@ class YtMusicService {
     return results;
   }
 
+  /// Página de canal de un artista (`browseId` UC…) vía InnerTube browse:
+  /// nombre, avatar, suscriptores (del header o de una fila), top canciones
+  /// y álbumes detectados en la página. El `params` opcional acota el tab
+  /// (p. ej. canciones del artista); sin él, la home del canal.
+  Future<YtmArtistDetail> fetchArtist(
+    String browseId, {
+    String? params,
+  }) async {
+    final body = jsonEncode({
+      'context': _context(),
+      'browseId': browseId,
+      if (params != null) 'params': params,
+    });
+    http.Response res;
+    try {
+      res = await _client
+          .post(
+            Uri.parse('$_browseEndpoint?prettyPrint=false'),
+            headers: const {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0',
+              'X-YouTube-Client-Name': '67',
+              'X-YouTube-Client-Version': _clientVersion,
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      rethrow;
+    } catch (e) {
+      throw YtMusicException(e.toString());
+    }
+    if (res.statusCode != 200) {
+      throw YtMusicException('http-${res.statusCode}');
+    }
+    Object? data;
+    try {
+      data = jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (_) {
+      throw const YtMusicException('bad-json');
+    }
+    return parseArtistPage(data, browseId);
+  }
+
+  /// Parsea la página de canal: nombre/avatar/suscriptores del header,
+  /// filas de canciones y filas que navegan a playlists (álbumes/singles).
+  static YtmArtistDetail parseArtistPage(Object? node, String browseId) {
+    String? name;
+    String? thumbUrl;
+    String? audience;
+    final tracks = <YtMusicResult>[];
+    final seenTracks = <String>{};
+    final albums = <YtmAlbum>[];
+    final seenAlbums = <String>{};
+
+    void walk(Object? n) {
+      if (n is Map) {
+        // Header del canal: nombre, avatar y suscriptores.
+        final header = n['musicImmersiveHeaderRenderer'] as Map? ??
+            n['musicVisualHeaderRenderer'] as Map?;
+        if (header != null) {
+          final title = header['title'];
+          if (title is Map && title['runs'] is List) {
+            final runs = (title['runs'] as List).whereType<Map>().toList();
+            if (runs.isNotEmpty) {
+              final t = runs.first['text'];
+              if (t is String && t.trim().isNotEmpty && name == null) {
+                name = t.trim();
+              }
+            }
+          }
+          // Avatar: el thumbnail del header es el BANNER (540×225); el
+          // cuadrado 544×544 es el último de la lista. _bestSquareThumb lo
+          // elige y _hiRes lo pide a 1200.
+          thumbUrl ??= _bestSquareThumb(
+            _thumbThumbs(header['thumbnail'] as Map?),
+          );
+          thumbUrl ??= _bestSquareThumb(
+            _thumbThumbs(header['foregroundThumbnail'] as Map?),
+          );
+          // "218M monthly audience" / "audiencia mensual": la métrica que
+          // YT Music muestra en el header (los "subscribers" ya no van ahí).
+          final mlc = header['monthlyListenerCount'];
+          if (mlc is Map && mlc['runs'] is List) {
+            final runs = (mlc['runs'] as List).whereType<Map>().toList();
+            if (runs.isNotEmpty) {
+              final t = runs.first['text'];
+              if (t is String && t.trim().isNotEmpty) {
+                audience ??= t.trim();
+              }
+            }
+          }
+        }
+        // Filas de lista: el shelf "Top songs" de la home del artista trae
+        // las canciones populares CON REPRODUCCIONES ("2.2B plays") y
+        // portada limpia de álbum.
+        final renderer = n['musicResponsiveListItemRenderer'];
+        if (renderer is Map) {
+          final item = renderer;
+          final r = resultFromListItem(item);
+          // Las filas del shelf NO traen duración (el player la resuelve al
+          // montar); el plays-text presente distingue una fila de canción
+          // real de una fila de menú/otra cosa.
+          if (r != null &&
+              (r.durationSeconds != null || r.playCountText != null) &&
+              seenTracks.add(r.videoId)) {
+            tracks.add(
+              YtMusicResult(
+                videoId: r.videoId,
+                title: r.title,
+                artist: r.artist,
+                durationSeconds: r.durationSeconds,
+                // Portada a resolución alta (w1200) como el resto.
+                thumbnailUrl: _hiRes(r.thumbnailUrl),
+                channelId: r.channelId,
+                channelSubscribers: r.channelSubscribers,
+                playCountText: r.playCountText,
+              ),
+            );
+          }
+        }
+        // Fila de álbum: navega a playlist VL… (o MPRE…), con año.
+        final item = renderer is Map ? renderer : null;
+        if (item != null) {
+          final nav = item['navigationEndpoint'] as Map?;
+          final bid = (nav?['browseEndpoint'] as Map?)?['browseId'] as String?;
+          if (bid != null && (bid.startsWith('VL') || bid.startsWith('MPRE'))) {
+            final plId = bid.startsWith('VL') ? bid.substring(2) : bid;
+            final cols = (item['flexColumns'] as List?) ?? const [];
+            String? title;
+            String? year;
+            if (cols.isNotEmpty) {
+              final runs = _runsOf(cols.first as Map);
+              if (runs.isNotEmpty && runs.first['text'] is String) {
+                title = (runs.first['text'] as String).trim();
+              }
+            }
+            if (cols.length > 1) {
+              for (final r2 in _runsOf(cols[1] as Map)) {
+                final t = (r2['text'] as String?)?.trim() ?? '';
+                if (RegExp(r'^(19|20)\d{2}$').hasMatch(t)) year = t;
+              }
+            }
+            if (title != null &&
+                title.isNotEmpty &&
+                seenAlbums.add(plId) &&
+                albums.length < 24) {
+              albums.add(
+                YtmAlbum(
+                  playlistId: plId,
+                  title: title,
+                  year: year,
+                  thumbnailUrl: _hiRes(
+                    _bestThumb(_thumbThumbs(item['thumbnail'] as Map?)),
+                  ),
+                ),
+              );
+            }
+          }
+        }
+        // Tarjetas de los carruseles del home del artista ("Songs",
+        // "Albums", "Singles"): WEB_REMIX usa musicTwoRowItemRenderer, no
+        // filas de lista. Sin esto, el detalle sale vacío (solo nombre).
+        // NOTA: aquí SOLO se recogen álbumes/singles. Las canciones vienen
+        // del tab de canciones (fetchArtistSongs): los carruseles incluyen
+        // la sección "Videos", cuyas miniaturas son de YouTube (con banner
+        // de canal) — no sirven como portada de canción.
+        final twoRow = n['musicTwoRowItemRenderer'];
+        if (twoRow is Map) {
+          final nav = twoRow['navigationEndpoint'] as Map?;
+          final bid = (nav?['browseEndpoint'] as Map?)?['browseId'] as String?;
+          final titleText = _firstRunText(twoRow['title'] as Map?);
+          // SOLO MPREb_… son álbumes/singles reales. Los VL… que aparecen
+          // en la home son mixes (RD…), playlists de usuarios (PL…) o
+          // "Featured on" — no álbumes.
+          if (bid is String && bid.startsWith('MPREb_') &&
+              titleText != null) {
+            final plId = bid;
+            String? year;
+            final subtitle = twoRow['subtitle'];
+            if (subtitle is Map && subtitle['runs'] is List) {
+              for (final r in (subtitle['runs'] as List).whereType<Map>()) {
+                final t = (r['text'] as String?)?.trim() ?? '';
+                if (RegExp(r'^(19|20)\d{2}$').hasMatch(t)) year = t;
+              }
+            }
+            if (titleText.isNotEmpty &&
+                seenAlbums.add(plId) &&
+                albums.length < 24) {
+              albums.add(
+                YtmAlbum(
+                  playlistId: plId,
+                  title: titleText,
+                  year: year,
+                  thumbnailUrl: _hiRes(
+                    _bestThumb(_thumbThumbs(twoRow['thumbnailRenderer'] as Map?)),
+                  ),
+                ),
+              );
+            }
+          }
+        }
+        n.values.forEach(walk);
+      } else if (n is List) {
+        for (final v in n) {
+          walk(v);
+        }
+      }
+    }
+
+    walk(node);
+    return YtmArtistDetail(
+      browseId: browseId,
+      name: name ?? '',
+      thumbnailUrl: _hiRes(thumbUrl),
+      audienceText: audience,
+      tracks: tracks.take(6).toList(),
+      albums: albums,
+    );
+  }
+
+  /// Miniatura preferente para AVATARES: la última de la lista suele ser la
+  /// cuadrada más grande (la primera es el banner ancho del header).
+  static String? _bestSquareThumb(List? thumbs) {
+    if (thumbs == null || thumbs.isEmpty) return null;
+    return (thumbs.last['url'] as String?)?.toString();
+  }
+
+  /// Primer `text` de `holder.runs[0]` (títulos/subtítulos de tarjetas).
+  static String? _firstRunText(Map? holder) {
+    final runs = holder?['runs'];
+    if (runs is! List || runs.isEmpty) return null;
+    final t = (runs.first as Map)['text'];
+    return t is String ? t.trim() : null;
+  }
+
+  /// Tab de CANCIONES del artista: `params` del musicCarouselShelfRenderer
+  /// "Songs" → browse con filtro de canciones. Devuelve filas con duración
+  /// Y REPRODUCCIONES ("1.2M plays") — portadas de álbum limpias y el
+  /// número de vistas real por canción.
+  Future<List<YtMusicResult>> fetchArtistSongs(
+    String browseId,
+    String songsParams, {
+    int limit = 6,
+  }) async {
+    final body = jsonEncode({
+      'context': _context(),
+      'browseId': browseId,
+      'params': songsParams,
+    });
+    http.Response res;
+    try {
+      res = await _client
+          .post(
+            Uri.parse('$_browseEndpoint?prettyPrint=false'),
+            headers: const {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0',
+              'X-YouTube-Client-Name': '67',
+              'X-YouTube-Client-Version': _clientVersion,
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      rethrow;
+    } catch (e) {
+      throw YtMusicException(e.toString());
+    }
+    if (res.statusCode != 200) {
+      throw YtMusicException('http-${res.statusCode}');
+    }
+    Object? data;
+    try {
+      data = jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (_) {
+      throw const YtMusicException('bad-json');
+    }
+    final results = <YtMusicResult>[];
+    final seen = <String>{};
+    void walk(Object? n) {
+      if (results.length >= limit && n is! Map) return;
+      if (n is Map) {
+        final renderer = n['musicResponsiveListItemRenderer'];
+        if (renderer is Map) {
+          final r = resultFromListItem(renderer);
+          if (r != null && r.durationSeconds != null && seen.add(r.videoId)) {
+            results.add(r);
+          }
+        }
+        n.values.forEach(walk);
+      } else if (n is List) {
+        for (final v in n) {
+          walk(v);
+        }
+      }
+    }
+
+    walk(data);
+    if (results.length > limit) return results.sublist(0, limit);
+    return results;
+  }
+
+  /// Extrae el `params` del carrusel "Songs" de la home del artista: cada
+  /// carrusel con botón "ver todo" navega al tab correspondiente del canal
+  /// con su `params`. El de canciones es el ÚLTIMO carrusel cuyo
+  /// navigationBrowseId apunta al PROPIO canal (UC…) en la home WEB_REMIX.
+  static String? extractSongsParams(Object? node) {
+    String? found;
+    void walk(Object? n) {
+      if (n is Map) {
+        final shelf = n['musicCarouselShelfRenderer'];
+        if (shelf is Map) {
+          final header = shelf['header'];
+          if (header is Map) {
+            final basic =
+                header['musicCarouselShelfBasicHeaderRenderer'] as Map? ??
+                header;
+            final nav = basic['navigationEndpoint'] as Map?;
+            final bid = (nav?['browseEndpoint'] as Map?)?['browseId'];
+            final params = (nav?['browseEndpoint'] as Map?)?['params'];
+            if (bid is String &&
+                bid.startsWith('UC') &&
+                params is String &&
+                params.isNotEmpty) {
+              found = params; // el último de la home es el de canciones
+            }
+          }
+        }
+        n.values.forEach(walk);
+      } else if (n is List) {
+        for (final v in n) {
+          walk(v);
+        }
+      }
+    }
+
+    walk(node);
+    return found;
+  }
+
+  /// Sube la resolución de una miniatura de Google/YT (la mayor disponible
+  /// en la página suele ser ~544px; a 1200 se ve nítida en cualquier tamaño).
+  static String? _hiRes(String? url) {
+    if (url == null || url.isEmpty) return null;
+    return Track.hiResThumbnail(url) ?? url;
+  }
+
+  /// Miniatura más grande de una fila/lista de thumbnails.
+  static String? _bestThumb(List? thumbs) {
+    if (thumbs == null || thumbs.isEmpty) return null;
+    Map best = thumbs.first;
+    var bestW = (best['width'] as num?) ?? 0;
+    for (final t in thumbs) {
+      if (((t['width'] as num?) ?? 0) > bestW) {
+        best = t;
+        bestW = (t['width'] as num?) ?? 0;
+      }
+    }
+    return best['url'] is String ? best['url'] as String : null;
+  }
+
+  /// `holder.musicThumbnailRenderer.thumbnail.thumbnails` con casts seguros
+  /// por paso (sin cadenas de paren imposibles de mantener).
+  static List? _thumbThumbs(Map? holder) {
+    if (holder == null) return null;
+    final renderer = holder['musicThumbnailRenderer'];
+    if (renderer is! Map) return null;
+    final thumb = renderer['thumbnail'];
+    if (thumb is! Map) return null;
+    final thumbs = thumb['thumbnails'];
+    return thumbs is List ? thumbs : null;
+  }
+
+  /// "1.2M subscribers" → 1200000; null si no hay texto de suscriptores.
+  static int? parseSubscribers(String text) {
+    final m = RegExp(
+      r'([\d.,]+)\s*([KMB])?\s*(?:subscribers|suscriptores|abonados|suscripciones)',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (m == null) return null;
+    final raw = m.group(1)!.replaceAll(',', '.');
+    final num = double.tryParse(raw);
+    if (num == null) return null;
+    final scale = switch (m.group(2)?.toUpperCase()) {
+      'K' => 1e3,
+      'M' => 1e6,
+      'B' => 1e9,
+      _ => 1.0,
+    };
+    return (num * scale).round();
+  }
+
+  /// Runs de una columna flex del renderer (lista de Map con `text`).
+  static List<Map> _runsOf(Map column) {
+    final runs = (((column['musicResponsiveListItemFlexColumnRenderer'] as Map?)?['text']
+                as Map?)?['runs']
+            as List?)
+        ?.whereType<Map>()
+        .toList();
+    return runs ?? const [];
+  }
+
   /// Artista desde un musicResponsiveListItemRenderer: navegación a canal
   /// (`browseId` UC…) + nombre en la primera columna.
   static YtmArtist? artistFromListItem(Map item) {
@@ -223,28 +694,22 @@ class YtMusicService {
       }
     }
     if (name == null || name.isEmpty) return null;
-    String? thumbUrl;
-    final thumbs =
-        ((((item['thumbnail'] as Map?)?['musicThumbnailRenderer']
-                        as Map?)?['thumbnail']
-                    as Map?)?['thumbnails']
-                as List?)
-            ?.whereType<Map>();
-    if (thumbs != null && thumbs.isNotEmpty) {
-      Map best = thumbs.first;
-      var bestW = (best['width'] as num?) ?? 0;
-      for (final t in thumbs) {
-        if (((t['width'] as num?) ?? 0) > bestW) {
-          best = t;
-          bestW = (t['width'] as num?) ?? 0;
-        }
+    final thumbUrl = _bestThumb(
+      _thumbThumbs(item['thumbnail'] as Map?),
+    );
+    // Suscriptores: texto tipo "12.3M subscribers" en cualquier columna.
+    int? subs;
+    for (final col in (item['flexColumns'] as List?) ?? const []) {
+      for (final r in _runsOf(col as Map)) {
+        final t = (r['text'] as String?)?.trim() ?? '';
+        subs ??= parseSubscribers(t);
       }
-      if (best['url'] is String) thumbUrl = best['url'] as String;
     }
     return YtmArtist(
       browseId: browseId,
       name: name,
       thumbnailUrl: thumbUrl,
+      subscriberCount: subs,
     );
   }
 
@@ -288,34 +753,17 @@ class YtMusicService {
     String? title;
     var artist = '';
     int? seconds;
+    int? subscribers;
+    String? channelId;
+    String? playCountText;
     // Miniatura: elegir la de mayor resolución disponible.
-    String? thumbUrl;
-    final thumbs =
-        ((((item['thumbnail'] as Map?)?['musicThumbnailRenderer']
-                        as Map?)?['thumbnail']
-                    as Map?)?['thumbnails']
-                as List?)
-            ?.whereType<Map>();
-    if (thumbs != null && thumbs.isNotEmpty) {
-      Map best = thumbs.first;
-      var bestW = (best['width'] as num?) ?? 0;
-      for (final t in thumbs) {
-        if (((t['width'] as num?) ?? 0) > bestW) {
-          best = t;
-          bestW = (t['width'] as num?) ?? 0;
-        }
-      }
-      if (best['url'] is String) thumbUrl = best['url'] as String;
-    }
+    final thumbUrl = _bestThumb(
+      (((item['thumbnail'] as Map?)?['musicThumbnailRenderer'] as Map?)?['thumbnail']
+              as Map?)?['thumbnails'] as List?,
+    );
     for (var i = 0; i < columns.length; i++) {
-      final runs =
-          ((((columns[i] as Map?)?['musicResponsiveListItemFlexColumnRenderer']
-                          as Map?)?['text']
-                      as Map?)?['runs']
-                  as List?)
-              ?.whereType<Map>()
-              .toList();
-      if (runs == null || runs.isEmpty) continue;
+      final runs = _runsOf(columns[i] as Map);
+      if (runs.isEmpty) continue;
       final texts = [
         for (final r in runs)
           if (r['text'] is String) r['text'] as String,
@@ -331,7 +779,28 @@ class YtMusicService {
         } else if (trimmed.isNotEmpty && artist.isEmpty) {
           artist = trimmed.replaceAll(RegExp(r'\s*[•|]\s*$'), '').trim();
         }
+        // La columna del artista puede traer "Artist • 1.2M subscribers".
+        subscribers ??= parseSubscribers(trimmed);
+        // Reproducciones de la fila (tab de canciones del artista):
+        // "1.2M plays" / "345K reproducciones".
+        playCountText ??= _parsePlayCount(trimmed);
       }
+    }
+    // Canal del artista: navegación del PRIMER run de la columna del artista
+    // (en YT Music el nombre va con link a browseId UC…). La vista/subs
+    // ("1.2M views") NO lleva canal: solo acepta canales.
+    for (var i = 1; i < columns.length && channelId == null; i++) {
+      for (final r in _runsOf(columns[i] as Map)) {
+        final nav = r['navigationEndpoint'] as Map?;
+        final bid = (nav?['browseEndpoint'] as Map?)?['browseId'] as String?;
+        if (bid != null && bid.startsWith('UC')) {
+          channelId = bid;
+          break;
+        }
+      }
+    }
+    if (subscribers == null && channelId != null) {
+      subscribers = 0;
     }
     if (seconds == null) {
       final fixed = (item['fixedColumns'] as List?)?.whereType<Map>();
@@ -361,7 +830,73 @@ class YtMusicService {
       artist: artist,
       durationSeconds: seconds,
       thumbnailUrl: thumbUrl,
+      channelId: channelId,
+      channelSubscribers: subscribers,
+      playCountText: playCountText,
     );
+  }
+
+  /// "1.2M plays" / "345K reproducciones" → texto normalizado; null si no
+  /// es un contador de reproducciones (duración, año, etc.).
+  static String? _parsePlayCount(String text) {
+    final m = RegExp(
+      r'^([\d.,]+[KMB]?)\s+(?:plays|reproducciones|views|visualizaciones)$',
+      caseSensitive: false,
+    ).firstMatch(text.trim());
+    return m == null ? null : text.trim();
+  }
+
+  // ── Álbumes ─────────────────────────────────────────────────────────
+
+  /// Tracklist de un álbum por su browseId (`MPREb_…` página de álbum o
+  /// `VL…`/id de playlist): browse + parseBrowsePage con continuación.
+  /// NOTA: el id de `MPREb_X` NO mapea a ninguna playlist `PL…`: la única
+  /// vía correcta es navegar la página del álbum directamente.
+  Future<List<YtMusicResult>> fetchAlbumPage(String browseIdOrPlaylist) async {
+    var id = browseIdOrPlaylist.trim();
+    if (id.startsWith('VL')) id = id.substring(2);
+    final tracks = <YtMusicResult>[];
+    final seen = <String>{};
+    String? continuation;
+    for (var page = 0; page < 10 && tracks.length < 100; page++) {
+      final body = jsonEncode({
+        'context': _context(),
+        if (continuation == null) 'browseId': id else 'continuation': continuation,
+      });
+      http.Response res;
+      try {
+        res = await _client
+            .post(
+              Uri.parse('$_browseEndpoint?prettyPrint=false'),
+              headers: const {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0',
+                'X-YouTube-Client-Name': '67',
+                'X-YouTube-Client-Version': _clientVersion,
+              },
+              body: body,
+            )
+            .timeout(const Duration(seconds: 12));
+      } catch (e) {
+        throw YtMusicException(e.toString());
+      }
+      if (res.statusCode != 200) {
+        throw YtMusicException('http-${res.statusCode}');
+      }
+      Object? data;
+      try {
+        data = jsonDecode(utf8.decode(res.bodyBytes));
+      } catch (_) {
+        throw const YtMusicException('bad-json');
+      }
+      final parsed = parseBrowsePage(data);
+      for (final r in parsed.$1) {
+        if (seen.add(r.videoId)) tracks.add(r);
+      }
+      if (parsed.$2 == null || parsed.$1.isEmpty) break;
+      continuation = parsed.$2;
+    }
+    return tracks;
   }
 
   // ── Playlists ───────────────────────────────────────────────────────

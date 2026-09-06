@@ -46,6 +46,9 @@ Map<String, dynamic> _trackToJson(Track t) => {
   'dur': t.duration?.inMilliseconds,
   'thumb': t.thumbnailUrl,
   'album': t.album,
+  'chan': t.artistChannelId,
+  'subs': t.subscriberCount,
+  'plays': t.playCountText,
 };
 
 Track? _trackFromJson(Map<String, dynamic> j) {
@@ -56,6 +59,8 @@ Track? _trackFromJson(Map<String, dynamic> j) {
   final durMs = j['dur'];
   final thumb = j['thumb'];
   final album = j['album'];
+  final chan = j['chan'];
+  final subs = j['subs'];
   return Track(
     id: id,
     title: title,
@@ -65,16 +70,24 @@ Track? _trackFromJson(Map<String, dynamic> j) {
     album: album is String ? album : null,
     // Sin `album` no hubo matching Deezer: metadatos limpios de origen.
     cleanMetadata: album == null,
+    artistChannelId: chan is String && chan.isNotEmpty ? chan : null,
+    subscriberCount: subs is int && subs > 0 ? subs : null,
+    playCountText: j['plays'] is String ? j['plays'] as String : null,
   );
 }
 
 /// Caché PERSISTENTE de búsquedas (memoria + disco):
 /// - La primera vez que un dispositivo hace una búsqueda paga el coste
 ///   completo (yt-dlp ~6-8s). Las siguientes sesiones la sirven de disco
-///   en <5ms mientras no expire el TTL.
-/// - LRU simple por inserción ordenada, con tope de entradas y limpieza
-///   de vencidas en cada carga/guardado.
+///   en <5ms mientras no expire el TTL./// - LRU simple por inserción ordenada, con tope de entradas y limpieza
+/// de vencidas en cada carga/guardado.
+///
+/// `version` invalida TODO el caché cuando cambia el formato serializado
+/// (p. ej. al añadir `chan`/`subs` de canal a las entradas: las antiguas no
+/// pueden derivar artistas, así que se descartan y se vuelven a buscar).
 class SearchCacheStore {
+  static const int version = 2;
+
   SearchCacheStore({
     this.ttl = const Duration(hours: 6),
     this.maxEntries = 60,
@@ -106,6 +119,9 @@ class SearchCacheStore {
   }
 
   File _file(Directory dir) => File(p.join(dir.path, 'searches.json'));
+
+  File _versionFile(Directory dir) =>
+      File(p.join(dir.path, 'version.json'));
 
   /// Resultados cacheados y vigentes, o null.
   Future<List<Track>?> get(String query, int limit) async {
@@ -162,7 +178,28 @@ class SearchCacheStore {
     _diskLoaded = true;
     try {
       final dir = await _cacheDir();
+      // Versión del formato: si difiere, borra el archivo y empieza de
+      // cero (las entradas viejas sin canal no sirven para derivar).
+      final vf = _versionFile(dir);
+      var stale = true;
+      if (await vf.exists()) {
+        try {
+          final v = jsonDecode(await vf.readAsString());
+          if (v is Map && v['format'] == version) stale = false;
+        } catch (_) {}
+      }
       final f = _file(dir);
+      if (stale) {
+        _dirty = false;
+        try {
+          if (await f.exists()) await f.delete();
+          if (await vf.exists()) await vf.delete();
+        } catch (_) {}
+        unawaited(
+          vf.writeAsString(jsonEncode({'format': version}), flush: true),
+        );
+        return;
+      }
       if (!await f.exists()) return;
       final raw = await f.readAsString();
       final data = jsonDecode(raw);
@@ -193,6 +230,13 @@ class SearchCacheStore {
       _mem.removeWhere((_, v) => now.difference(v.at) >= ttl);
       final data = {for (final e in _mem.entries) e.key: e.value.toJson()};
       await _file(dir).writeAsString(jsonEncode(data), flush: true);
+      // Marca el formato actual para que la próxima sesión no lo invalide.
+      final vf = _versionFile(dir);
+      if (!await vf.exists()) {
+        unawaited(
+          vf.writeAsString(jsonEncode({'format': version}), flush: true),
+        );
+      }
     } catch (_) {}
   }
 
