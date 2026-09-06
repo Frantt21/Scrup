@@ -103,7 +103,12 @@ class YtMusicService {
             },
             body: body,
           )
-          .timeout(const Duration(seconds: 12));
+  /// Respuesta de InnerTube. Bajado de 12s a 8s: en el pipeline nuevo
+  /// InnerTube es el CAMINO PRINCIPAL de la búsqueda y yt-dlp (lento en
+  /// Android) es el fallback — si InnerTube está colgado, esperar 12s antes
+  /// de degradar convertía cada búsqueda en ~14s garantizados. Con 8s un
+  /// fallo degrada rápido y la búsqueda sigue siendo usable.
+          .timeout(const Duration(seconds: 8));
     } on TimeoutException {
       rethrow;
     } catch (e) {

@@ -16,6 +16,7 @@ import 'services/audio_cache_service.dart';
 import 'services/artwork_cache_service.dart';
 import 'services/just_audio_backend.dart';
 import 'services/media_kit_backend.dart';
+import 'services/search_cache_store.dart';
 import 'services/search_service.dart';
 import 'services/discord/discord_presence_service.dart';
 import 'services/lyrics_service.dart';
@@ -236,8 +237,12 @@ class ScrupApp extends StatelessWidget {
         ),
         Provider<ArtworkCacheService>(create: (_) => ArtworkCacheService()),
         Provider<SearchService>(
-          create: (context) =>
-              SearchService(ytDlp: context.read<YtDlpService>()),
+          create: (context) => SearchService(
+            ytDlp: context.read<YtDlpService>(),
+            // Caché persistente de búsquedas: repetir una búsqueda (o abrir
+            // la app y repetir la de ayer) responde de disco al instante.
+            cache: SearchCacheStore(),
+          ),
         ),
         Provider<LyricsService>(
           create: (context) => LyricsService(context.read<AppDatabase>()),
