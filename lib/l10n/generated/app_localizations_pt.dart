@@ -704,6 +704,14 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get providerLrclib => 'LRCLIB · línea';
+
+  @override
+  String get searchArtistsSection => 'Artista';
+
+  @override
+  String searchArtistPlaying(String name) {
+    return 'Reproduzindo $name';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1376,4 +1384,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shortcutMouseForward => 'Próxima música (mouse)';
+
+  @override
+  String get searchArtistsSection => 'Artista';
+
+  @override
+  String searchArtistPlaying(String name) {
+    return 'Reproduzindo $name';
+  }
 }

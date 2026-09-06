@@ -1386,6 +1386,18 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'LRCLIB · línea'**
   String get providerLrclib;
+
+  /// No description provided for @searchArtistsSection.
+  ///
+  /// In es, this message translates to:
+  /// **'Artista'**
+  String get searchArtistsSection;
+
+  /// Snackbar al reproducir el catálogo de un artista desde la búsqueda
+  ///
+  /// In es, this message translates to:
+  /// **'Reproduciendo {name}'**
+  String searchArtistPlaying(String name);
 }
 
 class _AppLocalizationsDelegate

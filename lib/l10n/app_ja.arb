@@ -216,5 +216,7 @@
   "shortcutCategoryNavigation": "ナビゲーション",
   "shortcutCategoryModes": "モード",
   "shortcutMouseBack": "前の曲 (マウス)",
-  "shortcutMouseForward": "次の曲 (マウス)"
+  "shortcutMouseForward": "次の曲 (マウス)",
+  "searchArtistsSection": "アーティスト",
+  "searchArtistPlaying": "{name} を再生中"
 }

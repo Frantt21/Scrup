@@ -353,5 +353,7 @@
   "provider": "Provider:",
   "providerAll": "All (KPoe + LRCLIB)",
   "providerKpoe": "KPoe · word by word",
-  "providerLrclib": "LRCLIB · line"
+  "providerLrclib": "LRCLIB · line",
+  "searchArtistsSection": "Artist",
+  "searchArtistPlaying": "Playing {name}"
 }

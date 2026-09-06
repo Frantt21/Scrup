@@ -690,4 +690,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get providerLrclib => 'LRCLIB · línea';
+
+  @override
+  String get searchArtistsSection => '歌手';
+
+  @override
+  String searchArtistPlaying(String name) {
+    return '正在播放 $name';
+  }
 }

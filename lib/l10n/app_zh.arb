@@ -216,5 +216,7 @@
   "shortcutCategoryNavigation": "导航",
   "shortcutCategoryModes": "模式",
   "shortcutMouseBack": "上一首 (鼠标)",
-  "shortcutMouseForward": "下一首 (鼠标)"
+  "shortcutMouseForward": "下一首 (鼠标)",
+  "searchArtistsSection": "歌手",
+  "searchArtistPlaying": "正在播放 {name}"
 }

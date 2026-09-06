@@ -710,4 +710,12 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get providerLrclib => 'LRCLIB · línea';
+
+  @override
+  String get searchArtistsSection => 'Исполнитель';
+
+  @override
+  String searchArtistPlaying(String name) {
+    return 'Воспроизводится $name';
+  }
 }

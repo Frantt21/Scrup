@@ -10,6 +10,7 @@ import '../../services/player_service.dart';
 import '../../services/search_service.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
+import '../widgets/cover_image.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 import '../widgets/track_tile.dart';
 
@@ -46,6 +47,7 @@ class _SearchViewState extends State<SearchView> {
   final _searchFocus = FocusNode();
 
   List<Track> _results = const [];
+  List<YtmArtist> _artists = const [];
   bool _searching = false;
   String? _error;
   bool _hasSearched = false;
@@ -118,18 +120,29 @@ class _SearchViewState extends State<SearchView> {
       _hasSearched = true;
     });
     try {
-      final tracks = await context.read<SearchService>().search(q);
+      // Canciones (30 por defecto) y artistas (InnerTube, búsqueda general)
+      // en PARALELO: ambas fuentes son rápidas, ninguna bloquea a la otra.
+      final results = context.read<SearchService>().search(q);
+      final artists = context.read<SearchService>().searchArtists(q, limit: 8);
+      final tracks = await results;
       if (!mounted || token != _searchToken) return; // búsqueda obsoleta
       // SIN enriquecimiento automático: InnerTube ya devuelve metadatos
       // limpios (y Deezer solo vive en el editor manual de metadatos).
+      // Canciones YA: se pintan al llegar (~0.3-1s). Los artistas llegan
+      // unos ms después y aparecen encima SIN bloquear la lista.
+      if (!mounted || token != _searchToken) return;
       setState(() {
         _results = tracks;
         _searching = false;
       });
+      final artistList = await artists;
+      if (!mounted || token != _searchToken) return;
+      setState(() => _artists = artistList);
     } catch (e) {
       if (!mounted || token != _searchToken) return;
       setState(() {
         _results = const [];
+        _artists = const [];
         _error = e.toString();
       });
     } finally {
@@ -391,10 +404,18 @@ class _SearchViewState extends State<SearchView> {
     return ListView.separated(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, kPlayerOverlayInset),
-      itemCount: _results.length,
+      itemCount: _results.length + _artists.length,
       separatorBuilder: (_, _) => const SizedBox(height: 4),
       itemBuilder: (context, i) {
-        final track = _results[i];
+        // Artistas PRIMERO (van con su propia fila).
+        if (i < _artists.length) {
+          final artist = _artists[i];
+          return _ArtistTile(
+            artist: artist,
+            onTap: () => unawaited(_playArtist(artist)),
+          );
+        }
+        final track = _results[i - _artists.length];
         return TrackTile(
           track: track,
           onPlay: () => playTrack(context, track),
@@ -403,6 +424,108 @@ class _SearchViewState extends State<SearchView> {
           isPlaying: _playing,
         );
       },
+    );
+  }
+
+  /// Toca un artista → cola con sus mejores canciones: el catálogo del
+  /// artista se obtiene con el filtro de canciones de YT Music sobre su
+  /// nombre (canciones canónicas, sin covers/lives) y entra en caché como
+  /// cualquier búsqueda.
+  Future<void> _playArtist(YtmArtist artist) async {
+    final player = context.read<PlayerService>();
+    try {
+      final tracks = await context.read<SearchService>().search(
+        artist.name,
+        limit: 25,
+      );
+      if (tracks.isEmpty) return;
+      await player.playQueue(tracks);
+    } catch (_) {
+      // Sin catálogo no hay reproducción; el fallo no debe romper la view.
+    }
+  }
+}
+
+/// Fila de artista: avatar circular + nombre. Toque → play del catálogo.
+class _ArtistTile extends StatelessWidget {
+  const _ArtistTile({required this.artist, required this.onTap});
+
+  final YtmArtist artist;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final thumb = artist.thumbnailUrl;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Row(
+          children: [
+            ClipOval(
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: thumb != null && thumb.isNotEmpty
+                    ? CoverImage(
+                        source: thumb,
+                        width: 44,
+                        height: 44,
+                        cacheWidth: 96,
+                        fit: BoxFit.cover,
+                        fallback: ColoredBox(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          child: Icon(
+                            Icons.person_rounded,
+                            size: 24,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    : ColoredBox(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        child: Icon(
+                          Icons.person_rounded,
+                          size: 24,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    artist.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    l10n.searchArtistsSection,
+                    maxLines: 1,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.play_arrow_rounded,
+              size: 24,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

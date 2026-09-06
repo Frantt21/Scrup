@@ -353,5 +353,15 @@
   "provider": "Proveedor:",
   "providerAll": "Todos (KPoe + LRCLIB)",
   "providerKpoe": "KPoe · palabra a palabra",
-  "providerLrclib": "LRCLIB · línea"
+  "providerLrclib": "LRCLIB · línea",
+  "searchArtistsSection": "Artista",
+  "searchArtistPlaying": "Reproduciendo {name}",
+  "@searchArtistPlaying": {
+    "description": "Snackbar al reproducir el catálogo de un artista desde la búsqueda",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  }
 }

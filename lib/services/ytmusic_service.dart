@@ -43,6 +43,21 @@ class YtMusicException implements Exception {
   String toString() => message;
 }
 
+/// Artista encontrado en la búsqueda de InnerTube: canal (`browseId` UC…),
+/// nombre y miniatura. No es reproducible por sí mismo: para sonar se
+/// busca el catálogo del artista por nombre (filtro Songs de YT Music).
+class YtmArtist {
+  const YtmArtist({
+    required this.browseId,
+    required this.name,
+    this.thumbnailUrl,
+  });
+
+  final String browseId;
+  final String name;
+  final String? thumbnailUrl;
+}
+
 /// Public YouTube/YT Music playlist read via InnerTube browse.
 class YtmPlaylist {
   const YtmPlaylist({
@@ -124,6 +139,113 @@ class YtMusicService {
       throw const YtMusicException('bad-json');
     }
     return parseResponse(data, limit);
+  }
+
+  /// Búsqueda de ARTISTAS en InnerTube: misma query, SIN el filtro de
+  /// canciones (`params`) — la respuesta general incluye las secciones
+  /// "Top result" y "Artists" cuyos items navegan a canales (browseId
+  /// `UC…`). Filtramos por eso: los items con videoId son canciones y se
+  /// descartan.
+  /// Errores → lista vacía (la búsqueda de canciones sigue funcionando).
+  Future<List<YtmArtist>> searchArtists(String query, {int limit = 8}) async {
+    if (query.trim().isEmpty) return const [];
+    try {
+      final body = jsonEncode({
+        'context': _context(),
+        'query': query,
+        // sin 'params': búsqueda general (incluye artistas).
+      });
+      final res = await _client
+          .post(
+            Uri.parse('$_endpoint?prettyPrint=false'),
+            headers: const {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0',
+              'X-YouTube-Client-Name': '67',
+              'X-YouTube-Client-Version': _clientVersion,
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return const [];
+      final data = jsonDecode(utf8.decode(res.bodyBytes));
+      return parseArtists(data, limit);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Extrae artistas (browseId UC…) del árbol de respuesta general.
+  static List<YtmArtist> parseArtists(Object? node, int limit) {
+    final results = <YtmArtist>[];
+    final seen = <String>{};
+
+    void walk(Object? n) {
+      if (results.length >= limit) return;
+      if (n is Map) {
+        final renderer = n['musicResponsiveListItemRenderer'];
+        if (renderer is Map) {
+          final a = artistFromListItem(renderer);
+          if (a != null && seen.add(a.browseId)) results.add(a);
+        }
+        n.values.forEach(walk);
+      } else if (n is List) {
+        for (final v in n) {
+          walk(v);
+        }
+      }
+    }
+
+    walk(node);
+    if (results.length > limit) return results.sublist(0, limit);
+    return results;
+  }
+
+  /// Artista desde un musicResponsiveListItemRenderer: navegación a canal
+  /// (`browseId` UC…) + nombre en la primera columna.
+  static YtmArtist? artistFromListItem(Map item) {
+    final nav = item['navigationEndpoint'] as Map?;
+    final browse = nav?['browseEndpoint'] as Map?;
+    final browseId = browse?['browseId'] as String?;
+    if (browseId == null || !browseId.startsWith('UC')) return null;
+    final columns = (item['flexColumns'] as List?) ?? const [];
+    String? name;
+    if (columns.isNotEmpty) {
+      final runs =
+          ((((columns[0] as Map?)?['musicResponsiveListItemFlexColumnRenderer']
+                          as Map?)?['text']
+                      as Map?)?['runs']
+                  as List?)
+              ?.whereType<Map>()
+              .toList();
+      if (runs != null && runs.isNotEmpty && runs.first['text'] is String) {
+        name = (runs.first['text'] as String).trim();
+      }
+    }
+    if (name == null || name.isEmpty) return null;
+    String? thumbUrl;
+    final thumbs =
+        ((((item['thumbnail'] as Map?)?['musicThumbnailRenderer']
+                        as Map?)?['thumbnail']
+                    as Map?)?['thumbnails']
+                as List?)
+            ?.whereType<Map>();
+    if (thumbs != null && thumbs.isNotEmpty) {
+      Map best = thumbs.first;
+      var bestW = (best['width'] as num?) ?? 0;
+      for (final t in thumbs) {
+        if (((t['width'] as num?) ?? 0) > bestW) {
+          best = t;
+          bestW = (t['width'] as num?) ?? 0;
+        }
+      }
+      if (best['url'] is String) thumbUrl = best['url'] as String;
+    }
+    return YtmArtist(
+      browseId: browseId,
+      name: name,
+      thumbnailUrl: thumbUrl,
+    );
   }
 
   // Parses InnerTube response by walking the tree for list item renderers.

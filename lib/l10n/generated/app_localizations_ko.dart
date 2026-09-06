@@ -692,4 +692,12 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get providerLrclib => 'LRCLIB · línea';
+
+  @override
+  String get searchArtistsSection => '아티스트';
+
+  @override
+  String searchArtistPlaying(String name) {
+    return '$name 재생 중';
+  }
 }

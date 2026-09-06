@@ -216,5 +216,7 @@
   "shortcutCategoryNavigation": "Navegação",
   "shortcutCategoryModes": "Modos",
   "shortcutMouseBack": "Música anterior (rato)",
-  "shortcutMouseForward": "Próxima música (rato)"
+  "shortcutMouseForward": "Próxima música (rato)",
+  "searchArtistsSection": "Artista",
+  "searchArtistPlaying": "Reproduzindo {name}"
 }

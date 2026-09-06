@@ -703,4 +703,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get providerLrclib => 'LRCLIB · line';
+
+  @override
+  String get searchArtistsSection => 'Artist';
+
+  @override
+  String searchArtistPlaying(String name) {
+    return 'Playing $name';
+  }
 }

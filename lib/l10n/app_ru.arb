@@ -216,5 +216,7 @@
   "shortcutCategoryNavigation": "Навигация",
   "shortcutCategoryModes": "Режимы",
   "shortcutMouseBack": "Предыдущий трек (мышь)",
-  "shortcutMouseForward": "Следующий трек (мышь)"
+  "shortcutMouseForward": "Следующий трек (мышь)",
+  "searchArtistsSection": "Исполнитель",
+  "searchArtistPlaying": "Воспроизводится {name}"
 }
