@@ -344,11 +344,13 @@ class PlayerService {
     if (!_beginSkip()) return;
     final hasNext = _queueIndex >= 0 && _queueIndex < _queue.length - 1;
     if (hasNext) {
+      _registerSlide(1);
       await _playAt(_nextIndex());
       return;
     }
 
     if (_queue.isNotEmpty && repeatMode.value == LoopMode.all) {
+      _registerSlide(1);
       await _playAt(0);
       return;
     }
@@ -356,23 +358,61 @@ class PlayerService {
     if (radio.value && recommend != null) {
       final current = _currentTrack;
       if (current != null) {
+        // El cambio (quizá asíncrono, vía radio) lo pidió el botón next.
+        _registerSlide(1);
         await _playRadio(current);
       }
     }
+    // Sin cambio real: no se registra intención (evita slides "fantasma"
+    // sobre cambios automáticos posteriores).
   }
 
   Future<void> previous() async {
     if (!_beginSkip()) return;
     if (_lastPosition > const Duration(seconds: 3)) {
+      // Solo rebobina al inicio: NO es un cambio de pista → sin intención.
       await seek(Duration.zero);
       return;
     }
     if (_queueIndex > 0) {
+      _registerSlide(-1);
       await _playAt(_queueIndex - 1);
       return;
     }
 
     await seek(Duration.zero);
+  }
+
+  // ── Dirección del slide del artwork ─────────────────────────────────
+  // La animación de cambio de pista se dirige por la ACCIÓN del usuario
+  // (botón siguiente/anterior del mini, del player expandido, gesto sobre
+  // el arte, teclas/notificación del OS), NO por la posición en la cola ni
+  // por cambios automáticos (fin de pista, radio, selección en la cola →
+  // fundido). `next()`/`previous()` la registran justo antes de cambiar;
+  // [takeSlideDirection] la consume (una vez) en el overlay del artwork.
+  final ValueNotifier<double> _slideIntent = ValueNotifier<double>(0);
+  DateTime? _slideIntentAt;
+
+  static const Duration _slideIntentMaxAge = Duration(milliseconds: 1500);
+
+  void _registerSlide(double dir) {
+    _slideIntent.value = dir;
+    _slideIntentAt = DateTime.now();
+  }
+
+  /// Devuelve (y resetea) la dirección pedida por el usuario si es reciente
+  /// (+1 siguiente desde la derecha, -1 anterior desde la izquierda). Si la
+  /// petición es vieja (no hubo cambio de pista) o no existe, devuelve 0
+  /// (fundido).
+  double takeSlideDirection() {
+    final at = _slideIntentAt;
+    final fresh =
+        at != null &&
+        DateTime.now().difference(at) < _slideIntentMaxAge;
+    final v = _slideIntent.value;
+    _slideIntent.value = 0;
+    _slideIntentAt = null;
+    return fresh ? v : 0;
   }
 
   // Anti-spam de next/prev: los toques (botones, notificación, teclado)
@@ -922,6 +962,7 @@ class PlayerService {
     await _errorController.close();
     preparingTrackId.dispose();
     preparingTrack.dispose();
+    _slideIntent.dispose();
     repeatMode.dispose();
     shuffle.dispose();
     radio.dispose();

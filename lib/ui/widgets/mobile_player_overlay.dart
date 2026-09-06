@@ -7,11 +7,18 @@ import 'package:provider/provider.dart';
 import '../../core/track.dart';
 import '../../core/app_log.dart';
 import '../../data/database.dart';
+import '../../l10n/generated/app_localizations.dart';
+import '../../services/artwork_cache_service.dart';
+import '../../services/artwork_palette_service.dart';
+import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
 import '../views/lyrics_view.dart';
+import 'context_menu_item.dart';
 import 'cover_image.dart';
+import 'edit_metadata_dialog.dart';
+import 'scrup_toasts.dart';
 
 /// Superficie neutra pre-acento (fondo del player sin acento todavía).
 const Color _kIdleSurface = Colors.transparent;
@@ -105,29 +112,23 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
   Color? _lastLoggedAccent;
   String? _lastLoggedTrackId;
 
-  // `_pendingSlide` guarda la dirección pedida por el botón/gesto y se
-  // consume cuando llega la pista nueva (así la animación depende de la
-  // ACCIÓN, no de la posición en la cola).
-  double _pendingSlide = 0;
+  /// Dirección del slide en curso, reservada para la pista [id]: la
+  /// transición de la pista entrante recibe UNA sola rafaga de eventos
+  /// (currentTrack null → preparing → publish → preparing null). Solo el
+  /// PRIMERO que cambia el arte aplica la dirección y la RESERVA para el id:
+  /// los eventos posteriores de la MISMA pista no la tocan (si se aplicara
+  /// en cada uno, el publish/clear la resetearía a mitad del slide y el
+  /// artwork "saltaba" al final).
+  String? _slideDirFor;
 
-  /// Cuándo se pidió la dirección (para no aplicar un slide rancio si el
-  /// tap fue tragado por el debounce del servicio).
-  DateTime? _pendingSlideAt;
-
-  /// La dirección solo vale si el cambio llega justo tras el gesto; si el
-  /// tap se ignoró (debounce) y el cambio vino de otro lado, fundido.
-  bool get _slideFresh {
-    final at = _pendingSlideAt;
-    return at != null &&
-        DateTime.now().difference(at) < const Duration(milliseconds: 1500);
-  }
-
-  /// Consume la dirección pedida por el usuario (siguiente/anterior); los
-  /// cambios automáticos quedan en 0 (solo fundido).
-  void _consumeSlide() {
-    _nSlideDir.value = _slideFresh ? _pendingSlide : 0;
-    _pendingSlide = 0;
-    _pendingSlideAt = null;
+  /// Aplica la dirección de la pista entrante [id] si es una transición
+  /// nueva (id distinto del reservado). Sin intención de usuario
+  /// (auto-avance, selección en cola) → 0 = fundido.
+  void _applySlideFor(String? id) {
+    if (id == null || id == _slideDirFor) return;
+    final dir = _player.takeSlideDirection();
+    _nSlideDir.value = dir;
+    _slideDirFor = dir == 0 ? null : id;
   }
 
   // Corazón del doble toque: burst en el punto del toque sobre el artwork.
@@ -179,9 +180,10 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
 
   void _onTrackChanged(Track? t) {
     if (!mounted) return;
-    // Consume la dirección pedida por el usuario ANTES de publicar la pista
-    // (así la animación del arte sale con el cambio).
-    _consumeSlide();
+    // Publicación de la pista: si es una transición nueva sin preparación
+    // previa, aplica la dirección aquí; si ya está reservada (preparando),
+    // no se toca (ver [_applySlideFor]).
+    _applySlideFor(t?.id);
     _nTrack.value = t;
     _refreshFavoriteState();
     if (t != null) _ticker ??= _startTicker();
@@ -217,17 +219,15 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     });
   }
 
-  /// Siguiente / anterior CON animación dirigida del artwork: siguiente
-  /// entra desde la derecha (+1), anterior desde la izquierda (-1).
+  /// Siguiente / anterior: la dirección de la animación del artwork la
+  /// registra el PROPIO `next()`/`previous()` del servicio (ver
+  /// [PlayerService.takeSlideDirection]) → siguiente entra desde la derecha
+  /// (+1), anterior desde la izquierda (-1), desde CUALQUIER botón.
   void _goNext() {
-    _pendingSlide = 1;
-    _pendingSlideAt = DateTime.now();
     _player.next();
   }
 
   void _goPrev() {
-    _pendingSlide = -1;
-    _pendingSlideAt = DateTime.now();
     _player.previous();
   }
 
@@ -260,20 +260,121 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     }
   }
 
+  // ── Context menu del artwork (long-press) ────────────────────────────
+  // Misma estructura que el de desktop (player_bar.dart): editar metadatos,
+  // añadir a playlist y recalcular el color de acento. Para 'edit' se pasa
+  // la pista PUBLICADA (la en preparación aún no está en la DB).
+
+  /// Pista a la que se le aplicarán las acciones del menú: la publicada
+  /// (metadatos editables en DB); si solo hay preparación, esta última.
+  Track? get _actionableTrack => _nTrack.value ?? _nPreparing.value;
+
+  Future<void> _showArtworkContextMenu(Offset position) async {
+    final track = _actionableTrack;
+    if (track == null) return;
+    final l10n = AppLocalizations.of(context);
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      clipBehavior: Clip.antiAlias,
+      items: [
+        ContextMenuItem(
+          value: 'edit',
+          icon: Icons.edit_rounded,
+          label: l10n.editMetadata,
+        ),
+        ContextMenuItem(
+          value: 'add',
+          icon: Icons.playlist_add_rounded,
+          label: l10n.addToPlaylist,
+        ),
+        ContextMenuItem(
+          value: 'recalc',
+          icon: Icons.palette_rounded,
+          label: l10n.recalcColors,
+        ),
+      ],
+    );
+    if (!mounted || action == null) return;
+    if (action == 'edit') {
+      await _editCurrentMetadata();
+    } else if (action == 'add') {
+      await showAddToPlaylistDialog(context, track);
+    } else if (action == 'recalc') {
+      await _recalcCurrentAccent();
+    }
+  }
+
+  Future<void> _editCurrentMetadata() async {
+    final track = _nTrack.value;
+    if (track == null) return;
+    final saved = await showDialog<Track>(
+      context: context,
+      builder: (ctx) => EditMetadataDialog(track: track),
+    );
+    if (saved == null || !mounted) return;
+    final player = context.read<PlayerService>();
+    final savedMsg = AppLocalizations.of(context).metadataSaved;
+    await player.updateCurrentMetadata(saved);
+    showScrupToast(savedMsg, kind: ScrupToastKind.success);
+  }
+
+  /// Recalcula el acento (color) del artwork actual: invalida el caché de
+  /// paleta, reextrae con [force] y aplica el color si sigue siendo la
+  /// pista visible (igual que desktop).
+  Future<void> _recalcCurrentAccent() async {
+    final track = _actionableTrack;
+    final url = track?.thumbnailUrl;
+    if (url == null || url.isEmpty) return;
+    final hiUrl = Track.hiResThumbnail(url) ?? url;
+    final store = context.read<PaletteCacheStore>();
+    await ArtworkPaletteService.accentFor(
+      hiUrl,
+      store,
+      force: true,
+      artworkCache: context.read<ArtworkCacheService>(),
+    );
+    if (!mounted) return;
+    final theme = context.read<ThemeController>();
+    theme.invalidateColor(hiUrl);
+    theme.invalidateColor(url);
+    // Si la pista visible sigue siendo la recalculada, aplica el color ya
+    // (si cambió de pista mientras tanto, el cambio la traerá de caché).
+    if (_actionableTrack?.thumbnailUrl == url) {
+      theme.setAccent(store.get(hiUrl));
+    }
+    showScrupToast(
+      AppLocalizations.of(context).colorsUpdated,
+      kind: ScrupToastKind.success,
+    );
+  }
+
   void _onPreparing() {
     final id = _player.preparingTrackId.value;
     appLog(
       'PREP',
       'overlay id=${shortId(id)} active=${_nPreparingActive.value}',
     );
-    // Consume la dirección del usuario ANTES de que el artwork cambie al
-    // track que se está preparando (así la animación sale con el gesto). Si
-    // la preparación se CANCELA (id null tras una preparación activa), se
-    // vuelve al arte anterior con solo fundido (sin slide "fantasma").
+    // Aplica la dirección del usuario ANTES de que el artwork cambie al
+    // track que se está preparando (así la animación sale con la acción).
     if (id != null) {
-      _consumeSlide();
+      _applySlideFor(id);
     } else if (_nPreparingActive.value) {
-      _nSlideDir.value = 0;
+      // Fin de la preparación. Si la pista YA se publicó (normal), se
+      // libera la reserva sin tocar _nSlideDir (la animación del slide
+      // sigue en curso). Si se CANCELÓ sin publicar, se vuelve al arte
+      // anterior con fundido (sin slide "fantasma").
+      if (_player.currentTrackValue == null) {
+        _slideDirFor = null;
+        _nSlideDir.value = 0;
+      } else {
+        _slideDirFor = null;
+      }
     }
     if (!mounted) return;
     _nPreparingActive.value = id != null;
@@ -551,6 +652,10 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
             child: GestureDetector(
               onDoubleTapDown: (d) => _armHeartBurst(d.globalPosition),
               onDoubleTap: _toggleFavorite,
+              // Long-press: context menu (editar metadatos, añadir a
+              // playlist, recalcular color) — igual que el clic derecho en
+              // desktop. La posición del menú sale del punto del long-press.
+              onLongPressStart: (d) => _showArtworkContextMenu(d.globalPosition),
               onHorizontalDragEnd: (details) {
                 final v = details.primaryVelocity ?? 0;
                 if (v < -350) {

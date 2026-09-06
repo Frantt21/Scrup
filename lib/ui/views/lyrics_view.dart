@@ -140,7 +140,16 @@ class _LyricsViewState extends State<LyricsView>
       if (!mounted) return;
       _smoothBasePosition = p;
       _smoothBaseAt = DateTime.now();
-      if (!_playing) _position.value = p;
+      // Publica SIEMPRE (~4Hz), no solo en pausa: el ticker de suavizado
+      // (que interpola a ~30Hz entre samples) está MUTEADO por TickerMode
+      // cuando el contenedor de letras está CERRADO, así que si no se
+      // publicara aquí la posición se congelaba con el sheet cerrado → la
+      // línea activa/scroll quedaban desfasados al reabrirlo (y el botón de
+      // resync ni aparecía). Nunca retrocede: mientras suena, la estimación
+      // del ticker va por delante del último sample y lo preserva.
+      if (!_playing || p > _position.value) {
+        _position.value = p;
+      }
     });
     _playing = player.isPlaying;
     _playingSub = player.playing.listen((playing) {
