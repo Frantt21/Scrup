@@ -87,7 +87,8 @@ class MobilePlayerOverlay extends StatefulWidget {
   State<MobilePlayerOverlay> createState() => _MobilePlayerOverlayState();
 }
 
-class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
+class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
+    with TickerProviderStateMixin {
   late final PlayerService _player;
   late final ThemeController _theme;
 
@@ -129,6 +130,186 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     final dir = _player.takeSlideDirection();
     _nSlideDir.value = dir;
     _slideDirFor = dir == 0 ? null : id;
+  }
+
+  // ── Artwork ARRASTRABLE (carrusel 1:1 con el dedo) ───────────────────
+  // Arrastrar el artwork horizontalmente desliza el arte ACTUAL fuera de
+  // pantalla y trae el de la pista SIGUIENTE (izq→der) o ANTERIOR (der→izq);
+  // al soltar, si el arrastre supera el umbral se CAMBIA de pista de verdad
+  // (next/previous del servicio); si no, vuelve a su sitio. Mientras se
+  // arrastra NO se emite ningún cambio: solo se previsualiza el arte vecino
+  // (que ya está en el caché de disco por el warm de la cola).
+  AnimationController? _artDragCtrl;
+
+  /// Desplazamiento actual del carrusel en UNIDADES de artwork: −1 = el
+  /// siguiente ocupa el centro, +1 = el anterior lo ocupa, 0 = actual.
+  double _artDrag = 0;
+
+  /// Índice del vecino previsualizado durante el arrastre (para cambiar de
+  /// lado en vivo si el dedo cruza el centro).
+  int _artDragNeighbor = 0;
+
+  /// Notifier del carrusel: el arrastre anima a ~60-120Hz y un `setState`
+  /// del overlay entero por frame mataría el morph. El builder del artwork
+  /// escucha esto (junto a sus notifiers de pista/playing) y solo él se
+  /// reconstruye en cada frame del arrastre.
+  final ValueNotifier<double> artDragN = ValueNotifier<double>(0);
+  final ValueNotifier<int> artDragNeighborN = ValueNotifier<int>(0);
+
+  /// Commit en curso desde el carrusel: la transición ya la hizo el dedo,
+  /// así que el switcher del arte cambia SIN animación (Duration.zero) y el
+  /// preview del vecino se oculta (el arte nuevo ya es el principal).
+  bool _artDragCommit = false;
+  bool _artCommitted = false;
+
+  void setStateOnlyArt(VoidCallback fn) {
+    fn();
+    artDragN.value = _artDrag;
+    artDragNeighborN.value = _artDragNeighbor;
+  }
+
+  /// Ancho actual del artwork (la unidad del carrusel): lo da el RenderBox
+  /// medido; antes del primer layout usa el ancho de pantalla de referencia.
+  double get artSideOfContext {
+    final box = _artStackKey.currentContext?.findRenderObject();
+    if (box is RenderBox && box.hasSize && box.size.width > 0) {
+      return box.size.width;
+    }
+    return MediaQuery.sizeOf(context).width * 0.88;
+  }
+
+  void _disposeArtDragCtrl() {
+    _artDragCtrl?.dispose();
+    _artDragCtrl = null;
+  }
+
+  /// Pista vecina en la cola para el preview del carrusel: [dir] +1 =
+  /// siguiente, −1 = anterior. Con shuffle activo no hay "vecino" fijo (el
+  /// orden es aleatorio) → null = preview vacío.
+  Track? _neighborTrack(int dir) {
+    final q = _player.queue.value;
+    if (q.isEmpty) return null;
+    final cur = _showingNow;
+    var idx = cur == null ? -1 : q.indexWhere((t) => t.id == cur.id);
+    if (idx < 0) idx = _player.queueIndex.value;
+    final target = (idx + dir).clamp(0, q.length - 1);
+    if (target == idx) return null;
+    return q[target];
+  }
+
+  /// Preview del arte VECINO durante el arrastre: entra del lado hacia el
+  /// que se arrastra. [warmAccent] asegura que el color/bytes ya estén en
+  /// caché (el warm de la cola los suele traer de antemano).
+  Widget _artNeighborPreview(double p) {
+    final dir = _artDragNeighbor; // +1 siguiente, −1 anterior
+    final neighbor = dir == 0 ? null : _neighborTrack(dir);
+    final url = neighbor?.thumbnailUrl;
+    if (url != null && url.isNotEmpty) {
+      _theme.warmAccent(url);
+    }
+    return url == null || url.isEmpty
+        ? _artPlaceholder(p)
+        : CoverImage(
+            source: Track.hiResThumbnail(url) ?? url,
+            fit: BoxFit.cover,
+            cacheWidth: 900,
+            fallback: _artPlaceholder(p),
+          );
+  }
+
+  void _onArtDragStart(DragStartDetails d) {
+    _disposeArtDragCtrl();
+    _artCommitted = false;
+    _artDragCommit = false;
+    setStateOnlyArt(() {
+      _artDrag = 0;
+      _artDragNeighbor = 0;
+    });
+  }
+
+  /// El carrusel sigue al dedo 1:1: positivo = arrastre hacia la derecha
+  /// (muestra la ANTERIOR), negativo = hacia la izquierda (muestra la
+  /// SIGUIENTE). El arte que entra viene DEL lado hacia el que se arrastra.
+  void _onArtDragUpdate(DragUpdateDetails d) {
+    final side = artSideOfContext;
+    if (side <= 0) return;
+    setStateOnlyArt(() => _artDrag = (_artDrag + d.delta.dx / side).clamp(
+      -1.0,
+      1.0,
+    ));
+    _artDragNeighbor = _artDrag < -0.05
+        ? 1
+        : _artDrag > 0.05
+        ? -1
+        : 0;
+    artDragNeighborN.value = _artDragNeighbor;
+  }
+
+  void _onArtDragEnd(DragEndDetails d) {
+    final v = d.primaryVelocity ?? 0;
+    final flick = v.abs() > 500;
+    final crossed = _artDrag.abs() >= 0.4;
+    final dir = _artDrag < 0 ? 1 : -1; // +1 siguiente, −1 anterior
+    if (crossed || (flick && _artDrag != 0)) {
+      // Cambio REAL: la transición ya la hizo el carrusel con el dedo → el
+      // switcher del arte cambia SIN animación y el ARTE NUEVO (ahora
+      // principal) arranca EXACTAMENTE donde estaba el preview del vecino
+      // y asienta a 0 (continúa el movimiento que inició el dedo, sin
+      // saltos ni animación encima).
+      final from = _artDrag;
+      // El vecino entró del lado de entrada: +1 si venía de la derecha
+      // (next, arrastre a la izq.), −1 si de la izquierda (prev). Su offset
+      // era (1-|from|); el arte principal lo hereda.
+      final entryDir = from < 0 ? 1.0 : -1.0;
+      final commitDrag = entryDir * (1 - from.abs());
+      _artCommitted = true;
+      _artDragCommit = true;
+      setStateOnlyArt(() {
+        _artDrag = commitDrag;
+        _artDragNeighbor = 0;
+      });
+      _startArtSettle(commitDrag);
+      if (dir == 1) {
+        _player.next();
+      } else {
+        _player.previous();
+      }
+    } else if (_artDrag != 0) {
+      // Vuelve a su sitio: el preview del vecino sale con el transform.
+      _startArtSettle(_artDrag);
+    }
+  }
+
+  /// Asienta el transform del carrusel ([from] → 0, ease-out corto). Al
+  /// terminar libera las banderas del commit (si el cambio aún no llegó —
+  /// p. ej. el debounce tragó el next— el próximo cambio anima normal).
+  void _startArtSettle(double from) {
+    _disposeArtDragCtrl();
+    final ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    );
+    _artDragCtrl = ctrl;
+    ctrl.addListener(() {
+      if (!mounted) return;
+      setStateOnlyArt(
+        () => _artDrag = from * (1 - Curves.easeOutCubic.transform(ctrl.value)),
+      );
+      if (ctrl.isCompleted) {
+        setStateOnlyArt(() {
+          _artDrag = 0;
+          _artDragNeighbor = 0;
+        });
+        _artCommitted = false;
+        _artDragCommit = false;
+        // Fuera del callback del controller (dispose en plena notificación
+        // es frágil): post-frame.
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _disposeArtDragCtrl(),
+        );
+      }
+    });
+    ctrl.forward();
   }
 
   // Corazón del doble toque: burst en el punto del toque sobre el artwork.
@@ -424,6 +605,9 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
     _player.preparingTrackId.removeListener(_onPreparing);
     _favSub?.cancel();
     _ticker?.cancel();
+    _disposeArtDragCtrl();
+    artDragN.dispose();
+    artDragNeighborN.dispose();
     for (final s in _subs) {
       s.cancel();
     }
@@ -630,6 +814,8 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
           _nPreparingActive,
           _nPlaying,
           _nSlideDir,
+          artDragN,
+          artDragNeighborN,
         ]),
         builder: (context, _) {
           final showing = _showingNow;
@@ -656,21 +842,30 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
               // playlist, recalcular color) — igual que el clic derecho en
               // desktop. La posición del menú sale del punto del long-press.
               onLongPressStart: (d) => _showArtworkContextMenu(d.globalPosition),
-              onHorizontalDragEnd: (details) {
-                final v = details.primaryVelocity ?? 0;
-                if (v < -350) {
-                  _goNext();
-                } else if (v > 350) {
-                  _goPrev();
-                }
-              },
+              // Artwork ARRASTRABLE: carrusel 1:1 que previsualiza el arte
+              // de la pista siguiente/anterior y cambia al soltar (ver
+              // [_onArtDragStart/Update/End]).
+              onHorizontalDragStart: _onArtDragStart,
+              onHorizontalDragUpdate: _onArtDragUpdate,
+              onHorizontalDragEnd: _onArtDragEnd,
               child: Stack(
                 key: _artStackKey,
                 fit: StackFit.expand,
                 clipBehavior: Clip.none,
                 children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 280),
+                  // Carrusel 1:1 del arrastre (transform del bloque entero;
+                  // el AnimatedSwitcher de dentro solo hace el crossfade/slide
+                  // cuando la pista cambia por BOTÓN, teclas o fin de pista).
+                  Transform.translate(
+                    offset: Offset(_artDrag * 120, 0),
+                    child: Transform.scale(
+                      scale: 1 - (_artDrag.abs() * 0.18),
+                      child:                  AnimatedSwitcher(
+                    // Commit desde el carrusel: SIN animación (la transición
+                    // ya la hizo el dedo; animar encima se sobreponía).
+                    duration: _artDragCommit
+                        ? Duration.zero
+                        : const Duration(milliseconds: 280),
                     switchInCurve: Curves.easeOutCubic,
                     switchOutCurve: Curves.easeInCubic,
                     transitionBuilder: (child, animation) {
@@ -713,6 +908,32 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay> {
                             ),
                     ),
                   ),
+                    ),
+                  ),
+                  // Arte VECINO durante el arrastre: entra del lado hacia el
+                  // que se arrastra (preview 1:1, aún sin cambiar de pista).
+                  // Oculto tras el commit: el arte nuevo ya es el principal.
+                  if (_artDrag.abs() > 0.02 && !_artCommitted)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Transform.translate(
+                          offset: Offset(
+                            (_artDrag.sign * -1 + _artDrag) * 120,
+                            0,
+                          ),
+                          child: Opacity(
+                            opacity: _artDrag.abs().clamp(0.0, 1.0),
+                            child: Transform.scale(
+                              scale: 1 - ((1 - _artDrag.abs()) * 0.18),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(radius),
+                                child: _artNeighborPreview(p),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   // Corazón del doble toque (fuera del ClipRRect: no se
                   // recorta aunque el toque sea cerca de un borde).
                   if (_heartBurst > 0)
