@@ -35,6 +35,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get recentTitle => 'Recentes';
 
   @override
+  String get yourLikes => 'As tuas curtidas';
+
+  @override
   String get recentPlaylistsTitle => 'Playlists recientes';
 
   @override
@@ -732,6 +735,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get recentTitle => 'Recentes';
+
+  @override
+  String get yourLikes => 'Suas curtidas';
 
   @override
   String get addToPlaylist => 'Adicionar à playlist';

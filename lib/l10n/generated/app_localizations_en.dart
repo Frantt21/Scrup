@@ -35,6 +35,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recentTitle => 'Recent';
 
   @override
+  String get yourLikes => 'Your Likes';
+
+  @override
   String get recentPlaylistsTitle => 'Recently played playlists';
 
   @override

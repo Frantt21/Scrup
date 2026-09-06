@@ -35,6 +35,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get recentTitle => 'Недавние';
 
   @override
+  String get yourLikes => 'Твои лайки';
+
+  @override
   String get recentPlaylistsTitle => 'Playlists recientes';
 
   @override

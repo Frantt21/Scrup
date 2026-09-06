@@ -563,6 +563,29 @@ class AppDatabase extends _$AppDatabase {
         .go();
   }
 
+  /// Últimas pistas añadidas a [playlistId] (para el banner "Tus me gusta"
+  /// de home: las 3 portadas más recientes, sobrepuestas). Se usa el orden
+  /// de la playlist (position DESC) como proxy de "añadido más reciente".
+  Stream<List<Track>> watchLatestPlaylistTracks(
+    int playlistId, {
+    int limit = 3,
+  }) {
+    final query =
+        (select(playlistTracks)
+              ..where((pt) => pt.playlistId.equals(playlistId))
+              ..orderBy([
+                (pt) => OrderingTerm.desc(pt.position),
+              ])
+              ..limit(limit))
+            .join([
+              innerJoin(tracks, tracks.id.equalsExp(playlistTracks.trackId)),
+            ]);
+
+    return query.watch().map((rows) {
+      return rows.map((row) => _trackFromRow(row.readTable(tracks))).toList();
+    });
+  }
+
   /// Reordena las canciones de [playlistId] según [trackIds] (orden final
   /// completo): batch de UPDATEs de posición en una sola transacción. El
   /// stream de `watchPlaylistTracks` re-emite el orden persistido.

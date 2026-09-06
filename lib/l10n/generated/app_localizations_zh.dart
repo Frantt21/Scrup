@@ -35,6 +35,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get recentTitle => '最近播放';
 
   @override
+  String get yourLikes => '你的喜欢';
+
+  @override
   String get recentPlaylistsTitle => 'Playlists recientes';
 
   @override

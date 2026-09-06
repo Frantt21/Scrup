@@ -8,6 +8,7 @@
   "playbackErrorWithDetails": "播放错误：{details}",
   "searchHint": "在 YouTube 上搜索歌曲…",
   "recentTitle": "最近播放",
+  "yourLikes": "你的喜欢",
   "addToPlaylist": "添加到播放列表",
   "recentEmptyTitle": "还没有播放任何内容",
   "recentEmptyHint": "使用上方搜索开始吧",

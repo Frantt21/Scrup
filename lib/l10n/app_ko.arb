@@ -8,6 +8,7 @@
   "playbackErrorWithDetails": "재생 오류: {details}",
   "searchHint": "YouTube에서 노래 검색…",
   "recentTitle": "최근 재생",
+  "yourLikes": "좋아요한 곡",
   "addToPlaylist": "플레이리스트에 추가",
   "recentEmptyTitle": "아직 재생한 곡이 없습니다",
   "recentEmptyHint": "위의 검색을 사용해 시작하세요",

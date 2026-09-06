@@ -57,6 +57,12 @@ class _HomeViewState extends State<HomeView> {
   StreamSubscription<bool>? _playingSub;
   List<Track> _recent = const [];
   bool _loaded = false;
+
+  // Banner "Tus me gusta": últimas 3 canciones añadidas a favoritos
+  // (portadas sobrepuestas). Stream reactivo: al dar like aparece al instante.
+  Stream<List<Track>>? _likesStream;
+  StreamSubscription<List<Track>>? _likesSub;
+  List<Track> _likes = const [];
   StreamSubscription<List<Playlist>>? _recentPlaylistsSub;
   List<Playlist> _recentPlaylists = const [];
 
@@ -113,6 +119,19 @@ class _HomeViewState extends State<HomeView> {
         if (!mounted) return;
         setState(() => _recentPlaylists = playlists);
       });
+      // Banner de favoritos (no bloquea _loaded: es optativo).
+      unawaited(
+        context.read<AppDatabase>().ensureFavoritesPlaylist().then((id) {
+          if (!mounted) return;
+          _likesStream = context
+              .read<AppDatabase>()
+              .watchLatestPlaylistTracks(id, limit: 3);
+          _likesSub = _likesStream!.listen((tracks) {
+            if (!mounted) return;
+            setState(() => _likes = tracks);
+          });
+        }),
+      );
     }
     // Indicador de "en reproducción" en las tarjetas
     final player = context.read<PlayerService>();
@@ -149,6 +168,7 @@ class _HomeViewState extends State<HomeView> {
     _sub?.cancel();
     _trackSub?.cancel();
     _playingSub?.cancel();
+    _likesSub?.cancel();
     _recentPlaylistsSub?.cancel();
     _nullTrackTimer?.cancel();
     if (_onActivePlaylistChanged != null) {
@@ -255,6 +275,32 @@ class _HomeViewState extends State<HomeView> {
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 48),
                         child: Center(child: CircularProgressIndicator()),
+                      ),
+                    ),
+                  // ── Banner "Tus me gusta" ─────────────────────────
+                  // Card a todo el ancho con el título a la izquierda y las
+                  // 3 últimas portadas de favoritos sobrepuestas a la
+                  // derecha. Reproduce los favoritos al tocarlo; oculto si
+                  // no hay ningún favorito aún.
+                  if (_loaded && _likes.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          mobile ? 16 : 24,
+                          8,
+                          mobile ? 16 : 24,
+                          12,
+                        ),
+                        child: _YourLikesBanner(
+                          likes: _likes,
+                          title: l10n.yourLikes,
+                          // Orden cronológico de like (el stream trae el
+                          // más reciente primero): el más antiguo suena
+                          // primero, como una playlist real.
+                          onPlay: () => unawaited(
+                            playQueue(context, _likes.reversed.toList()),
+                          ),
+                        ),
                       ),
                     ),
                   if (_loaded)
@@ -693,6 +739,112 @@ class _RecentCardState extends State<_RecentCard> {
 }
 
 /// Aviso compacto cuando no hay reproducciones recientes.
+/// Banner "Tus me gusta" de home: título a la izquierda + las 3 últimas
+/// portadas de favoritos sobrepuestas a la derecha. Tocarlo reproduce los
+/// favoritos.
+class _YourLikesBanner extends StatelessWidget {
+  final List<Track> likes;
+  final String title;
+  final VoidCallback onPlay;
+
+  const _YourLikesBanner({
+    required this.likes,
+    required this.title,
+    required this.onPlay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
+
+    // Portadas sobrepuestas (la más reciente arriba): 44dp con borde del
+    // color del banner. Muestro hasta 3; el orden visual va de la más
+    // reciente (arriba) a la más antigua (abajo).
+    final covers = <Widget>[];
+    for (var i = 0; i < likes.length && i < 3; i++) {
+      final t = likes[i];
+      covers.add(
+        Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: accent, width: 2),
+          ),
+          child: ClipOval(
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: CoverImage(
+                source: t.thumbnailUrl != null
+                    ? (Track.hiResThumbnail(t.thumbnailUrl) ?? t.thumbnailUrl)
+                    : null,
+                fit: BoxFit.cover,
+                cacheWidth: 96,
+                fallback: ColoredBox(
+                  color: accent.withValues(alpha: 0.25),
+                  child: Icon(
+                    Icons.favorite_rounded,
+                    size: 20,
+                    color: theme.colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      color: accent.withValues(alpha: 0.16),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPlay,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                Icons.favorite_rounded,
+                color: accent,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              // Portadas sobrepuestas: la más reciente ENCIMA de la pila.
+              SizedBox(
+                width: 44 + (covers.length - 1) * 22.0,
+                height: 44,
+                child: Stack(
+                  children: [
+                    for (var i = covers.length - 1; i >= 0; i--)
+                      Positioned(
+                        left: i * 22.0,
+                        top: 0,
+                        child: covers[i],
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _EmptyHint extends StatelessWidget {
   final ThemeData theme;
 

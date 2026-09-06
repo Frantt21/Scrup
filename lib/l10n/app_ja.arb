@@ -8,6 +8,7 @@
   "playbackErrorWithDetails": "再生エラー: {details}",
   "searchHint": "YouTubeで曲を検索…",
   "recentTitle": "最近再生した曲",
+  "yourLikes": "お気に入り",
   "addToPlaylist": "プレイリストに追加",
   "recentEmptyTitle": "まだ何も再生していません",
   "recentEmptyHint": "上の検索を使って始めましょう",

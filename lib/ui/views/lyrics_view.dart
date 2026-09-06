@@ -63,6 +63,12 @@ class _LyricsViewState extends State<LyricsView>
 
   bool _actionsHovered = false;
 
+  /// nº de diálogos de letras abiertos (buscar/sync/share): mientras haya,
+  /// los botones de acciones se OCULTAN aunque el puntero siga sobre ellos
+  /// (en Android el MouseRegion queda "pegado" tras abrir un diálogo y los
+  /// botones flotaban sobre él). El hover real se encarga de lo demás.
+  int _openDialogs = 0;
+
   StreamSubscription<Track?>? _trackSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<Duration?>? _durationSub;
@@ -334,6 +340,8 @@ class _LyricsViewState extends State<LyricsView>
   Future<void> _showSearchDialog() async {
     final track = _track;
     if (track == null) return;
+    setState(() => _openDialogs++);
+    try {
     final result = await showDialog<LyricsSearchResult>(
       context: context,
       builder: (ctx) => _LyricsSearchDialog(
@@ -366,11 +374,16 @@ class _LyricsViewState extends State<LyricsView>
         ),
       );
     }
+    } finally {
+      if (mounted) setState(() => _openDialogs--);
+    }
   }
 
   Future<void> _showSyncDialog() async {
     final lyrics = _lyrics;
     if (lyrics == null) return;
+    setState(() => _openDialogs++);
+    try {
     await showDialog<void>(
       context: context,
       builder: (ctx) => _LyricsSyncDialog(
@@ -387,6 +400,9 @@ class _LyricsViewState extends State<LyricsView>
         },
       ),
     );
+    } finally {
+      if (mounted) setState(() => _openDialogs--);
+    }
   }
 
   void _showShareDialog() {
@@ -394,6 +410,7 @@ class _LyricsViewState extends State<LyricsView>
     final track = _track;
     if (lyrics == null || track == null) return;
     final idx = lyrics.getCurrentLineIndex(_position.value - _lyricsOffset);
+    setState(() => _openDialogs++);
     showDialog<void>(
       context: context,
       builder: (ctx) => _LyricsShareDialog(
@@ -404,7 +421,9 @@ class _LyricsViewState extends State<LyricsView>
         artworkUrl: track.thumbnailUrl,
         accentColor: context.read<ThemeController>().accentColor,
       ),
-    );
+    ).whenComplete(() {
+      if (mounted) setState(() => _openDialogs--);
+    });
   }
 
   @override
@@ -520,15 +539,21 @@ class _LyricsViewState extends State<LyricsView>
               if (embedded) setState(() => _actionsHovered = false);
             },
             child: IgnorePointer(
-              ignoring: embedded && !_actionsHovered,
+              ignoring: embedded && (!_actionsHovered || _openDialogs > 0),
               child: AnimatedOpacity(
-                opacity: !embedded || _actionsHovered ? 1 : 0,
+                opacity: !embedded || (_actionsHovered && _openDialogs == 0)
+                    ? 1
+                    : 0,
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeOut,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
+                      // Key pública: el header del sheet de letras (Android)
+                      // presiona ESTE botón real vía GlobalObjectKey, así
+                      // reutiliza diálogos/estado sin duplicar lógica.
+                      key: const GlobalObjectKey('_lyrics_sweep_btn'),
                       icon: Icon(
                         Icons.graphic_eq_rounded,
                         color: _sweepEnabled
@@ -547,16 +572,19 @@ class _LyricsViewState extends State<LyricsView>
                       },
                     ),
                     IconButton(
+                      key: const GlobalObjectKey('_lyrics_sync_btn'),
                       icon: const Icon(Icons.timer_rounded),
                       tooltip: l10n.syncLyricsTitle,
                       onPressed: _lyrics == null ? null : _showSyncDialog,
                     ),
                     IconButton(
+                      key: const GlobalObjectKey('_lyrics_search_btn'),
                       icon: const Icon(Icons.search_rounded),
                       tooltip: l10n.searchLyrics,
                       onPressed: _track == null ? null : _showSearchDialog,
                     ),
                     IconButton(
+                      key: const GlobalObjectKey('_lyrics_share_btn'),
                       icon: const Icon(Icons.share_rounded),
                       tooltip: l10n.shareLyrics,
                       onPressed: _lyrics == null ? null : _showShareDialog,

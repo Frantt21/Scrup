@@ -35,6 +35,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get recentTitle => '최근 재생';
 
   @override
+  String get yourLikes => '좋아요한 곡';
+
+  @override
   String get recentPlaylistsTitle => 'Playlists recientes';
 
   @override

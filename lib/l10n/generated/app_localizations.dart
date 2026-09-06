@@ -157,6 +157,12 @@ abstract class AppLocalizations {
   /// **'Recientes'**
   String get recentTitle;
 
+  /// No description provided for @yourLikes.
+  ///
+  /// In es, this message translates to:
+  /// **'Tus me gusta'**
+  String get yourLikes;
+
   /// No description provided for @recentPlaylistsTitle.
   ///
   /// In es, this message translates to:
