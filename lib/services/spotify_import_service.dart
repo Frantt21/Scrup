@@ -57,8 +57,7 @@ class SpotifyImportException implements Exception {
   String toString() => reason;
 }
 
-/// Reads public Spotify playlists via the embed endpoint and matches
-/// tracks to YouTube.
+/// Reads public Spotify playlists via the embed endpoint and matches tracks to YouTube.
 class SpotifyImportService {
   SpotifyImportService({http.Client? client})
     : _client = client ?? http.Client();
@@ -81,7 +80,7 @@ class SpotifyImportService {
     return null;
   }
 
-  // Fetches and parses the public embed. Throws on invalid/deleted/private.
+  // Fetch and parse the public embed. Throws on invalid/deleted/private.
   Future<SpotifyPlaylist> fetchPlaylist(String urlOrId) async {
     final id = extractPlaylistId(urlOrId);
     if (id == null) throw const SpotifyImportException('invalid-id');
@@ -130,7 +129,7 @@ class SpotifyImportService {
             .where((s) => s.isNotEmpty)
             .join(', ');
       }
-      // Algunas versiones del embed no traen artists[] sino subtitle.
+      // Some embed versions do not include artists[] but instead a subtitle.
       if (artists.isEmpty && item['subtitle'] is String) {
         artists = item['subtitle'] as String;
       }
@@ -253,7 +252,7 @@ class SpotifyImportService {
     return bestScore >= .35 ? best : null;
   }
 
-  // Tries YT Music first, falls back to yt-dlp search.
+  // Try YT Music first, fall back to yt-dlp search.
   Future<List<Track>> _candidatesFor(
     SpotifyPlaylistTrack target, {
     required YtDlpService ytDlp,
