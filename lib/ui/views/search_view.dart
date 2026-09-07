@@ -16,25 +16,18 @@ import '../widgets/cover_image.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 import '../widgets/track_tile.dart';
 
-/// Vista de búsqueda: busca canciones en YouTube y permite reproducirlas
-/// o añadirlas a una playlist.
+/// Search view: searches songs on YouTube and lets you play them or add them to a playlist.
 class SearchView extends StatefulWidget {
-  /// Consulta de búsqueda externa (lanzada desde el inicio). Al cambiar, la
-  /// vista ejecuta la búsqueda y la muestra. Es un [ValueNotifier] porque la
-  /// vista lo consume (resetea a null) para permitir repetir una consulta
-  /// idéntica.
+  /// External search query (launched from home). When it changes, the view runs the search and shows it. It is a [ValueNotifier] because the view consumes it (resets to null) to allow repeating an identical query.
   final ValueNotifier<String?>? searchRequest;
 
-  /// Señal de foco: al notificarse, la vista enfoca el campo de búsqueda
-  /// (se usa cuando se llega a la búsqueda desde el botón del header).
+  /// Focus signal: when notified, the view focuses the search field (used when arriving at search from the header button).
   final ValueNotifier<int>? focusRequest;
 
-  /// Vuelve al inicio (ya no hay barra lateral).
+  /// Return to home (no sidebar anymore).
   final VoidCallback? onBack;
 
-  /// Abre el detalle de un artista. En móvil lo provee el AppShell: el
-  /// screen se monta DENTRO del shell (nav + miniplayer siguen visibles).
-  /// Si es null (desktop), se empuja como ruta de pantalla completa.
+  /// Open an artist detail. On mobile it is provided by AppShell: the screen is mounted INSIDE the shell (nav + miniplayer stay visible). If null (desktop), it is pushed as a full-screen route.
   final ValueChanged<YtmArtist>? onOpenArtist;
 
   const SearchView({
@@ -516,8 +509,7 @@ class _SearchViewState extends State<SearchView> {
   }
 }
 
-/// Fila de artista: cuadrada redondeada (MISMO look que las portadas) con
-/// el avatar REAL del canal cuando llega, placeholder de persona mientras.
+/// Artist row: rounded square (SAME look as the covers) with the channel's REAL avatar when it arrives, person placeholder while it is missing.
 class _ArtistTile extends StatelessWidget {
   const _ArtistTile({
     required this.artist,
