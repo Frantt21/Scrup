@@ -5,18 +5,13 @@ import '../../l10n/generated/app_localizations.dart';
 import 'cover_image.dart';
 import 'now_playing_bars.dart';
 
-/// Fila de una pista (resultados, recientes, playlists).
+/// Row of a track (results, recent, playlists).
 ///
-/// - [onPlay]: reproduce la pista al tocar la fila.
-/// - [onAddToPlaylist]: muestra un botón "+" para añadir a playlist.
-/// - [trailing]: widget extra opcional al final (p. ej. quitar de playlist).
-/// - [isCurrent]/[isPlaying]: si la pista es la que está en el reproductor,
-///   el título se pinta en el acento y un ecualizador animado lo indica
-///   (moviéndose si suena, quieto si está pausada).
-/// - [accentColor]: color del artwork (p. ej. el de la playlist): tintar el
-///   texto y los iconos con ese color. Si es oscuro se aclara hacia blanco
-///   para mantener la legibilidad sobre el cristal oscuro, conservando el
-///   tinte. `null` = colores estándar del tema.
+/// - [onPlay]: plays the track when tapping the row.
+/// - [onAddToPlaylist]: shows a "+" button to add to a playlist.
+/// - [trailing]: optional extra widget at the end (e.g. remove from playlist).
+/// - [isCurrent]/[isPlaying]: if the track is the one in the player, the title is painted in the accent and an animated equalizer indicates it (moving if it is playing, still if paused).
+/// - [accentColor]: artwork color (e.g. the playlist's): tints the text and icons with that color. If it is dark, it is lightened toward white to keep legibility over the dark glass, preserving the tint. `null` = standard theme colors.
 class TrackTile extends StatelessWidget {
   final Track track;
   final VoidCallback onPlay;
@@ -27,8 +22,7 @@ class TrackTile extends StatelessWidget {
   final Color? accentColor;
   final bool showDuration;
 
-  /// Texto opcional para añadir a la línea del artista (p. ej. "1.2M
-  /// plays"). Se muestra atenuado tras el nombre, separado con " · ".
+  /// Optional text to add to the artist line (e.g. "1.2M plays"). It is shown dimmed after the name, separated with " · ".
   final String? subtitleSuffix;
 
   const TrackTile({
