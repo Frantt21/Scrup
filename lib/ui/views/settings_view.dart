@@ -20,9 +20,7 @@ import '../locale_controller.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/scrup_toasts.dart';
 
-/// Pantalla de configuración: contenedor flotante tipo glass (como el
-/// detalle de playlist) con tres secciones: idioma (i18n, persistido entre
-/// sesiones), caché (tamaño usado / vaciar) y acerca de.
+/// Settings screen: a floating glass container (like the playlist detail) with three sections: language (i18n, persisted between sessions), cache (used size / clear), and about.
 class SettingsView extends StatefulWidget {
   const SettingsView({super.key});
 
@@ -34,20 +32,20 @@ class _SettingsViewState extends State<SettingsView> {
   CacheStats? _stats;
   bool _clearing = false;
 
-  // ── Recalculo de paletas de artwork ────────────────────────────────────
+  // ── Artwork palette recalculation ──────────────────────────────────────
   List<Playlist>? _playlists;
   Playlist? _selectedPlaylist;
   bool _recalculating = false;
   int _recalcDone = 0;
   int _recalcTotal = 0;
 
-  /// Estado de la presencia de Discord (cargado desde el store al abrir).
+  /// Discord presence state (loaded from the store when opened).
   bool _discordEnabled = false;
 
-  /// Modo karaoke (sweep palabra por palabra) de los lyrics.
+  /// Karaoke mode (word-by-word sweep) for lyrics.
   bool _lyricsSweepEnabled = false;
 
-  /// Omitir silencios (saltar huecos sin música automáticamente).
+  /// Skip silence (automatically skip silent gaps).
   bool _skipSilenceEnabled = true;
 
   /// Límite del caché de audio en MiB (null = por defecto, 40 GiB).
