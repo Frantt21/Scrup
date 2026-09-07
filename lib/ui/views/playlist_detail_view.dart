@@ -26,8 +26,7 @@ import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/scrup_toasts.dart';
 import '../widgets/track_tile.dart';
 
-/// Floating glass container showing playlist detail with hero, tracks,
-/// drag reorder, context menus and ambient color from cover art.
+/// Floating glass container showing playlist detail with hero, tracks, drag reorder, context menus and ambient color from cover art.
 class PlaylistDetailView extends StatefulWidget {
   final Playlist playlist;
   final VoidCallback onBack;
