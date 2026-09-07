@@ -10,16 +10,13 @@ import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import 'track_tile.dart';
 
-/// Ancho fijo del panel de cola abierto (misma filosofía que el sidebar).
+/// Fixed width of the open queue panel (same philosophy as the sidebar).
 const double kQueuePanelWidth = 300;
 
-/// Margen vertical del panel (el mismo 12 que usan sidebar y player).
+/// Vertical margin of the panel (the same 12 used by sidebar and player).
 const double _kQueueMargin = 12;
 
-/// Panel de la COLA de reproducción: contenedor flotante tipo glass (misma
-/// receta que el sidebar: blur, degradado oscuro translúcido y sombra) que
-/// se DESLIZA desde el borde derecho empujando el contenedor principal
-/// (el contenido y el player se corren a la izquierda; al cerrarlo vuelven).
+/// Playback queue panel: a floating glass container (same recipe as the sidebar: blur, translucent dark gradient and shadow) that SLIDES from the right edge, pushing the main container (the content and player shift left; closing them returns them).
 class QueuePanel extends StatelessWidget {
   /// `true` = cola visible (el panel ocupa su ancho); `false` = colapsado.
   final bool open;
