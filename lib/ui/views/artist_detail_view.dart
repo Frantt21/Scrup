@@ -14,29 +14,20 @@ import '../playlist_actions.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/track_tile.dart';
 
-/// Texto legible sobre un fondo del color dado (negro/blanco por luminancia).
+/// Readable text over a background of the given color (black/white by luminance).
 Color _onColor(Color bg) =>
     bg.computeLuminance() > 0.5 ? Colors.black : Colors.white;
 
-/// Detalle de artista (Android/desktop): datos de la página de canal de
-/// InnerTube (top canciones + álbumes) con caché propio de 24h.
+/// Artist detail (Android/desktop): data from the InnerTube channel page (top songs + albums) with its own 24h cache.
 ///
-/// Header estilo DETALLE DE PLAYLIST con FULL ARTWORK: la imagen del canal a
-/// todo el ancho (edge-to-edge, detrás de la barra de estado) con degradado
-/// que funde al color de fondo — el mismo look que la playlist detail en su
-/// estilo por defecto. Los botones usan el acento EXTRAÍDO de la imagen del
-/// canal (no el primary del tema global). Al scrollear, la appbar colapsada
-/// muestra el nombre del artista. Se monta DENTRO del shell (nav +
-/// miniplayer presentes).
+/// Header with PLAYLIST DETAIL style and FULL ARTWORK: the channel image spans the full width (edge-to-edge, behind the status bar) with a gradient that blends into the background color — the same look as the playlist detail in its default style. Buttons use the accent EXTRACTED from the channel image (not the global theme primary). Scrolling shows the artist name in the collapsed appbar. It is mounted INSIDE the shell (nav + miniplayer present).
 class ArtistDetailView extends StatefulWidget {
   const ArtistDetailView({super.key, required this.artist, this.onBack});
 
-  /// Artista derivado de la búsqueda: canal + nombre (sin avatar: la cara
-  /// real llega con el detalle).
+  /// Artist derived from the search: channel + name (no avatar: the real face arrives with the detail).
   final YtmArtist artist;
 
-  /// Vuelve a la búsqueda. En móvil lo provee el AppShell (screen montado
-  /// en el shell); si es null, hace pop del Navigator (desktop).
+  /// Returns to the search. On mobile it is provided by AppShell (screen mounted in the shell); if null, it pops the Navigator (desktop).
   final VoidCallback? onBack;
 
   @override
@@ -48,18 +39,14 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   bool _loading = true;
   String? _error;
 
-  /// Nombre visible en la appbar colapsada (true al pasar el umbral del
-  /// header expandido).
+  /// Name visible in the collapsed appbar (true after passing the expanded header threshold).
   bool _showPinnedTitle = false;
 
-  /// Acento EXTRAÍDO de la imagen del canal (mismo camino que el detalle de
-  /// playlist: PaletteCacheStore + ArtworkPaletteService). Colorean los
-  /// botones y tiñe el fondo (lerp 0.30, igual que la playlist full).
+  /// Accent EXTRACTED from the channel image (same path as the playlist detail: PaletteCacheStore + ArtworkPaletteService). They color the buttons and tint the background (lerp 0.30, same as the full playlist).
   Color? _accent;
   String? _accentFor;
 
-  /// Álbum abierto: se muestra EMbebIDO (en lugar del contenido del
-  /// artista, sin push de ruta) — nav + miniplayer siguen visibles.
+  /// Opened album: shown EMBEDDED (instead of the artist content, without route push) — nav + miniplayer stay visible.
   YtmAlbum? _openedAlbum;
 
   @override
@@ -95,8 +82,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     }
   }
 
-  /// Extrae el acento de la imagen del canal (cacheado en el
-  /// PaletteCacheStore — mismo almacén compartido de las playlists).
+  /// Extract the accent from the channel image (cached in the PaletteCacheStore — same shared store as the playlists).
   Future<void> _maybeExtractAccent(String? thumb) async {
     if (thumb == null || thumb.isEmpty || thumb == _accentFor) return;
     _accentFor = thumb;
