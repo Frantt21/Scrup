@@ -50,9 +50,7 @@ class AudioCacheService {
   final ValueNotifier<String?> downloadingId = ValueNotifier<String?>(null);
   final ValueNotifier<double?> progress = ValueNotifier<double?>(null);
 
-  // In-flight downloads keyed by videoId (dedup concurrent requests).
-  // Slot is reserved synchronously before any await.
-  // Dedup concurrent downloads per videoId.
+  // In-flight downloads keyed by videoId (dedup concurrent requests). The slot is reserved synchronously before any await.
   final Map<String, Completer<StreamingDownload>> _inflight = {};
 
   static const int maxConcurrentPreloads = 2;
@@ -128,22 +126,16 @@ class AudioCacheService {
     return StreamingSource(path);
   }
 
-  /// Cuántas pistas siguientes se "despiertan" de disco (page cache).
+  /// How many upcoming tracks are "woken up" from disk (page cache).
   static const int maxWarmUpcoming = 5;
 
-  /// Bytes del header leídos por archivo: basta para que el SO traiga el
-  /// inicio del contenedor (moov/stco en m4a) a la page cache.
+  /// Header bytes read per file: enough for the OS to bring the start of the container (moov/stco in m4a) into the page cache.
   static const int _warmHeaderBytes = 1 << 20;
 
-  // Dedupe de pistas ya despertadas en esta sesión (set barato en memoria).
+  // Dedupe tracks already warmed in this session (cheap in-memory set).
   final Set<String> _warmedIds = {};
 
-  /// Camino 2 del precache: pistas YA cacheadas en disco. A diferencia de
-  /// [preload] (descarga), aquí no hay I/O de red: se abre cada archivo en
-  /// un ISOLATE y se leen sus primeros bytes para que el sistema operativo
-  /// los traiga a la page cache ANTES de que termine la pista actual — al
-  /// montar la pista, el backend (ExoPlayer) encuentra el header caliente
-  /// y el `open()` no toca disco en frío (sin jank en la transición).
+  /// Path 2 of prefetch: tracks already cached on disk. Unlike [preload] (download), this has no network I/O: each file is opened in an isolate and its first bytes are read so the OS brings them into the page cache before the current track ends. When the track is opened, the backend (ExoPlayer) finds a hot header and the `open()` does not hit cold disk (no transition jank).
   void warmUpcoming(List<String> videoIds) {
     for (final id in videoIds) {
       if (_warmedIds.contains(id)) continue;
@@ -165,8 +157,7 @@ class AudioCacheService {
     } catch (_) {}
   }
 
-  /// Lee los primeros [_warmHeaderBytes] del archivo (DENTRO del isolate:
-  /// todo el I/O de disco queda fuera del UI thread).
+  /// Read the first [_warmHeaderBytes] of the file (INSIDE the isolate: all disk I/O stays off the UI thread).
   static int _readHeaderBytes(String path) {
     final f = File(path);
     if (!f.existsSync()) return 0;
@@ -182,7 +173,7 @@ class AudioCacheService {
     }
   }
 
-  // Background preload with bandwidth-awareness and concurrency limit.
+  // Background preload with bandwidth-awareness and a concurrency limit.
   Future<void> preload(String videoId, {String? title}) async {
     try {
       if (await cachedPath(videoId) != null) return;
