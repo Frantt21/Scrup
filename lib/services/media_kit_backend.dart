@@ -5,9 +5,7 @@ import 'package:media_kit/media_kit.dart';
 
 import 'audio_backend.dart';
 
-/// Backend de audio sobre media_kit (libmpv): se usa en desktop/flatpak.
-/// Es la implementación original extraída de [PlayerService]; la lógica de
-/// cola/acento/UI no cambia.
+/// Audio backend on media_kit (libmpv): used on desktop/flatpak. It is the original implementation extracted from [PlayerService]; the queue/accent/UI logic does not change.
 class MediaKitBackend implements AudioBackend {
   final Player _player = Player();
 
