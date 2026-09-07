@@ -17,8 +17,7 @@ import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import '../theme_controller.dart';
 
-/// Fullscreen mode: the player IS the app.
-/// Animated entry/exit with a three-zone layout (art + controls, lyrics, header).
+/// Fullscreen mode: the player IS the app. Entrada/salida animada con tres zonas: arte + controles, letras, cabecera.
 class FullscreenPlayerView extends StatefulWidget {
   final bool active;
   final Widget lyricsPanel;
@@ -97,14 +96,11 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     super.dispose();
   }
 
-  // ── Artwork hi-res + palette (two phases) ──────────────────────────
-
+  // Arte hi-res + paleta en dos fases: 1) mostrar artwork desde disco/red; 2) extraer el trio de colores en background sin bloquear la pantalla.
   static final Set<String> _ensuredUrls = {};
   static final Map<String, List<Color>> _trioCache = {};
-
   Timer? _prefetchTimer;
 
-  // Phase 1: load artwork to disk and show immediately.
   Future<void> _loadTrackVisuals(Track? track) async {
     final token = ++_visualToken;
     final rawUrl = track?.thumbnailUrl;
@@ -119,7 +115,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
       return;
     }
 
-    // Phase 1: artwork only (file path).
     final artworkCache = context.read<ArtworkCacheService>();
     String? path;
     final lower = rawUrl.toLowerCase();
@@ -155,7 +150,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
         path = await artworkCache.filePathFor(rawUrl);
       }
     }
-
     if (!mounted || token != _visualToken) return;
 
     if (path != null) _ensuredUrls.add(rawUrl);
@@ -164,11 +158,10 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
       _artPath = path;
     });
 
-    // Phase 2: palette in background.
     _loadPalettePhase2(rawUrl, token);
   }
 
-  // Phase 2: extract color trio without blocking artwork display.
+  /// Fase 2: extrae el trio de colores en background sin bloquear la pantalla.
   Future<void> _loadPalettePhase2(String rawUrl, int token) async {
     final paletteStore = context.read<PaletteCacheStore>();
     final artworkCache = context.read<ArtworkCacheService>();
@@ -198,7 +191,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     if (trio != null && trio.isNotEmpty) {
       setState(() => _palette = trio!);
     } else if (_palette.isNotEmpty) {
-      // Clear old palette when new artwork has no colors.
       setState(() => _palette = const []);
     }
     _prefetchTimer?.cancel();
@@ -207,7 +199,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     });
   }
 
-  // Prefetches artwork + palette for the next 3 queue tracks.
+  /// Prefetch de artwork + paleta para las 3 pistas siguientes de la cola (background, best-effort).
   Future<void> _prefetchNext() async {
     if (!mounted) return;
     final player = context.read<PlayerService>();
@@ -224,7 +216,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
       final artworkCache = context.read<ArtworkCacheService>();
       var path = await artworkCache.filePathFor(url);
       if (path == null) {
-        // Descargar si no está en caché.
         for (final dlUrl in [Track.hiResThumbnail(url) ?? url, url]) {
           try {
             final resp = await http
@@ -482,9 +473,7 @@ class _AnimatedBackdropState extends State<_AnimatedBackdrop>
   }
 }
 
-/// Fondo LÍQUIDO vía fragment shader (shaders/liquid_bg.frag): fbm con
-/// doble domain warping — flujo continuo, borde a borde, sin viñeta. Los
-/// colores llegan ya interpolados desde [_AnimatedBackdropState._shown].
+/// Fondo líquido vía fragment shader (shaders/liquid_bg.frag): fbm con doble domain warping, flujo continuo borde a borde, sin viñeta. Los colores llegan ya interpolados desde [_AnimatedBackdropState._shown].
 class _LiquidPainter extends CustomPainter {
   final ui.FragmentProgram program;
   final double time;
@@ -494,8 +483,7 @@ class _LiquidPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Orden de uniforms = orden de declaración en el .frag (sin sampler).
-    // r/g/b ya vienen normalizados 0..1 (colores double en Flutter).
+    // Orden de uniforms = orden de declaración en el .frag (sin sampler). r/g/b ya vienen normalizados 0..1 (colores double en Flutter).
     final shader = program.fragmentShader()
       ..setFloat(0, size.width)
       ..setFloat(1, size.height)
@@ -544,16 +532,12 @@ class _WatercolorPainter extends CustomPainter {
     );
 
     final r = size.shortestSide;
-    var k = 0;
-    for (var i = 0; i < colors.length; i++) {
-      // Desaturar hacia negro un 30%: el color se siente sin pelear con
-      // el texto.
-      final c = Color.lerp(colors[i], Colors.black, 0.30)!;
-      // Velocidades ENTERAS en múltiplos del ciclo de `t` (y armónico 2×):
-      // al repetir el controller el fondo retoma su fase exacta → loop
-      // infinito sin saltos.
-      final speed = i.isEven ? 1.0 : 2.0;
-      for (var j = 0; j < 2; j++, k++) {
+    var k = 0;        for (var i = 0; i < colors.length; i++) {
+          final c = Color.lerp(colors[i], Colors.black, 0.30)!;
+          // Desaturar 30% hacia negro para que el color no pelee con el texto.
+          // Velocidades ENTERAS en múltiplos del ciclo de `t` (y armónico 2×): al repetir el controller el fondo retoma su fase exacta → loop infinito sin saltos.
+          final speed = i.isEven ? 1.0 : 2.0;
+          for (var j = 0; j < 2; j++, k++) {
         final (ax, ay) = _anchors[k % _anchors.length];
         final ph = k * 2.39996; // ángulo áureo: derivas desincronizadas
         final cx = size.width * ax + r * 0.10 * math.sin(t * speed + ph);
@@ -567,12 +551,10 @@ class _WatercolorPainter extends CustomPainter {
       }
     }
 
-    // Sin viñeta: el fluido cubre TODO el lienzo borde a borde.
+    // Sin viñeta: el fluido cubre todo el lienzo borde a borde.
   }
 
-  /// Una mancha de acuarela: tres círculos radiales superpuestos con
-  /// desfase — el solape irregular simula el borde orgánico de la acuarela
-  /// sin necesidad de blur (cada radial ya trae su caída difusa).
+  /// Una mancha de acuarela: tres radiales superpuestos con desfase; el solape irregular simula el borde orgánico sin blur (cada radial ya tiene su caída difusa).
   void _wash(Canvas canvas, Offset center, double r, Color color) {
     void circle(Offset off, double radius, Color col) {
       final c = center + off;
@@ -604,6 +586,8 @@ class _WatercolorPainter extends CustomPainter {
     );
   }
 
+  // SIN viñeta: el fluido cubre todo el lienzo borde a borde.
+
   @override
   bool shouldRepaint(_WatercolorPainter old) =>
       old.t != t || !listEquals(old.colors, colors);
@@ -611,9 +595,7 @@ class _WatercolorPainter extends CustomPainter {
 
 // ── Contenedor flotante de controles ──────────────────────────────────────
 
-/// Píldora glass con el transporte, posicionada bajo el artwork EN EL STACK
-/// RAÍZ (hit-test garantizado). Hover PROPIO: aparece al entrar el cursor
-/// en su zona y se oculta con retardo al salir.
+/// Píldora glass con el transporte, bajo el artwork en el stack raíz (hit-test garantizado). Hover propio: aparece al entrar el cursor y se oculta con retardo al salir.
 class _FloatingControls extends StatefulWidget {
   const _FloatingControls();
 
@@ -729,8 +711,7 @@ class _ArtworkState extends State<_Artwork> {
 
   @override
   Widget build(BuildContext context) {
-    // Sin AnimatedSwitcher: el crossfade forzaba decodificar 2 imágenes
-    // en GPU simultáneamente. Swap directo + scale de pausa.
+    // Sin AnimatedSwitcher: el crossfade forzaba decodificar 2 imágenes en GPU a la vez. Swap directo + scale de pausa.
     return SizedBox(
       width: widget.artSide,
       height: widget.artSide,
@@ -759,9 +740,7 @@ class _ArtworkState extends State<_Artwork> {
   }
 }
 
-/// Controles de transporte + progreso bajo el artwork grande. Los modos
-/// (shuffle/repeat/preparando) son ValueNotifiers del player; posición/
-/// duración/playing llegan por stream con throttle propio.
+/// Controles de transporte + progreso bajo el artwork grande. Modos (shuffle/repeat/preparando) son ValueNotifiers del player; posición/duración/playing llegan por stream con throttle propio.
 class _TransportControls extends StatefulWidget {
   const _TransportControls();
 
@@ -835,9 +814,7 @@ class _TransportControlsState extends State<_TransportControls> {
 
     return Column(
       children: [
-        // Transporte IDÉNTICO al player bar: fila COMPACTA centrada
-        // (shuffle | prev | play | next | repeat), no repartida a los
-        // bordes. Escalado ~1.4× para la distancia del fullscreen.
+        // Transporte idéntico al player bar: fila compacta centrada (shuffle | prev | play | next | repeat), no repartida a los bordes. Escalado ~1.4× por la distancia del fullscreen.
         ValueListenableBuilder<String?>(
           valueListenable: player.preparingTrackId,
           builder: (context, preparingId, _) {
