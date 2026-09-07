@@ -146,13 +146,15 @@ class SearchService {
       final subs = (t.subscriberCount ?? 0) > (prev?.artist.subscriberCount ?? 0)
           ? t.subscriberCount
           : prev?.artist.subscriberCount;
-      final thumb = t.thumbnailUrl ?? prev?.artist.thumbnailUrl;
       byChannel[ch] = (
         hits: (prev?.hits ?? 0) + 1,
+        // SIN avatar aquí a propósito: la única miniatura disponible en la
+        // fila es la PORTADA de la canción (mostrarla como cara del canal
+        // era el "avatar random" del listado). La real llega al instante
+        // desde _artistAvatars y pinta al resolver.
         artist: YtmArtist(
           browseId: ch,
           name: name,
-          thumbnailUrl: thumb,
           subscriberCount: subs,
         ),
       );
@@ -207,30 +209,99 @@ class SearchService {
     }
   }
 
-  /// Tracklist de un álbum (browseId VL… playlist o MPREb_… página de
-  /// álbum) para el screen de artista: lee con InnerTube browse y cachea
-  /// (fuente 'album', misma TTL de 6h — abrir un álbum dos veces es gratis).
+  /// Tracklist de un álbum para el screen de artista. DOS FORMAS DE ID con
+  /// caminos DIFERENTES (verificados contra la API real con curl):
+  ///
+  /// - `MPREb_…` (álbum/single real de YT Music): browse DIRECTO de la
+  ///   página del álbum (`fetchAlbumPage`). Envolverlo como playlist
+  ///   (`VL MPREb_…`) devuelve 0 items — era la causa del "sin resultados".
+  /// - `VL…`/`PL…` (playlist): lectura estándar con `fetchPlaylist`.
+  ///
+  /// Cacheado (fuente 'album', TTL 6h — abrir un álbum dos veces es gratis).
   Future<List<Track>> fetchAlbumTracks(String playlistId) async {
-    final raw = playlistId.trim();
-    if (raw.isEmpty) return const [];
-    // Normaliza MPREb_<id> → <id>: la playlist equivalente comparte el id.
-    final id = raw.startsWith('MPREb_') ? raw.substring(6) : raw;
+    final id = playlistId.trim();
+    if (id.isEmpty) return const [];
     final cached = await _cache?.getForSource('album', id, 50);
     if (cached != null) return cached;
-    for (final attempt in [id, if (raw != id) raw]) {
-      try {
-        final pl = await _ytMusic.fetchPlaylist(attempt, maxTracks: 50);
-        final tracks = pl.tracks.take(50).toList();
-        if (tracks.isNotEmpty) {
-          unawaited(_cache?.put(id, 50, tracks, source: 'album'));
-          return tracks;
-        }
-      } catch (_) {
-        // Prueba la siguiente forma del id.
+    try {
+      final List<Track> tracks;
+      if (id.startsWith('MPREb_')) {
+        // Página de álbum: browse directo (retorna las filas del tracklist).
+        final rows = await _ytMusic.fetchAlbumPage(id);
+        tracks = [for (final r in rows) r.toTrack()];
+      } else {
+        final pl = await _ytMusic.fetchPlaylist(id, maxTracks: 50);
+        tracks = pl.tracks.take(50).toList();
       }
+      if (tracks.isNotEmpty) {
+        unawaited(_cache?.put(id, 50, tracks, source: 'album'));
+        return tracks;
+      }
+    } catch (_) {
+      // Red rota / id inválido: sin resultados.
     }
     return const [];
   }
+
+  /// Avatares REALES de los canales derivados (una request por ARTISTA, no
+  /// por canción): la fila de búsqueda solo trae la portada de la canción,
+  /// nunca la cara del canal. Se consulta la página del canal (WEB_REMIX
+  /// home) y se extrae su avatar cuadrado a alta resolución. Errores →
+  /// entrada con `null` memoizada 10 min (un canal caído no reintenta).
+  ///
+  /// En disco NO se cachea: el screen de artista ya trae su avatar y la
+  /// llamada completa es una request por artista distinto por búsqueda.
+  final Map<String, String?> _avatarMemo = {};
+  final Map<String, DateTime> _avatarFailedAt = {};
+  final Set<String> _avatarInflight = {};
+
+  Future<Map<String, String?>> _artistAvatars(
+    List<YtmArtist> artists,
+  ) async {
+    final out = <String, String?>{};
+    final now = DateTime.now();
+    for (final a in artists) {
+      final id = a.browseId;
+      if (id.isEmpty) continue;
+      final failed = _avatarFailedAt[id];
+      if (failed != null && now.difference(failed) < const Duration(minutes: 10)) {
+        out[id] = null;
+        continue;
+      }
+      final memo = _avatarMemo[id];
+      if (memo != null) {
+        out[id] = memo;
+        continue;
+      }
+      if (_avatarInflight.add(id)) {
+        unawaited(
+          () async {
+            try {
+              final d = await _ytMusic.fetchArtist(id);
+              if (d.thumbnailUrl != null && d.thumbnailUrl!.isNotEmpty) {
+                _avatarMemo[id] = d.thumbnailUrl;
+              } else {
+                _avatarFailedAt[id] = DateTime.now();
+              }
+            } catch (_) {
+              _avatarFailedAt[id] = DateTime.now();
+            } finally {
+              _avatarInflight.remove(id);
+            }
+          }(),
+        );
+      }
+      out[id] = _avatarMemo[id];
+    }
+    return out;
+  }
+
+  /// API pública para la vista de búsqueda: devuelve el mapa actual (los
+  /// avatares ya conocidos) y lanza en background la resolución de los que
+  /// falten. La vista puede refrescar cuando lleguen nuevas URLs.
+  Future<Map<String, String?>> resolveArtistAvatars(
+    List<YtmArtist> artists,
+  ) => _artistAvatars(artists);
 
   /// Canciones primero y después vídeos generales, descartando ids ya
   /// vistos y capando al límite pedido. Expuesto para tests.

@@ -49,6 +49,12 @@ class _SearchViewState extends State<SearchView> {
 
   List<Track> _results = const [];
   List<YtmArtist> _artists = const [];
+
+  /// Avatares REALES de canal (UC… → URL), resueltos en background por
+  /// [_resolveArtistAvatars] después de pintar la lista. Mientras no llega,
+  /// la fila muestra el placeholder genérico (nunca la portada de una
+  /// canción, que era el "avatar random" de antes).
+  final Map<String, String?> _artistAvatars = {};
   bool _searching = false;
   String? _error;
   bool _hasSearched = false;
@@ -133,6 +139,9 @@ class _SearchViewState extends State<SearchView> {
         _artists = artistList;
         _searching = false;
       });
+      // Avatares en segundo plano: las canciones ya están en pantalla, la
+      // cara del canal aparece cuando su request termina (UI no bloqueada).
+      unawaited(_resolveArtistAvatars(artistList, token));
     } catch (e) {
       if (!mounted || token != _searchToken) return;
       setState(() {
@@ -145,6 +154,19 @@ class _SearchViewState extends State<SearchView> {
         setState(() => _searching = false);
       }
     }
+  }
+
+  /// Resuelve los avatares de los canales derivados (1 request por ARTISTA
+  /// vía SearchService) y refresca solo si la búsqueda sigue vigente.
+  Future<void> _resolveArtistAvatars(
+    List<YtmArtist> artists,
+    int token,
+  ) async {
+    final map = await context.read<SearchService>().resolveArtistAvatars(
+      artists,
+    );
+    if (!mounted || token != _searchToken) return;
+    setState(() => _artistAvatars.addAll(map));
   }
 
   @override
@@ -407,6 +429,7 @@ class _SearchViewState extends State<SearchView> {
           final artist = _artists[i];
           return _ArtistTile(
             artist: artist,
+            avatarUrl: _artistAvatars[artist.browseId],
             onTap: () => _openArtist(artist),
           );
         }
@@ -433,35 +456,47 @@ class _SearchViewState extends State<SearchView> {
   }
 }
 
-/// Fila de artista: avatar circular + nombre. Toque → play del catálogo.
+/// Fila de artista: cuadrada redondeada (MISMO look que las portadas) con
+/// el avatar REAL del canal cuando llega, placeholder de persona mientras.
 class _ArtistTile extends StatelessWidget {
-  const _ArtistTile({required this.artist, required this.onTap});
+  const _ArtistTile({
+    required this.artist,
+    required this.onTap,
+    this.avatarUrl,
+  });
 
   final YtmArtist artist;
   final VoidCallback onTap;
+
+  /// Avatar resuelto en background (o null mientras/no disponible).
+  final String? avatarUrl;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final thumb = artist.thumbnailUrl;
+    final thumb = avatarUrl;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
         child: Row(
           children: [
-            ClipOval(
+            // CUADRADA redondeada (14dp), no círculo: mismo estilo que las
+            // portadas de playlists/canciones. Hi-res: el avatar base llega
+            // a ~176px; pedirlo a w1200 lo deja nítido en cualquier DPR.
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
               child: SizedBox(
-                width: 44,
-                height: 44,
+                width: 48,
+                height: 48,
                 child: thumb != null && thumb.isNotEmpty
                     ? CoverImage(
-                        source: thumb,
-                        width: 44,
-                        height: 44,
-                        cacheWidth: 96,
+                        source: Track.hiResThumbnail(thumb) ?? thumb,
+                        width: 48,
+                        height: 48,
+                        cacheWidth: 200,
                         fit: BoxFit.cover,
                         fallback: ColoredBox(
                           color: theme.colorScheme.surfaceContainerHighest,
