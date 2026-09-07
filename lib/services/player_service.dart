@@ -43,11 +43,7 @@ class PlayerService {
 
   final Future<void> Function(Track track)? preload;
 
-  /// Camino 2 del precache: "despertar" de page cache las próximas pistas
-  /// QUE YA ESTÁN en disco (las que no lo están las cubre [preload] con la
-  /// descarga). Lo implementa [AudioCacheService.warmUpcoming]: isolate que
-  /// lee los primeros bytes de cada archivo para que el backend los encuentre
-  /// calientes al montar la pista. `null` en plataformas donde no aplica.
+  /// Precache por disco: "despierta" page cache de las próximas pistas que ya están en disco ([AudioCacheService.warmUpcoming] lee los primeros bytes en un isolate para que el backend las tenga calientes al montar la pista). `null` donde no aplica; las que no están en disco las cubre [preload].
   final void Function(List<String> trackIds)? prepareCached;
 
   final Future<List<Track>> Function(Track track)? recommend;
@@ -81,11 +77,7 @@ class PlayerService {
 
   final ValueNotifier<String?> preparingTrackId = ValueNotifier<String?>(null);
 
-  /// Pista en preparación (objeto completo). Los widgets que no tienen
-  /// acceso a la cola (p. ej. reproducción individual de una búsqueda, donde
-  /// la cola se limpia antes) la usan para adelantar el acento/artwork sin
-  /// depender de encontrarla en `queue`. Se mantiene en sync con
-  /// [preparingTrackId] vía [_setPreparing].
+  /// Pista en preparación (objeto completo). Los widgets sin acceso a la cola (p. ej. reproducción individual de búsqueda, donde la cola se limpia antes) la usan para adelantar acento/artwork sin buscar en `queue`. Se sincroniza con [preparingTrackId] vía [_setPreparing].
   final ValueNotifier<Track?> preparingTrack = ValueNotifier<Track?>(null);
   final ValueNotifier<LoopMode> repeatMode = ValueNotifier<LoopMode>(
     LoopMode.off,
@@ -178,7 +170,6 @@ class PlayerService {
   }) : _player = audioBackend {
     _player.positionStream.listen((p) {
       _lastPosition = p;
-      // Throttle: emit at most every ~250ms, but zero always emits instantly.
       final now = DateTime.now();
       if (p == Duration.zero ||
           _lastPositionEmit == null ||
@@ -195,33 +186,25 @@ class PlayerService {
       _playing = p;
       _playingController.add(p);
     });
-    // Estado ACTUAL del backend: los streams solo emiten cambios y si el
-    // arranque de la reproducción ocurrió antes de suscribirnos (p. ej.
-    // audio_service restaurando el estado al iniciar), `_playing` quedaría
-    // desincronizado y el toggle play/pausa rompería (siempre llamaría a
-    // play(), que es no-op cuando ya suena).
+    // Estado actual del backend: los streams solo emiten cambios y si la reproducción arrancó antes de suscribirnos (audio_service restaurando estado en init), `_playing` quedaría desincronizado y el toggle rompería (siempre llamaría play(), no-op cuando ya suena).
     _playing = _player.isPlaying;
     _player.bufferingStream.listen(_bufferingController.add);
     _player.volumeStream.listen((v) {
-      // Backends emiten NORMALIZADO 0..1.
       volume.value = v.clamp(0.0, 1.0);
     });
     _player.errorStream.listen(_errorController.add);
     _player.completedStream.listen((_) => _onTrackCompleted());
     _player.audioDevice.addListener(_syncAudioDevice);
     _player.audioDevices.addListener(_syncAudioDevices);
-    // Initialize with current state
     audioDevice.value = _player.audioDevice.value;
     audioDevices.value = _player.audioDevices.value;
   }
 
   void _syncAudioDevice() => audioDevice.value = _player.audioDevice.value;
-
   void _syncAudioDevices() => audioDevices.value = _player.audioDevices.value;
 
   bool get isPlaying => _playing;
 
-  // ── Control ──────────────────────────────────────────────────────────
   Future<bool> playTrack(Track track) async {
     activePlaylistId.value = null;
     _queue.clear();
@@ -371,14 +354,12 @@ class PlayerService {
         await _playRadio(current);
       }
     }
-    // Sin cambio real: no se registra intención (evita slides "fantasma"
-    // sobre cambios automáticos posteriores).
+    // Sin cambio real: no se registra intención (evita slides "fantasma" sobre cambios automáticos posteriores).
   }
 
   Future<void> previous() async {
     if (!_beginSkip()) return;
     if (_lastPosition > const Duration(seconds: 3)) {
-      // Solo rebobina al inicio: NO es un cambio de pista → sin intención.
       await seek(Duration.zero);
       return;
     }
@@ -391,24 +372,13 @@ class PlayerService {
     await seek(Duration.zero);
   }
 
-  // ── Dirección del slide del artwork ─────────────────────────────────
-  // La animación de cambio de pista se dirige por la ACCIÓN del usuario
-  // (botón siguiente/anterior del mini, del player expandido, gesto sobre
-  // el arte, teclas/notificación del OS), NO por la posición en la cola ni
-  // por cambios automáticos (fin de pista, radio, selección en la cola →
-  // fundido). `next()`/`previous()` la registran justo antes de cambiar;
-  // [takeSlideDirection] la consume (una vez) en el overlay del artwork.
+  // Dirección del slide del artículo: la animación de cambio la pide la ACCIÓN del usuario (botones del mini/player expandido, gesto sobre el arte, teclas/notificación del OS), no la posición en la cola ni cambios automáticos (fin de pista, radio, selección en cola → fundido). `next()`/`previous()` la registran antes de cambiar; [takeSlideDirection] la consume una vez en el overlay del artwork.
   final ValueNotifier<double> _slideIntent = ValueNotifier<double>(0);
   DateTime? _slideIntentAt;
 
   static const Duration _slideIntentMaxAge = Duration(milliseconds: 1500);
 
-  /// Peticiones de cambio animado iniciadas por el USUARIO (botones del
-  /// player/mini, teclas y notificación del OS): +1 siguiente, −1 anterior.
-  /// El overlay del artwork las escucha para reproducir el MISMO carrusel
-  /// que el arrastre (arte saliente + entrante), en vez del slide del
-  /// switcher. `sync: true` para que el overlay capture el arte VISIBLE
-  /// ANTES de que `next()`/`previous()` muevan preparing/publish.
+  /// Peticiones de cambio animado iniciadas por el USUARIO (botones del player/mini, teclas y notificación del OS): +1 siguiente, −1 anterior. El overlay del artwork las escucha para reproducir el mismo carrusel que el arrastre (arte saliente + entrante) en vez del slide del switcher. `sync: true` para que el overlay capture el arte visible ANTES de que `next()`/`previous()` muevan preparing/publish.
   final StreamController<double> _slideRequests =
       StreamController<double>.broadcast(sync: true);
 
@@ -435,24 +405,15 @@ class PlayerService {
     return fresh ? v : 0;
   }
 
-  // Anti-spam de next/prev: los toques (botones, notificación, teclado)
-  // que caen dentro de la ventana se ignoran; cada cambio aceptado ya pone
-  // en marcha pipeline async que se solaparía y multiplicaría el trabajo.
+  /// Anti-spam de next/prev: los toques (botones, notificación, teclado) dentro de la ventana se ignoran; cada cambio aceptado arranca un pipeline async que si no se protege se solaparía y multiplicaría el trabajo.
   DateTime? _lastSkipAt;
   static const Duration kSkipDebounce = Duration(milliseconds: 250);
 
-  /// Rate-limit de cambios de pista: mínimo entre dos _playAt reales. RECHAZA
-  /// en el acto (sin esperar): antes el rechazo dejaba la acción EN ESPERA y
-  /// luego la ejecutaba — 3 taps rápidos = 3 cambios acumulados (pasaba
-  /// canciones de más). Ahora el 2º/3º tap dentro de la ventana se descarta;
-  /// el auto-advance usa un timer trailing (ver [_scheduleAutoAdvance]) para
-  /// no quedar nunca sin reproducir.
+  /// Rate-limit de cambios de pista: mínimo entre dos _playAt reales. RECHAZA en el acto (sin esperar): antes el rechazo dejaba la acción en espera y luego la ejecutaba — 3 taps rápidos = 3 cambios acumulados. Ahora el 2º/3º tap en la ventana se descarta; el auto-advance usa un timer trailing ([_scheduleAutoAdvance]) para no quedar sin reproducir.
   static const Duration kMinTrackInterval = Duration(milliseconds: 320);
 
   DateTime _lastPlayAt = DateTime(0);
-
-  /// Auto-advance diferido cuando el cambio cayó en la ventana de
-  /// rate-limit (una sola timer: se reemplaza, nunca se acumula).
+  /// Auto-advance diferido cuando el cambio cayó en la ventana de rate-limit (una sola timer: se reemplaza, nunca se acumula).
   Timer? _autoAdvanceTimer;
 
   bool _beginSkip() {
@@ -737,14 +698,9 @@ class PlayerService {
     }
   }
 
-  // Cuántas pistas siguientes se precargan. Las primeras 2 arrancan de
-  // inmediato; el propio servicio de caché limita la concurrencia
-  // ([AudioCacheService.maxConcurrentPreloads] = 2) y encola el resto en
-  // orden, así las 3-5 nunca compiten por ancho de banda con las 2
-  // prioritarias.
+  /// Cuántas pistas siguientes se precargan. Las primeras 2 arrancan de inmediato; el servicio de caché limita la concurrencia ([AudioCacheService.maxConcurrentPreloads] = 2) y encola el resto en orden, así las 3-5 nunca compiten por ancho de banda con las 2 prioritarias.
   static const int _preloadAhead = 5;
 
-  // Preloads the next N tracks in the queue (background, best-effort).
   void _schedulePreloads() {
     final fn = preload;
     if (fn == null || _queueIndex < 0 || _queue.isEmpty) return;
@@ -758,9 +714,7 @@ class PlayerService {
     for (final t in targets) {
       unawaited(_preloadTrack(fn, t));
     }
-    // Camino 2: las pistas siguientes que YA están en disco se "despiertan"
-    // de page cache (isolate leyendo sus primeros bytes). Barato (sin red,
-    // fuera del UI thread) y se salta las que ya pasaron por aquí.
+    // Camino 2: las pistas siguientes que YA están en disco se "despiertan" de page cache (isolate leyendo sus primeros bytes). Barato (sin red, fuera del UI thread) y se salta las que ya pasaron por aquí.
     final warm = prepareCached;
     if (warm != null) {
       warm(targets.map((t) => t.id).toList());
@@ -778,7 +732,6 @@ class PlayerService {
 
   int _nextIndex() => _queueIndex + 1;
 
-  // Enqueue songs from the same artist (radio mode).
   Future<void> _playRadio(Track base) async {
     try {
       final tracks = await recommend!(base);
@@ -795,12 +748,7 @@ class PlayerService {
     }
   }
 
-  // Plays track at index in queue. Falls back to next on failure.
-  // [userSkip]: true en next/previous del usuario — son los ÚNICOS que
-  // pasan por el rate-limit (rechazo instantáneo, sin cola: los taps
-  // rápidos NO se acumulan). Las llamadas programáticas (playQueueAt,
-  // auto-advance, retry por fallo) NO se limitan: un rechazo aquí las
-  // dejaría colgadas (p. ej. playQueue justo tras playQueue en tests/UI).
+  /// Reproduce la pista en `index` de la cola; en fallo avanza a la siguiente. [userSkip]: true en next/previous del usuario — los ÚNICOS que pasan por el rate-limit (rechazo instantáneo, sin cola: los taps rápidos NO se acumulan). Las llamadas programáticas (playQueueAt, auto-advance, retry por fallo) NO se limitan: un rechazo aquí las dejaría colgadas (p. ej. playQueue justo tras playQueue en tests/UI).
   Future<bool> _playAt(int index, {bool userSkip = false}) async {
     if (index < 0 || index >= _queue.length) return false;
     if (userSkip) {
@@ -825,10 +773,10 @@ class PlayerService {
         appLog('PERF', 'playAt $what +${sw.elapsedMilliseconds}ms id=${track.id}');
     appLog('TRACK', 'preparing id=${track.id} idx=$index');
     try {
-      // Pause the backend BEFORE resolving the source. This is mandatory with just_audio: `playing` is NOT reset in setAudioSource and `play()` returns early without emitting if it was already playing -> `_playing` would stay false (UI paused/loading) while the new track plays. By pausing here, just_audio emits playing=false and the later open()+play() emits true -> state ends synchronized. It also cuts the previous track immediately (with media_kit open() already did that; with just_audio setAudioSource does not stop the previous track while resolve downloads the new one).
+      // Pausa el backend ANTES de resolver la fuente. Obligatorio con just_audio: `playing` NO se resetea en setAudioSource y `play()` retorna anticipado sin emitir si ya estaba sonando → `_playing` quedaría false (UI paused/loading) mientras la nueva pista suena. Al pausar aquí, just_audio emite playing=false y luego open()+play() emite true → estado sincronizado. También corta la pista anterior de inmediato (con media_kit open() ya lo hacía; con just_audio setAudioSource no para la anterior mientras resolve descarga la nueva).
       await _player.pause();
-      // Resolve source + enrich in parallel; play immediately, enrich later.
-      // The `_openedAt` guard (spurious completed in <3s) still covers any phantom completed.
+      // Resuelve fuente + enrich en paralelo; reproduce de inmediato, enrich luego.
+      // La guardia `_openedAt` (completed espurio en <3s) cubre cualquier completed fantasma.
       final srcFuture = resolveSource(track);
       final enrichFuture = _enrich(track);
       final src = await srcFuture;
@@ -837,9 +785,9 @@ class PlayerService {
       _lastSourceIsLocal = src.isLocal;
       _openedAt = DateTime.now();
       if (kNoAudioMount) {
-        // EXPERIMENTO kNoAudioMount: no open/play (audio is not mounted).
-        // The rest of the pipeline still runs: publish -> artwork/accent/lyrics.
-        // Playback is simulated with a position ticker.
+        // EXPERIMENTO kNoAudioMount: no open/play (audio no montado).
+        // El resto del pipeline corre igual: publish → artwork/acento/letras.
+        // La reproducción se simula con un ticker de posición.
         _startFakePlayback(track);
       } else {
         await _player.open(_mediaUri(src));
@@ -865,14 +813,13 @@ class PlayerService {
     }
   }
 
-  // Opens and plays a standalone track (outside queue).
+  /// Abre y reproduce una pista suelta (fuera de cola).
   Future<bool> _openAndPlay(Track track) async {
     final token = ++_playToken;
     _clearPlaybackState();
     _setPreparing(track);
     try {
-      // Same reason as in `_playAt`: pausing the backend keeps the `playing`
-      // state synchronized (just_audio does not emit in play() if it was already playing).
+      // Igual que en `_playAt`: pausar el backend mantiene sincronizado `playing` (just_audio no emite en play() si ya estaba sonando).
       await _player.pause();
       final srcFuture = resolveSource(track);
       final enrichFuture = _enrich(track);
@@ -908,7 +855,7 @@ class PlayerService {
     }
   }
 
-  // EXPERIMENTO kNoAudioMount: arranca/para la reproducción simulada.
+  /// EXPERIMENTO kNoAudioMount: arranca/para la reproducción simulada.
   void _startFakePlayback(Track? track) {
     _fakeTimer?.cancel();
     _playing = true;
@@ -933,13 +880,13 @@ class PlayerService {
     _playingController.add(false);
   }
 
-  /// Publish the preparing track (id + object) and clear it when preparation ends. Keeps both notifiers in sync.
+  /// Publica la pista en preparación (id + objeto) y la limpia al terminar. Mantiene ambos notifiers sincronizados.
   void _setPreparing(Track? track) {
     preparingTrackId.value = track?.id;
     preparingTrack.value = track;
   }
 
-  // Reset playback state to blank while loading a new track.
+  /// Resetea el estado de reproducción a vacío mientras carga la nueva pista.
   void _clearPlaybackState() {
     _fakeTimer?.cancel();
     _fakeTimer = null;
@@ -958,7 +905,7 @@ class PlayerService {
     _trackController.add(track);
   }
 
-  // Update metadata after a manual edit, without touching playback.
+  /// Actualiza metadatos tras edición manual, sin tocar la reproducción.
   Future<void> updateCurrentMetadata(Track updated) async {
     final i = _queue.indexWhere((t) => t.id == updated.id);
     final isCurrent = _currentTrack?.id == updated.id;
@@ -978,7 +925,7 @@ class PlayerService {
     }
   }
 
-  // Apply Deezer enrichment in background. Skip if track changed.
+  /// Aplica el enrich de Deezer en background. Salta si la pista cambió.
   Future<void> _enrichThenApply(
     Track original,
     Future<Track?> enrichFuture,
@@ -1009,6 +956,7 @@ class PlayerService {
     } catch (_) {}
   }
 
+  /// URI usable por el backend: stream remoto o archivo local.
   static String _mediaUri(PlayableSource src) {
     if (!src.isLocal) return src.uri;
     return Uri.file(src.uri).toString();
