@@ -687,8 +687,7 @@ class YtMusicService {
     return runs ?? const [];
   }
 
-  /// Artista desde un musicResponsiveListItemRenderer: navegación a canal
-  /// (`browseId` UC…) + nombre en la primera columna.
+  /// Artist from a musicResponsiveListItemRenderer: channel navigation (`browseId` UC...) + name in the first column.
   static YtmArtist? artistFromListItem(Map item) {
     final nav = item['navigationEndpoint'] as Map?;
     final browse = nav?['browseEndpoint'] as Map?;
@@ -712,7 +711,7 @@ class YtMusicService {
     final thumbUrl = _bestThumb(
       _thumbThumbs(item['thumbnail'] as Map?),
     );
-    // Suscriptores: texto tipo "12.3M subscribers" en cualquier columna.
+    // Subscribers: text like "12.3M subscribers" in any column.
     int? subs;
     for (final col in (item['flexColumns'] as List?) ?? const []) {
       for (final r in _runsOf(col as Map)) {
@@ -728,7 +727,7 @@ class YtMusicService {
     );
   }
 
-  // Parses InnerTube response by walking the tree for list item renderers.
+  // Parse the InnerTube response by walking the tree for list item renderers.
   static List<YtMusicResult> parseResponse(Object? node, int limit) {
     final results = <YtMusicResult>[];
     final seen = <String>{};
@@ -756,7 +755,7 @@ class YtMusicService {
     return results;
   }
 
-  // Extracts result from a musicResponsiveListItemRenderer.
+  // Extract result from a musicResponsiveListItemRenderer.
   static YtMusicResult? resultFromListItem(Map item) {
     final videoId =
         (item['playlistItemData'] as Map?)?['videoId'] as String? ??
@@ -771,7 +770,7 @@ class YtMusicService {
     int? subscribers;
     String? channelId;
     String? playCountText;
-    // Miniatura: elegir la de mayor resolución disponible.
+    // Thumbnail: pick the highest resolution available.
     final thumbUrl = _bestThumb(
       (((item['thumbnail'] as Map?)?['musicThumbnailRenderer'] as Map?)?['thumbnail']
               as Map?)?['thumbnails'] as List?,
@@ -794,16 +793,15 @@ class YtMusicService {
         } else if (trimmed.isNotEmpty && artist.isEmpty) {
           artist = trimmed.replaceAll(RegExp(r'\s*[•|]\s*$'), '').trim();
         }
-        // La columna del artista puede traer "Artist • 1.2M subscribers".
+        // The artist column may carry "Artist • 1.2M subscribers".
         subscribers ??= parseSubscribers(trimmed);
-        // Reproducciones de la fila (tab de canciones del artista):
-        // "1.2M plays" / "345K reproducciones".
+        // Play count of the row (artist songs tab): "1.2M plays" / "345K reproducciones".
         playCountText ??= _parsePlayCount(trimmed);
       }
     }
-    // Canal del artista: navegación del PRIMER run de la columna del artista
-    // (en YT Music el nombre va con link a browseId UC…). La vista/subs
-    // ("1.2M views") NO lleva canal: solo acepta canales.
+    // Artist channel: navigation of the FIRST run of the artist column
+    // (in YT Music the name comes with a link to browseId UC...). Views/subs
+    // ("1.2M views") do NOT carry a channel: only channels are accepted.
     for (var i = 1; i < columns.length && channelId == null; i++) {
       for (final r in _runsOf(columns[i] as Map)) {
         final nav = r['navigationEndpoint'] as Map?;
@@ -851,8 +849,8 @@ class YtMusicService {
     );
   }
 
-  /// "1.2M plays" / "345K reproducciones" → texto normalizado; null si no
-  /// es un contador de reproducciones (duración, año, etc.).
+  /// "1.2M plays" / "345K reproducciones" -> normalized text; null if not
+  /// a play counter (duration, year, etc.).
   static String? _parsePlayCount(String text) {
     final m = RegExp(
       r'^([\d.,]+[KMB]?)\s+(?:plays|reproducciones|views|visualizaciones)$',
@@ -863,16 +861,10 @@ class YtMusicService {
 
   // ── Álbumes ─────────────────────────────────────────────────────────
 
-  /// Tracklist de un álbum por su browseId (`MPREb_…` página de álbum o
-  /// `VL…`/id de playlist): browse + parseBrowsePage con continuación.
-  /// NOTA: el id de `MPREb_X` NO mapea a ninguna playlist `PL…`: la única
-  /// vía correcta es navegar la página del álbum directamente.
+  /// Tracklist of an album by its browseId (`MPREb_...` album page or `VL...`/id playlist): browse + parseBrowsePage with continuation.
+  /// NOTE: the id `MPREb_X` does NOT map to any `PL...` playlist: the only correct path is to browse the album page directly.
   ///
-  /// IMPORTANTE (verificado contra la API real): las filas del tracklist NO
-  /// traen miniatura (solo index/título/artista/duración/plays). La portada
-  /// del álbum vive SOLO en el header de la página
-  /// (`musicResponsiveHeaderRenderer.thumbnail`) — se devuelve aparte en
-  /// [YtmAlbumPage] para que el llamador la propague a cada fila.
+  /// IMPORTANTE (verified against the real API): the tracklist rows do NOT carry a thumbnail (only index/title/artist/duration/plays). The album cover lives ONLY in the page header (`musicResponsiveHeaderRenderer.thumbnail`) — it is returned separately in [YtmAlbumPage] so the caller can propagate it to each row.
   Future<YtmAlbumPage> fetchAlbumPage(String browseIdOrPlaylist) async {
     var id = browseIdOrPlaylist.trim();
     if (id.startsWith('VL')) id = id.substring(2);
@@ -929,8 +921,7 @@ class YtMusicService {
     );
   }
 
-  /// Portada del header de una página de álbum
-  /// (`musicResponsiveHeaderRenderer.thumbnail.musicThumbnailRenderer`).
+  /// Cover of an album page header (`musicResponsiveHeaderRenderer.thumbnail.musicThumbnailRenderer`).
   static String? _pageCoverUrl(Object? node) {
     String? found;
     void walk(Object? n) {
@@ -958,7 +949,7 @@ class YtMusicService {
     return found;
   }
 
-  /// Título del header de una página de álbum.
+  /// Title of an album page header.
   static String? _pageTitle(Object? node) {
     String? found;
     void walk(Object? n) {
@@ -1070,7 +1061,7 @@ class YtMusicService {
     return YtmPlaylist(id: id, name: name, tracks: tracks);
   }
 
-  // Parses browse page: items + continuation token + header name.
+  // Parse a browse page: items + continuation token + header name.
   static (List<YtMusicResult>, String?, String) parseBrowsePage(Object? node) {
     final items = <YtMusicResult>[];
     final seen = <String>{};
