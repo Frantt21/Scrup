@@ -21,7 +21,7 @@ class PaletteCacheStore {
 
   static const int _maxFailedEntries = 1000;
 
-  // Key: url→int (accent) or url:t→list of 3 ints (trio).
+  // Key: url->int (accent) or url:t->list of 3 ints (trio).
   final Map<String, Object> _colors = {};
 
   static const String _trioPrefix = '\x00trio:';
