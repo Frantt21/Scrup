@@ -18,7 +18,7 @@ import '../../services/player_service.dart';
 import '../theme_controller.dart';
 
 /// Fullscreen mode: the player IS the app.
-/// Animated entry/exit with three-zone layout (art + controls, lyrics, header).
+/// Animated entry/exit with a three-zone layout (art + controls, lyrics, header).
 class FullscreenPlayerView extends StatefulWidget {
   final bool active;
   final Widget lyricsPanel;
