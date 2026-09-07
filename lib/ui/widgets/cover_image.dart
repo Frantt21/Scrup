@@ -8,14 +8,9 @@ import 'package:provider/provider.dart';
 import '../../services/artwork_cache_service.dart';
 import '../../core/app_log.dart';
 
-/// Renderiza una imagen que puede venir de una URL de red (artwork de
-/// YouTube/Deezer) o de un archivo local del dispositivo (portada de
-/// playlist elegida por el usuario desde su disco).
+/// Render an image that can come from a network URL (YouTube/Deezer artwork) or from a local file on the device (playlist cover chosen by the user from their disk).
 ///
-/// Las URLs de red se persisten en el caché en DISCO
-/// ([ArtworkCacheService]): la primera vez se descargan y guardan, y en los
-/// siguientes arranques de la app se sirven desde el archivo local — sin
-/// re-descargar ni perder los artworks al cerrar y abrir la app.
+/// Network URLs are persisted in the ON-DISK cache ([ArtworkCacheService]): the first time they are downloaded and saved, and on later app starts they are served from the local file — without re-downloading and without losing artworks when closing and reopening the app.
 class CoverImage extends StatefulWidget {
   /// URL `http(s)://` o ruta local absoluta. `null`/vacío muestra el fallback.
   final String? source;
