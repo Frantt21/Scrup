@@ -6,20 +6,11 @@ import 'package:provider/provider.dart';
 
 import '../../services/settings_store.dart';
 
-/// Ecualizador animado: indica que una pista se está reproduciendo (barras
-/// en movimiento) o está pausada (barras bajas y quietas).
+/// Animated equalizer: shows a track is playing (bars in motion) or paused (bars low and still).
 ///
-/// Cuatro barras redondeadas cuyo alto oscila con ondas desfasadas entre sí.
-/// Solo anima cuando [active] es true: el resto de instancias (filas que no
-/// son la actual) quedan estáticas y sin coste de frames. El color por
-/// defecto es el acento del tema (lila, o el de la playlist en el detalle).
+/// Four rounded bars whose height oscillates with waves offset from each other. It animates only when [active] is true: the rest of instances (rows that are not the current one) stay static with no frame cost. The default color is the theme accent (purple, or the playlist's in the detail).
 ///
-/// La animación NO usa un [AnimationController] a propósito: un Ticker
-/// activo obliga al engine a producir un frame en cada vsync (60fps) aunque
-/// la UI no cambie visiblemente — era una de las fuentes del consumo de
-/// CPU/GPU durante la reproducción. En su lugar se usa un [Timer] a ~10fps
-/// que solo repinta al avanzar (los timers no fuerzan frames por sí solos).
-/// El movimiento se ve igual (el ciclo dura 900ms).
+/// The animation intentionally does NOT use an [AnimationController]: an active Ticker forces the engine to produce a frame on every vsync (60fps) even if the UI does not visibly change — that was one source of CPU/GPU consumption during playback. Instead, a [Timer] at ~10fps is used, which repaints only as it advances (timers do not force frames on their own). The motion looks the same (the cycle lasts 900ms).
 class NowPlayingBars extends StatefulWidget {
   /// `true` = animación en marcha (pista reproduciéndose); `false` = barras
   /// estáticas (pista pausada o estado inactivo).
