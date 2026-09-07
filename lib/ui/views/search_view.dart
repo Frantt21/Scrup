@@ -50,17 +50,13 @@ class _SearchViewState extends State<SearchView> {
   List<Track> _results = const [];
   List<YtmArtist> _artists = const [];
 
-  /// Avatares REALES de canal (UC… → URL), resueltos en background por
-  /// [_resolveArtistAvatars] después de pintar la lista. Mientras no llega,
-  /// la fila muestra el placeholder genérico (nunca la portada de una
-  /// canción, que era el "avatar random" de antes).
+  /// Avatares reales de canal (UC… → URL), resueltos en background por [_resolveArtistAvatars] tras pintar la lista. Mientras no llega, la fila muestra el placeholder genérico (nunca la portada de una canción, que era el "avatar random" de antes).
   final Map<String, String?> _artistAvatars = {};
   bool _searching = false;
   String? _error;
   bool _hasSearched = false;
 
-  /// Historial PERSISTENTE de búsquedas: chips bajo el campo; un toque
-  /// repite la consulta. Cada búsqueda exitosa sube al frente.
+  /// Historial persistente de búsquedas: chips bajo el campo; un toque repite la consulta. Cada búsqueda exitosa sube al frente.
   List<String> _history = const [];
 
   /// Pista en reproducción (para el indicador de "en reproducción").
@@ -76,7 +72,6 @@ class _SearchViewState extends State<SearchView> {
   @override
   void initState() {
     super.initState();
-    // Búsqueda lanzada desde la pantalla de inicio
     widget.searchRequest?.addListener(_onExternalSearch);
     widget.focusRequest?.addListener(_onFocusRequest);
     // Indicador de "en reproducción" en las filas de resultados
@@ -171,8 +166,7 @@ class _SearchViewState extends State<SearchView> {
     }
   }
 
-  /// Avatares (disco, instantáneo) + REVALIDACIÓN en background: cuando un
-  /// canal cambia su avatar, [onUpdated] repinta esa fila.
+  /// Avatares (disco, instantáneo) + revalidación en background: cuando un canal cambia su avatar, [onUpdated] repinta esa fila.
   Future<void> _resolveArtistAvatars(
     List<YtmArtist> artists,
     int token,
@@ -208,8 +202,7 @@ class _SearchViewState extends State<SearchView> {
 
     final bool mobile = Binaries.isMobile;
 
-    // En móvil usamos todo el espacio (sin contenedor flotante ni clearance
-    // del player); en desktop el cristal flotante con clearance.
+    // Móvil: todo el espacio (sin cristal flotante ni clearance del player); desktop: cristal flotante con clearance.
     final Widget body = mobile
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -268,34 +261,24 @@ class _SearchViewState extends State<SearchView> {
                         ),
                       ),
                     ),
-                    // Historial de búsquedas: chips persistentes; un toque
-                    // repite la consulta. Debajo del campo, en móvil.
-                    if (_history.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        height: 38,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _history.length,
-                          separatorBuilder: (_, _) => const SizedBox(width: 8),
-                          itemBuilder: (context, i) {
-                            final q = _history[i];
-                            return ActionChip(
-                              avatar: const Icon(
-                                Icons.history_rounded,
-                                size: 18,
-                              ),
-                              label: Text(q),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () {
-                                _searchController.text = q;
-                                _search(q);
-                              },
-                            );
+                    // Historial persistente de búsquedas: chips bajo el campo; un toque repite la consulta.
+                  if (_history.isNotEmpty)
+                    ...[for (final q in _history)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: ActionChip(
+                          avatar: const Icon(
+                            Icons.history_rounded,
+                            size: 18,
+                          ),
+                          label: Text(q),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () {
+                            _searchController.text = q;
+                            _search(q);
                           },
                         ),
-                      ),
-                    ],
+                      )]
                   ],
                 ),
               ),
