@@ -3,12 +3,9 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// Copia una imagen elegida por el usuario al directorio de portadas de la
-/// app (`playlist_covers/`) y devuelve la ruta de destino.
+/// Copy an image chosen by the user to the app's cover directory (`playlist_covers/`) and return the destination path.
 ///
-/// Copiar (en vez de referenciar el archivo original) hace que la portada
-/// sobreviva aunque el usuario mueva o borre el archivo original. Si la
-/// fuente ya está en el destino (se eligió la propia portada), no copia.
+/// Copying (instead of referencing the original file) makes the cover survive even if the user moves or deletes the original file. If the source is already in the destination (the playlist's own cover was chosen), it does not copy.
 Future<String> copyPlaylistCoverToAppDir(
   int playlistId,
   String sourcePath,
@@ -17,10 +14,7 @@ Future<String> copyPlaylistCoverToAppDir(
   final coversDir = Directory(p.join(base.path, 'playlist_covers'));
   await coversDir.create(recursive: true);
   final ext = p.extension(sourcePath);
-  // Nombre versionado: cada cambio de portada produce una ruta NUEVA. Flutter
-  // cachea `Image.file` por ruta, así que reutilizar `playlist_$id$ext`
-  // mostraba la portada vieja hasta recrear la vista (o reiniciar). Con un
-  // path distinto el ImageCache se invalida y el UI refresca al instante.
+  // Versioned name: each cover change produces a NEW path. Flutter caches `Image.file` by path, so reusing `playlist_$id$ext` showed the old cover until the view was recreated (or the app restarted). With a different path, the ImageCache is invalidated and the UI refreshes immediately.
   final millis = DateTime.now().millisecondsSinceEpoch;
   final dest = p.join(coversDir.path, 'playlist_${playlistId}_$millis$ext');
   if (!p.equals(sourcePath, dest)) {
@@ -29,13 +23,9 @@ Future<String> copyPlaylistCoverToAppDir(
   return dest;
 }
 
-/// Copia una imagen elegida por el usuario al directorio de portadas de
-/// pistas de la app (`track_covers/`) y devuelve la ruta de destino.
+/// Copy an image chosen by the user to the app's track cover directory (`track_covers/`) and return the destination path.
 ///
-/// Igual que [copyPlaylistCoverToAppDir]: se copia (no se referencia) para
-/// que la portada sobreviva aunque el archivo original se mueva o borre, y
-/// el nombre se deriva del id de la pista para que sea estable entre
-/// sesiones (la metadata editada persiste en la DB con esta ruta local).
+/// Same as [copyPlaylistCoverToAppDir]: it is copied (not referenced) so the cover survives even if the original file is moved or deleted, and the name is derived from the track id so it is stable across sessions (the edited metadata persists in the DB with this local path).
 Future<String> copyTrackCoverToAppDir(String trackId, String sourcePath) async {
   final base = await getApplicationSupportDirectory();
   final coversDir = Directory(p.join(base.path, 'track_covers'));
