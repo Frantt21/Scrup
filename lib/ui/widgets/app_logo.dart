@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Logo del app ([assets/app-logo.png]) para la barra superior. Si la imagen
-/// no está disponible se degrada a un icono de ecualizador con el acento.
+/// App logo ([assets/app-logo.png]) for the top bar. If the image is not available, it falls back to an equalizer icon with the accent.
 class AppLogo extends StatelessWidget {
   final double size;
 
