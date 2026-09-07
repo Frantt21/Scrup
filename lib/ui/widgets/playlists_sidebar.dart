@@ -17,7 +17,7 @@ import 'spotify_import_dialog.dart';
 
 const double kSidebarWidth = 250;
 
-/// Floating glass sidebar showing all playlists with list/grid toggle.
+/// Floating glass sidebar showing all playlists with a list/grid toggle.
 class PlaylistsSidebar extends StatefulWidget {
   final int? openPlaylistId;
   final ValueChanged<Playlist?> onSelectPlaylist;
