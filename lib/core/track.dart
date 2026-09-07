@@ -48,7 +48,7 @@ class Track {
     final thumbnails = json['thumbnails'] as List<dynamic>?;
     String? thumb;
     if (thumbnails != null && thumbnails.isNotEmpty) {
-      // Preferir la última (suele ser la de mayor resolución)
+      // Prefer the last one, which is usually the highest resolution.
       final sorted =
           List<Map<String, dynamic>>.from(
             thumbnails.whereType<Map<String, dynamic>>(),
@@ -62,7 +62,7 @@ class Track {
 
     return Track(
       id: json['id'] as String? ?? '',
-      // Limpia tags como "(Official Video)", " | Lyrics", etc.
+      // Clean tags like "(Official Video)", " | Lyrics", etc.
       title: TitleCleaner.clean(json['title'] as String? ?? 'Sin título'),
       artist:
           (json['channel'] ?? json['uploader'] ?? json['artist'] ?? '')
