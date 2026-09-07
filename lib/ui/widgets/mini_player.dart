@@ -9,9 +9,7 @@ import '../../core/app_log.dart';
 import '../../services/player_service.dart';
 import 'cover_image.dart';
 
-/// Mini-reproductor para móvil: carátula + título + controles esenciales en
-/// una barra compacta sobre la NavigationBar inferior. Tocar la zona de la
-/// carátula/título abre la pantalla "now playing" (fullscreen).
+/// Mobile mini-player: cover + title + essential controls in a compact bar over the bottom NavigationBar. Tapping the cover/title area opens the "now playing" screen (fullscreen).
 class MiniPlayer extends StatefulWidget {
   final VoidCallback onOpenNowPlaying;
   final VoidCallback onOpenQueue;
@@ -42,8 +40,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
   Color? _lastLoggedAccent;
   String? _lastLoggedTrackId;
 
-  /// Acento anterior para el fundido: el tween arranca del color REAL
-  /// previo (no de transparente) hacia el nuevo.
+  /// Previous accent for the fade: the tween starts from the REAL previous color (not transparent) toward the new one.
   Color? _prevAccent;
 
   @override
