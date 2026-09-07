@@ -22,7 +22,7 @@ class DeezerService {
 
   final Map<String, Future<Track?>> _inflight = {};
 
-  // Enriches a track with Deezer metadata. Skips tracks with cleanMetadata.
+  // Enrich a track with Deezer metadata. Skips tracks with cleanMetadata.
   Future<Track?> enrich(Track track) async {
     if (track.cleanMetadata) return null;
     if (_cache.containsKey(track.id)) return _cache[track.id];
@@ -40,13 +40,13 @@ class DeezerService {
     }
   }
 
-  // Searches Deezer bypassing cache (for manual metadata edits).
+  // Search Deezer bypassing cache (for manual metadata edits).
   Future<Track?> searchManual(String title, String artist) async {
     final probe = Track(id: '__manual__', title: title, artist: artist);
     return _searchAndPick(probe);
   }
 
-  // Enriches multiple tracks in parallel with concurrency limit.
+  // Enrich multiple tracks in parallel with a concurrency limit.
   Future<List<Track>> enrichAll(
     List<Track> tracks, {
     int concurrency = 4,
@@ -99,7 +99,7 @@ class DeezerService {
     }
   }
 
-  // Picks the best match from Deezer results.
+  // Pick the best match from Deezer results.
   Track? _pickBest(Track track, List<dynamic> data) {
     Track? best;
     var bestScore = 0;
@@ -135,7 +135,7 @@ class DeezerService {
     );
   }
 
-  // Returns (totalScore, titleScore) for matching.
+  // Return (totalScore, titleScore) for matching.
   (int, int) _score(Track original, Track candidate) {
     final a = _norm(original.artist);
     final b = _norm(original.title);
@@ -202,12 +202,12 @@ class DeezerService {
         .trim();
   }
 
-  // Merges Deezer data into original track.
+  // Merge Deezer data into the original track.
   Track? apply(Track original, Track? deezer) {
     if (deezer == null) return null;
     return original.copyWith(
       title: deezer.title,
-      // Si Deezer no trae artista, conservar el de YouTube
+      // If Deezer did not bring an artist, keep the YouTube one
       artist: deezer.artist.trim().isEmpty ? original.artist : deezer.artist,
       thumbnailUrl: deezer.thumbnailUrl,
       album: deezer.album,
