@@ -1,4 +1,4 @@
-/// DTO para resultados de búsqueda de lyrics.
+/// DTO for a lyrics search result.
 class LyricsSearchResult {
   final int id;
   final String trackName;
@@ -9,8 +9,8 @@ class LyricsSearchResult {
   final String plainLyrics;
   final String syncedLyrics;
 
-  /// Proveedor del resultado ('KPoe' | 'Unison' | 'LRCLIB'); vacío si se
-  /// desconoce (p. ej. resultados editados a mano).
+  /// Provider of the result ('KPoe' | 'Unison' | 'LRCLIB'); empty if unknown
+  /// (e.g. manually edited results).
   final String provider;
 
   LyricsSearchResult({
