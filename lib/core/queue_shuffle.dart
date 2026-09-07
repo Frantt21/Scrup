@@ -7,9 +7,7 @@ int shuffleKeepingCurrent<T>(List<T> queue, T? current, Random random) {
   if (queue.length > 1) queue.shuffle(random);
   if (current == null) return -1;
   return queue.indexWhere((t) => identical(t, current));
-}
-
-// Promotes track at startIndex to front, then shuffles the rest.
+}  // Promote the track at startIndex to the front, then shuffle the rest.
 int promoteThenShuffle<T>(List<T> queue, int startIndex, Random random) {
   if (queue.isEmpty) return startIndex;
   final playIndex = startIndex.clamp(0, queue.length - 1);
