@@ -28,18 +28,13 @@ import '../widgets/cover_image.dart';
 import '../widgets/lyrics_display.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 
-/// Synced lyrics view with auto-scroll, karaoke sweep, tap-to-seek
-/// and manual search/sync.
+/// Synced lyrics view with auto-scroll, karaoke sweep, tap-to-seek and manual search/sync.
 class LyricsView extends StatefulWidget {
   final bool embedded;
 
   const LyricsView({super.key, this.embedded = false});
 
-  /// Puente estático para el header del sheet de letras (Android): el sheet
-  /// llama a estas acciones SIN duplicar diálogos/estado. El view ACTIVO
-  /// rellena el mapa en cada build (callbacks con estado vivo) y lo limpia
-  /// al disponer. Sin GlobalObjectKey: pueden coexistir 2 instancias
-  /// montadas (página de letras + sheet) y la key duplicada revienta.
+  /// Static bridge for the lyrics sheet header (Android): the sheet calls these actions WITHOUT duplicating dialogs/state. The ACTIVE view fills the map on each build (callbacks with live state) and clears it on dispose. No GlobalObjectKey: 2 instances can coexist mounted (lyrics page + sheet) and the duplicate key breaks.
   static final Map<String, VoidCallback?> activeActions = {};
 
   @override
