@@ -39,14 +39,13 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   bool _loading = true;
   String? _error;
 
-  /// Name visible in the collapsed appbar (true after passing the expanded header threshold).
   bool _showPinnedTitle = false;
 
-  /// Accent EXTRACTED from the channel image (same path as the playlist detail: PaletteCacheStore + ArtworkPaletteService). They color the buttons and tint the background (lerp 0.30, same as the full playlist).
+  /// Acento extraído de la imagen del canal (mismo camino que el detalle de playlist: PaletteCacheStore + ArtworkPaletteService). Pinta los botones y tiñe el fondo (lerp 0.30, igual que el playlist completo).
   Color? _accent;
   String? _accentFor;
 
-  /// Opened album: shown EMBEDDED (instead of the artist content, without route push) — nav + miniplayer stay visible.
+  /// Álbum abierto: se muestra EMBEBIDO (en vez del contenido del artista, sin push de ruta) — nav + miniplayer visibles.
   YtmAlbum? _openedAlbum;
 
   @override
@@ -149,8 +148,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     }
   }
 
-  /// Umbral (offset de scroll) a partir del cual la appbar colapsada muestra
-  /// el nombre: justo antes de que el header expandido salga de pantalla.
+  /// Umbral (offset de scroll) a partir del cual la appbar colapsada muestra el nombre: justo antes de que el header expandido salga de pantalla.
   double _titleThreshold(double expandedHeight) =>
       (expandedHeight - 90).clamp(0.0, double.infinity);
 
@@ -180,8 +178,6 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
               theme.colorScheme.surface);
 
     final bool loading = _loading && detail == null;
-    // Alto del header expandido: casi cuadrado, como la portada de la
-    // playlist detail (width*0.95) — el artwork del canal a PANTALLA COMPLETA.
     final double expandedH = MediaQuery.sizeOf(context).width * 0.95;
     final String name = (detail?.name.isNotEmpty ?? false)
         ? detail!.name
@@ -609,14 +605,8 @@ class _AlbumCard extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Tracklist de un álbum, con el MISMO estilo que el detalle de playlist en
-/// modo "acento plano" (flat): fondo del color del acento (extraído de la
-/// PROPIA portada del álbum, fallback al acento del artista), portada 1:1
-/// centrada, título y botones de Play y Shuffle. Vista embebida (sin push
-/// de ruta): el spinner de carga vive AQUÍ, nunca en la card de la fila.
-class ArtistAlbumView extends StatefulWidget {
+}  /// Tracklist de un álbum, con el MISMO estilo que el detalle de playlist en modo "acento plano" (flat): fondo del color del acento (extraído de la PROPIA portada del álbum, fallback al acento del artista), portada 1:1 centrada, título y botones de Play y Shuffle. Vista embebida (sin push de ruta): el spinner de carga vive AQUÍ, nunca en la card de la fila.
+  class ArtistAlbumView extends StatefulWidget {
   const ArtistAlbumView({
     super.key,
     required this.album,
