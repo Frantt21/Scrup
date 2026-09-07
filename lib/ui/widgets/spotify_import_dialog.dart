@@ -11,10 +11,7 @@ import '../../services/spotify_import_service.dart';
 import '../../services/ytdlp_service.dart';
 import '../../services/ytmusic_service.dart';
 
-/// Abre el diálogo de migración de playlists a Scrup. Detecta la fuente por
-/// el enlace: Spotify (embed público, primeras ~100) o YouTube/YouTube Music
-/// (InnerTube browse, sin límite práctico). Devuelve el nombre elegido y las
-/// pistas emparejadas en YouTube, o null si el usuario cancela.
+/// Open the playlist migration dialog for Scrup. It detects the source from the link: Spotify (public embed, first ~100) or YouTube/YouTube Music (InnerTube browse, no practical limit). It returns the chosen name and the tracks matched on YouTube, or null if the user cancels.
 Future<({String name, List<Track> tracks})?> showSpotifyImportDialog(
   BuildContext context,
 ) {
