@@ -377,6 +377,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get recalcColors => '重新计算颜色';
 
   @override
+  String get reloadArtworks => '重新加载封面';
+
+  @override
   String get playlistCoverStyle => 'Estilo de portada';
 
   @override

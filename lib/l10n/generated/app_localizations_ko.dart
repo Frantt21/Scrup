@@ -378,6 +378,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get recalcColors => '색상 재계산';
 
   @override
+  String get reloadArtworks => '아트워크 다시 불러오기';
+
+  @override
   String get playlistCoverStyle => 'Estilo de portada';
 
   @override

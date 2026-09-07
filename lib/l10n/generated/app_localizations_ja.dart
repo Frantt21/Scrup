@@ -378,6 +378,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get recalcColors => '色を再計算';
 
   @override
+  String get reloadArtworks => 'アートワークを再読み込み';
+
+  @override
   String get playlistCoverStyle => 'Estilo de portada';
 
   @override

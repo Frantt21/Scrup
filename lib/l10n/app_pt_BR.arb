@@ -117,6 +117,7 @@
   },
   "paletteRecalc": "Recalcular",
   "recalcColors": "Recalcular cores",
+  "reloadArtworks": "Recarregar artworks",
   "colorsUpdated": "Cores atualizados",
   "playlistLabel": "Playlist",
   "cacheUsed": "{used} de {limit}",

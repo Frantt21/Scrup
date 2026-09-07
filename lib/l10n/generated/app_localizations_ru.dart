@@ -385,6 +385,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get recalcColors => 'Пересчитать цвета';
 
   @override
+  String get reloadArtworks => 'Перезагрузить обложки';
+
+  @override
   String get playlistCoverStyle => 'Estilo de portada';
 
   @override

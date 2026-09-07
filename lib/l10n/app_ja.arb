@@ -117,6 +117,7 @@
   },
   "paletteRecalc": "再計算",
   "recalcColors": "色を再計算",
+  "reloadArtworks": "アートワークを再読み込み",
   "colorsUpdated": "色を更新しました",
   "playlistLabel": "プレイリスト",
   "cacheUsed": "{used} / {limit}",

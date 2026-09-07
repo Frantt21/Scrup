@@ -382,6 +382,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recalcColors => 'Recalculate colors';
 
   @override
+  String get reloadArtworks => 'Reload artworks';
+
+  @override
   String get playlistCoverStyle => 'Cover style';
 
   @override

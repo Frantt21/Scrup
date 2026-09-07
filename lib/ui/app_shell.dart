@@ -11,7 +11,9 @@ import '../core/binaries.dart';
 import '../data/database.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
+import '../services/search_service.dart' show YtmArtist;
 import '../services/settings_store.dart';
+import 'views/artist_detail_view.dart';
 import 'views/home_view.dart';
 import 'views/library_view.dart';
 import 'views/lyrics_view.dart';
@@ -39,6 +41,10 @@ class _AppShellState extends State<AppShell> {
   StreamSubscription<String>? _errorSub;
 
   Playlist? _openPlaylist;
+
+  /// Artista abierto desde la búsqueda (móvil): se monta DENTRO del shell
+  /// (IndexedStack) como los demás screens — nav + miniplayer siguen ahí.
+  YtmArtist? _openArtist;
 
   bool _showSettings = false;
   int _settingsOpenCount = 0;
@@ -161,6 +167,10 @@ class _AppShellState extends State<AppShell> {
       }
       if (_openPlaylist != null) {
         _selectPlaylist(null);
+        return true;
+      }
+      if (_openArtist != null) {
+        setState(() => _openArtist = null);
         return true;
       }
     }
@@ -349,7 +359,13 @@ class _AppShellState extends State<AppShell> {
       _openPlaylist = playlist;
       _showSettings = false;
       _showLyrics = false;
+      _openArtist = null;
     });
+  }
+
+  /// Abre/cierra el detalle de artista (móvil): screen dentro del shell.
+  void _openArtistDetail(YtmArtist artist) {
+    setState(() => _openArtist = artist);
   }
 
   void _openSettings() {
@@ -433,6 +449,17 @@ class _AppShellState extends State<AppShell> {
       // inset superior, y la playlist detail dibuja el artwork DEBAJO de la
       // barra de estado (igual que forawn_mobile). La NavigationBar lleva su
       // propio SafeArea inferior para no pisar la barra de gestos de Android.
+      child: PopScope(
+      // El árbol vive en un solo Scaffold (sin Navigator para las screens):
+      // el botón ATRÁS de Android retrocede screens apilados (letras →
+      // playlist → artista → ajustes → tabs) y SOLO en el inicio (sin nada
+      // abierto) sale del app. Con un sheet/dialog abierto el back los
+      // cierra primero (viven en rutas del Navigator por encima del shell).
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBackNavigation();
+      },
       child: Scaffold(
       // El teclado queda POR ENCIMA del app: no empuja nav bar ni mini-player
       // (combina con adjustPan del manifest para centrar el campo en foco).
@@ -546,6 +573,7 @@ class _AppShellState extends State<AppShell> {
         ],
       ),
       ),
+      ),
     );
   }
 
@@ -607,29 +635,44 @@ class _AppShellState extends State<AppShell> {
   // vive abajo) y la cola como overlay a pantalla completa.
   Widget _buildMobileContent() {
     final openPlaylist = _openPlaylist;
+    final openArtist = _openArtist;
     final content = Stack(
       children: [
         IndexedStack(
+          // Orden de slots: 0 home, 1 búsqueda, 2 librería, 3 playlist,
+          // 4 ajustes, 5 letras, 6 ARTISTA. (Antes el índice del artista
+          // apuntaba al slot de letras — SizedBox.shrink sin pista — y el
+          // screen quedaba en negro.)
           index: _showLyrics
               ? 5
               : (openPlaylist != null
                     ? 3
-                    : (_showSettings ? 4 : _selectedIndex)),
+                    : (_showSettings
+                          ? 4
+                          : (openArtist != null ? 6 : _selectedIndex))),
           children: [
             // Home sin SafeArea superior (edge-to-edge): el degradado de
             // acento del inicio se extiende detr�s de la barra de estado.
             // El propio HomeView aplica el inset superior a su contenido.
             HomeView(onSearch: _submitSearch, onOpenSearch: _openSearch, onOpenPlaylist: _selectPlaylist),
+            // bottom: FALSE: el inset inferior del sistema ya lo absorbe la
+            // NavigationBar del shell (64+inset). Con el SafeArea completo
+            // el inset se aplicaba DOS veces y dejaba una banda vacía oscura
+            // entre el contenido y el miniplayer ("contenedor negro" en
+            // búsqueda/librería/ajustes; home y playlist no lo llevan).
             SafeArea(
               top: true,
+              bottom: false,
               child: SearchView(
                 searchRequest: _searchRequest,
                 focusRequest: _searchFocusRequest,
                 onBack: _backToHome,
+                onOpenArtist: _openArtistDetail,
               ),
             ),
             SafeArea(
               top: true,
+              bottom: false,
               child: LibraryView(
                 onSelectPlaylist: _selectPlaylist,
               ),
@@ -647,6 +690,7 @@ class _AppShellState extends State<AppShell> {
               const SizedBox.shrink(),
             SafeArea(
               top: true,
+              bottom: false,
               child: SettingsView(key: ValueKey(_settingsOpenCount)),
             ),
             // La página de letras del IndexedStack SOLO se monta cuando se
@@ -666,6 +710,16 @@ class _AppShellState extends State<AppShell> {
                       child: LyricsView(key: _fsLyricsKey),
                     ),
                   ),
+            // Detalle de artista (móvil): screen del shell, SIN push de
+            // ruta — nav + miniplayer siguen visibles debajo.
+            if (openArtist != null)
+              ArtistDetailView(
+                key: ValueKey(openArtist.browseId),
+                artist: openArtist,
+                onBack: () => setState(() => _openArtist = null),
+              )
+            else
+              const SizedBox.shrink(),
           ],
         ),
         // NOTE: la cola m�vil ya NO se dibuja como overlay a pantalla
@@ -756,10 +810,43 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  /// Back de Android: cierra en orden inverso lo que esté abierto. SOLO si
+  /// no hay nada abierto y estamos en el tab inicial sale del app.
+  void _handleBackNavigation() {
+    if (Binaries.isDesktop) {
+      // Desktop: el shell no interfiere con el back de rutas.
+      return;
+    }
+    // Orden de cierre (de lo más superficial a lo más profundo).
+    if (_showLyrics) {
+      setState(() => _showLyrics = false);
+      return;
+    }
+    if (_openPlaylist != null) {
+      _selectPlaylist(null);
+      return;
+    }
+    if (_openArtist != null) {
+      setState(() => _openArtist = null);
+      return;
+    }
+    if (_showSettings) {
+      _closeSettings();
+      return;
+    }
+    if (_selectedIndex != 0) {
+      setState(() => _selectedIndex = 0);
+      return;
+    }
+    // Nada abierto y en el inicio: salir del app (comportamiento estándar).
+    SystemNavigator.pop();
+  }
+
   void _selectMobileNav(int i) {
     setState(() {
       _openPlaylist = null;
       _showLyrics = false;
+      _openArtist = null;
       if (i == 3) {
         _showSettings = true;
       } else {

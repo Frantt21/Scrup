@@ -16,8 +16,10 @@ import 'services/audio_cache_service.dart';
 import 'services/artwork_cache_service.dart';
 import 'services/just_audio_backend.dart';
 import 'services/media_kit_backend.dart';
+import 'services/artist_avatar_cache_store.dart';
 import 'services/artist_cache_store.dart';
 import 'services/search_cache_store.dart';
+import 'services/search_history_store.dart';
 import 'services/search_service.dart';
 import 'services/discord/discord_presence_service.dart';
 import 'services/lyrics_service.dart';
@@ -245,11 +247,18 @@ class ScrupApp extends StatelessWidget {
             cache: SearchCacheStore(),
             // Detalles de artista: un JSON por canal (TTL 24h).
             artistCache: ArtistCacheStore(),
+            // Avatares de canal: un JSON compartido; el disco sirve el
+            // avatar instantáneo y la revalidación en background lo
+            // actualiza si el canal lo cambió.
+            avatarCache: ArtistAvatarCacheStore(),
           ),
         ),
         Provider<LyricsService>(
           create: (context) => LyricsService(context.read<AppDatabase>()),
         ),
+        // Historial de búsquedas (persistente): los chips de la vista
+        // Buscar lo muestran y un toque repite la consulta.
+        Provider<SearchHistoryStore>(create: (_) => SearchHistoryStore()),
         Provider<SettingsStore>(create: (_) => settings),
         Provider<PaletteCacheStore>(create: (_) => paletteCache),
         Provider<ScrupAudioHandler>(create: (_) => audioHandler),

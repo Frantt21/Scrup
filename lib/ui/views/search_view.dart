@@ -7,6 +7,7 @@ import '../../core/binaries.dart';
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/player_service.dart';
+import '../../services/search_history_store.dart';
 import '../../services/search_service.dart';
 import 'artist_detail_view.dart';
 import '../playback.dart';
@@ -31,11 +32,17 @@ class SearchView extends StatefulWidget {
   /// Vuelve al inicio (ya no hay barra lateral).
   final VoidCallback? onBack;
 
+  /// Abre el detalle de un artista. En móvil lo provee el AppShell: el
+  /// screen se monta DENTRO del shell (nav + miniplayer siguen visibles).
+  /// Si es null (desktop), se empuja como ruta de pantalla completa.
+  final ValueChanged<YtmArtist>? onOpenArtist;
+
   const SearchView({
     super.key,
     this.searchRequest,
     this.focusRequest,
     this.onBack,
+    this.onOpenArtist,
   });
 
   @override
@@ -58,7 +65,10 @@ class _SearchViewState extends State<SearchView> {
   bool _searching = false;
   String? _error;
   bool _hasSearched = false;
-  final List<String> _recentSearches = ['Daft Punk', 'Lo-fi', 'Radiohead'];
+
+  /// Historial PERSISTENTE de búsquedas: chips bajo el campo; un toque
+  /// repite la consulta. Cada búsqueda exitosa sube al frente.
+  List<String> _history = const [];
 
   /// Pista en reproducción (para el indicador de "en reproducción").
   Track? _currentTrack;
@@ -96,6 +106,12 @@ class _SearchViewState extends State<SearchView> {
       if (!mounted) return;
       setState(() => _playing = p);
     });
+    // Historial persistente: se muestra como chips en ambas plataformas.
+    unawaited(
+      context.read<SearchHistoryStore>().load().then((h) {
+        if (mounted) setState(() => _history = h);
+      }),
+    );
   }
 
   void _onExternalSearch() {
@@ -139,6 +155,12 @@ class _SearchViewState extends State<SearchView> {
         _artists = artistList;
         _searching = false;
       });
+      // Historial: consulta exitosa al frente (persistente, dedupe).
+      unawaited(
+        context.read<SearchHistoryStore>().add(q).then((h) {
+          if (mounted) setState(() => _history = h);
+        }),
+      );
       // Avatares en segundo plano: las canciones ya están en pantalla, la
       // cara del canal aparece cuando su request termina (UI no bloqueada).
       unawaited(_resolveArtistAvatars(artistList, token));
@@ -156,14 +178,18 @@ class _SearchViewState extends State<SearchView> {
     }
   }
 
-  /// Resuelve los avatares de los canales derivados (1 request por ARTISTA
-  /// vía SearchService) y refresca solo si la búsqueda sigue vigente.
+  /// Avatares (disco, instantáneo) + REVALIDACIÓN en background: cuando un
+  /// canal cambia su avatar, [onUpdated] repinta esa fila.
   Future<void> _resolveArtistAvatars(
     List<YtmArtist> artists,
     int token,
   ) async {
     final map = await context.read<SearchService>().resolveArtistAvatars(
       artists,
+      onUpdated: (browseId, url) {
+        if (!mounted || token != _searchToken) return;
+        setState(() => _artistAvatars[browseId] = url);
+      },
     );
     if (!mounted || token != _searchToken) return;
     setState(() => _artistAvatars.addAll(map));
@@ -249,6 +275,34 @@ class _SearchViewState extends State<SearchView> {
                         ),
                       ),
                     ),
+                    // Historial de búsquedas: chips persistentes; un toque
+                    // repite la consulta. Debajo del campo, en móvil.
+                    if (_history.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 38,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _history.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
+                          itemBuilder: (context, i) {
+                            final q = _history[i];
+                            return ActionChip(
+                              avatar: const Icon(
+                                Icons.history_rounded,
+                                size: 18,
+                              ),
+                              label: Text(q),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () {
+                                _searchController.text = q;
+                                _search(q);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -334,11 +388,11 @@ class _SearchViewState extends State<SearchView> {
                             height: 34,
                             child: ListView.separated(
                               scrollDirection: Axis.horizontal,
-                              itemCount: _recentSearches.length,
+                              itemCount: _history.length,
                               separatorBuilder: (_, _) =>
                                   const SizedBox(width: 8),
                               itemBuilder: (context, i) {
-                                final q = _recentSearches[i];
+                                final q = _history[i];
                                 return ActionChip(
                                   label: Text(q),
                                   onPressed: () {
@@ -445,9 +499,15 @@ class _SearchViewState extends State<SearchView> {
     );
   }
 
-  /// Toca un artista → screen de detalle (push a pantalla completa). El
-  /// detalle carga sus datos por sí mismo (cache 24h por canal).
+  /// Toca un artista → screen de detalle. En móvil el AppShell lo monta
+  /// DENTRO del shell (nav + miniplayer presentes); en desktop, push de
+  /// ruta a pantalla completa.
   void _openArtist(YtmArtist artist) {
+    final cb = widget.onOpenArtist;
+    if (cb != null) {
+      cb(artist);
+      return;
+    }
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
         builder: (_) => ArtistDetailView(artist: artist),

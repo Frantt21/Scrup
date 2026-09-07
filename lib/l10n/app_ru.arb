@@ -117,6 +117,7 @@
   },
   "paletteRecalc": "Пересчитать",
   "recalcColors": "Пересчитать цвета",
+  "reloadArtworks": "Перезагрузить обложки",
   "colorsUpdated": "Цвета обновлены",
   "playlistLabel": "Плейлист",
   "cacheUsed": "{used} из {limit}",

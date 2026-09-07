@@ -382,6 +382,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get recalcColors => 'Recalcular cores';
 
   @override
+  String get reloadArtworks => 'Recarregar artworks';
+
+  @override
   String get playlistCoverStyle => 'Estilo de portada';
 
   @override
@@ -1099,6 +1102,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get recalcColors => 'Recalcular cores';
+
+  @override
+  String get reloadArtworks => 'Recarregar artworks';
 
   @override
   String get colorsUpdated => 'Cores atualizados';

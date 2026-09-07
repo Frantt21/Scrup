@@ -117,6 +117,7 @@
   },
   "paletteRecalc": "재계산",
   "recalcColors": "색상 재계산",
+  "reloadArtworks": "아트워크 다시 불러오기",
   "colorsUpdated": "색상이 업데이트되었습니다",
   "playlistLabel": "재생목록",
   "cacheUsed": "{used} / {limit}",

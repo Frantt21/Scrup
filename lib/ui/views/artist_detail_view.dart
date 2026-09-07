@@ -14,20 +14,30 @@ import '../playlist_actions.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/track_tile.dart';
 
+/// Texto legible sobre un fondo del color dado (negro/blanco por luminancia).
+Color _onColor(Color bg) =>
+    bg.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+
 /// Detalle de artista (Android/desktop): datos de la página de canal de
 /// InnerTube (top canciones + álbumes) con caché propio de 24h.
 ///
-/// Header estilo DETALLE DE PLAYLIST (móvil): portada del canal full-bleed
-/// con degradado que funde al color de fondo, degradado EXTRAÍDO de la
-/// propia imagen (palette service, igual que las playlists) y, al
-/// scrollear, la appbar colapsada muestra el nombre del artista con el
-/// blur/zoom del FlexibleSpaceBar de por medio.
+/// Header estilo DETALLE DE PLAYLIST con FULL ARTWORK: la imagen del canal a
+/// todo el ancho (edge-to-edge, detrás de la barra de estado) con degradado
+/// que funde al color de fondo — el mismo look que la playlist detail en su
+/// estilo por defecto. Los botones usan el acento EXTRAÍDO de la imagen del
+/// canal (no el primary del tema global). Al scrollear, la appbar colapsada
+/// muestra el nombre del artista. Se monta DENTRO del shell (nav +
+/// miniplayer presentes).
 class ArtistDetailView extends StatefulWidget {
-  const ArtistDetailView({super.key, required this.artist});
+  const ArtistDetailView({super.key, required this.artist, this.onBack});
 
   /// Artista derivado de la búsqueda: canal + nombre (sin avatar: la cara
   /// real llega con el detalle).
   final YtmArtist artist;
+
+  /// Vuelve a la búsqueda. En móvil lo provee el AppShell (screen montado
+  /// en el shell); si es null, hace pop del Navigator (desktop).
+  final VoidCallback? onBack;
 
   @override
   State<ArtistDetailView> createState() => _ArtistDetailViewState();
@@ -37,16 +47,20 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   YtmArtistDetail? _detail;
   bool _loading = true;
   String? _error;
-  int? _openedAlbumIndex;
 
   /// Nombre visible en la appbar colapsada (true al pasar el umbral del
   /// header expandido).
   bool _showPinnedTitle = false;
 
-  /// Color EXTRAÍDO de la imagen del canal (palette service, igual que el
-  /// detalle de playlist): tiñe el fondo de todo el screen.
-  Color? _ambientColor;
-  String? _ambientFor;
+  /// Acento EXTRAÍDO de la imagen del canal (mismo camino que el detalle de
+  /// playlist: PaletteCacheStore + ArtworkPaletteService). Colorean los
+  /// botones y tiñe el fondo (lerp 0.30, igual que la playlist full).
+  Color? _accent;
+  String? _accentFor;
+
+  /// Álbum abierto: se muestra EMbebIDO (en lugar del contenido del
+  /// artista, sin push de ruta) — nav + miniplayer siguen visibles.
+  YtmAlbum? _openedAlbum;
 
   @override
   void initState() {
@@ -66,18 +80,12 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
         name: widget.artist.name,
       );
       if (!mounted) return;
-      if (detail == null) {
-        setState(() {
-          _loading = false;
-          _error = 'no-data';
-        });
-        return;
-      }
       setState(() {
         _detail = detail;
         _loading = false;
+        _error = detail == null ? 'no-data' : null;
       });
-      _maybeExtractAmbient(detail.thumbnailUrl);
+      unawaited(_maybeExtractAccent(detail?.thumbnailUrl));
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -87,21 +95,23 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     }
   }
 
-  /// Extrae el color ambiente del avatar/portada del canal (con caché en el
-  /// PaletteCacheStore, mismo camino que el detalle de playlist).
-  Future<void> _maybeExtractAmbient(String? thumb) async {
-    if (thumb == null || thumb.isEmpty || thumb == _ambientFor) return;
-    _ambientFor = thumb;
-    final stored = context.read<PaletteCacheStore>().get(thumb);
+  /// Extrae el acento de la imagen del canal (cacheado en el
+  /// PaletteCacheStore — mismo almacén compartido de las playlists).
+  Future<void> _maybeExtractAccent(String? thumb) async {
+    if (thumb == null || thumb.isEmpty || thumb == _accentFor) return;
+    _accentFor = thumb;
+    final store = context.read<PaletteCacheStore>();
+    final stored = store.get(thumb);
     if (stored != null) {
-      setState(() => _ambientColor = stored);
+      setState(() => _accent = stored);
       return;
     }
+    if (store.isFailed(thumb)) return;
     Color? color;
     try {
       final trio = await ArtworkPaletteService.trioFor(
         thumb,
-        context.read<PaletteCacheStore>(),
+        store,
         artworkCache: context.read<ArtworkCacheService>(),
       );
       color = trio.isEmpty
@@ -110,8 +120,8 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     } catch (_) {
       color = null;
     }
-    if (!mounted) return;
-    setState(() => _ambientColor = color);
+    if (!mounted || color == null) return;
+    setState(() => _accent = color);
   }
 
   void _playAll() {
@@ -134,29 +144,22 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     );
   }
 
-  /// Álbum → abre su tracklist (fetch + pantalla aparte).
-  Future<void> _openAlbum(int index) async {
-    final detail = _detail;
-    if (detail == null || index >= detail.albums.length) return;
-    final album = detail.albums[index];
-    setState(() => _openedAlbumIndex = index);
-    try {
-      final tracks = await context
-          .read<SearchService>()
-          .fetchAlbumTracks(album.playlistId);
-      if (!mounted) return;
-      if (tracks.isEmpty) {
-        setState(() => _openedAlbumIndex = null);
-        return;
-      }
-      await Navigator.of(context, rootNavigator: true).push(
-        MaterialPageRoute<void>(
-          builder: (_) => ArtistAlbumView(album: album, tracks: tracks),
-        ),
-      );
-      if (mounted) setState(() => _openedAlbumIndex = null);
-    } catch (_) {
-      if (mounted) setState(() => _openedAlbumIndex = null);
+  /// Álbum → muestra su tracklist EMbebIDO (sin Navigator.push): el
+  /// spinner vive DENTRO de esa vista mientras trae las pistas.
+  Future<void> _openAlbum(YtmAlbum album) async {
+    setState(() => _openedAlbum = album);
+  }
+
+  void _back() {
+    if (_openedAlbum != null) {
+      setState(() => _openedAlbum = null);
+      return;
+    }
+    final cb = widget.onBack;
+    if (cb != null) {
+      cb();
+    } else {
+      Navigator.of(context).maybePop();
     }
   }
 
@@ -171,20 +174,28 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     final l10n = AppLocalizations.of(context);
     final detail = _detail;
 
+    // Tracklist de álbum abierto: vista EMbebIDA (mismo hueco del shell,
+    // sin push de ruta — nav + miniplayer siguen visibles).
+    final album = _openedAlbum;
+    if (album != null) {
+      return ArtistAlbumView(album: album, onBack: _back, artistAccent: _accent);
+    }
+
     // Fondo con el color EXTRAÍDO de la imagen (mismo lerp 0.30 que el
-    // detalle de playlist móvil): sin costura entre header y contenido.
-    final Color bgColor = _ambientColor == null
+    // detalle de playlist en su estilo full-bleed): sin costura entre el
+    // header y el contenido.
+    final Color bgColor = _accent == null
         ? theme.colorScheme.surface
         : (Color.lerp(
                 theme.colorScheme.surfaceContainerHighest,
-                _ambientColor,
+                _accent,
                 0.30,
               ) ??
               theme.colorScheme.surface);
 
     final bool loading = _loading && detail == null;
-    // Alto del header expandido: casi cuadrado, como la portada del detalle
-    // de playlist (width*0.95) — el avatar del canal a PANTALLA COMPLETA.
+    // Alto del header expandido: casi cuadrado, como la portada de la
+    // playlist detail (width*0.95) — el artwork del canal a PANTALLA COMPLETA.
     final double expandedH = MediaQuery.sizeOf(context).width * 0.95;
     final String name = (detail?.name.isNotEmpty ?? false)
         ? detail!.name
@@ -194,8 +205,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
       backgroundColor: bgColor,
       body: NotificationListener<ScrollNotification>(
         onNotification: (n) {
-          final visible =
-              n.metrics.pixels > _titleThreshold(expandedH);
+          final visible = n.metrics.pixels > _titleThreshold(expandedH);
           if (visible != _showPinnedTitle) {
             setState(() => _showPinnedTitle = visible);
           }
@@ -208,18 +218,19 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                 parent: AlwaysScrollableScrollPhysics(),
               ),
               slivers: [
-                // ── Header full-bleed estilo playlist ──────────────────
+                // ── Header FULL ARTWORK (como la playlist detail) ──────
                 SliverAppBar(
                   expandedHeight: expandedH,
                   pinned: true,
                   stretch: true,
                   stretchTriggerOffset: 60,
-                  backgroundColor: Colors.transparent,
+                  // Colapsado: fondo SÓLIDO del color del ambiente (nunca
+                  // transparente: el nombre se lee siempre).
+                  backgroundColor: bgColor,
                   elevation: 0,
                   automaticallyImplyLeading: false,
                   centerTitle: true,
-                  // Nombre del artista SOLO cuando el header está colapsado
-                  // (transición suave con el blur del zoom de fondo).
+                  // Nombre del artista SOLO cuando el header está colapsado.
                   title: AnimatedOpacity(
                     opacity: _showPinnedTitle ? 1 : 0,
                     duration: const Duration(milliseconds: 180),
@@ -238,7 +249,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                       StretchMode.zoomBackground,
                       StretchMode.blurBackground,
                     ],
-                    background: _Header(
+                    background: _FullArtHeader(
                       detail: detail,
                       loading: loading,
                       bgColor: bgColor,
@@ -272,8 +283,15 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                         if (detail != null && detail.tracks.isNotEmpty)
                           FilledButton.icon(
                             onPressed: _playAll,
+                            // Acento EXTRAÍDO del canal (no el primary del
+                            // tema global), como los botones del detalle de
+                            // playlist usan el ambiente de su portada.
                             style: FilledButton.styleFrom(
                               minimumSize: const Size(0, 44),
+                              backgroundColor: _accent,
+                              foregroundColor: _onColor(
+                                _accent ?? theme.colorScheme.primary,
+                              ),
                             ),
                             icon: const Icon(Icons.play_arrow_rounded),
                             label: Text(l10n.play),
@@ -301,8 +319,14 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                           const SizedBox(height: 12),
                           Text(l10n.artistDetailEmpty),
                           const SizedBox(height: 12),
-                          FilledButton.tonal(
+                          FilledButton(
                             onPressed: _load,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: _accent,
+                              foregroundColor: _onColor(
+                                _accent ?? theme.colorScheme.primary,
+                              ),
+                            ),
                             child: Text(l10n.retry),
                           ),
                         ],
@@ -365,8 +389,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                               padding: const EdgeInsets.only(right: 12),
                               child: _AlbumCard(
                                 album: album,
-                                loading: _openedAlbumIndex == i,
-                                onTap: () => unawaited(_openAlbum(i)),
+                                onTap: () => unawaited(_openAlbum(album)),
                               ),
                             );
                           },
@@ -380,8 +403,8 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                 ],
               ],
             ),
-            // Back flotante SIEMPRE visible (sobre el cover y sobre la
-            // appbar colapsada), igual que el detalle de playlist.
+            // Back flotante SIEMPRE visible (sobre el artwork y sobre la
+            // appbar colapsada). NEUTRO: sin color de acento.
             Positioned(
               top: 0,
               left: 0,
@@ -404,32 +427,37 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
 
   Widget _floatingCircleBtn(BuildContext context) {
     final theme = Theme.of(context);
+    // Con el header colapsado activo (nombre visible) el back va SIN fondo:
+    // sobre el fondo sólido del ambiente el círculo sobra. Expandido (sobre
+    // el artwork) conserva el fondo neutro para legibilidad.
+    final collapsed = _showPinnedTitle;
     return Container(
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withValues(alpha: 0.85),
+        color: collapsed
+            ? Colors.transparent
+            : theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.9),
         shape: BoxShape.circle,
       ),
       child: IconButton(
         icon: Icon(
           Icons.arrow_back_rounded,
           size: 20,
-          color: theme.colorScheme.onPrimary,
+          color: theme.colorScheme.onSurface,
         ),
-        onPressed: () => Navigator.of(context).maybePop(),
+        onPressed: _back,
         padding: EdgeInsets.zero,
       ),
     );
   }
 }
 
-/// Header full-bleed: la imagen del canal a TODO EL ALTO del flexible space
-/// (como la portada del detalle de playlist) con degradado inferior que
-/// funde al color de fondo. Placeholder con degradado neutro mientras
-/// carga.
-class _Header extends StatelessWidget {
-  const _Header({
+/// Header FULL ARTWORK (estilo playlist full-bleed): la imagen del canal a
+/// TODO EL ALTO del flexible space con degradado inferior que funde al
+/// color de fondo (mismos stops que la playlist detail).
+class _FullArtHeader extends StatelessWidget {
+  const _FullArtHeader({
     required this.detail,
     required this.loading,
     required this.bgColor,
@@ -447,7 +475,7 @@ class _Header extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Imagen COMPLETA (sin círculo, sin recorte cuadrado flotante).
+        // Imagen COMPLETA a todo el ancho (edge-to-edge).
         if (thumb != null && thumb.isNotEmpty)
           CoverImage(
             source: thumb,
@@ -499,7 +527,8 @@ class _Header extends StatelessWidget {
                     ),
             ),
           ),
-        // Degradado inferior: funde al color de fondo (sin costura).
+        // Degradado inferior: funde al color de fondo (sin costura) —
+        // mismos stops que el header full-bleed de la playlist detail.
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -522,16 +551,12 @@ class _Header extends StatelessWidget {
 
 /// Card de álbum para la FILA HORIZONTAL: portada 1:1 a tamaño completo
 /// (140dp, mismo tamaño que las cards de playlists recientes del home) +
-/// título + año debajo. Muestra spinner al abrir.
+/// título + año debajo. SIN loader en la card: el toque abre la vista del
+/// tracklist, que muestra el spinner mientras carga.
 class _AlbumCard extends StatelessWidget {
-  const _AlbumCard({
-    required this.album,
-    required this.loading,
-    required this.onTap,
-  });
+  const _AlbumCard({required this.album, required this.onTap});
 
   final YtmAlbum album;
-  final bool loading;
   final VoidCallback onTap;
 
   @override
@@ -541,7 +566,7 @@ class _AlbumCard extends StatelessWidget {
     const width = 140.0;
 
     return GestureDetector(
-      onTap: loading ? null : onTap,
+      onTap: onTap,
       child: SizedBox(
         width: width,
         child: Column(
@@ -551,39 +576,30 @@ class _AlbumCard extends StatelessWidget {
             SizedBox(
               width: width,
               height: width,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: thumb != null && thumb.isNotEmpty
-                        ? CoverImage(
-                            source: thumb,
-                            fit: BoxFit.cover,
-                            cacheWidth: 500,
-                            fallback: ColoredBox(
-                              color: theme.colorScheme.surfaceContainerHighest,
-                              child: Icon(
-                                Icons.album_rounded,
-                                size: 40,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          )
-                        : ColoredBox(
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            child: Icon(
-                              Icons.album_rounded,
-                              size: 40,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: thumb != null && thumb.isNotEmpty
+                    ? CoverImage(
+                        source: thumb,
+                        fit: BoxFit.cover,
+                        cacheWidth: 500,
+                        fallback: ColoredBox(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          child: Icon(
+                            Icons.album_rounded,
+                            size: 40,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
-                  ),
-                  if (loading)
-                    const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                ],
+                        ),
+                      )
+                    : ColoredBox(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        child: Icon(
+                          Icons.album_rounded,
+                          size: 40,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
               ),
             ),
             const SizedBox(height: 6),
@@ -609,54 +625,463 @@ class _AlbumCard extends StatelessWidget {
   }
 }
 
-/// Tracklist de un álbum (pantalla aparte, leída del playlistId con
-/// fetchPlaylist y cacheada en el search cache como cualquier búsqueda).
-class ArtistAlbumView extends StatelessWidget {
-  const ArtistAlbumView({super.key, required this.album, required this.tracks});
+/// Tracklist de un álbum, con el MISMO estilo que el detalle de playlist en
+/// modo "acento plano" (flat): fondo del color del acento (extraído de la
+/// PROPIA portada del álbum, fallback al acento del artista), portada 1:1
+/// centrada, título y botones de Play y Shuffle. Vista embebida (sin push
+/// de ruta): el spinner de carga vive AQUÍ, nunca en la card de la fila.
+class ArtistAlbumView extends StatefulWidget {
+  const ArtistAlbumView({
+    super.key,
+    required this.album,
+    this.onBack,
+    this.artistAccent,
+  });
 
   final YtmAlbum album;
-  final List<Track> tracks;
+
+  /// Volver (vista embebida dentro del detalle de artista). Si es null se
+  /// hace pop del Navigator (push de ruta en desktop).
+  final VoidCallback? onBack;
+
+  /// Acento del artista (extraído de su imagen): fallback mientras se
+  /// extrae el de la portada del álbum.
+  final Color? artistAccent;
+
+  @override
+  State<ArtistAlbumView> createState() => _ArtistAlbumViewState();
+}
+
+class _ArtistAlbumViewState extends State<ArtistAlbumView> {
+  List<Track>? _tracks;
+  Color? _accent;
+  String? _accentFor;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+    unawaited(_extractAccent());
+  }
+
+  Future<void> _load() async {
+    try {
+      final tracks = await context
+          .read<SearchService>()
+          .fetchAlbumTracks(widget.album.playlistId);
+      if (!mounted) return;
+      setState(() => _tracks = tracks);
+      // El acento depende de la portada; por si la recarga la actualizó.
+      unawaited(_extractAccent());
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _tracks = const []);
+    }
+  }
+
+  /// Recarga FORZANDO la re-lectura de InnerTube (menú 3 puntos).
+  Future<void> _reload() async {
+    setState(() => _tracks = null);
+    try {
+      final tracks = await context
+          .read<SearchService>()
+          .reloadAlbumTracks(widget.album.playlistId);
+      if (!mounted) return;
+      setState(() => _tracks = tracks);
+      unawaited(_extractAccent());
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _tracks = const []);
+    }
+  }
+
+  /// Acento de la PROPIA portada del álbum (mismo almacén de paletas que
+  /// las playlists); fallback al acento del artista.
+  Future<void> _extractAccent() async {
+    final url = widget.album.thumbnailUrl;
+    if (url == null || url.isEmpty || url == _accentFor) return;
+    _accentFor = url;
+    final store = context.read<PaletteCacheStore>();
+    final stored = store.get(url);
+    if (stored != null) {
+      setState(() => _accent = stored);
+      return;
+    }
+    if (store.isFailed(url)) return;
+    Color? color;
+    try {
+      final trio = await ArtworkPaletteService.trioFor(
+        url,
+        store,
+        artworkCache: context.read<ArtworkCacheService>(),
+      );
+      color = trio.isEmpty
+          ? null
+          : (ArtworkPaletteService.accentFromTrio(trio) ?? trio.first);
+    } catch (_) {
+      color = null;
+    }
+    if (!mounted || color == null) return;
+    setState(() => _accent = color);
+  }
+
+  Future<void> _playAll() async {
+    final tracks = _tracks;
+    if (tracks == null || tracks.isEmpty) return;
+    await context.read<PlayerService>().playQueue(tracks);
+  }
+
+  /// Igual que el detalle de playlist: activa shuffle si no está activo y
+  /// reproduce toda la lista.
+  Future<void> _playShuffled() async {
+    final tracks = _tracks;
+    if (tracks == null || tracks.isEmpty) return;
+    final player = context.read<PlayerService>();
+    if (!player.shuffle.value) player.toggleShuffle();
+    await player.playQueue(tracks);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final tracks = _tracks;
+
+    // "Flat accent": el fondo de TODO el screen comparte un único color
+    // derivado del acento (lerp surface 0.55, igual que la playlist flat).
+    final Color accent = _accent ?? widget.artistAccent ?? theme.primaryColor;
+    final Color flatColor =
+        Color.lerp(theme.colorScheme.surface, accent, 0.55) ??
+        theme.colorScheme.surface;
+
+    Widget buttonRow() => Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        FilledButton.icon(
+          onPressed: (tracks == null || tracks.isEmpty) ? null : _playAll,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 44),
+            backgroundColor: accent,
+            foregroundColor: _onColor(accent),
+          ),
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: Text(l10n.play),
+        ),
+        const SizedBox(width: 12),
+        FilledButton.icon(
+          onPressed: (tracks == null || tracks.isEmpty) ? null : _playShuffled,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 44),
+            backgroundColor: accent,
+            foregroundColor: _onColor(accent),
+          ),
+          icon: const Icon(Icons.shuffle_rounded),
+          label: Text(l10n.shuffle),
+        ),
+      ],
+    );
+
     return Scaffold(
-      appBar: AppBar(title: Text(album.title)),
-      body: tracks.isEmpty
-          ? Center(child: Text(l10n.searchNoResults))
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              itemCount: tracks.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 4),
-              itemBuilder: (context, i) {
-                final track = tracks[i];
-                return TrackTile(
-                  track: track,
-                  onPlay: () => unawaited(
-                    context.read<PlayerService>().playQueue(
-                      tracks,
-                      startIndex: i,
+      backgroundColor: flatColor,
+      // MISMO estilo que la playlist detail móvil en modo "acento plano":
+      // SliverAppBar SIN pin (el hero se va entero al scrollear — nunca hay
+      // un segundo header), portada 1:1 alineada al tope bajo 110dp y los
+      // controles flotantes como overlay EXTERNO al scroll.
+      body: Stack(
+        children: [
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            slivers: [
+              // ── Header: SOLO portada (idéntico al flat de playlist) ──
+              SliverAppBar(
+                expandedHeight: MediaQuery.sizeOf(context).width * 0.95,
+                pinned: false,
+                floating: false,
+                snap: false,
+                stretch: true,
+                stretchTriggerOffset: 60,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                automaticallyImplyLeading: false,
+                flexibleSpace: FlexibleSpaceBar(
+                  collapseMode: CollapseMode.pin,
+                  stretchModes: const [
+                    StretchMode.zoomBackground,
+                    StretchMode.blurBackground,
+                  ],
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ColoredBox(color: flatColor),
+                      if (widget.album.thumbnailUrl?.isNotEmpty ?? false)
+                        Padding(
+                          // Igual que playlist flat: la portada nace DEBAJO
+                          // de los controles flotantes (top 110).
+                          padding: const EdgeInsets.only(top: 110),
+                          child: Center(
+                            child: FractionallySizedBox(
+                              widthFactor: 0.6,
+                              alignment: Alignment.topCenter,
+                              child: AspectRatio(
+                                aspectRatio: 1,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: CoverImage(
+                                    source: widget.album.thumbnailUrl,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 900,
+                                    fallback: Container(
+                                      color: Colors.black26,
+                                      child: const Center(
+                                        child: Icon(
+                                          Icons.album_rounded,
+                                          size: 80,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        const Center(
+                          child: Icon(Icons.album_rounded, size: 120),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              // ── Info + acciones (mismo padding que la playlist) ──────
+              SliverToBoxAdapter(child: _albumInfo(theme, l10n, buttonRow)),
+              if (tracks == null)
+                const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (tracks.isEmpty)
+                SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.album_rounded,
+                          size: 48,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(l10n.searchNoResults),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: _load,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: accent,
+                            foregroundColor: _onColor(accent),
+                          ),
+                          child: Text(l10n.retry),
+                        ),
+                      ],
                     ),
                   ),
-                  onAddToPlaylist: () =>
-                      showAddToPlaylistDialog(context, track),
-                );
-              },
-            ),
-      bottomNavigationBar: tracks.isEmpty
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: FilledButton.icon(
-                  onPressed: () => unawaited(
-                    context.read<PlayerService>().playQueue(tracks),
+                )
+              else
+                // Lista con el MISMO padding que la playlist móvil.
+                SliverPadding(
+                  padding: const EdgeInsets.only(bottom: 100),
+                  sliver: SliverList.builder(
+                    itemCount: tracks.length,
+                    itemBuilder: (context, i) {
+                      final track = tracks[i];
+                      return TrackTile(
+                        track: track,
+                        onPlay: () => unawaited(
+                          context.read<PlayerService>().playQueue(
+                            tracks,
+                            startIndex: i,
+                          ),
+                        ),
+                        onAddToPlaylist: () =>
+                            showAddToPlaylistDialog(context, track),
+                      );
+                    },
                   ),
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: Text(l10n.playAll),
+                ),
+            ],
+          ),
+          // ── Controles flotantes EXTERNOS al scroll (como playlist) ───
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              // Padding ALINEADO con la playlist detail: (16, 16, 16, 8).
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    _floatingCircleBtn(
+                      context,
+                      Icons.arrow_back_rounded,
+                      widget.onBack ?? () => Navigator.of(context).maybePop(),
+                    ),
+                    const Spacer(),
+                    _floatingCircleBtn(
+                      context,
+                      Icons.more_vert_rounded,
+                      _showAlbumMenu,
+                    ),
+                  ],
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Botón circular flotante del header: MISMO estilo que la playlist
+  /// detail móvil (40×40, círculo al acento, icono contrastado).
+  Widget _floatingCircleBtn(
+    BuildContext context,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
+    final theme = Theme.of(context);
+    final Color accent = _accent ?? widget.artistAccent ?? theme.primaryColor;
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.85),
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        icon: Icon(icon, size: 20, color: _onColor(accent)),
+        onPressed: onTap,
+        padding: EdgeInsets.zero,
+      ),
+    );
+  }
+
+  /// Menú de 3 puntos (estilo playlist): recargar artworks del álbum.
+  Future<void> _showAlbumMenu() async {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: theme.colorScheme.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 32,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurfaceVariant.withValues(
+                  alpha: 0.3,
+                ),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                widget.album.title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.palette_rounded),
+              title: Text(l10n.reloadArtworks),
+              onTap: () => Navigator.pop(ctx, 'recalc'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'recalc') {
+      // 1) Recalcula el acento de la portada del álbum (borra su entrada de
+      //    paleta y re-extrae).
+      final url = widget.album.thumbnailUrl;
+      final store = context.read<PaletteCacheStore>();
+      if (url != null && url.isNotEmpty) {
+        await store.invalidate(url);
+        _accentFor = null;
+        _accent = null;
+        await _extractAccent();
+      }
+      // 2) Borra el acento cacheado de cada pista de la lista.
+      if (mounted) {
+        for (final t in _tracks ?? const <Track>[]) {
+          final tu = t.thumbnailUrl;
+          if (tu != null && tu.isNotEmpty) {
+            await store.invalidate(tu);
+          }
+        }
+        setState(() {});
+      }
+      // 3) Re-lee el tracklist de InnerTube: la portada del header (que
+      //    propaga a todas las filas) vuelve con la imagen vigente.
+      await _reload();
+    }
+  }
+
+  /// Info + botones (título, año, nº de canciones, Play/Shuffle).
+  Widget _albumInfo(
+    ThemeData theme,
+    AppLocalizations l10n,
+    Widget Function() buttonRow,
+  ) {
+    final tracks = _tracks;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+      child: Column(
+        children: [
+          Text(
+            widget.album.title,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          if (widget.album.year != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              widget.album.year!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (tracks != null && tracks.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              l10n.songCount(tracks.length),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          buttonRow(),
+        ],
+      ),
     );
   }
 }

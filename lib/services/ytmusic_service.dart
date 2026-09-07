@@ -126,6 +126,21 @@ class YtmAlbum {
   final String? year;
 }
 
+/// Página de álbum leída con `fetchAlbumPage`: filas del tracklist (SIN
+/// miniatura — la API no las trae) + portada/título del header de la
+/// página, que el llamador propaga a cada fila.
+class YtmAlbumPage {
+  const YtmAlbumPage({
+    required this.rows,
+    this.coverUrl,
+    this.title = '',
+  });
+
+  final List<YtMusicResult> rows;
+  final String? coverUrl;
+  final String title;
+}
+
 /// Public YouTube/YT Music playlist read via InnerTube browse.
 class YtmPlaylist {
   const YtmPlaylist({
@@ -852,12 +867,20 @@ class YtMusicService {
   /// `VL…`/id de playlist): browse + parseBrowsePage con continuación.
   /// NOTA: el id de `MPREb_X` NO mapea a ninguna playlist `PL…`: la única
   /// vía correcta es navegar la página del álbum directamente.
-  Future<List<YtMusicResult>> fetchAlbumPage(String browseIdOrPlaylist) async {
+  ///
+  /// IMPORTANTE (verificado contra la API real): las filas del tracklist NO
+  /// traen miniatura (solo index/título/artista/duración/plays). La portada
+  /// del álbum vive SOLO en el header de la página
+  /// (`musicResponsiveHeaderRenderer.thumbnail`) — se devuelve aparte en
+  /// [YtmAlbumPage] para que el llamador la propague a cada fila.
+  Future<YtmAlbumPage> fetchAlbumPage(String browseIdOrPlaylist) async {
     var id = browseIdOrPlaylist.trim();
     if (id.startsWith('VL')) id = id.substring(2);
     final tracks = <YtMusicResult>[];
     final seen = <String>{};
     String? continuation;
+    String? coverUrl;
+    String? title;
     for (var page = 0; page < 10 && tracks.length < 100; page++) {
       final body = jsonEncode({
         'context': _context(),
@@ -889,6 +912,9 @@ class YtMusicService {
       } catch (_) {
         throw const YtMusicException('bad-json');
       }
+      // Portada y título del header (solo la 1ª página los trae).
+      coverUrl ??= _pageCoverUrl(data);
+      title ??= _pageTitle(data);
       final parsed = parseBrowsePage(data);
       for (final r in parsed.$1) {
         if (seen.add(r.videoId)) tracks.add(r);
@@ -896,7 +922,78 @@ class YtMusicService {
       if (parsed.$2 == null || parsed.$1.isEmpty) break;
       continuation = parsed.$2;
     }
-    return tracks;
+    return YtmAlbumPage(
+      rows: tracks,
+      coverUrl: coverUrl,
+      title: title ?? '',
+    );
+  }
+
+  /// Portada del header de una página de álbum
+  /// (`musicResponsiveHeaderRenderer.thumbnail.musicThumbnailRenderer`).
+  static String? _pageCoverUrl(Object? node) {
+    String? found;
+    void walk(Object? n) {
+      if (found != null) return;
+      if (n is Map) {
+        final header = n['musicResponsiveHeaderRenderer'] as Map?;
+        if (header != null) {
+          final url = _bestThumb(_thumbThumbs(header['thumbnail'] as Map?));
+          if (url != null) {
+            found = url;
+            return;
+          }
+        }
+        for (final v in n.values) {
+          walk(v);
+        }
+      } else if (n is List) {
+        for (final v in n) {
+          walk(v);
+        }
+      }
+    }
+
+    walk(node);
+    return found;
+  }
+
+  /// Título del header de una página de álbum.
+  static String? _pageTitle(Object? node) {
+    String? found;
+    void walk(Object? n) {
+      if (found != null) return;
+      if (n is Map) {
+        final header = n['musicResponsiveHeaderRenderer'] as Map?;
+        if (header != null) {
+          final title = header['title'];
+          if (title is Map) {
+            final simple = title['simpleText'];
+            if (simple is String && simple.trim().isNotEmpty) {
+              found = simple.trim();
+              return;
+            }
+            if (title['runs'] is List) {
+              final runs = (title['runs'] as List).whereType<Map>().toList();
+              if (runs.isNotEmpty && runs.first['text'] is String) {
+                found = (runs.first['text'] as String).trim();
+                return;
+              }
+            }
+          }
+        }
+        for (final v in n.values) {
+          walk(v);
+        }
+      } else if (n is List) {
+        for (final v in n) {
+          walk(v);
+        }
+      }
+    }
+
+    walk(node);
+    return found;
   }
 
   // ── Playlists ───────────────────────────────────────────────────────

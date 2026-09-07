@@ -787,6 +787,12 @@ abstract class AppLocalizations {
   /// **'Recalcular colores'**
   String get recalcColors;
 
+  /// No description provided for @reloadArtworks.
+  ///
+  /// In es, this message translates to:
+  /// **'Recargar artworks'**
+  String get reloadArtworks;
+
   /// No description provided for @playlistCoverStyle.
   ///
   /// In es, this message translates to:

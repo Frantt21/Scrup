@@ -117,6 +117,7 @@
   },
   "paletteRecalc": "重新计算",
   "recalcColors": "重新计算颜色",
+  "reloadArtworks": "重新加载封面",
   "colorsUpdated": "颜色已更新",
   "playlistLabel": "播放列表",
   "cacheUsed": "{used} / {limit}",

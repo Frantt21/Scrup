@@ -632,7 +632,10 @@ class _RecentCardState extends State<_RecentCard> {
                 : null,
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
+            // MISMO radio que el contenedor con borde (14): con 18 las
+            // esquinas del artwork sobresalían del borde de 2px de la
+            // canción en reproducción.
+            borderRadius: BorderRadius.circular(14),
             child: Stack(
               fit: StackFit.expand,
               children: [

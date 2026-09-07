@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/app_log.dart';
 import '../core/track.dart';
+import 'artist_avatar_cache_store.dart';
 import 'artist_cache_store.dart';
 import 'search_cache_store.dart';
 import 'ytdlp_service.dart';
@@ -17,10 +18,12 @@ class SearchService {
     YtDlpService? ytDlp,
     SearchCacheStore? cache,
     ArtistCacheStore? artistCache,
+    ArtistAvatarCacheStore? avatarCache,
   }) : _ytMusic = ytMusic ?? YtMusicService(),
        _ytDlp = ytDlp ?? YtDlpService(),
        _cache = cache,
-       _artistCache = artistCache;
+       _artistCache = artistCache,
+       _avatarCache = avatarCache;
 
   final YtMusicService _ytMusic;
   final YtDlpService _ytDlp;
@@ -32,6 +35,10 @@ class SearchService {
   /// Caché de detalles de artista (JSON por browseId, TTL 24h). `null` =
   /// desactivada (tests): el detalle va siempre a red.
   final ArtistCacheStore? _artistCache;
+
+  /// Caché PERSISTENTE de avatares de canal (disco). `null` = desactivada
+  /// (tests): los avatares van siempre a red.
+  final ArtistAvatarCacheStore? _avatarCache;
 
   // Dedup concurrent searches by key (multiple views / rapid resubmits).
   final Map<String, Future<List<Track>>> _inflight = {};
@@ -223,12 +230,24 @@ class SearchService {
     if (id.isEmpty) return const [];
     final cached = await _cache?.getForSource('album', id, 50);
     if (cached != null) return cached;
+    return _fetchAlbumTracksUncached(id);
+  }
+
+  /// Lee el tracklist de InnerTube SIN consultar caché (y cachea el
+  /// resultado). Las filas NO traen miniatura (la API solo la expone en el
+  /// header de la página) → se propaga la portada del álbum a cada pista.
+  Future<List<Track>> _fetchAlbumTracksUncached(String id) async {
     try {
       final List<Track> tracks;
       if (id.startsWith('MPREb_')) {
-        // Página de álbum: browse directo (retorna las filas del tracklist).
-        final rows = await _ytMusic.fetchAlbumPage(id);
-        tracks = [for (final r in rows) r.toTrack()];
+        final page = await _ytMusic.fetchAlbumPage(id);
+        tracks = [
+          for (final r in page.rows)
+            r.toTrack().copyWith(
+              album: page.title.isNotEmpty ? page.title : null,
+              thumbnailUrl: page.coverUrl,
+            ),
+        ];
       } else {
         final pl = await _ytMusic.fetchPlaylist(id, maxTracks: 50);
         tracks = pl.tracks.take(50).toList();
@@ -243,6 +262,16 @@ class SearchService {
     return const [];
   }
 
+  /// Recarga el tracklist FORZANDO la re-lectura de InnerTube (borra la
+  /// entrada de caché antes). Lo usa "Recargar artworks" del screen del
+  /// álbum: trae la portada del header vigente y refresca las miniaturas.
+  Future<List<Track>> reloadAlbumTracks(String playlistId) async {
+    final id = playlistId.trim();
+    if (id.isEmpty) return const [];
+    await _cache?.removeForSource('album', id, 50);
+    return _fetchAlbumTracksUncached(id);
+  }
+
   /// Avatares REALES de los canales derivados (una request por ARTISTA, no
   /// por canción): la fila de búsqueda solo trae la portada de la canción,
   /// nunca la cara del canal. Se consulta la página del canal (WEB_REMIX
@@ -251,35 +280,65 @@ class SearchService {
   ///
   /// En disco NO se cachea: el screen de artista ya trae su avatar y la
   /// llamada completa es una request por artista distinto por búsqueda.
-  final Map<String, String?> _avatarMemo = {};
+  final Map<String, String> _avatarMemo = {};
   final Map<String, DateTime> _avatarFailedAt = {};
   final Set<String> _avatarInflight = {};
 
   Future<Map<String, String?>> _artistAvatars(
-    List<YtmArtist> artists,
-  ) async {
+    List<YtmArtist> artists, {
+    void Function(String browseId, String url)? onUpdated,
+  }) async {
     final out = <String, String?>{};
+    for (final a in artists) {
+      final id = a.browseId;
+      if (id.isEmpty) continue;
+      var url = _avatarMemo[id];
+      if (url == null) {
+        // Disco: el avatar de la sesión anterior aparece AL INSTANTE.
+        final cached = await _avatarCache?.get(id);
+        if (cached != null) {
+          _avatarMemo[id] = cached;
+          url = cached;
+        }
+      }
+      out[id] = url;
+    }
+    // REVALIDACIÓN en background (NO se espera): una request por artista
+    // aún no confirmado en vivo esta sesión; si el canal cambió su avatar,
+    // se actualiza memoria + disco y se avisa a la vista para repintar.
+    unawaited(_revalidateAvatars(artists, onUpdated));
+    return out;
+  }
+
+  /// Revalida los avatares en background (dedup por canal y por sesión: un
+  /// canal ya confirmado en vivo no se vuelve a pedir).
+  Future<void> _revalidateAvatars(
+    List<YtmArtist> artists,
+    void Function(String browseId, String url)? onUpdated,
+  ) async {
+    final pending = <Future<void>>[];
     final now = DateTime.now();
     for (final a in artists) {
       final id = a.browseId;
       if (id.isEmpty) continue;
+      if (_avatarLive.contains(id)) continue; // ya validado en vivo
       final failed = _avatarFailedAt[id];
-      if (failed != null && now.difference(failed) < const Duration(minutes: 10)) {
-        out[id] = null;
-        continue;
-      }
-      final memo = _avatarMemo[id];
-      if (memo != null) {
-        out[id] = memo;
+      if (failed != null &&
+          now.difference(failed) < const Duration(minutes: 10)) {
         continue;
       }
       if (_avatarInflight.add(id)) {
-        unawaited(
+        pending.add(
           () async {
             try {
               final d = await _ytMusic.fetchArtist(id);
-              if (d.thumbnailUrl != null && d.thumbnailUrl!.isNotEmpty) {
-                _avatarMemo[id] = d.thumbnailUrl;
+              final url = d.thumbnailUrl;
+              if (url != null && url.isNotEmpty) {
+                _avatarLive.add(id);
+                final prev = _avatarMemo[id];
+                _avatarMemo[id] = url;
+                unawaited(_avatarCache?.put(id, url));
+                if (prev != url) onUpdated?.call(id, url);
               } else {
                 _avatarFailedAt[id] = DateTime.now();
               }
@@ -291,17 +350,22 @@ class SearchService {
           }(),
         );
       }
-      out[id] = _avatarMemo[id];
     }
-    return out;
+    if (pending.isNotEmpty) await Future.wait(pending);
   }
 
-  /// API pública para la vista de búsqueda: devuelve el mapa actual (los
-  /// avatares ya conocidos) y lanza en background la resolución de los que
-  /// falten. La vista puede refrescar cuando lleguen nuevas URLs.
+  /// Canales cuyo avatar ya se obtuvo EN VIVO esta sesión (no se revalida
+  /// de nuevo hasta reiniciar la app).
+  final Set<String> _avatarLive = {};
+
+  /// API pública para la vista de búsqueda: devuelve los avatares ya
+  /// conocidos (memoria/disco, instantáneo) y lanza la revalidación en
+  /// background. [onUpdated] avisa a la vista cuando un canal cambió su
+  /// avatar para que repinte solo esa fila.
   Future<Map<String, String?>> resolveArtistAvatars(
-    List<YtmArtist> artists,
-  ) => _artistAvatars(artists);
+    List<YtmArtist> artists, {
+    void Function(String browseId, String url)? onUpdated,
+  }) => _artistAvatars(artists, onUpdated: onUpdated);
 
   /// Canciones primero y después vídeos generales, descartando ids ya
   /// vistos y capando al límite pedido. Expuesto para tests.

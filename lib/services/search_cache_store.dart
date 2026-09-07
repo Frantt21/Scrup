@@ -240,6 +240,18 @@ class SearchCacheStore {
     } catch (_) {}
   }
 
+  /// Elimina UNA entrada (p. ej. la caché 'album' de un tracklist) para
+  /// forzar su re-lectura la próxima vez ("Recargar artworks").
+  Future<void> removeForSource(String source, String query, int limit) async {
+    final key = _key(source, query.trim().toLowerCase(), limit);
+    _mem.remove(key);
+    _dirty = true;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(seconds: 2), () {
+      unawaited(_flush());
+    });
+  }
+
   /// Vacía el caché (p. ej. acción de "limpiar caché" en ajustes).
   Future<void> clear() async {
     _mem.clear();
