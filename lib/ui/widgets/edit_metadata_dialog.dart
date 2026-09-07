@@ -8,11 +8,7 @@ import '../../services/playlist_cover_store.dart';
 import 'cover_image.dart';
 import 'scrup_toasts.dart';
 
-/// Diálogo para editar manualmente los metadatos de una pista (título,
-/// artista, álbum y portada). Devuelve el [Track] actualizado al pulsar
-/// Guardar, o `null` si se cancela. Mismo estilo glass que el resto de
-/// diálogos de la app. Compartido por el player bar (clic derecho) y el
-/// menú contextual de pistas en el detalle de playlist.
+/// Dialog to manually edit a track's metadata (title, artist, album and cover). Returns the updated [Track] when Save is tapped, or `null` if cancelled. Same glass style as the rest of the app's dialogs. Shared by the player bar (right-click) and the track context menu in the playlist detail.
 class EditMetadataDialog extends StatefulWidget {
   final Track track;
 
@@ -28,8 +24,7 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
   late final TextEditingController _album;
   late final TextEditingController _cover;
 
-  /// Búsqueda multi-fuente (Deezer + Apple Music + InnerTube + Spotify
-  /// oEmbed), unificada en un único selector de resultados.
+  /// Multi-source search (Deezer + Apple Music + InnerTube + Spotify oEmbed), unified in a single results selector.
   final MetadataLookupService _lookup = MetadataLookupService();
 
   /// Abre el selector de resultados EN LÍNEA: busca en todas las fuentes
