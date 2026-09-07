@@ -8,10 +8,7 @@ import '../../services/player_service.dart';
 import '../theme_controller.dart';
 import 'cover_image.dart';
 
-/// Contenedor ARRASTRABLE con el reproductor COMPLETO de Android: un bottom
-/// sheet que se desliza desde la base con un "peek", se puede subir/bajar y
-/// estirar casi a pantalla completa. Contiene artwork, título, artista, barra
-/// de progreso con seek y los controles de reproducción.
+/// Draggable container with the COMPLETE Android player: a bottom sheet that slides from the bottom with a "peek", can be raised/lowered and stretched almost to full screen. It contains artwork, title, artist, a progress bar with seek, and the playback controls.
 class DraggablePlayerSheet extends StatelessWidget {
   const DraggablePlayerSheet({super.key});
 
