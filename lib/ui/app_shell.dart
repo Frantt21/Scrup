@@ -77,7 +77,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    // Errores de reproducci�n globales (URL expirada, 403, etc.)
+    // Global playback errors (expired URL, 403, etc.)
     _errorSub = context.read<PlayerService>().errors.listen((message) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
@@ -85,10 +85,9 @@ class _AppShellState extends State<AppShell> {
         l10n.playbackErrorWithDetails(message),
         kind: ScrupToastKind.error,
       );
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Sidecars (yt-dlp/ffmpeg) descend on desktop; on mobile the toolchain
-      // lives in the app bundle (asset copy) � handled elsewhere.
+    });        WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Sidecars (yt-dlp/ffmpeg) are downloaded on desktop; on mobile the toolchain
+      // lives in the app bundle (asset copy) and is handled elsewhere.
       if (!Binaries.isDesktop) return;
       final yt = Binaries.ytdlpPath;
       final ff = Binaries.ffmpegPath;
@@ -273,8 +272,7 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  /// Botones laterales del rat�n: button 4 (back) = canci�n anterior,
-  /// button 5 (forward) = siguiente canci�n.
+  /// Side mouse buttons: button 4 (back) = previous track, button 5 (forward) = next track.
   void _handlePointerDown(PointerDownEvent event) {
     final player = context.read<PlayerService>();
     // event.buttons es un bitmask: bit 3 = button 4, bit 4 = button 5.
@@ -287,9 +285,7 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  /// Entra/sale de pantalla completa: oculta la title bar, monta el
-  /// reproductor dedicado y pide al WM el modo nativo. La salida animada la
-  /// gestiona el overlay (reverse ? onExited ? desmontar).
+  /// Enter/exit fullscreen: hides the title bar, mounts the dedicated player, and asks the WM for native mode. The animated exit is handled by the overlay (reverse ? onExited ? dismount).
   Future<void> _setFullscreen(bool on) async {
     if (_fullscreen == on) return;
     setState(() {
