@@ -6,15 +6,7 @@ import '../core/lyrics_search_result.dart';
 import '../core/synced_lyrics.dart';
 import '../data/database.dart';
 
-/// Servicio de letras con EXACTAMENTE DOS fuentes y en este orden:
-///
-///   1. KPoe  (palabra a palabra / karaoke) — espejos en paralelo.
-///   2. LRCLIB (línea a línea) — solo si KPoe no encontró nada.
-///
-/// Se eliminó Unison de la cadena automática y de la búsqueda manual: en
-/// Android añadía varias consultas en serie (exacta + full-text + descarga
-/// del cuerpo de los candidatos) y las letras tardaban muchísimo. Con dos
-/// fuentes el peor caso es: KPoe (espejos en paralelo, 6s) + LRCLIB (8s).
+/// Servicio de letras con EXACTAMENTE DOS fuentes, en este orden: 1) KPoe (palabra a palabra / karaoke, espejos en paralelo); 2) LRCLIB (línea a línea), solo si KPoe no encontró nada. Unison se eliminó de la cadena automática y manual porque en Android añadía varias consultas en serie (exacta + full-text + descarga de candidatos) y las letras tardaban mucho; con dos fuentes el peor caso es KPoe (espejos paralelos, 6s) + LRCLIB (8s).
 class LyricsService {
   LyricsService(this._db);
 
@@ -23,7 +15,6 @@ class LyricsService {
   final _cache = <String, SyncedLyrics>{};
   final _notFound = <String>{}; // Keys already searched with no result.
 
-  // Searches lyrics manually across the two providers (KPoe → LRCLIB).
   Future<List<LyricsSearchResult>> searchLyrics(
     String query, {
     String provider = 'all',
@@ -54,7 +45,7 @@ class LyricsService {
       }
     }
 
-    // Try LRCLIB (line-by-line), solo como respaldo de KPoe.
+    // LRCLIB (line-by-line), respaldo de KPoe.
     if (wantLrclib) {
       try {
         final encodedQuery = Uri.encodeComponent(query);
@@ -82,8 +73,7 @@ class LyricsService {
     return results;
   }
 
-  /// Consulta UN espejo de KPoe para la búsqueda manual; null si no responde
-  /// o no trae letras. Se lanzan todos en paralelo desde [searchLyrics].
+  /// Consulta un espejo de KPoe para la búsqueda manual; null si no responde o no trae letras. Todos se lanzan en paralelo desde [searchLyrics].
   Future<LyricsSearchResult?> _kpoeSearchOne(
     String server,
     String title,
@@ -145,7 +135,7 @@ class LyricsService {
     }
   }
 
-  // Generates (title, artist) candidates for providers with separate fields.
+  /// Genera candidatos (título, artista) para proveedores con campos separados. Dedupe por par case-insensitive y normaliza los formatos más comunes (guión, "by").
   static List<(String, String)> _searchCandidates(
     String query,
     String? titleHint,
@@ -194,7 +184,7 @@ class LyricsService {
         '${secs.toString().padLeft(2, '0')}.${cs.toString().padLeft(2, '0')}';
   }
 
-  // Saves manually selected lyrics, preserving word-by-word if present.
+  /// Guarda las letras seleccionadas manualmente, preservando word-by-word si están presentes.
   Future<void> saveManualLyrics(
     String songTitle,
     String artist,
@@ -270,8 +260,7 @@ class LyricsService {
         artist,
       );
       if (kpoeResult != null) {
-        // Save as JSON to preserve word-by-word timestamps (un único write:
-        // el guardado ocurre aquí, no dentro de _fetchKpoe).
+        // Guarda como JSON para preservar los timestamps palabra a palabra (un único write: el guardado ocurre aquí, no dentro de _fetchKpoe).
         final karaokeJson = _syncedLyricsToJson(kpoeResult);
         await _db.storeLyrics(title, artist, karaokeJson, notFound: false);
         _cache[cacheKey] = kpoeResult;
