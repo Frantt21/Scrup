@@ -72,7 +72,7 @@ class SilenceSkipService extends ChangeNotifier {
 
   final Map<String, List<SilenceGap>> _gapsByTrack = {};
 
-  // Provisional analysis from partial download (.part file).
+  // Provisional analysis from a partial download (.part file).
   final Map<String, List<SilenceGap>> _provisionalGaps = {};
   final Set<String> _provisionalDone = {};
   String? _analyzingId;
@@ -241,7 +241,7 @@ class SilenceSkipService extends ChangeNotifier {
   }
 
   // Polls position periodically and skips gaps. Priority: SponsorBlock
-  // → acoustic analysis → provisional (.part).
+  // -> acoustic analysis -> provisional (.part).
   void _checkPosition() {
     if (!_settings.skipSilenceEnabled.value || !_playing) return;
     final track = _player.currentTrackValue;
