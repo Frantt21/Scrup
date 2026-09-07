@@ -22,21 +22,15 @@ import '../widgets/cover_image.dart';
 import '../widgets/now_playing_bars.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 
-/// Pantalla de inicio: barra de búsqueda arriba y las reproducciones
-/// recientes en un grid 1:1 de SOLO DOS FILAS (las columnas se acomodan al
-/// ancho de la ventana; las demás recientes no se muestran). Las playlists
-/// viven en el contenedor lateral.
+/// Home screen: search bar on top and recent plays in a 1:1 grid of ONLY TWO ROWS (columns adjust to the window width; other recent tracks are not shown). Playlists live in the side container.
 class HomeView extends StatefulWidget {
-  /// Se llama al enviar una búsqueda desde el inicio (AppShell cambia a la
-  /// vista Buscar y le pasa la consulta).
+  /// Called when submitting a search from home (AppShell switches to the Search view and passes the query).
   final ValueChanged<String>? onSearch;
 
-  /// Se llama al pulsar el botón de búsqueda del header (AppShell navega a la
-  /// vista Buscar sin consulta previa).
+  /// Called when pressing the search button in the header (AppShell navigates to the Search view without a previous query).
   final VoidCallback? onOpenSearch;
 
-  /// Se llama al tocar una playlist reciente del inicio (AppShell abre su
-  /// detalle).
+  /// Called when tapping a recent playlist on home (AppShell opens its detail).
   final ValueChanged<Playlist>? onOpenPlaylist;
 
   const HomeView({
@@ -883,17 +877,13 @@ class _EmptyHint extends StatelessWidget {
   }
 }
 
-/// Degradado de acento en el TOP del Inicio: ocupa ~1/4 del alto y se
-/// desvanece hacia abajo hasta transparente. Solo en el inicio.
+/// Accent gradient at the TOP of Home: takes ~1/4 of the height and fades downward to transparent. Only on home.
 class _TopAccentGradient extends StatelessWidget {
   const _TopAccentGradient();
 
   @override
   Widget build(BuildContext context) {
-    // Hoja reactiva aislada: escucha SOLO el acento. Antes el HomeView
-    // entero hacía `context.watch<ThemeController>()` en su build y cada
-    // cambio de acento (uno por cambio de pista) reconstruía TODO el scroll
-    // + grid, incluso con el player encima.
+    // Isolated reactive leaf: listens ONLY to the accent. Before this, the whole HomeView did `context.watch<ThemeController>()` in its build and every accent change (one per track change) rebuilt the whole scroll + grid, even with the player on top.
     final color =
         context.watch<ThemeController>().accentColor ??
         Theme.of(context).colorScheme.primary;
@@ -988,9 +978,7 @@ class _RecentPlaylistsRow extends StatelessWidget {
   }
 }
 
-/// Card grande de playlist reciente: portada 1:1 con el título DENTRO del
-/// card (sobre el artwork, como las recientes) y el indicador de
-/// "en reproducción" cuando la playlist está sonando.
+/// Large recent playlist card: 1:1 cover with the title INSIDE the card (over the artwork, like the recent tracks) and the "now playing" indicator when the playlist is playing.
 class _RecentPlaylistCard extends StatelessWidget {
   final Playlist playlist;
   final Color accent;
@@ -1062,7 +1050,7 @@ class _RecentPlaylistCard extends StatelessWidget {
                   ),
                 ),
               ),
-              // Título dentro del card (esquina inferior)
+              // Title inside the card (bottom corner)
               Positioned(
                 left: 10,
                 right: 10,
@@ -1077,7 +1065,7 @@ class _RecentPlaylistCard extends StatelessWidget {
                   ),
                 ),
               ),
-              // Indicador de "en reproducción" (igual que desktop)
+              // "Now playing" indicator (same as desktop)
               if (isCurrent)
                 Positioned(
                   top: 10,
