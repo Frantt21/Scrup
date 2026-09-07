@@ -66,10 +66,10 @@ class ArtworkPaletteService {
     }
   }
 
-  // ── Acento ÚNICO (barato) ────────────────────────────────────────────
-  // Para las superficies que pintan su fondo con el acento (player,
-  // miniplayer, letras): UN solo color del artwork, sin tríos ni paletas
-  // completas. Cacheado por URL como el resto.
+  // ── Single accent (cheap) ──────────────────────────────────────────────
+  // For surfaces that paint their background with the accent (player,
+  // miniplayer, lyrics): ONE color from the artwork, no trios or full palettes.
+  // Cached by URL like the rest.
 
   /// Acento para [url]: del caché o extrayéndolo ahora (bytes → un color).
   /// Devuelve `null` si no hay bytes o la extracción falla.
@@ -139,7 +139,7 @@ class ArtworkPaletteService {
         .toColor();
   }
 
-  // Decodes and quantizes pixels in a background isolate.
+  // Decode and quantize pixels in a background isolate.
   static Future<List<Color>> extractSwatches(Uint8List bytes) async {
     return Isolate.run(() => _decodeAndQuantize(bytes));
   }
@@ -185,7 +185,7 @@ class ArtworkPaletteService {
     ];
   }
 
-  // Fetches artwork bytes: disk → cache → network with hi-res fallback.
+  // Fetch artwork bytes: disk -> cache -> network with hi-res fallback.
   static Future<Uint8List?> _fetchBytes(
     String url, {
     ArtworkCacheService? artworkCache,
