@@ -32,7 +32,7 @@ class MetadataLookupService {
   final YtMusicService _ytmusic = YtMusicService();
   final DeezerService _deezer;
 
-  // Searches all public sources. Returns all hits with source badges.
+  // Search all public sources. Returns all hits with source badges.
   Future<List<MetadataHit>> search(String query) async {
     final spotifyLink = _spotifyUrlRe.firstMatch(query);
     final textQuery = query.replaceFirst(_spotifyUrlRe, '').trim();
