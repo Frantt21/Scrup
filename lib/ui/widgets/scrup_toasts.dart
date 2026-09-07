@@ -1,24 +1,21 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-/// Tipo de notificación: cambia el icono y el tinte del borde/accento.
+/// Toast type: changes the icon and the tint of the border/accent.
 enum ScrupToastKind {
-  /// Confirmación neutra (p. ej. \"Añadida a la playlist\").
+  /// Neutral confirmation (e.g. \"Added to playlist\").
   info,
 
-  /// Acción completada con éxito.
+  /// Action completed successfully.
   success,
 
-  /// Algo falló (reproducción, guardado, caché…).
+  /// Something failed (playback, save, cache…).
   error,
 }
 
-/// Muestra una notificación flotante en la PARTE SUPERIOR de la app (en vez
-/// del SnackBar de Flutter, que aparece abajo con el estilo por defecto).
+/// Shows a floating notification at the TOP of the app (instead of Flutter's SnackBar, which appears at the bottom with the default style).
 ///
-/// Es un singleton sin contexto: los call sites pueden lanzar toasts desde
-/// cualquier parte (listeners, helpers, vistas). El host ([ScrupToastHost])
-/// se monta en el AppShell y se encarga de renderizarlas.
+/// It is a context-free singleton: call sites can fire toasts from anywhere (listeners, helpers, views). The host ([ScrupToastHost]) is mounted in the AppShell and handles rendering them.
 void showScrupToast(
   String message, {
   ScrupToastKind kind = ScrupToastKind.info,
@@ -27,15 +24,13 @@ void showScrupToast(
   ScrupToastController.instance.show(message, kind: kind, duration: duration);
 }
 
-/// Controlador global de toasts: mantiene la pila activa (máx. [maxVisible]),
-/// auto-cierra cada una con un timer y notifica al host para repintar.
+/// Global toast controller: keeps the active stack (max [maxVisible]), auto-closes each one with a timer, and notifies the host to repaint.
 class ScrupToastController extends ChangeNotifier {
   ScrupToastController._();
 
   static final ScrupToastController instance = ScrupToastController._();
 
-  /// Máximo de notificaciones simultáneas a la vista: las más antiguas se
-  /// descartan al llegar una nueva (evita apilar un muro de toasts).
+  /// Maximum simultaneous notifications to the view: the oldest ones are discarded when a new one arrives (avoids stacking a wall of toasts).
   static const int maxVisible = 3;
 
   final List<ActiveToast> _toasts = [];
