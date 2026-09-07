@@ -706,8 +706,8 @@ class YtDlpService {
     );
   }
 
-  // Extracts full track metadata. Uses android client (~20% faster
-  // than web for metadata only). Don't use for downloads.
+  // Extracts full track metadata. Uses the android client (~20% faster
+  // than web for metadata only). Do not use for downloads.
   Future<Track?> getTrackInfo(String videoId) async {
     final result = await _run([
       '--no-playlist',
