@@ -242,8 +242,6 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
     }
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -360,10 +358,7 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
   }
 }
 
-// ── Fondo animado: olas verticales ────────────────────────────────────────
-
-/// Animated liquid backdrop with three colors from artwork palette.
-/// Colors interpolate smoothly on track changes.
+/// Animated liquid backdrop with three colors from artwork palette; colors interpolate smoothly on track changes.
 class _AnimatedBackdrop extends StatefulWidget {
   final List<Color> colors;
 
@@ -512,8 +507,6 @@ class _WatercolorPainter extends CustomPainter {
 
   _WatercolorPainter({required this.t, required this.colors});
 
-  /// Anclas normalizadas de las manchas: repartidas por bordes/esquinas,
-  /// lejos del carril central donde van artwork + lyrics.
   static const _anchors = <(double, double)>[
     (0.14, 0.24),
     (0.86, 0.18),
@@ -531,13 +524,11 @@ class _WatercolorPainter extends CustomPainter {
       Paint()..color = const Color(0xFF050505),
     );
 
-    final r = size.shortestSide;
-    var k = 0;        for (var i = 0; i < colors.length; i++) {
-          final c = Color.lerp(colors[i], Colors.black, 0.30)!;
-          // Desaturar 30% hacia negro para que el color no pelee con el texto.
-          // Velocidades ENTERAS en múltiplos del ciclo de `t` (y armónico 2×): al repetir el controller el fondo retoma su fase exacta → loop infinito sin saltos.
-          final speed = i.isEven ? 1.0 : 2.0;
-          for (var j = 0; j < 2; j++, k++) {
+    final r = size.shortestSide;    var k = 0;
+    for (var i = 0; i < colors.length; i++) {
+      final c = Color.lerp(colors[i], Colors.black, 0.30)!;
+      final speed = i.isEven ? 1.0 : 2.0;
+      for (var j = 0; j < 2; j++, k++) {
         final (ax, ay) = _anchors[k % _anchors.length];
         final ph = k * 2.39996; // ángulo áureo: derivas desincronizadas
         final cx = size.width * ax + r * 0.10 * math.sin(t * speed + ph);
@@ -554,7 +545,6 @@ class _WatercolorPainter extends CustomPainter {
     // Sin viñeta: el fluido cubre todo el lienzo borde a borde.
   }
 
-  /// Una mancha de acuarela: tres radiales superpuestos con desfase; el solape irregular simula el borde orgánico sin blur (cada radial ya tiene su caída difusa).
   void _wash(Canvas canvas, Offset center, double r, Color color) {
     void circle(Offset off, double radius, Color col) {
       final c = center + off;
@@ -585,8 +575,6 @@ class _WatercolorPainter extends CustomPainter {
       color.withValues(alpha: color.a * 0.6),
     );
   }
-
-  // SIN viñeta: el fluido cubre todo el lienzo borde a borde.
 
   @override
   bool shouldRepaint(_WatercolorPainter old) =>
