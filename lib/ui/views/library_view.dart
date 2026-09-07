@@ -35,7 +35,7 @@ class _LibraryViewState extends State<LibraryView> {
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
 
-  /// Playlists filtradas por la consulta de búsqueda (insensible a acentos).
+  /// Playlists filtered by the search query (accent-insensitive).
   List<Playlist> get _filtered {
     final q = _normQuery(_searchCtrl.text.trim());
     if (q.isEmpty) return _playlists;
