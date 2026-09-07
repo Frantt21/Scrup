@@ -6,11 +6,9 @@ import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
 import 'widgets/scrup_toasts.dart';
 
-/// Reproduce una pista individual (resuelve la fuente cache-first y la
-/// reproduce). El historial lo registra el propio [PlayerService] vía el
-/// callback `onPlayed` (cubre también auto-advance y radio).
+/// Play a single track (resolves the source cache-first and plays it). The history is registered by [PlayerService] itself via the `onPlayed` callback (also covers auto-advance and radio).
 ///
-/// Se usa desde cualquier vista (inicio, resultados, playlists).
+/// It is used from any view (home, results, playlists).
 Future<void> playTrack(BuildContext context, Track track) async {
   final l10n = AppLocalizations.of(context);
   final player = context.read<PlayerService>();
@@ -21,11 +19,9 @@ Future<void> playTrack(BuildContext context, Track track) async {
   }
 }
 
-/// Reproduce una lista completa como cola (auto-advance al terminar cada
-/// pista). Usado por "Reproducir todas" de las playlists.
+/// Play a full list as a queue (auto-advance when each track ends). Used by playlists' "Play all".
 ///
-/// [playlistId] identifica la playlist de la que viene la cola: se marca
-/// como la playlist "en reproducción" (indicador del sidebar/detalle).
+/// [playlistId] identifies the playlist the queue comes from: it is marked as the playlist "now playing" (sidebar/detail indicator).
 Future<void> playQueue(
   BuildContext context,
   List<Track> tracks, {
