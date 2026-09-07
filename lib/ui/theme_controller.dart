@@ -17,12 +17,7 @@ const Color kDefaultAccent = Color(0xFFC084FC);
 
 const double kDefaultAccentNeutralThreshold = 0.10;
 
-/// Normaliza la URL del artwork a la variante hi-res — la MISMA clave que
-/// usa el `CoverImage` del reproductor. Así el warm/extracción del acento
-/// descarga UN solo set de bytes (hi-res) que sirve a la vez para el color
-/// Y para el caché de disco del artwork: al publicarse la pista, la portada
-/// sale del caché sin descarga adicional (el mismo lazy que usan la
-/// búsqueda/playlists, sin prefetch adelantado).
+/// Normalize the artwork URL to the hi-res variant — the SAME key that the player's `CoverImage` uses. This way the accent warm/extraction downloads ONE set of bytes (hi-res) that serves both the color AND the on-disk artwork cache: when the track is published, the cover comes from cache without an extra download (the same lazy used by search/playlists, with no eager prefetch).
 String? _hiResUrl(String? url) {
   if (url == null || url.isEmpty) return null;
   return Track.hiResThumbnail(url) ?? url;
