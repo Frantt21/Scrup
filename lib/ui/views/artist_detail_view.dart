@@ -605,8 +605,10 @@ class _AlbumCard extends StatelessWidget {
       ),
     );
   }
-}  /// Tracklist de un álbum, con el MISMO estilo que el detalle de playlist en modo "acento plano" (flat): fondo del color del acento (extraído de la PROPIA portada del álbum, fallback al acento del artista), portada 1:1 centrada, título y botones de Play y Shuffle. Vista embebida (sin push de ruta): el spinner de carga vive AQUÍ, nunca en la card de la fila.
-  class ArtistAlbumView extends StatefulWidget {
+}
+
+/// Tracklist de un álbum con el mismo estilo que el detalle de playlist en modo "acento plano" (flat): fondo del acento extraído de la propia portada del álbum (fallback al artista), portada 1:1 centrada, título y botones Play/Shuffle. Vista embebida (sin push): el spinner vive aquí, nunca en la card.
+class ArtistAlbumView extends StatefulWidget {
   const ArtistAlbumView({
     super.key,
     required this.album,
