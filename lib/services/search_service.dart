@@ -112,12 +112,12 @@ class SearchService {
     return merged;
   }
 
-  /// Recomendaciones para el modo radio: SOLO YouTube Music (InnerTube).
-  /// La consulta suele ser el nombre del artista, y el filtro de canciones
-  /// de YT Music devuelve pistas canónicas del artista (sin covers, lives
-  /// ni mixes que yt-dlp suele colar). Tolerante a fallos: cualquier error
-  /// → lista vacía. Cachea (misma TTL de 6h): la radio de un artista no
-  /// cambia en horas y evita relanzar la consulta en cada pista.
+  /// Recommendations for radio mode: ONLY YouTube Music (InnerTube).
+  /// The query is usually the artist name, and YT Music's songs filter returns
+  /// canonical artist tracks (without the covers, lives, and mixes that yt-dlp
+  /// tends to include). Fault-tolerant: any error -> empty list. Cached (same
+  /// 6h TTL): an artist's radio does not change within hours and avoids re-running
+  /// the query on every track.
   Future<List<Track>> recommendByArtist(String query, {int limit = 10}) async {
     final q = query.trim();
     if (q.isEmpty) return const [];
@@ -133,16 +133,10 @@ class SearchService {
     }
   }
 
-  /// Deriva los artistas de una búsqueda desde los PROPIOS resultados, sin
-  /// ninguna request extra: cada fila de InnerTube trae el canal del artista
-  /// en su navegación. Agrupa por canal, cuenta coincidencias y ordena:
-  /// 1º por nº de canciones del artista en los resultados (relevancia),
-  /// 2º por suscriptores (el resultado más popular del mismo canal). Con
-  /// eso no hace falta la búsqueda general de InnerTube (que era una
-  /// request ADICIONAL por búsqueda y la encarecía).
+  /// Derive artists from a search using ONLY the search results, with no extra request: each InnerTube row carries the artist channel in its navigation. Group by channel, count matches, and sort by 1st number of songs by that artist in the results (relevance), 2nd subscribers (the most popular result of the same channel). This avoids the general InnerTube search (which was an extra request per search and made searches slower).
   static List<YtmArtist> deriveArtists(List<Track> results, {int limit = 8}) {
     if (results.isEmpty) return const [];
-    // Por canal: mejor YtmArtist (más subs vista) + nº de coincidencias.
+    // By channel: best YtmArtist (most subs seen) + number of matches.
     final byChannel = <String, ({int hits, YtmArtist artist})>{};
     for (final t in results) {
       final ch = t.artistChannelId;
@@ -155,10 +149,7 @@ class SearchService {
           : prev?.artist.subscriberCount;
       byChannel[ch] = (
         hits: (prev?.hits ?? 0) + 1,
-        // SIN avatar aquí a propósito: la única miniatura disponible en la
-        // fila es la PORTADA de la canción (mostrarla como cara del canal
-        // era el "avatar random" del listado). La real llega al instante
-        // desde _artistAvatars y pinta al resolver.
+        // NO avatar here by design: the only thumbnail available in the row is the SONG COVER (showing it as the channel face was the "random avatar" in the list). The real one arrives instantly from _artistAvatars and paints on resolve.
         artist: YtmArtist(
           browseId: ch,
           name: name,
@@ -178,9 +169,7 @@ class SearchService {
     ];
   }
 
-  /// Detalle del artista (top canciones + álbumes + suscriptores) con su
-  /// PROPIO caché en disco (JSON por artista, TTL 24h — el catálogo de un
-  /// artista casi no cambia en un día; entra/salir del screen es gratis).
+  /// Artist detail (top songs + albums + subscribers) with its OWN on-disk cache (one JSON per artist, 24h TTL - the catalog of an artist almost never changes in a day; entering/leaving the screen is cheap).
   Future<YtmArtistDetail?> fetchArtistDetail(
     String browseId, {
     String? name,
@@ -209,22 +198,18 @@ class SearchService {
       }
       return detail;
     } catch (_) {
-      // Memoiza el fallo 10 min: sin red, reabrir el screen no relanza la
-      // request en cada intento.
+    // Memoize the failure for 10 min: without network, reopening the screen does not re-launch the request on every try.
       _artistCache?.markFailure(id);
       return null;
     }
   }
 
-  /// Tracklist de un álbum para el screen de artista. DOS FORMAS DE ID con
-  /// caminos DIFERENTES (verificados contra la API real con curl):
+  /// Tracklist of an album for the artist screen. TWO ID forms with DIFFERENT paths (verified against the real API with curl):
   ///
-  /// - `MPREb_…` (álbum/single real de YT Music): browse DIRECTO de la
-  ///   página del álbum (`fetchAlbumPage`). Envolverlo como playlist
-  ///   (`VL MPREb_…`) devuelve 0 items — era la causa del "sin resultados".
-  /// - `VL…`/`PL…` (playlist): lectura estándar con `fetchPlaylist`.
+  /// - `MPREb_...` (real YT Music album/single): DIRECT browse of the album page (`fetchAlbumPage`). Wrapping it as a playlist (`VL MPREb_...`) returns 0 items - that was the cause of "no results".
+  /// - `VL...`/`PL...` (playlist): standard read with `fetchPlaylist`.
   ///
-  /// Cacheado (fuente 'album', TTL 6h — abrir un álbum dos veces es gratis).
+  /// Cached (source 'album', 6h TTL - opening an album twice is free).
   Future<List<Track>> fetchAlbumTracks(String playlistId) async {
     final id = playlistId.trim();
     if (id.isEmpty) return const [];
@@ -262,9 +247,7 @@ class SearchService {
     return const [];
   }
 
-  /// Recarga el tracklist FORZANDO la re-lectura de InnerTube (borra la
-  /// entrada de caché antes). Lo usa "Recargar artworks" del screen del
-  /// álbum: trae la portada del header vigente y refresca las miniaturas.
+  /// Reload the tracklist by FORCING a re-read of InnerTube (clears the cache entry first). Used by "Reload artworks" in the album screen: it fetches the current header cover and refreshes the thumbnails.
   Future<List<Track>> reloadAlbumTracks(String playlistId) async {
     final id = playlistId.trim();
     if (id.isEmpty) return const [];
@@ -287,14 +270,14 @@ class SearchService {
   Future<Map<String, String?>> _artistAvatars(
     List<YtmArtist> artists, {
     void Function(String browseId, String url)? onUpdated,
-  }) async {
+  }    ) async {
     final out = <String, String?>{};
     for (final a in artists) {
       final id = a.browseId;
       if (id.isEmpty) continue;
       var url = _avatarMemo[id];
       if (url == null) {
-        // Disco: el avatar de la sesión anterior aparece AL INSTANTE.
+        // Disk: the previous session's avatar appears INSTANTLY.
         final cached = await _avatarCache?.get(id);
         if (cached != null) {
           _avatarMemo[id] = cached;
@@ -338,7 +321,7 @@ class SearchService {
                 final prev = _avatarMemo[id];
                 _avatarMemo[id] = url;
                 unawaited(_avatarCache?.put(id, url));
-                if (prev != url) onUpdated?.call(id, url);
+                if (prev != null && prev != url) onUpdated?.call(id, url);
               } else {
                 _avatarFailedAt[id] = DateTime.now();
               }
