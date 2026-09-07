@@ -2,8 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../services/settings_store.dart';
 
-/// Parsea un código de idioma guardado (BCP-47: `es`, `en`, `pt_BR`) a un
-/// [Locale]. Soporta regiones separadas por `_` o `-` (`pt_BR` → `pt`+`BR`).
+/// Parse a stored language code (BCP-47: `es`, `en`, `pt_BR`) into a [Locale]. It supports regions separated by `_` or `-` (`pt_BR` -> `pt`+`BR`).
 Locale parseStoredLocale(String code) {
   final parts = code.split(RegExp(r'[_-]'));
   if (parts.length >= 2 && parts[1].isNotEmpty) {
@@ -12,20 +11,16 @@ Locale parseStoredLocale(String code) {
   return Locale(parts[0]);
 }
 
-/// Mantiene el idioma activo de la interfaz y notifica a la app cuando cambia
-/// (el MaterialApp se reconstruye con el nuevo `locale`). Los cambios se
-/// persisten en [SettingsStore] para restaurarse entre sesiones.
+/// Keeps the active interface language and notifies the app when it changes (the MaterialApp is rebuilt with the new `locale`). Changes are persisted in [SettingsStore] to be restored between sessions.
 class LocaleController extends ChangeNotifier {
   LocaleController(this._locale);
 
   Locale _locale;
 
-  /// Idioma activo (por defecto el español, como antes de la i18n).
+  /// Active language (by default Spanish, as before i18n).
   Locale get locale => _locale;
 
-  /// Cambia el idioma, notifica a la UI y lo persiste. Si es el mismo que el
-  /// actual no hace nada. Se compara el locale COMPLETO (no solo el código de
-  /// idioma): así `pt_BR` y `pt` son locales distintos.
+  /// Change the language, notify the UI, and persist it. If it is the same as the current one, do nothing. The FULL locale is compared (not just the language code): this way `pt_BR` and `pt` are distinct locales.
   Future<void> setLocale(Locale locale, SettingsStore settings) async {
     if (locale == _locale) return;
     _locale = locale;
