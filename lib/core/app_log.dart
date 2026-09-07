@@ -3,30 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
-/// Instrumentación de diagnóstico del pipeline de acento/paleta y
-/// transiciones (salida por logcat: `adb logcat -d | grep SCPR`).
+/// Diagnostic instrumentation for the accent/palette pipeline and transitions (logcat output: `adb logcat -d | grep SCPR`).
 ///
-/// TODA la instrumentación está APAGADA para la release limpia: sin logs
-/// SCPR, sin monitor de jank, sin contadores de frames/rebuilds, sin
-/// perfilador de builds y sin la gráfica de rendimiento sobre la app. El
-/// código queda pero con `const false` el compilador lo elimina en release.
-const bool kPaletteLog = false;
-
-/// Muestra la gráfica de rendimiento (hilos UI/GPU) sobre la app.
-const bool kShowPerfOverlay = false;
-
-/// Loguea por logcat cada frame que exceda ~2 vsynchs (SCPR[JANK] con
-/// tiempos de build y raster).
-const bool kJankLog = false;
-
-/// Perfilador de builds de Flutter (SOLO debug): loguea cada widget
-/// construido con su tiempo.
-const bool kProfileBuilds = false;
-
-/// Contador de frames PRODUCIDOS cada 5s (SCPR[FRAMES]).
-const bool kFrameCount = false;
-
-/// Contadores de rebuilds por widget (SCPR[BUILDS] cada 5s).
+/// ALL instrumentation is OFF for the clean release: no SCPR logs, no jank monitor, no frame/rebuild counters, no build profiler, and no performance overlay on the app. The code stays, but with `const false` the compiler removes it in release.
+const bool kPaletteLog = false;  /// Shows the performance graph (UI/GPU threads) over the app.
+const bool kShowPerfOverlay = false;  /// Logs to logcat every frame that exceeds ~2 vsyncs (SCPR[JANK] with build and raster times).
+const bool kJankLog = false;  /// Flutter build profiler (DEBUG ONLY): logs every widget built with its time.
+const bool kProfileBuilds = false;  /// Counter of frames PRODUCED every 5s (SCPR[FRAMES]).
+const bool kFrameCount = false;  /// Rebuild counters per widget (SCPR[BUILDS] every 5s).
 const bool kBuildCount = false;
 
 /// EXPERIMENTO: sin letras (no fetch, no ticker de suavizado, no rebuilds).
@@ -37,32 +21,10 @@ const bool kNoLyrics = false;
 
 /// EXPERIMENTO: sin artwork (CoverImage siempre fallback, sin descargas ni
 /// precaches de portadas). Siguiente ronda de ablación; apagado por ahora.
-const bool kNoArtwork = false;
-
-/// Umbral (ms) del watchdog de build en overlay/mini/letras: si construir
-/// el widget supera esto, se loguea SCPR[PERF].
-const int kBuildWatchdogMs = 12;
-
-/// EXPERIMENTO: apaga TODO el sistema de acento (extracción, precargas,
-/// SETs, re-theme). Las superficies quedan en negro plano. Si el lag
-/// desaparece, el culpable es la transición; si persiste, es otra cosa.
-/// VEREDICTO: culpable confirmado → flag apagado, acento restaurado.
-const bool kFlatBlackPlayer = false;
-
-/// EXPERIMENTO: oculta las recientes de home (grid de canciones + fila de
-/// playlists) y no se suscribe a sus streams. Cada cambio de canción dispara
-/// `recordPlay` → reemite recientes → rebuild del grid.
-/// RESUELTO de otra forma (debounce fuera de ventana): flag apagado.
-const bool kHideHomeRecents = false;
-
-/// EXPERIMENTO: NO monta el stream de audio (`_player.open`/`play`). El
-/// pipeline completo corre igual (cola, resolve, enrich, publish → artwork,
-/// acento y letras cargan) pero la reproducción es SIMULADA con un ticker
-/// (playing + posición avanzando) para medir los Hz con solo colores,
-/// artwork y letras en carga. Si con esto los Hz no mueren, el culpable del
-/// jank es el montaje/decodificación del audio.
-/// APAGADO: el audio vuelve a montarse normal (veredicto: el culpable del
-/// jank de la transición era el prefetch EAGER de portadas, no el audio).
+const bool kNoArtwork = false;  /// Threshold (ms) of the build watchdog in overlay/mini/lyrics: if building the widget exceeds this, it is logged as SCPR[PERF].
+const int kBuildWatchdogMs = 12;  /// EXPERIMENTO: turns off ALL the accent system (extraction, prefetches, SETs, re-theme). Surfaces stay flat black. If the lag disappears, the culprit is the transition; if it persists, it is something else. VERDICT: culprit confirmed -> flag off, accent restored.
+const bool kFlatBlackPlayer = false;  /// EXPERIMENTO: hides the home recent tracks (song grid + playlist row) and does not subscribe to their streams. Every track change fires `recordPlay` -> re-emits recent tracks -> rebuild of the grid. RESOLVED another way (debounce outside the window): flag off.
+const bool kHideHomeRecents = false;  /// EXPERIMENTO: does NOT mount the audio stream (`_player.open`/`play`). The full pipeline still runs (queue, resolve, enrich, publish -> artwork, accent and lyrics load) but playback is SIMULATED with a ticker (playing + advancing position) to measure Hz with only colors, artwork and lyrics loading. If Hz do not die with this, the culprit of the jank is audio mounting/decoding. OFF: audio is mounted normally again (verdict: the culprit of the transition jank was the EAGER preview of covers, not the audio).
 const bool kNoAudioMount = false;
 
 final DateTime _boot = DateTime.now();
