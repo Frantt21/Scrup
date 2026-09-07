@@ -1,15 +1,9 @@
 import 'package:flutter/material.dart';
 
 
-/// Item de menú contextual (clic derecho) con la estética de la app: icono
-/// en el color de acento y tamaño contenido, con el label en el estilo del
-/// menú. Compartido por todos los `showMenu` del app para que se vean
-/// iguales.
+/// Context menu item (right-click) with the app's aesthetic: icon in the accent color and contained size, with the label in the menu style. Shared by all `showMenu` calls in the app so they look the same.
 ///
-/// [color] permite forzar el color del icono (p. ej. el del artwork de la
-/// playlist): sin él, se usa el acento de la app. Es necesario pasarlo
-/// explícitamente porque los menús empujados al Overlay del Navigator NO
-/// heredan los `Theme` locales (p. ej. el del detalle de playlist).
+/// [color] lets you force the icon color (e.g. the playlist's artwork): without it, the app accent is used. It must be passed explicitly because menus pushed to the Navigator Overlay do NOT inherit local `Theme`s (e.g. the playlist detail's).
 class ContextMenuItem extends PopupMenuItem<String> {
   ContextMenuItem({
     super.key,
