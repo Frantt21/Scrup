@@ -24,9 +24,7 @@ class SettingsStore {
 
   SharedPreferences? _prefs;
 
-  /// Caché en memoria del estilo de header del detalle de playlist: permite
-  /// leer el valor de forma SÍNCRONA al entrar, evitando el parpadeo de ~50ms
-  /// que causaba la lectura async de prefs.
+  /// In-memory cache of the playlist detail header style: lets the value be read SYNCHRONOUSLY on entry, avoiding the ~50ms flicker that the async prefs read caused.
   bool? _flatPlaylistHeaderCache;
   bool? get flatPlaylistHeaderCache => _flatPlaylistHeaderCache;
 
