@@ -8,9 +8,7 @@ import '../services/player_service.dart';
 import 'widgets/cover_image.dart';
 import 'widgets/scrup_toasts.dart';
 
-/// Muestra el modal para añadir [track] a una playlist: un diálogo con las
-/// playlists en grid (portada + título) y una celda final para crear una
-/// nueva. Compartido entre el buscador, las recientes, el reproductor, etc.
+/// Show the modal to add [track] to a playlist: a dialog with the playlists in a grid (cover + title) and a final cell to create a new one. Shared between the search, recent tracks, player, etc.
 Future<void> showAddToPlaylistDialog(BuildContext context, Track track) async {
   final l10n = AppLocalizations.of(context);
   final db = context.read<AppDatabase>();
@@ -28,11 +26,9 @@ Future<void> showAddToPlaylistDialog(BuildContext context, Track track) async {
     ),
   );
   if (selected == null || !context.mounted) return;
-  await db.addToPlaylist(selected, track);
-  // Si la playlist seleccionada es la que se está reproduciendo,
-  // añadir la canción también a la cola del reproductor.
-  final player = context.read<PlayerService>();
-  if (player.activePlaylistId.value == selected) {
+  await db.addToPlaylist(selected, track);      // If the selected playlist is the one currently playing, add the song to the player queue too.
+      final player = context.read<PlayerService>();
+      if (player.activePlaylistId.value == selected) {
     player.addToQueue(track);
   }
   showScrupToast(l10n.addedToPlaylist, kind: ScrupToastKind.success);
