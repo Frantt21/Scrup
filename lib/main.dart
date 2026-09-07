@@ -73,10 +73,7 @@ Future<void> main() async {
       minimumSize: const Size(1440, 800),
       center: true,
       title: 'Scrup',
-      // Ocultar la nativa en Windows y macOS (macOS ya lo dejó configurado
-      // arriba; aquí se mantiene para waitUntilReadyToShow). En Linux NO se
-      // pasa (null): setTitleBarStyle(normal) DESHARÍA el setAsFrameless()
-      // anterior reactivando la barra nativa del gestor de ventanas.
+      // Hide the native bar on Windows and macOS (macOS already configured it above; kept here for waitUntilReadyToShow). On Linux it is NOT passed (null): setTitleBarStyle(normal) would UNDO the earlier setAsFrameless() and reactivate the native window manager bar.
       titleBarStyle: (Platform.isWindows || Platform.isMacOS)
           ? TitleBarStyle.hidden
           : null,
@@ -242,22 +239,18 @@ class ScrupApp extends StatelessWidget {
         Provider<SearchService>(
           create: (context) => SearchService(
             ytDlp: context.read<YtDlpService>(),
-            // Caché persistente de búsquedas: repetir una búsqueda (o abrir
-            // la app y repetir la de ayer) responde de disco al instante.
+            // Persistent search cache: repeating a search (or opening the app and repeating yesterday's) responds from disk instantly.
             cache: SearchCacheStore(),
-            // Detalles de artista: un JSON por canal (TTL 24h).
+            // Artist details: one JSON per channel (24h TTL).
             artistCache: ArtistCacheStore(),
-            // Avatares de canal: un JSON compartido; el disco sirve el
-            // avatar instantáneo y la revalidación en background lo
-            // actualiza si el canal lo cambió.
+            // Channel avatars: a shared JSON; disk serves the avatar instantly and background revalidation updates it if the channel changed it.
             avatarCache: ArtistAvatarCacheStore(),
           ),
         ),
         Provider<LyricsService>(
           create: (context) => LyricsService(context.read<AppDatabase>()),
         ),
-        // Historial de búsquedas (persistente): los chips de la vista
-        // Buscar lo muestran y un toque repite la consulta.
+        // Search history (persistent): the Search view chips show it and a tap repeats the query.
         Provider<SearchHistoryStore>(create: (_) => SearchHistoryStore()),
         Provider<SettingsStore>(create: (_) => settings),
         Provider<PaletteCacheStore>(create: (_) => paletteCache),
@@ -272,9 +265,7 @@ class ScrupApp extends StatelessWidget {
             // se cancela y reprograma en cada cambio de la cola.
             Timer? queueDebounce;
             final player = PlayerService(
-              // Android: just_audio (ExoPlayer) — reutiliza el pipeline de
-              // audio entre pistas y las transiciones no derriban el
-              // reproductor. Desktop/flatpak: media_kit (libmpv).
+              // Android: just_audio (ExoPlayer) - reuses the audio pipeline between tracks and transitions do not tear down the player. Desktop/flatpak: media_kit (libmpv).
               audioBackend: Platform.isAndroid
                   ? JustAudioBackend()
                   : MediaKitBackend(),
@@ -297,8 +288,7 @@ class ScrupApp extends StatelessWidget {
                 return searchService.search(query, limit: 10);
               },
               preload: (track) => cache.preload(track.id, title: track.title),
-              // Camino 2 del precache: pistas YA cacheadas → isolate que lee
-              // sus primeros bytes (page cache caliente para el mount).
+              // Path 2 of prefetch: tracks already cached -> isolate that reads their first bytes (hot page cache for the mount).
               prepareCached: cache.warmUpcoming,
               onEnriched: (track) async => db.updateTrackMetadata(track),
               onPlayed: (track) async => db.recordPlay(track),
@@ -404,25 +394,17 @@ class ScrupApp extends StatelessWidget {
               return MaterialApp(
                 title: 'Scrup',
                 debugShowCheckedModeBanner: false,
-                // Sin gráfica de rendimiento sobre la app (release limpia).
+                // No performance graph over the app (clean release).
                 showPerformanceOverlay: false,
                 locale: localeController.locale,
                 supportedLocales: AppLocalizations.supportedLocales,
                 localizationsDelegates:
                     AppLocalizations.localizationsDelegates,
-                // Duración CERO a propósito: AnimatedTheme reconstruye todo el
-                // árbol dependiente en CADA frame de la animación; con 200ms
-                // eran ~12 frames caros por cambio. El tinte dinámico se
-                // conserva (aplica de golpe en un solo rebuild) y la suavidad
-                // la ponen los fundidos de 350ms de las superficies.
-                // (Lección de forawn_mobile: chrome estático + acentos locales;
-                // aquí se mantiene el tinte global pero instantáneo.)
+                // Duration ZERO on purpose: AnimatedTheme rebuilds the entire dependent tree on EVERY animation frame; at 200ms that was ~12 expensive frames per change. The dynamic tint is preserved (applied at once in a single rebuild) and the smoothness comes from the 350ms surface fades.
+                // (Lesson from forawn_mobile: static chrome + local accents; here the global tint is kept but instant.)
                 themeAnimationDuration: Duration.zero,
                 themeAnimationCurve: Curves.easeInOut,
-                // Tema semillado con el acento de la pista actual: tiñe el
-                // primary y demás elementos derivados en TODA la app. La
-                // semilla llega ~400ms tras el acento de superficies para no
-                // apilar el re-theme sobre la ventana del cambio.
+                // Theme seeded with the current track's accent: it tints the primary and other derived elements across the whole app. The seed arrives ~400ms after the surface accent to avoid stacking the re-theme on top of the change window.
                 theme: _buildTheme(themeController.themeSeed),
                 builder: (context, child) {
                   Widget core = Stack(
@@ -537,11 +519,7 @@ class ScrupApp extends StatelessWidget {
   }
 }
 
-/// Controla el cierre de la ventana junto a `setPreventClose(true)` (ver
-/// main): al pedir cerrar, ejecuta [flush] —el guardado pendiente de la cola
-/// y del caché de colores— y SOLO entonces destruye la ventana, garantizando
-/// que el volcado llegue a disco antes de que el proceso salga. Best-effort:
-/// si la persistencia falla, igual se cierra; y nunca cierra dos veces.
+/// Controls window close together with `setPreventClose(true)` (see main): on close request, it runs [flush] —the pending save of the queue and color cache— and ONLY then destroys the window, ensuring the flush reaches disk before the process exits. Best-effort: if persistence fails, it still closes; and it never closes twice.
 class _AppCloseHandler extends WindowListener {
   _AppCloseHandler(this.flush);
 
@@ -558,31 +536,21 @@ class _AppCloseHandler extends WindowListener {
 
   Future<void> _closeAfterFlush() async {
     try {
-      // Tope de seguridad: si la persistencia se quedara colgada, no dejar
-      // la ventana abierta para siempre (el guard _closing bloquearía los
-      // siguientes intentos de cierre).
+      // Safety cap: if persistence got stuck, do not leave the window open forever (the _closing guard would block further close attempts).
       await flush().timeout(const Duration(seconds: 3), onTimeout: () {});
     } catch (_) {
-      // Nunca impedir el cierre por un fallo de persistencia.
+      // Never block close because of a persistence failure.
     } finally {
       try {
         await windowManager.destroy();
       } catch (_) {
-        // Ya cerrada o plataforma que no lo soporta: el cierre nativo sigue.
+        // Already closed or platform that does not support it: the native close still proceeds.
       }
     }
   }
 }
 
-/// En Linux, redondea las CUATRO esquinas de la ventana (estilo
-/// GNOME/Handy). La ventana es TRANSPARENTE y sin marco (ver main y
-/// my_application.cc: view y fondo de la ventana con alpha cuando el
-/// escritorio compone), así que aquí se recorta el contenido a las esquinas
-/// redondeadas y el escritorio se ve a través de ellas. Cuando la ventana
-/// está maximizada NO se recorta: el contenido llega al borde de la pantalla
-/// (como hace el propio escritorio con las ventanas maximizadas). En el resto
-/// de plataformas no se usa: en Windows la ventana es opaca y cuadrada, y en
-/// macOS el sistema redondea la ventana nativamente.
+/// On Linux, rounds the FOUR corners of the window (GNOME/Handy style). The window is TRANSPARENT and frameless (see main and my_application.cc: the view and window background have alpha when the desktop composes), so here the content is clipped to the rounded corners and the desktop shows through them. When the window is maximized, it is NOT clipped: the content reaches the screen edge (as the desktop itself does with maximized windows). On the rest of the platforms it is not used: on Windows the window is opaque and square, and on macOS the system rounds the window natively.
 class _LinuxRoundedCorners extends StatefulWidget {
   const _LinuxRoundedCorners({required this.child});
 
@@ -611,8 +579,7 @@ class _LinuxRoundedCornersState extends State<_LinuxRoundedCorners> {
       }
     });
     windowManager.addListener(_listener!);
-    // Sincronizar el estado real: algunos gestores ignoran el maximize del
-    // arranque (best-effort) y la ventana puede arrancar en modo ventana.
+      // Sync the real state: some managers ignore the startup maximize (best-effort) and the window may start in windowed mode.
     unawaited(_syncMaximized());
   }
 
@@ -674,9 +641,7 @@ const SystemUiOverlayStyle _systemOverlayStyle = SystemUiOverlayStyle(
   systemNavigationBarContrastEnforced: false,
 );
 
-/// Persiste la instantánea de la cola (orden, orden pre-shuffle, índice y
-/// playlist activa). Compartida por el debounce de `onQueueChanged` y el
-/// flush al cerrar la ventana. Best-effort: nunca lanza.
+/// Persists the queue snapshot (order, pre-shuffle order, index and active playlist). Shared by the `onQueueChanged` debounce and the flush on window close. Best-effort: never throws.
 Future<void> _writeQueueSnapshot(
   SettingsStore settings,
   QueuePersistenceSnapshot snapshot,
@@ -691,8 +656,7 @@ Future<void> _writeQueueSnapshot(
   }
 }
 
-/// Cursor de mano (pointer) cuando el botón está habilitado y el cursor
-/// normal cuando está deshabilitado. Compartido por los tres temas de botón.
+/// Hand cursor (pointer) when the button is enabled and the normal cursor when disabled. Shared by the three button themes.
 final ButtonStyle _clickCursorStyle = ButtonStyle(
   mouseCursor: WidgetStateProperty.resolveWith(
     (states) => states.contains(WidgetState.disabled)
