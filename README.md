@@ -46,14 +46,6 @@ Target platforms: Windows, Linux and macOS with a single Flutter codebase.
 - Pause support: the progress bar and timer freeze when paused and resume when playing.
 - Small icon: an optional app icon can appear in the presence thumbnail. It is configured in the Discord Developer Portal.
 
-### Settings
-- Keyboard shortcuts: a full categorized list is shown in the settings screen.
-- Cache limit: choose from presets between 512 MB and unlimited, or open the cache folder directly.
-- Lyrics mode: toggle the word-by-word karaoke sweep and silence skip.
-- Discord toggle: enable or disable Rich Presence.
-- Language: switch between eight languages. The choice persists between sessions.
-- Playlist recalculation: recalculate artwork palettes for all songs in a playlist.
-
 ## Requirements
 
 - Flutter SDK stable with desktop support for Windows, Linux or macOS.
