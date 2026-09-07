@@ -6,8 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../../l10n/generated/app_localizations.dart';
 
-/// Dialog for creating a new playlist (name, description, cover).
-/// Compartido por desktop (sidebar) y mobile (librería).
+/// Dialog for creating a new playlist (name, description, cover). Shared by desktop (sidebar) and mobile (library).
 class CreatePlaylistDialog extends StatefulWidget {
   const CreatePlaylistDialog({super.key});
 
