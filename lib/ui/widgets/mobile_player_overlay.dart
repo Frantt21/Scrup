@@ -20,7 +20,7 @@ import 'cover_image.dart';
 import 'edit_metadata_dialog.dart';
 import 'scrup_toasts.dart';
 
-/// Superficie neutra pre-acento (fondo del player sin acento todavía).
+/// Neutral pre-accent surface (player background before an accent is available).
 const Color _kIdleSurface = Colors.transparent;
 
 /// Contenido del miniplayer ARRASTRABLE (librería `miniplayer`) en Android:
