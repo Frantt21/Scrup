@@ -1,24 +1,24 @@
-/// Limpia títulos de YouTube eliminando tags de publicación habituales:
+/// Clean YouTube titles by removing common publication tags:
 /// "(Official Video)", "[HD]", " | Lyrics", "- Audio", etc.
 ///
-/// Intenta conservar el contenido real (nombre de la canción, feats) y solo
-/// elimina marcadores de formato/subida.
+/// It tries to keep the real content (song name, feats) and only removes
+/// format/upload markers.
 class TitleCleaner {
   TitleCleaner._();
 
   static final List<RegExp> _patterns = [
-    // Tags entre paréntesis o corchetes en cualquier posición
+    // Tags in parentheses or brackets at any position
     RegExp(
       r'[\(\[]([^\)\]]*?(?:official|video|audio|lyrics?|visualizer|remaster(?:ed)?|hd|4k|karaoke|letra)[^\)\]]*?)[\)\]]',
       caseSensitive: false,
     ),
-    // Sufijos separados por |, -, –, —, •, · que sean tags (uno o varios
-    // consecutivos, p. ej. "- 4K HD" o "| Lyrics - Official Audio")
+    // Suffixes separated by |, -, –, —, •, · that are tags (one or more
+    // consecutive, e.g. "- 4K HD" or "| Lyrics - Official Audio")
     RegExp(
       r'\s*[|\-–—•·]\s*(?:(?:official\s+(?:music\s+)?video|official\s+audio|video\s+oficial|lyrics?\s*(?:video)?|audio|visualizer|remaster(?:ed)?|hd|4k|karaoke|letra)\s*(?:[|\-–—•·]\s*)?)+\s*$',
       caseSensitive: false,
     ),
-    // Múltiples espacios resultantes
+    // Multiple resulting spaces
     RegExp(r'\s{2,}'),
   ];
 
@@ -28,7 +28,7 @@ class TitleCleaner {
     for (final pattern in _patterns) {
       t = t.replaceAll(pattern, ' ').trim();
     }
-    // Limpiar separadores sobrantes al final ("Título - " → "Título")
+    // Clean leftover separators at the end ("Title - " -> "Title")
     t = t.replaceAll(RegExp(r'\s*[|\-–—•·]\s*$'), '').trim();
     return t;
   }
