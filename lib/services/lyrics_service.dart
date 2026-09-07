@@ -169,7 +169,7 @@ class LyricsService {
       add(titleHint, artistHint ?? '');
     }
     final q = query.trim();
-    // "Artista - Título" / "Título - Artista"
+    // "Artist - Title" / "Title - Artist"
     final dashParts = q.split(RegExp(r'\s+[-–—]\s+'));
     if (dashParts.length == 2) {
       add(dashParts[0], dashParts[1]);
@@ -217,13 +217,13 @@ class LyricsService {
       );
       _cache[_key(songTitle, artist)] = lyrics;
     } catch (_) {
-      // Silencioso: guardar lyrics es best-effort.
+      // Silent: saving lyrics is best-effort.
     }
   }
 
   // Fetches lyrics: KPoe → LRCLIB, with SQLite cache.
-  // Single-flight: las N vistas de letras montadas a la vez (player +
-  // sheet) comparten UNA sola petición en curso por canción.
+  // Single-flight: the N lyric views mounted at once (player +
+  // sheet) share ONE in-flight request per song.
   final Map<String, Future<SyncedLyrics?>> _inFlight = {};
 
   Future<SyncedLyrics?> fetchLyrics(String title, String artist) {
@@ -232,11 +232,11 @@ class LyricsService {
     if (_notFound.contains(cacheKey)) return Future.value(null);
     return _inFlight.putIfAbsent(
       cacheKey,
-      // OJO: el closure debe devolver VOID. Si devuelve el resultado de
-      // `_inFlight.remove(...)` (el MISMO futuro, ya guardado por putIfAbsent),
-      // `whenComplete` ESPERA a ese futuro devuelto → el futuro se espera a sí
-      // mismo y NUNCA completa → el primer fetch por canción quedaba en loader
-      // infinito (los siguientes funcionaban porque _cache ya estaba poblado).
+      // OJO: the closure must return VOID. If it returns the result of
+      // `_inFlight.remove(...)` (the SAME future, already stored by putIfAbsent),
+      // `whenComplete` WAITS on that returned future → the future waits on itself
+      // and NEVER completes → the first fetch per song got stuck in a loader
+      // forever (the next ones worked because _cache was already populated).
       () => _fetchUncached(title, artist, cacheKey).whenComplete(() {
         _inFlight.remove(cacheKey);
       }),
@@ -278,7 +278,7 @@ class LyricsService {
         return kpoeResult;
       }
 
-      // 2) LRCLIB (línea a línea) solo si KPoe no encontró nada.
+      // 2) LRCLIB (line by line) only if KPoe found nothing.
       final lrclibResult = await _fetchLrclib(
         cleanTrack,
         cleanArtist,
@@ -312,9 +312,9 @@ class LyricsService {
     String originalTitle,
     String originalArtist,
   ) async {
-    // Espejos EN PARALELO: el primero en orden de [_kpoeServers] que
-    // responda con letras gana. Antes eran 3 peticiones en serie (8s cada
-    // una si el servidor caía): un servidor lento retrasaba a los demás.
+    // Mirrors IN PARALLEL: the first one in [_kpoeServers] order that
+    // responds with lyrics wins. Before this, they were 3 requests in series (8s each
+    // if a server was down): a slow server delayed the others.
     final attempts = <Future<SyncedLyrics?>>[
       for (final server in _kpoeServers)
         _tryKpoeServer(
@@ -356,8 +356,8 @@ class LyricsService {
         originalArtist,
       );
       if (result != null && result.lines.isNotEmpty) {
-        // Sin store aquí: _fetchUncached guarda UNA vez (JSON, preservando
-        // el karaoke palabra a palabra).
+        // No store here: _fetchUncached saves ONCE (JSON, preserving
+        // the word-by-word karaoke).
         return result;
       }
     } catch (_) {
