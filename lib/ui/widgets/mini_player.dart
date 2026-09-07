@@ -98,8 +98,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
         _preparing = found;
         _preparingActive = active;
       });
-      // Igual que en el player extendido: precarga el acento de la pista
-      // entrante para que la transición no pase por el color por defecto.
+      // Igual que en el player extendido: precarga el acento de la pista entrante para que la transición no pase por el color por defecto.
       if (found != null) {
         context.read<ThemeController>().warmAccent(found.thumbnailUrl);
       }
@@ -141,8 +140,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
     final theme = Theme.of(context);
     final player = context.read<PlayerService>();
     final themeController = context.watch<ThemeController>();
-    // Igual que el extendido: sin acento aún, tinte neutro invisible en vez
-    // del lila del tema.
+    // Igual que el extendido: sin acento aún, tinte neutro invisible en vez del lila del tema.
     final accent = themeController.accentColor ?? Colors.transparent;
 
     // El mini-player está SIEMPRE montado a altura fija (barra persistente):
@@ -166,9 +164,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
         ? (_position.inMilliseconds / _duration!.inMilliseconds).clamp(0.0, 1.0)
         : 0.0;
 
-    // Fundido RGB origen→destino (igual que el extendido): `ValueKey`
-    // reinicia la animación en cada cambio de acento partiendo del color
-    // previo real, sin salto a transparente ni tercer color intermedio.
+    // Fundido RGB origen→destino (igual que el extendido): `ValueKey` reinicia la animación en cada cambio de acento partiendo del color previo real, sin salto a transparente ni tercer color intermedio.
     final begin = _prevAccent ?? accent;
     _prevAccent = accent;
     final Widget page = Material(
