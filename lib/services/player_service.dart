@@ -778,7 +778,7 @@ class PlayerService {
 
   int _nextIndex() => _queueIndex + 1;
 
-  // Enqueues songs from the same artist (radio mode).
+  // Enqueue songs from the same artist (radio mode).
   Future<void> _playRadio(Track base) async {
     try {
       final tracks = await recommend!(base);
@@ -825,19 +825,10 @@ class PlayerService {
         appLog('PERF', 'playAt $what +${sw.elapsedMilliseconds}ms id=${track.id}');
     appLog('TRACK', 'preparing id=${track.id} idx=$index');
     try {
-      // Pausa el backend ANTES de resolver la fuente. Con just_audio es
-      // imprescindible: `playing` NO se resetea en setAudioSource y `play()`
-      // retorna temprano sin emitir si ya sonaba → `_playing` quedaría en
-      // false (UI en pausa/loading) con la pista nueva sonando. Al pausar
-      // aquí, just_audio emite playing=false y el open()+play() posterior
-      // emite true → el estado queda sincronizado. De paso corta la pista
-      // anterior al instante (con media_kit open() ya la cortaba; con
-      // just_audio setAudioSource no detiene la anterior mientras resolve
-      // descarga la nueva).
+      // Pause the backend BEFORE resolving the source. This is mandatory with just_audio: `playing` is NOT reset in setAudioSource and `play()` returns early without emitting if it was already playing -> `_playing` would stay false (UI paused/loading) while the new track plays. By pausing here, just_audio emits playing=false and the later open()+play() emits true -> state ends synchronized. It also cuts the previous track immediately (with media_kit open() already did that; with just_audio setAudioSource does not stop the previous track while resolve downloads the new one).
       await _player.pause();
       // Resolve source + enrich in parallel; play immediately, enrich later.
-      // El guard de `_openedAt` (completed espurio en <3s) sigue cubriendo
-      // cualquier completed fantasma.
+      // The `_openedAt` guard (spurious completed in <3s) still covers any phantom completed.
       final srcFuture = resolveSource(track);
       final enrichFuture = _enrich(track);
       final src = await srcFuture;
@@ -846,9 +837,9 @@ class PlayerService {
       _lastSourceIsLocal = src.isLocal;
       _openedAt = DateTime.now();
       if (kNoAudioMount) {
-        // EXPERIMENTO kNoAudioMount: sin open/play (no se monta el audio).
-        // El resto del pipeline corre: publish → artwork/acento/letras.
-        // La reproducción se simula con un ticker de posición.
+        // EXPERIMENTO kNoAudioMount: no open/play (audio is not mounted).
+        // The rest of the pipeline still runs: publish -> artwork/accent/lyrics.
+        // Playback is simulated with a position ticker.
         _startFakePlayback(track);
       } else {
         await _player.open(_mediaUri(src));
@@ -861,9 +852,7 @@ class PlayerService {
       _schedulePreloads();
       return true;
     } catch (e) {
-      // Error OBOLETO: si ya se pidió otra pista (token nuevo), este fallo
-      // es del intento viejo — no lo toast (era parte del spam "conexión
-      // abortada" en ráfagas de skips).
+      // Bearable error: if another track was already requested (new token), this failure is from the old attempt — do not toast it (it was part of the "connection aborted" spam in bursts of skips).
       if (token == _playToken) {
         _errorController.add('No se pudo reproducir "${track.title}": $e');
         if (_queueIndex < _queue.length - 1) {
@@ -882,8 +871,8 @@ class PlayerService {
     _clearPlaybackState();
     _setPreparing(track);
     try {
-      // Misma razón que en `_playAt`: pausar el backend mantiene el estado
-      // `playing` sincronizado (just_audio no emite en play() si ya sonaba).
+      // Same reason as in `_playAt`: pausing the backend keeps the `playing`
+      // state synchronized (just_audio does not emit in play() if it was already playing).
       await _player.pause();
       final srcFuture = resolveSource(track);
       final enrichFuture = _enrich(track);
@@ -944,14 +933,13 @@ class PlayerService {
     _playingController.add(false);
   }
 
-  /// Publica la pista en preparación (id + objeto) y la limpia cuando
-  /// termina la preparación. Mantiene los dos notificadores en sync.
+  /// Publish the preparing track (id + object) and clear it when preparation ends. Keeps both notifiers in sync.
   void _setPreparing(Track? track) {
     preparingTrackId.value = track?.id;
     preparingTrack.value = track;
   }
 
-  // Resets playback state to blank while loading a new track.
+  // Reset playback state to blank while loading a new track.
   void _clearPlaybackState() {
     _fakeTimer?.cancel();
     _fakeTimer = null;
@@ -970,7 +958,7 @@ class PlayerService {
     _trackController.add(track);
   }
 
-  // Updates metadata after manual edit, without touching playback.
+  // Update metadata after a manual edit, without touching playback.
   Future<void> updateCurrentMetadata(Track updated) async {
     final i = _queue.indexWhere((t) => t.id == updated.id);
     final isCurrent = _currentTrack?.id == updated.id;
@@ -990,7 +978,7 @@ class PlayerService {
     }
   }
 
-  // Applies Deezer enrichment in background. Skips if track changed.
+  // Apply Deezer enrichment in background. Skip if track changed.
   Future<void> _enrichThenApply(
     Track original,
     Future<Track?> enrichFuture,
