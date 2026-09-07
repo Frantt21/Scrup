@@ -2,7 +2,7 @@
   <img src="assets/app-logo.png" alt="Scrub icon" width="100">
 </p>
 
-# Scrup
+<h1 align="center">Scrup</h1>
 
 Scrup is a music player for YouTube that downloads tracks with `yt-dlp` and plays them from a local file using `media-kit` (the mpv engine). The first time a song plays, audio starts as soon as the partial download has data, while the download finishes in the background and is cached to disk. Later plays are served from the local cache, which avoids the dropouts of YouTube remote streams.
 
