@@ -8,13 +8,9 @@ import 'package:media_kit/media_kit.dart' show AudioDevice;
 
 import 'audio_backend.dart';
 
-/// Backend de audio sobre just_audio (ExoPlayer/Media3) para Android.
+/// Audio backend on just_audio (ExoPlayer/Media3) for Android.
 ///
-/// A diferencia de media_kit/libmpv, ExoPlayer REUTILIZA el pipeline de
-/// audio (AudioTrack + decodificadores) entre pistas: `setAudioSource` es
-/// barato y el cambio de canción no derriba/reconstruye el demuxer ni la
-/// salida. Es lo que hace forawn_mobile y por eso sus transiciones van a
-/// 80-90Hz.
+/// Unlike media_kit/libmpv, ExoPlayer REUSES the audio pipeline (AudioTrack + decoders) between tracks: `setAudioSource` is cheap and a track change does not tear down or rebuild the demuxer or the output. That is what forawn_mobile does, and that is why its transitions run at 80-90Hz.
 class JustAudioBackend implements AudioBackend {
   final AudioPlayer _player = AudioPlayer();
 
