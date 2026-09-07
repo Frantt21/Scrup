@@ -1,16 +1,15 @@
 import 'package:drift/drift.dart';
 
-/// Tabla de canciones cacheadas localmente (metadatos, NO la URL de audio,
-/// porque esas URLs expiran).
+/// Locally cached songs (metadata only, NOT the audio URL, because those URLs expire).
 @DataClassName('TrackRow')
 class Tracks extends Table {
-  TextColumn get id => text()(); // video id de YouTube
+  TextColumn get id => text()(); // YouTube video id
   TextColumn get title => text()();
   TextColumn get artist => text().withDefault(const Constant(''))();
   IntColumn get durationSeconds => integer().nullable()();
   TextColumn get thumbnailUrl => text().nullable()();
 
-  /// Álbum enriquecido vía Deezer (null si aún no se ha enriquecido).
+  /// Album enriched via Deezer (null until it has been enriched).
   TextColumn get album => text().nullable()();
   DateTimeColumn get lastPlayed => dateTime().nullable()();
   IntColumn get playCount => integer().withDefault(const Constant(0))();
@@ -19,7 +18,7 @@ class Tracks extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// Historial de reproducción (relaciona pista + timestamp).
+/// Playback history (links track + timestamp).
 @DataClassName('HistoryRow')
 class History extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -27,32 +26,31 @@ class History extends Table {
   DateTimeColumn get playedAt => dateTime()();
 }
 
-/// Playlist creada por el usuario.
+/// User-created playlist.
 @DataClassName('PlaylistRow')
 class Playlists extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
-  /// Portada de la playlist (URL del artwork de una de sus canciones, o
-  /// null si aún no tiene).
+  /// Playlist cover (URL of the artwork of one of its songs, or null if none yet).
   TextColumn get coverUrl => text().nullable()();
 
-  /// Descripción opcional escrita por el usuario.
+  /// Optional description written by the user.
   TextColumn get description => text().nullable()();
 
-  /// Playlist especial de Favoritos (siempre al final, no se puede borrar).
+  /// Special Favorites playlist (always last, cannot be deleted).
   BoolColumn get isFavorites => boolean().withDefault(const Constant(false))();
 
-  /// Última vez que se reprodujo la playlist (para las "recientes" del inicio).
+  /// Last time the playlist was played (for the home recent playlists section).
   DateTimeColumn get lastPlayedAt => dateTime().nullable()();
 }
 
-/// Lyrics cacheadas de una canción (LRC sincronizado).
+/// Cached lyrics for a song (synced LRC).
 @DataClassName('LyricsRow')
 class Lyrics extends Table {
-  TextColumn get id => text()(); // title_artist normalizado
-  TextColumn get lrcContent => text()(); // contenido LRC completo
+  TextColumn get id => text()(); // normalized title_artist
+  TextColumn get lrcContent => text()(); // full LRC content
   BoolColumn get isNotFound => boolean().withDefault(const Constant(false))();
   DateTimeColumn get fetchedAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -60,18 +58,15 @@ class Lyrics extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// Caché de paletas de artwork: el acento del reproductor (1 color) y el
-/// trío del fondo fullscreen (3 colores), por URL de portada.
+/// Artwork palette cache: the player accent (1 color) and the fullscreen background trio (3 colors), by cover URL.
 ///
-/// Sustituye al JSON plano anterior: escrituras incrementales (INSERT OR
-/// REPLACE por entrada), sin reescritura completa ni carga total creciendo
-/// sin límite. [usedAt] ordena el recorte LRU.
+/// Replaces the former plain JSON: incremental writes (INSERT OR REPLACE per entry), no full rewrite, and total load does not grow unbounded. [usedAt] orders LRU trimming.
 @DataClassName('PaletteRow')
 class PaletteCache extends Table {
-  TextColumn get id => text()(); // URL del artwork
-  IntColumn get c1 => integer()(); // ARGB acento / primer color
-  IntColumn get c2 => integer().nullable()(); // ARGB (trío)
-  IntColumn get c3 => integer().nullable()(); // ARGB (trío)
+  TextColumn get id => text()(); // artwork URL
+  IntColumn get c1 => integer()(); // ARGB accent / first color
+  IntColumn get c2 => integer().nullable()(); // ARGB (trio)
+  IntColumn get c3 => integer().nullable()(); // ARGB (trio)
   DateTimeColumn get usedAt => dateTime().withDefault(currentDateAndTime)();
 
   @override
