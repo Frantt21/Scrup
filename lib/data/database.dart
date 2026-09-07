@@ -7,23 +7,22 @@ import 'tables.dart';
 
 part 'database.g.dart';
 
-/// Modelo de dominio para una playlist (evita filtrar DataClass de drift).
+/// Domain model for a playlist (avoids filtering drift's DataClass).
 class Playlist {
   final int id;
   final String name;
   final DateTime createdAt;
 
-  /// Portada de la playlist (URL del artwork de una de sus canciones, o
-  /// ruta local si la eligió el usuario).
+  /// Playlist cover (URL of the artwork of one of its songs, or a local path if the user chose one).
   final String? coverUrl;
 
-  /// Descripción opcional escrita por el usuario.
+  /// Optional description written by the user.
   final String? description;
 
-  /// Playlist especial de Favoritos (siempre al final, no se puede borrar).
+  /// Special Favorites playlist (always last, cannot be deleted).
   final bool isFavorites;
 
-  /// Última vez que se reprodujo la playlist (null si nunca se ha reproducido).
+  /// Last time the playlist was played (null if never played).
   final DateTime? lastPlayedAt;
 
   const Playlist({
@@ -41,7 +40,7 @@ class Playlist {
   tables: [Tracks, History, Playlists, PlaylistTracks, Lyrics, PaletteCache],
 )
 class AppDatabase extends _$AppDatabase {
-  /// [executor] permite inyectar una base en memoria en los tests.
+  /// [executor] lets tests inject an in-memory database.
   AppDatabase({QueryExecutor? executor})
     : super(executor ?? driftDatabase(name: 'scrup'));
 
@@ -75,19 +74,19 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(playlists, playlists.isFavorites);
       }
       if (from < 7) {
-        // Tabla de lyrics cacheadas
+        // Cached lyrics table
         await m.createTable(lyrics);
-        // Migrar lyrics viejas de SharedPreferences a SQLite (una sola vez).
+        // Migrate old lyrics from SharedPreferences to SQLite (once).
         await _migrateSharedPrefsLyrics();
       }
       if (from < 8) {
-        // Caché de paletas de artwork (acento + trío fullscreen), antes en
-        // palette_cache.json. El JSON viejo se elimina best-effort al
-        // arrancar (ver PaletteCacheStore.load).
+        // Artwork palette cache (accent + fullscreen trio), formerly in
+        // palette_cache.json. The old JSON is removed best-effort on startup
+        // (see PaletteCacheStore.load).
         await m.createTable(paletteCache);
       }
       if (from < 9) {
-        // Fecha de última reproducción de la playlist (para "recientes").
+        // Last played timestamp for a playlist (for "recent playlists").
         await m.addColumn(playlists, playlists.lastPlayedAt);
       }
     },
@@ -95,12 +94,11 @@ class AppDatabase extends _$AppDatabase {
 
   // -------------------------------------------------- paletas de artwork
 
-  /// Inserta o actualiza una entrada de paleta (acento único: [colors] con
-  /// 1 elemento; trío fullscreen: 3). Actualiza `usedAt` para el LRU.
+  /// Insert or update a palette entry (single accent: [colors] with 1 element; fullscreen trio: 3). Updates `usedAt` for LRU.
   Future<void> upsertPalette(String url, List<int> colors) async {
     assert(colors.isNotEmpty && colors.length <= 3);
     await into(paletteCache).insertOnConflictUpdate(
-      // Columnas NO anulables sin default: valor crudo (no Value).
+      // Non-nullable columns with no default: raw value (not Value).
       PaletteCacheCompanion.insert(
         id: url,
         c1: colors[0],
@@ -110,11 +108,10 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Todas las entradas persistidas (para poblar la caché en memoria al
-  /// arrancar).
+  /// All persisted entries (to populate the in-memory cache on startup).
   Future<List<PaletteRow>> allPalettes() => select(paletteCache).get();
 
-  /// Recorte LRU: deja solo las [keep] entradas usadas más recientemente.
+  /// LRU trim: keep only the [keep] most recently used entries.
   Future<void> trimPalettes(int keep) async {
     await customStatement(
       'DELETE FROM palette_cache WHERE id NOT IN '
@@ -123,12 +120,12 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Elimina una entrada de paleta (recálculo manual).
+  /// Delete a palette entry (manual recalculation).
   Future<void> deletePalette(String url) async {
     await (delete(paletteCache)..where((r) => r.id.equals(url))).go();
   }
 
-  /// URLs de artwork DISTINTAS de una playlist (para recalcular paletas).
+  /// Distinct artwork URLs from a playlist (for palette recalculation).
   Future<List<String>> distinctPlaylistArtworks(int playlistId) async {
     final query = selectOnly(
       playlistTracks,
@@ -148,7 +145,7 @@ class AppDatabase extends _$AppDatabase {
   String _lyricsKey(String title, String artist) =>
       '${title.toLowerCase().trim()}_${artist.toLowerCase().trim()}';
 
-  /// Guarda lyrics (LRC) en la base de datos.
+  /// Save lyrics (LRC) to the database.
   Future<void> storeLyrics(
     String title,
     String artist,
@@ -166,7 +163,7 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Obtiene lyrics almacenadas, o null si no existen.
+  /// Get stored lyrics, or null if none exist.
   Future<String?> getStoredLrc(String title, String artist) async {
     final key = _lyricsKey(title, artist);
     final row = await (select(
@@ -177,8 +174,7 @@ class AppDatabase extends _$AppDatabase {
     return row.lrcContent.isEmpty ? null : row.lrcContent;
   }
 
-  /// Marca una canción como "lyrics no encontradas" para evitar búsquedas
-  /// repetidas.
+  /// Mark a song as "lyrics not found" to avoid repeated searches.
   Future<void> markLyricsNotFound(String title, String artist) async {
     final key = _lyricsKey(title, artist);
     await into(lyrics).insertOnConflictUpdate(
@@ -191,22 +187,21 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Elimina lyrics cacheadas de una canción.
+  /// Delete cached lyrics for a song.
   Future<void> deleteLyrics(String title, String artist) async {
     final key = _lyricsKey(title, artist);
     await (delete(lyrics)..where((l) => l.id.equals(key))).go();
   }
 
-  /// Migra lyrics de SharedPreferences (formato legacy) a SQLite.
-  /// Se ejecuta una sola vez durante la migración v6→v7 y borra las
-  /// claves viejas de SharedPreferences después de migrarlas.
+  /// Migrate lyrics from SharedPreferences (legacy format) to SQLite.
+  /// It runs once during the v6->v7 migration and clears the old SharedPreferences keys afterward.
   Future<void> _migrateSharedPrefsLyrics() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final keys = prefs.getKeys();
       for (final prefKey in keys) {
         if (prefKey.startsWith('scrup_lyrics_nf_')) {
-          // Marca "no encontrado" → migrar como isNotFound=true
+          // Mark "not found" -> migrate as isNotFound=true
           final songKey = prefKey.replaceFirst('scrup_lyrics_nf_', '');
           await into(lyrics).insertOnConflictUpdate(
             LyricsCompanion(
@@ -220,7 +215,7 @@ class AppDatabase extends _$AppDatabase {
           continue;
         }
         if (!prefKey.startsWith('scrup_lyrics_')) continue;
-        // Lyrics encontradas → migrar como isNotFound=false
+        // Found lyrics -> migrate as isNotFound=false
         final lrcContent = prefs.getString(prefKey);
         final songKey = prefKey.replaceFirst('scrup_lyrics_', '');
         if (lrcContent == null || lrcContent.isEmpty) {
@@ -238,13 +233,12 @@ class AppDatabase extends _$AppDatabase {
         await prefs.remove(prefKey);
       }
     } catch (_) {
-      // Silencioso: la migración es best-effort.
+      // Silent: the migration is best-effort.
     }
   }
 
   // ---------------------------------------------------------------- cache
-  /// Guarda (o actualiza) los metadatos de una pista. Nunca guardamos la URL
-  /// de audio porque expira.
+  /// Save (or update) a track's metadata. We never save the audio URL because it expires.
   Future<void> cacheTrack(Track track) async {
     await into(tracks).insertOnConflictUpdate(
       TracksCompanion.insert(
@@ -258,13 +252,10 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Actualiza los metadatos cacheados de una pista (p. ej. al llegar el
-  /// enriquecimiento de Deezer) sin tocar el historial. Como las recientes
-  /// hacen JOIN con `tracks`, el artwork/álbum enriquecidos se reflejan al
-  /// instante en el inicio.
+  /// Update a cached track's metadata (e.g. when Deezer enrichment arrives) without touching history. Since recent tracks JOIN `tracks`, the enriched artwork/album appear instantly on the home screen.
   Future<void> updateTrackMetadata(Track track) => cacheTrack(track);
 
-  /// Devuelve los metadatos cacheados de una pista, si existen.
+  /// Return a track's cached metadata, if any exist.
   Future<Track?> getCachedTrack(String id) async {
     final row = await (select(
       tracks,
@@ -273,11 +264,9 @@ class AppDatabase extends _$AppDatabase {
     return _trackFromRow(row);
   }
 
-  /// Últimas canciones reproducidas (para la pantalla principal sin conexión).
+  /// Recent songs played (for the offline home screen).
   ///
-  /// Deduplica por track id: cada canción aparece una sola vez, usando la
-  /// reproducción más reciente. El historial está acotado por el pruning
-  /// (60 días), así que traemos todas las filas y deduplicamos en memoria.
+  /// Deduplicate by track id: each song appears only once, using the most recent play. History is bounded by pruning (60 days), so we fetch all rows and deduplicate in memory.
   Stream<List<Track>> watchRecentlyPlayed({int limit = 30}) {
     final query =
         (select(history)..orderBy([(h) => OrderingTerm.desc(h.playedAt)])).join(
@@ -299,8 +288,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   // ------------------------------------------------------------- historial
-  /// Registra una reproducción (marca lastPlayed, incrementa playCount y
-  /// añade una fila al historial).
+  /// Record a play (mark lastPlayed, increment playCount, add a history row).
   Future<void> recordPlay(Track track) async {
     await cacheTrack(track);
     await (update(tracks)..where((t) => t.id.equals(track.id))).write(
@@ -314,7 +302,7 @@ class AppDatabase extends _$AppDatabase {
     await into(history).insert(
       HistoryCompanion.insert(trackId: track.id, playedAt: DateTime.now()),
     );
-    // Pruning: mantener solo los últimos 60 días de historial
+    // Pruning: keep only the last 60 days of history
     await (delete(history)..where(
           (h) => h.playedAt.isSmallerThanValue(
             DateTime.now().subtract(const Duration(days: 60)),
@@ -325,8 +313,8 @@ class AppDatabase extends _$AppDatabase {
 
   // ------------------------------------------------------------ playlists
   Stream<List<Playlist>> watchPlaylists() {
-    // Favoritos siempre al final (isFavorites=false primero); el resto por
-    // creación, las más recientes primero.
+    // Favorites always last (isFavorites=false first); the rest by
+    // creation, most recent first.
     final query = select(playlists)
       ..orderBy([
         (p) => OrderingTerm.asc(p.isFavorites),
@@ -349,9 +337,7 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Observa las playlists por fecha de reproducción (más recientes primero),
-  /// para la sección de "playlists recientes" del inicio. Solo las que se han
-  /// reproducido alguna vez.
+  /// Watch playlists by play date (most recent first), for the home recent playlists section. Only playlists that have been played at least once.
   Stream<List<Playlist>> watchRecentPlaylists({int limit = 10}) {
     final query = select(playlists)
       ..where((p) => p.lastPlayedAt.isNotNull())
@@ -374,15 +360,14 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Registra que [playlistId] se reprodujo ahora (para las "recientes").
+  /// Record that [playlistId] was played now (for recent playlists).
   Future<void> markPlaylistPlayed(int playlistId) async {
     await (update(playlists)..where((p) => p.id.equals(playlistId))).write(
       PlaylistsCompanion(lastPlayedAt: Value(DateTime.now())),
     );
   }
 
-  /// Observa una playlist concreta (para reflejar cambios de portada en el
-  /// detalle).
+  /// Watch a specific playlist (to reflect cover changes in the detail view).
   Stream<Playlist?> watchPlaylist(int id) {
     final query = select(playlists)..where((p) => p.id.equals(id));
     return query.watchSingleOrNull().map(
@@ -400,8 +385,7 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Número de canciones por playlist (para mostrar en las tarjetas del
-  /// grid).
+  /// Number of songs per playlist (to show on the grid cards).
   Stream<Map<int, int>> watchPlaylistTrackCounts() {
     final query = selectOnly(playlistTracks)
       ..addColumns([playlistTracks.playlistId, playlistTracks.trackId.count()])
@@ -417,7 +401,7 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Crea una playlist y devuelve su id.
+  /// Create a playlist and return its id.
   Future<int> createPlaylist(String name) async {
     final id = await into(
       playlists,
@@ -471,7 +455,7 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Devuelve el id de la playlist de Favoritos, creándola si no existe.
+  /// Return the Favorites playlist id, creating it if it does not exist.
   Future<int> ensureFavoritesPlaylist() async {
     final existing = await (select(
       playlists,
@@ -485,8 +469,7 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Ids de las playlists que ya contienen [trackId]: el modal de "añadir a
-  /// playlist" marca con un check las que ya la tienen.
+  /// ids of playlists that already contain [trackId]: the "add to playlist" modal marks those with a check.
   Future<Set<int>> playlistIdsContainingTrack(String trackId) async {
     final rows = await (select(
       playlistTracks,
@@ -494,7 +477,7 @@ class AppDatabase extends _$AppDatabase {
     return rows.map((r) => r.playlistId).toSet();
   }
 
-  /// `true` mientras la pista esté en la playlist (stream reactivo).
+  /// `true` while the track is in the playlist (reactive stream).
   Stream<bool> watchTrackInPlaylist(int playlistId, String trackId) {
     final query = select(playlistTracks)
       ..where(
@@ -503,7 +486,7 @@ class AppDatabase extends _$AppDatabase {
     return query.watch().map((rows) => rows.isNotEmpty);
   }
 
-  /// Canciones de una playlist (con metadatos cacheados), en orden.
+  /// Songs of a playlist (with cached metadata), in order.
   Stream<List<Track>> watchPlaylistTracks(int playlistId) {
     final query =
         (select(playlistTracks)
@@ -518,7 +501,7 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Añade una canción al final de una playlist (no duplica).
+  /// Add a song to the end of a playlist (no duplicates).
   Future<void> addToPlaylist(int playlistId, Track track) async {
     await cacheTrack(track);
     final existing =
@@ -546,8 +529,7 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
 
-    // Portada por defecto: si la playlist aún no tiene y la canción trae
-    // artwork, usarlo como portada.
+    // Default cover: if the playlist still has none and the song has artwork, use it as the cover.
     final playlist = await getPlaylist(playlistId);
     if (playlist != null &&
         playlist.coverUrl == null &&
@@ -563,9 +545,7 @@ class AppDatabase extends _$AppDatabase {
         .go();
   }
 
-  /// Últimas pistas añadidas a [playlistId] (para el banner "Tus me gusta"
-  /// de home: las 3 portadas más recientes, sobrepuestas). Se usa el orden
-  /// de la playlist (position DESC) como proxy de "añadido más reciente".
+  /// Most recently added tracks to [playlistId] (for the home "Your likes" banner: the 3 most recent covers, overlaid). It uses the playlist order (position DESC) as a proxy for "most recently added".
   Stream<List<Track>> watchLatestPlaylistTracks(
     int playlistId, {
     int limit = 3,
@@ -586,9 +566,7 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Reordena las canciones de [playlistId] según [trackIds] (orden final
-  /// completo): batch de UPDATEs de posición en una sola transacción. El
-  /// stream de `watchPlaylistTracks` re-emite el orden persistido.
+  /// Reorder the songs of [playlistId] according to [trackIds] (full final order): a batch of position UPDATEs in one transaction. The `watchPlaylistTracks` stream re-emits the persisted order.
   Future<void> reorderPlaylistTracks(
     int playlistId,
     List<String> trackIds,
