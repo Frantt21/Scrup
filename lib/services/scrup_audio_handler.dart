@@ -78,8 +78,7 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
         _playing = playing;
         _publishPlaybackState();
       }),
-      // Sin processingState la sesión queda en STATE_NONE y SystemUI no
-      // pinta timestamp/seekbar (el progreso necesita READY/PLAYING).
+      // Without processingState the session stays in STATE_NONE and SystemUI does not paint timestamp/seekbar (the progress needs READY/PLAYING).
       player.buffering.listen((buffering) {
         _buffering = buffering;
         _publishPlaybackState();
@@ -92,9 +91,7 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
         _lastPublishedSec = sec;
         _publishPlaybackState();
       }),
-      // La duración real llega DESPUÉS de publicar la pista (enriquecido o
-      // cabecera del stream): se re-emite el MediaItem para que la
-      // notificación pinte el timestamp total y la seekbar.
+      // The real duration arrives AFTER publishing the track (enriched or stream header): the MediaItem is re-emitted so the notification paints the total timestamp and seekbar.
       player.duration.listen((d) {
         _lastDuration = d;
         final item = mediaItem.value;
@@ -148,10 +145,7 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   MediaItem _mediaItemFor(Track track) {
-    // La notificación descarga el artUri por su cuenta. Se publica la URL
-    // ORIGINAL al instante (siempre resuelve) y [_maybeUpgradeArtwork] la
-    // sube a alta resolución solo si verifica 200 — `maxresdefault.jpg` no
-    // existe en todos los videos y un 404 dejaría la notificación sin arte.
+    // The notification downloads the artUri on its own. The ORIGINAL URL is published instantly (always resolves) and [_maybeUpgradeArtwork] upgrades it to high resolution only if it verifies 200 — `maxresdefault.jpg` does not exist for every video and a 404 would leave the notification without art.
     final raw = track.thumbnailUrl;
     final art = (raw == null || raw.isEmpty) ? null : Uri.tryParse(raw);
     return MediaItem(
@@ -169,9 +163,7 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
   final Set<String> _brokenHiRes = {};
   static const int _maxArtworkProbeCache = 500;
 
-  /// Intenta subir el arte de la notificación a alta resolución sin
-  /// regresiones: verifica la variante HQ con un HEAD barato y solo la
-  /// publica si responde 200 y la pista sigue siendo la actual.
+  /// Try to upgrade the notification art to high resolution without regressions: verify the HQ variant with a cheap HEAD and publish it only if it responds 200 and the track is still the current one.
   void _maybeUpgradeArtwork(Track track) {
     final raw = track.thumbnailUrl;
     if (raw == null || raw.isEmpty) return;
