@@ -6,13 +6,9 @@ import 'package:window_manager/window_manager.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'app_logo.dart';
 
-/// Barra de título personalizada: área de arrastre + acciones opcionales
-/// ([leading] a la izquierda, [trailing] antes de los controles de ventana)
-/// + botones de control (minimizar, maximizar/restaurar, cerrar).
+/// Custom title bar: draggable area + optional actions ([leading] on the left, [trailing] before the window controls) + control buttons (minimize, maximize/restore, close).
 ///
-/// En macOS los botones de ventana NO se dibujan: el sistema conserva los
-/// traffic lights nativos (setTitleBarStyle hidden + windowButtonVisibility
-/// en main) y la barra deja 78px a la izquierda para que no se solapen.
+/// On macOS the window buttons are NOT drawn: the system keeps the native traffic lights (setTitleBarStyle hidden + windowButtonVisibility in main) and the bar leaves 78px on the left so they do not overlap.
 class CustomTitleBar extends StatefulWidget {
   final Widget? leading;
   final String? title;
