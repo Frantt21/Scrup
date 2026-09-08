@@ -828,8 +828,12 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                             ),
                           ],
                           const SizedBox(height: 4),
+                          // Placeholder con el MISMO estilo mientras llegan las
+                          // pistas: evita el flash 0 canciones → real.
                           Text(
-                            _countAndDuration,
+                            _tracksLoaded
+                                ? _countAndDuration
+                                : '—',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -840,7 +844,9 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               FilledButton.icon(
-                                onPressed: count == 0 ? null : _playAll,
+                                onPressed: !_tracksLoaded || count == 0
+                                    ? null
+                                    : _playAll,
                                 style: FilledButton.styleFrom(
                                   minimumSize: const Size(0, 44),
                                 ),
@@ -849,7 +855,9 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                               ),
                               const SizedBox(width: 12),
                               FilledButton.icon(
-                                onPressed: count == 0 ? null : _playShuffled,
+                                onPressed: !_tracksLoaded || count == 0
+                                    ? null
+                                    : _playShuffled,
                                 style: FilledButton.styleFrom(
                                   minimumSize: const Size(0, 44),
                                 ),
@@ -863,12 +871,11 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                     ),
                   ),
                 ),
-                // Track list
+                // Track list: sin spinner (el flash de 1 frame se notaba);
+                // espacio en blanco hasta que lleguen las pistas.
                 if (!_tracksLoaded)
                   const SliverFillRemaining(
-                    child: Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    child: SizedBox.shrink(),
                   )
                 else if (_tracks.isEmpty)
                   SliverFillRemaining(
@@ -1552,7 +1559,9 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   FilledButton.icon(
-                                    onPressed: count == 0 ? null : _playAll,
+                                    onPressed: !_tracksLoaded || count == 0
+                                        ? null
+                                        : _playAll,
                                     style: FilledButton.styleFrom(
                                     minimumSize: const Size(
                                         0,
@@ -1563,7 +1572,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                     label: Text(l10n.play),
                                   ),
                                   FilledButton.icon(
-                                    onPressed: count == 0
+                                    onPressed: !_tracksLoaded || count == 0
                                         ? null
                                         : _playShuffled,
                                     style: FilledButton.styleFrom(
@@ -1648,7 +1657,9 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                     ),
                                   ),
                                   Text(
-                                    _countAndDuration,
+                                    _tracksLoaded
+                                        ? _countAndDuration
+                                        : '—',
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),

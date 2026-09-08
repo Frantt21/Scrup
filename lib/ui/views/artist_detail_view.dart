@@ -683,19 +683,16 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
   @override
   void initState() {
     super.initState();
+    // Lecturas SÍNCRONAS antes del primer frame: sin flash flat ↔ full-bleed
+    // ni acento por defecto (el valor async corregía ~1 frame después).
+    _fullBleed =
+        context.read<SettingsStore>().flatPlaylistHeaderCache ?? false;
+    final url = widget.album.thumbnailUrl;
+    if (url != null && url.isNotEmpty) {
+      _accent = context.read<PaletteCacheStore>().get(url);
+    }
     unawaited(_load());
     unawaited(_extractAccent());
-    unawaited(_loadHeaderStyle());
-  }
-
-  /// Lee el estilo persistido (mismo setting que la playlist detail).
-  Future<void> _loadHeaderStyle() async {
-    final flat = await context.read<SettingsStore>().loadFlatPlaylistHeader();
-    if (!mounted || flat == null) return;
-    // En playlist: flat=true es "acento plano". Aquí flat=false ES el modo
-    // plano (por defecto en álbumes): full-bleed solo si el usuario eligió
-    // el estilo "portada completa".
-    setState(() => _fullBleed = flat);
   }
 
   /// Alterna full-bleed ↔ acento plano y persiste (mismo setting que la
@@ -813,6 +810,8 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         FilledButton.icon(
+          // Deshabilitado hasta tener pistas: el label aparece YA montado, sin
+          // el flash "sin texto → texto".
           onPressed: (tracks == null || tracks.isEmpty) ? null : _playAll,
           style: FilledButton.styleFrom(
             minimumSize: const Size(0, 44),
@@ -956,9 +955,7 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
               // ── Info + acciones (mismo padding que la playlist) ──────
               SliverToBoxAdapter(child: _albumInfo(theme, l10n, buttonRow)),
               if (tracks == null)
-                const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
-                )
+                const SliverFillRemaining(child: SizedBox.shrink())
               else if (tracks.isEmpty)
                 SliverFillRemaining(
                   child: Center(
@@ -1263,7 +1260,10 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-          ],
+          ] else
+            // Placeholder del MISMO estilo mientras llega el tracklist: sin
+            // flash vacío → real.
+            const SizedBox(height: 18),
           const SizedBox(height: 16),
           buttonRow(),
         ],

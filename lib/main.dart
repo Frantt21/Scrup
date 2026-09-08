@@ -138,6 +138,11 @@ Future<void> main() async {
   try {
     await settings.loadSkipSilenceEnabled();
   } catch (_) {}
+  // Cachea el estilo de header (flat/full-bleed) para lectura SÍNCRONA al
+  // abrir playlist/álbum/single: sin flash de estilo al entrar.
+  try {
+    await settings.loadFlatPlaylistHeader();
+  } catch (_) {}
 
   runApp(
     ScrupApp(

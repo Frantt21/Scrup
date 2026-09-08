@@ -650,31 +650,53 @@ class _HistoryDropdownState extends State<_HistoryDropdown> {
           offset: const Offset(0, 8),
           targetAnchor: Alignment.bottomLeft,
           followerAnchor: Alignment.topLeft,
-          child: Material(
-            elevation: 6,
-            borderRadius: BorderRadius.circular(14),
-            color: theme.colorScheme.surfaceContainerHigh,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280),
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                itemCount: items.length,
-                itemBuilder: (context, i) {
-                  final q = items[i];
-                  return ListTile(
-                    dense: true,
-                    leading: Icon(
-                      Icons.history_rounded,
-                      size: 20,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    title: Text(q, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    onTap: () => _pick(q),
-                  );
-                },
-              ),
-            ),
+          child: LayoutBuilder(
+            builder: (context, c) {
+              // Ancho del panel = ancho del CAMPO (leaderSize): el panel
+              // queda alineado al input, sin desbordar por el borde derecho.
+              final double fieldWidth = _link.leaderSize?.width ?? 0;
+              final EdgeInsets headerPad = Binaries.isMobile
+                  ? const EdgeInsets.fromLTRB(16, 16, 16, 8)
+                  : const EdgeInsets.fromLTRB(12, 12, 24, 8);
+              final double maxWidth = fieldWidth > 0
+                  ? fieldWidth
+                  : (c.biggest.width - headerPad.right + headerPad.left);
+              return ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: maxWidth.isFinite && maxWidth > 0
+                      ? maxWidth
+                      : double.infinity,
+                  maxHeight: 280,
+                ),
+                child: Material(
+                  elevation: 6,
+                  borderRadius: BorderRadius.circular(14),
+                  color: theme.colorScheme.surfaceContainerHigh,
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    itemCount: items.length,
+                    itemBuilder: (context, i) {
+                      final q = items[i];
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(
+                          Icons.history_rounded,
+                          size: 20,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        title: Text(
+                          q,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () => _pick(q),
+                      );
+                    },
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],
