@@ -614,8 +614,6 @@ class _RecentCardState extends State<_RecentCard> {
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            // Borde de 2px SOLO en la canción en reproducción (con el acento
-            // de su artwork). El resto de las recientes no llevan borde.
             border: widget.isCurrent
                 ? Border.all(
                     width: 2,
@@ -626,14 +624,11 @@ class _RecentCardState extends State<_RecentCard> {
                 : null,
           ),
           child: ClipRRect(
-            // MISMO radio que el contenedor con borde (14): con 18 las
-            // esquinas del artwork sobresalían del borde de 2px de la
             // canción en reproducción.
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(13),
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // Artwork completo
                 _artwork(theme),
                 // Gradiente inferior para legibilidad del texto
                 const DecoratedBox(
