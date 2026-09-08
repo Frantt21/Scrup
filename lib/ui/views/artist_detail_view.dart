@@ -4,14 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
+import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import '../../services/search_service.dart';
+import '../../services/settings_store.dart';
 import '../playlist_actions.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/scrup_toasts.dart';
 import '../widgets/track_tile.dart';
 
 /// Readable text over a background of the given color (black/white by luminance).
@@ -42,6 +45,10 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   YtmArtistDetail? _detail;
   bool _loading = true;
   String? _error;
+
+  /// true cuando el scroll pasó el header del canal: el nombre aparece
+  /// entre los botones del header flotante.
+  bool _showArtistTitle = false;
 
   /// Acento extraído de la imagen del canal (mismo camino que el detalle de playlist: PaletteCacheStore + ArtworkPaletteService). Pinta los botones y tiñe el fondo (lerp 0.30, igual que el playlist completo).
   Color? _accent;
@@ -187,7 +194,16 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
       backgroundColor: bgColor,
       body: Stack(
         children: [
-          CustomScrollView(
+          NotificationListener<ScrollNotification>(
+            onNotification: (n) {
+              final visible = n.metrics.pixels >
+                  (expandedH - 90).clamp(0.0, double.infinity);
+              if (visible != _showArtistTitle) {
+                setState(() => _showArtistTitle = visible);
+              }
+              return false;
+            },
+            child: CustomScrollView(
             physics: const BouncingScrollPhysics(
               parent: AlwaysScrollableScrollPhysics(),
             ),
@@ -333,8 +349,10 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                 ],
               ],
             ),
-            // Back flotante SIEMPRE visible (overlay externo al scroll,
-            // como la playlist detail): círculo al ACENTO del canal.
+            ),
+            // Header flotante SIEMPRE visible (overlay externo al scroll,
+            // como la playlist detail): back al ACENTO + nombre del canal
+            // cuando el hero salió de pantalla.
             Positioned(
               top: 0,
               left: 0,
@@ -342,9 +360,27 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
               child: SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _floatingCircleBtn(context),
+                  child: Row(
+                    children: [
+                      _floatingCircleBtn(context),
+                      Expanded(
+                        child: AnimatedOpacity(
+                          opacity: _showArtistTitle ? 1 : 0,
+                          duration: const Duration(milliseconds: 180),
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Simetría con el back (40dp invisible).
+                      const SizedBox(width: 40),
+                    ],
                   ),
                 ),
               ),
@@ -635,11 +671,40 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
   Color? _accent;
   String? _accentFor;
 
+  /// Estilo del header (compartido con la playlist detail): false = portada
+  /// 1:1 sobre acento plano (por defecto en álbumes), true = portada
+  /// full-bleed con degradado. Se persiste en SettingsStore.
+  bool _fullBleed = false;
+
+  /// true cuando el scroll pasó el header: el título aparece entre los
+  /// botones del header flotante.
+  bool _showScrollTitle = false;
+
   @override
   void initState() {
     super.initState();
     unawaited(_load());
     unawaited(_extractAccent());
+    unawaited(_loadHeaderStyle());
+  }
+
+  /// Lee el estilo persistido (mismo setting que la playlist detail).
+  Future<void> _loadHeaderStyle() async {
+    final flat = await context.read<SettingsStore>().loadFlatPlaylistHeader();
+    if (!mounted || flat == null) return;
+    // En playlist: flat=true es "acento plano". Aquí flat=false ES el modo
+    // plano (por defecto en álbumes): full-bleed solo si el usuario eligió
+    // el estilo "portada completa".
+    setState(() => _fullBleed = flat);
+  }
+
+  /// Alterna full-bleed ↔ acento plano y persiste (mismo setting que la
+  /// playlist detail: ambos estilos viajan juntos).
+  void _toggleHeaderStyle() {
+    setState(() => _fullBleed = !_fullBleed);
+    unawaited(
+      context.read<SettingsStore>().saveFlatPlaylistHeader(_fullBleed),
+    );
   }
 
   Future<void> _load() async {
@@ -731,6 +796,18 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
     final Color flatColor =
         Color.lerp(theme.colorScheme.surface, accent, 0.55) ??
         theme.colorScheme.surface;
+    // Fondo full-bleed (estilo playlist por defecto): lerp 0.30.
+    final Color bleedColor = Color.lerp(
+          theme.colorScheme.surfaceContainerHighest,
+          accent,
+          0.30,
+        ) ??
+        theme.colorScheme.surface;
+    final bool fullBleed = _fullBleed;
+    final Color bgColor = fullBleed ? bleedColor : flatColor;
+    final double expandedH = MediaQuery.sizeOf(context).width * (fullBleed ? 1.0 : 0.95);
+    // Umbral del título de scroll: justo antes de que el hero salga.
+    final double titleThreshold = (expandedH - 90).clamp(0.0, double.infinity);
 
     Widget buttonRow() => Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -760,21 +837,29 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
     );
 
     return Scaffold(
-      backgroundColor: flatColor,
+      backgroundColor: bgColor,
       // MISMO estilo que la playlist detail móvil en modo "acento plano":
       // SliverAppBar SIN pin (el hero se va entero al scrollear — nunca hay
       // un segundo header), portada 1:1 alineada al tope bajo 110dp y los
       // controles flotantes como overlay EXTERNO al scroll.
       body: Stack(
         children: [
-          CustomScrollView(
+          NotificationListener<ScrollNotification>(
+            onNotification: (n) {
+              final visible = n.metrics.pixels > titleThreshold;
+              if (visible != _showScrollTitle) {
+                setState(() => _showScrollTitle = visible);
+              }
+              return false;
+            },
+            child: CustomScrollView(
             physics: const BouncingScrollPhysics(
               parent: AlwaysScrollableScrollPhysics(),
             ),
             slivers: [
               // ── Header: SOLO portada (idéntico al flat de playlist) ──
               SliverAppBar(
-                expandedHeight: MediaQuery.sizeOf(context).width * 0.95,
+                expandedHeight: expandedH,
                 pinned: false,
                 floating: false,
                 snap: false,
@@ -789,7 +874,42 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
                     StretchMode.zoomBackground,
                     StretchMode.blurBackground,
                   ],
-                  background: Stack(
+                  background: fullBleed
+                      // Estilo "portada completa": imagen a TODO EL ALTO con
+                      // degradado que funde al fondo (mismos stops que la
+                      // playlist full-bleed).
+                      ? Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (widget.album.thumbnailUrl?.isNotEmpty ?? false)
+                              CoverImage(
+                                source: widget.album.thumbnailUrl,
+                                fit: BoxFit.cover,
+                                cacheWidth: 1200,
+                                fallback: ColoredBox(color: bgColor),
+                              )
+                            else
+                              ColoredBox(color: bgColor),
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.black.withValues(alpha: 0.18),
+                                    Colors.transparent,
+                                    bgColor.withValues(alpha: 0.75),
+                                    bgColor,
+                                  ],
+                                  stops: const [0.0, 0.38, 0.78, 1.0],
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      // Estilo "acento plano": portada 1:1 centrada bajo
+                      // los controles (idéntico al flat de playlist).
+                      : Stack(
                     fit: StackFit.expand,
                     children: [
                       ColoredBox(color: flatColor),
@@ -888,6 +1008,7 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
                   ),
                 ),
             ],
+            ),
           ),
           // ── Controles flotantes EXTERNOS al scroll (como playlist) ───
           Positioned(
@@ -905,7 +1026,22 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
                       Icons.arrow_back_rounded,
                       widget.onBack ?? () => Navigator.of(context).maybePop(),
                     ),
-                    const Spacer(),
+                    // Título del álbum SOLO cuando el hero salió de pantalla.
+                    Expanded(
+                      child: AnimatedOpacity(
+                        opacity: _showScrollTitle ? 1 : 0,
+                        duration: const Duration(milliseconds: 180),
+                        child: Text(
+                          widget.album.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
                     _floatingCircleBtn(
                       context,
                       Icons.more_vert_rounded,
@@ -945,7 +1081,9 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
     );
   }
 
-  /// Menú de 3 puntos (estilo playlist): recargar artworks del álbum.
+  /// Menú de 3 puntos (estilo playlist): recargar artworks, cambiar el
+  /// estilo del header y — SOLO en álbumes — crear una playlist con el
+  /// tracklist completo.
   Future<void> _showAlbumMenu() async {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
@@ -987,12 +1125,43 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
               title: Text(l10n.reloadArtworks),
               onTap: () => Navigator.pop(ctx, 'recalc'),
             ),
+            ListTile(
+              leading: Icon(
+                _fullBleed ? Icons.grid_view_rounded : Icons.photo_rounded,
+              ),
+              title: Text(l10n.playlistCoverStyle),
+              subtitle: Text(
+                _fullBleed
+                    ? l10n.playlistCoverStyleFull
+                    : l10n.playlistCoverStyleFlat,
+              ),
+              trailing: Icon(
+                _fullBleed ? Icons.check_rounded : Icons.chevron_right_rounded,
+              ),
+              onTap: () => Navigator.pop(ctx, 'style'),
+            ),
+            // SOLO álbumes (no singles): crea una playlist local con todo
+            // el tracklist del álbum.
+            if (!widget.album.isSingle)
+              ListTile(
+                leading: const Icon(Icons.playlist_add_rounded),
+                title: Text(l10n.createPlaylistFromAlbum),
+                onTap: () => Navigator.pop(ctx, 'create_playlist'),
+              ),
             const SizedBox(height: 8),
           ],
         ),
       ),
     );
     if (!mounted || action == null) return;
+    if (action == 'style') {
+      _toggleHeaderStyle();
+      return;
+    }
+    if (action == 'create_playlist') {
+      await _createPlaylistFromAlbum();
+      return;
+    }
     if (action == 'recalc') {
       // 1) Recalcula el acento de la portada del álbum (borra su entrada de
       //    paleta y re-extrae).
@@ -1018,6 +1187,45 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
       //    propaga a todas las filas) vuelve con la imagen vigente.
       await _reload();
     }
+  }
+
+  /// Crea una playlist local con el tracklist del álbum (SOLO álbumes).
+  /// Portada por defecto: la del álbum (el propio addToPlaylist la aplica
+  /// con la primera pista, pero aquí la fijamos de una vez).
+  Future<void> _createPlaylistFromAlbum() async {
+    final tracks = _tracks;
+    if (tracks == null || tracks.isEmpty) return;
+    final db = context.read<AppDatabase>();
+    final name = widget.album.title.trim();
+    final int id;
+    try {
+      id = await db.createPlaylist(name);
+    } catch (_) {
+      if (!mounted) return;
+      showScrupToast(
+        AppLocalizations.of(context).cantCreatePlaylist,
+        kind: ScrupToastKind.error,
+      );
+      return;
+    }
+    for (final track in tracks) {
+      try {
+        // Dedupe interno: si ya estaba, no la duplica.
+        await db.addToPlaylist(id, track);
+      } catch (_) {}
+    }
+    // Portada del álbum (si addToPlaylist ya puso una, esta la iguala).
+    final cover = widget.album.thumbnailUrl;
+    if (cover != null && cover.isNotEmpty) {
+      try {
+        await db.setPlaylistCover(id, cover);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    showScrupToast(
+      AppLocalizations.of(context).playlistCreated(name),
+      kind: ScrupToastKind.success,
+    );
   }
 
   /// Info + botones (título, año, nº de canciones, Play/Shuffle).

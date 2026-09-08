@@ -226,5 +226,6 @@
   "artistSubscribers": "人のチャンネル登録者",
   "artistDetailEmpty": "このアーティストを読み込めませんでした。",
   "retry": "再試行",
-  "playAll": "すべて再生"
+  "playAll": "すべて再生",
+  "createPlaylistFromAlbum": "このアルバムでプレイリストを作成"
 }

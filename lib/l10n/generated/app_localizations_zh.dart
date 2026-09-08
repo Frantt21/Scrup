@@ -389,6 +389,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get playlistCoverStyleFlat => 'Acento plano';
 
   @override
+  String get createPlaylistFromAlbum => '用此专辑创建播放列表';
+
+  @override
   String get colorsUpdated => '颜色已更新';
 
   @override

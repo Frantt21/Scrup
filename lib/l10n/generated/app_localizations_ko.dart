@@ -390,6 +390,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get playlistCoverStyleFlat => 'Acento plano';
 
   @override
+  String get createPlaylistFromAlbum => '이 앨범으로 플레이리스트 만들기';
+
+  @override
   String get colorsUpdated => '색상이 업데이트되었습니다';
 
   @override

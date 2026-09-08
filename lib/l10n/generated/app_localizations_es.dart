@@ -395,6 +395,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get playlistCoverStyleFlat => 'Acento plano';
 
   @override
+  String get createPlaylistFromAlbum => 'Crear playlist con este álbum';
+
+  @override
   String get colorsUpdated => 'Colores actualizados';
 
   @override

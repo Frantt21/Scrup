@@ -226,5 +226,6 @@
   "artistSubscribers": "inscritos",
   "artistDetailEmpty": "Não foi possível carregar este artista.",
   "retry": "Tentar novamente",
-  "playAll": "Reproduzir tudo"
+  "playAll": "Reproduzir tudo",
+  "createPlaylistFromAlbum": "Criar playlist com este álbum"
 }

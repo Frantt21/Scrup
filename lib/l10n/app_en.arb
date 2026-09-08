@@ -214,6 +214,7 @@
   "playlistCoverStyle": "Cover style",
   "playlistCoverStyleFull": "Full cover",
   "playlistCoverStyleFlat": "Flat accent",
+  "createPlaylistFromAlbum": "Create playlist with this album",
   "colorsUpdated": "Colors updated",
   "playlistLabel": "Playlist",
   "cacheUsed": "{used} of {limit}",

@@ -390,6 +390,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get playlistCoverStyleFlat => 'Acento plano';
 
   @override
+  String get createPlaylistFromAlbum => 'このアルバムでプレイリストを作成';
+
+  @override
   String get colorsUpdated => '色を更新しました';
 
   @override

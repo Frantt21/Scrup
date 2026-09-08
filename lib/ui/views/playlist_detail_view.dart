@@ -87,6 +87,10 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
   /// (por defecto), true = acento plano + portada 1:1.
   bool _flatHeader = false;
 
+  /// true cuando el scroll pasó el header expandido: el nombre aparece
+  /// centrado entre los botones del header flotante.
+  bool _showScrollTitle = false;
+
   late final AnimationController _searchAnimController;
 
   @override
@@ -611,6 +615,16 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
               ) ??
             bgColor);
 
+    // Alto del header expandido (compartido por la appbar y el umbral del
+    // título de scroll).
+    final double expandedH = flat
+        ? MediaQuery.sizeOf(context).width * 0.95
+        : MediaQuery.sizeOf(context).width;
+
+    /// Umbral (offset de scroll) a partir del cual el header flotante
+    /// muestra el nombre: justo antes de que el hero salga de pantalla.
+    double titleThreshold() => (expandedH - 90).clamp(0.0, double.infinity);
+
     Widget mobileRowFor(BuildContext context, int i) {
       final list = _filterActive ? _visibleTracks : _tracks;
       final track = list[i];
@@ -652,7 +666,15 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
         backgroundColor: flat ? flatColor : bgColor,
         body: Stack(
           children: [
-            CustomScrollView(
+            NotificationListener<ScrollNotification>(
+              onNotification: (n) {
+                final visible = n.metrics.pixels > titleThreshold();
+                if (visible != _showScrollTitle) {
+                  setState(() => _showScrollTitle = visible);
+                }
+                return false;
+              },
+              child: CustomScrollView(
               physics: const BouncingScrollPhysics(
                 parent: AlwaysScrollableScrollPhysics(),
               ),
@@ -662,9 +684,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                   // En flat (acento plano) el header es más compacto: solo el
                   // alto necesario para la portada 1:1, evitando el enorme
                   // hueco vacío antes del título.
-                  expandedHeight: flat
-                      ? MediaQuery.sizeOf(context).width * 0.95
-                      : MediaQuery.sizeOf(context).width,
+                  expandedHeight: expandedH,
                   pinned: false,
                   floating: false,
                   snap: false,
@@ -923,6 +943,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                     ),
                   ),
               ],
+              ),
             ),
             // Floating header: (back) ... (search)(more) OR animated search bar
             Positioned(
@@ -1028,7 +1049,24 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                 theme,
                                 widget.onBack,
                               ),
-                              const Spacer(),
+                              // Nombre de la playlist SOLO cuando el hero
+                              // salió de pantalla (scroll superado).
+                              Expanded(
+                                child: AnimatedOpacity(
+                                  opacity: _showScrollTitle ? 1 : 0,
+                                  duration: const Duration(milliseconds: 180),
+                                  child: Text(
+                                    playlist.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ),
+                              ),
                               _floatingCircleBtn(
                                 Icons.search_rounded,
                                 theme,

@@ -811,6 +811,12 @@ abstract class AppLocalizations {
   /// **'Acento plano'**
   String get playlistCoverStyleFlat;
 
+  /// No description provided for @createPlaylistFromAlbum.
+  ///
+  /// In es, this message translates to:
+  /// **'Crear playlist con este álbum'**
+  String get createPlaylistFromAlbum;
+
   /// No description provided for @colorsUpdated.
   ///
   /// In es, this message translates to:

@@ -226,5 +226,6 @@
   "artistSubscribers": "位订阅者",
   "artistDetailEmpty": "无法加载此歌手。",
   "retry": "重试",
-  "playAll": "播放全部"
+  "playAll": "播放全部",
+  "createPlaylistFromAlbum": "用此专辑创建播放列表"
 }

@@ -226,5 +226,6 @@
   "artistSubscribers": "подписчиков",
   "artistDetailEmpty": "Не удалось загрузить этого исполнителя.",
   "retry": "Повторить",
-  "playAll": "Слушать всё"
+  "playAll": "Слушать всё",
+  "createPlaylistFromAlbum": "Создать плейлист из этого альбома"
 }

@@ -394,6 +394,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get playlistCoverStyleFlat => 'Acento plano';
 
   @override
+  String get createPlaylistFromAlbum => 'Criar playlist com este álbum';
+
+  @override
   String get colorsUpdated => 'Cores atualizados';
 
   @override
@@ -1108,6 +1111,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get reloadArtworks => 'Recarregar artworks';
+
+  @override
+  String get createPlaylistFromAlbum => 'Criar playlist com este álbum';
 
   @override
   String get colorsUpdated => 'Cores atualizados';

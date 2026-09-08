@@ -397,6 +397,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get playlistCoverStyleFlat => 'Acento plano';
 
   @override
+  String get createPlaylistFromAlbum => 'Создать плейлист из этого альбома';
+
+  @override
   String get colorsUpdated => 'Цвета обновлены';
 
   @override

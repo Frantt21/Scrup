@@ -231,57 +231,19 @@ class _SearchViewState extends State<SearchView> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
+                    // Historial como DROPDOWN: overlay anclado al campo.
+                    // Se despliega al enfocar el input y se cierra al
+                    // buscar o perder el foco (sin pills fijas).
+                    _HistoryDropdown(
                       controller: _searchController,
                       focusNode: _searchFocus,
-                      onSubmitted: _search,
-                      textInputAction: TextInputAction.search,
-                      decoration: InputDecoration(
-                        hintText: l10n.searchHint,
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        suffixIcon: _searching
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              )
-                            : null,
-                        filled: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(28),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                        ),
-                      ),
+                      history: _history,
+                      searching: _searching,
+                      onPick: (q) {
+                        _searchController.text = q;
+                        _search(q);
+                      },
                     ),
-                    // Historial persistente de búsquedas: chips bajo el campo; un toque repite la consulta.
-                  if (_history.isNotEmpty)
-                    ...[for (final q in _history)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: ActionChip(
-                          avatar: const Icon(
-                            Icons.history_rounded,
-                            size: 18,
-                          ),
-                          label: Text(q),
-                          visualDensity: VisualDensity.compact,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          onPressed: () {
-                            _searchController.text = q;
-                            _search(q);
-                          },
-                        ),
-                      )]
                   ],
                 ),
               ),
@@ -361,33 +323,23 @@ class _SearchViewState extends State<SearchView> {
                                 vertical: 12,
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            height: 34,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: _history.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(width: 8),
-                              itemBuilder: (context, i) {
-                                final q = _history[i];
-                                return ActionChip(
-                                  label: Text(q),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  onPressed: () {
-                                    _searchController.text = q;
-                                    _search(q);
-                                  },
-                                );
-                              },
-                            ),
+                          ),                          const SizedBox(height: 12),
+                          // Historial como DROPDOWN (mismo widget que
+                          // móvil): overlay anclado al campo.
+                          _HistoryDropdown(
+                            controller: _searchController,
+                            focusNode: _searchFocus,
+                            history: _history,
+                            searching: _searching,
+                            onPick: (q) {
+                              _searchController.text = q;
+                              _search(q);
+                            },
                           ),
                         ],
                       ),
                     ),
+
                     Expanded(child: _buildBody(theme)),
                   ],
                 ),
@@ -593,6 +545,173 @@ class _ArtistTile extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Dropdown del historial de búsqueda: overlay anclado al campo que se
+/// despliega al ENFOCAR el input y se cierra al buscar o perder el foco.
+/// Sustituye a las pills fijas bajo el campo.
+class _HistoryDropdown extends StatefulWidget {
+  const _HistoryDropdown({
+    required this.controller,
+    required this.focusNode,
+    required this.history,
+    required this.searching,
+    required this.onPick,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final List<String> history;
+  final bool searching;
+  final ValueChanged<String> onPick;
+
+  @override
+  State<_HistoryDropdown> createState() => _HistoryDropdownState();
+}
+
+class _HistoryDropdownState extends State<_HistoryDropdown> {
+  final LayerLink _link = LayerLink();
+  OverlayEntry? _entry;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_onFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(_HistoryDropdown old) {
+    super.didUpdateWidget(old);
+    // Historial nuevo (o búsqueda en curso): repinta el overlay abierto.
+    if (_entry != null && mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _removeOverlay();
+    widget.focusNode.removeListener(_onFocusChanged);
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (widget.focusNode.hasFocus) {
+      _showOverlay();
+    } else {
+      _removeOverlay();
+    }
+  }
+
+  void _showOverlay() {
+    if (_entry != null) return;
+    _entry = OverlayEntry(builder: (_) => _buildPanel());
+    Overlay.of(context, rootOverlay: true).insert(_entry!);
+  }
+
+  void _removeOverlay() {
+    _entry?.remove();
+    _entry = null;
+  }
+
+  void _pick(String q) {
+    widget.focusNode.unfocus();
+    _removeOverlay();
+    widget.onPick(q);
+  }
+
+  Widget _buildPanel() {
+    final theme = Theme.of(context);
+    final items = widget.history
+        .where(
+          (q) => q
+              .toLowerCase()
+              .contains(widget.controller.text.trim().toLowerCase()),
+        )
+        .toList();
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Stack(
+      children: [
+        // Scrim invisible: un toque fuera cierra el dropdown.
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              widget.focusNode.unfocus();
+              _removeOverlay();
+            },
+          ),
+        ),
+        CompositedTransformFollower(
+          link: _link,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 8),
+          targetAnchor: Alignment.bottomLeft,
+          followerAnchor: Alignment.topLeft,
+          child: Material(
+            elevation: 6,
+            borderRadius: BorderRadius.circular(14),
+            color: theme.colorScheme.surfaceContainerHigh,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                itemCount: items.length,
+                itemBuilder: (context, i) {
+                  final q = items[i];
+                  return ListTile(
+                    dense: true,
+                    leading: Icon(
+                      Icons.history_rounded,
+                      size: 20,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    title: Text(q, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    onTap: () => _pick(q),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _link,
+      child: TextField(
+        controller: widget.controller,
+        focusNode: widget.focusNode,
+        onSubmitted: (q) {
+          _removeOverlay();
+          widget.onPick(q);
+        },
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: AppLocalizations.of(context).searchHint,
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: widget.searching
+              ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : null,
+          filled: true,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
         ),
       ),
     );

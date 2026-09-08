@@ -754,9 +754,10 @@ class _YourLikesBanner extends StatelessWidget {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
 
-    // Portadas sobrepuestas: CUADRADAS (mismo radio que el artwork del
-    // player, 18dp), SIN borde, y a TODO EL ALTO del banner. Apiladas con
-    // la más reciente ENCIMA.
+    // Portadas sobrepuestas 1:1 (mismo radio 18dp que el artwork del
+    // player), SIN borde. La más reciente ENCIMA; la última PEGA al borde
+    // derecho del banner (sin margen: el ClipRRect del banner recorta la
+    // esquina por el radio 16, como las covers de playlists).
     const double coverRadius = 18.0;
     // ALTURA FIJA de la pila: dentro de un sliver la altura no viene
     // acotada (double.infinity en contexto sin límite = excepción de
@@ -796,9 +797,9 @@ class _YourLikesBanner extends StatelessWidget {
       child: InkWell(
         onTap: onOpenPlaylist,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 8, 0),
-          // SIN padding vertical: las portadas ocupan todo el alto del card
-          // (el ClipRRect del banner recorta las esquinas por el radio 16).
+          // Solo padding IZQUIERDO: la pila de portadas llega hasta el borde
+          // derecho real del card (la tercera queda pegada al extremo).
+          padding: const EdgeInsets.only(left: 14),
           child: Row(
             children: [
               Icon(Icons.favorite_rounded, color: accent, size: 22),
@@ -814,17 +815,21 @@ class _YourLikesBanner extends StatelessWidget {
                   ),
                 ),
               ),
-              // Pila: la más reciente encima, desplazadas 26px cada una.
+              // Pila 1:1: cada cover mide bannerHeight (cuadrada), la más
+              // reciente encima desplazada 30px a la izquierda. La última
+              // (más vieja) queda alineada al borde derecho SIN margen.
               SizedBox(
-                width: 56 + (covers.length - 1) * 26.0,
+                width: bannerHeight + (covers.length - 1) * 30.0,
                 height: bannerHeight,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
                     for (var i = covers.length - 1; i >= 0; i--)
-                      Positioned.fill(
-                        left: i * 26.0,
-                        right: (covers.length - 1 - i) * 26.0,
+                      Positioned(
+                        right: i * 30.0,
+                        top: 0,
+                        bottom: 0,
+                        width: bannerHeight,
                         child: covers[i],
                       ),
                   ],
