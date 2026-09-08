@@ -1,5 +1,8 @@
-![Scrup icon](assets/app-logo.png)
-# Scrup
+<p align="center">
+  <img src="assets/app-logo.png" alt="Scrub icon" width="100">
+</p>
+
+<h1 align="center">Scrup</h1>
 
 Scrup is a music player for YouTube that downloads tracks with `yt-dlp` and plays them from a local file using `media-kit` (the mpv engine). The first time a song plays, audio starts as soon as the partial download has data, while the download finishes in the background and is cached to disk. Later plays are served from the local cache, which avoids the dropouts of YouTube remote streams.
 
@@ -45,53 +48,6 @@ Target platforms: Windows, Linux and macOS with a single Flutter codebase.
 - Dynamic title: the Discord header shows the song title instead of the app name.
 - Pause support: the progress bar and timer freeze when paused and resume when playing.
 - Small icon: an optional app icon can appear in the presence thumbnail. It is configured in the Discord Developer Portal.
-
-### Settings
-- Keyboard shortcuts: a full categorized list is shown in the settings screen.
-- Cache limit: choose from presets between 512 MB and unlimited, or open the cache folder directly.
-- Lyrics mode: toggle the word-by-word karaoke sweep and silence skip.
-- Discord toggle: enable or disable Rich Presence.
-- Language: switch between eight languages. The choice persists between sessions.
-- Playlist recalculation: recalculate artwork palettes for all songs in a playlist.
-
-### Keyboard shortcuts
-
-Shortcuts are disabled when a text field is focused, such as search or metadata editing, to avoid conflicts.
-
-#### Playback
-| Key | Action |
-|---|---|
-| Space | Play / Pause |
-| N | Next track |
-| P | Previous track |
-| Right | Seek forward 10s |
-| Left | Seek backward 10s |
-| Mouse side button back | Previous track |
-| Mouse side button forward | Next track |
-| F | Add / remove from favorites |
-
-#### Volume
-| Key | Action |
-|---|---|
-| Up | Volume up 5% |
-| Down | Volume down 5% |
-| M | Mute / Unmute |
-
-#### Navigation
-| Key | Action |
-|---|---|
-| L | Toggle lyrics |
-| Q | Toggle queue |
-| , | Toggle settings |
-| Esc | Close active panel |
-| F11 | Fullscreen |
-
-#### Modes
-| Key | Action |
-|---|---|
-| S | Toggle shuffle |
-| R | Toggle repeat |
-| D | Toggle radio |
 
 ## Requirements
 
