@@ -222,6 +222,7 @@
   "searchArtistPlaying": "{name} を再生中",
   "artistTopTracks": "人気の曲",
   "artistAlbums": "アルバムとシングル",
+  "artistSingles": "シングル",
   "artistSubscribers": "人のチャンネル登録者",
   "artistDetailEmpty": "このアーティストを読み込めませんでした。",
   "retry": "再試行",

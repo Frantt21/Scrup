@@ -359,6 +359,7 @@
   "searchArtistPlaying": "Playing {name}",
   "artistTopTracks": "Popular",
   "artistAlbums": "Albums & singles",
+  "artistSingles": "Singles",
   "artistSubscribers": "subscribers",
   "artistDetailEmpty": "Could not load this artist.",
   "retry": "Retry",

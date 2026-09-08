@@ -273,6 +273,9 @@ class _SearchViewState extends State<SearchView> {
                           ),
                           label: Text(q),
                           visualDensity: VisualDensity.compact,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                           onPressed: () {
                             _searchController.text = q;
                             _search(q);
@@ -371,6 +374,9 @@ class _SearchViewState extends State<SearchView> {
                                 final q = _history[i];
                                 return ActionChip(
                                   label: Text(q),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
                                   onPressed: () {
                                     _searchController.text = q;
                                     _search(q);
@@ -450,7 +456,11 @@ class _SearchViewState extends State<SearchView> {
 
     return ListView.separated(
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, kPlayerOverlayInset),
+      // MISMO ancho útil que las demás listas (playlist/top tracks): esas
+      // listas no llevan padding horizontal propio — el inset 8 lo pone el
+      // TrackTile interno — así los bordes de todas las filas quedan
+      // alineados entre screens.
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, kPlayerOverlayInset),
       itemCount: _results.length + _artists.length,
       separatorBuilder: (_, _) => const SizedBox(height: 4),
       itemBuilder: (context, i) {
@@ -519,19 +529,21 @@ class _ArtistTile extends StatelessWidget {
         child: Row(
           children: [
             // CUADRADA redondeada (14dp), no círculo: mismo estilo que las
-            // portadas de playlists/canciones. Hi-res: el avatar base llega
-            // a ~176px; pedirlo a w1200 lo deja nítido en cualquier DPR.
+            // portadas de playlists/canciones, pero MÁS GRANDE que una fila
+            // de canción (64dp) para destacar la sección de artistas.
+            // Hi-res: el avatar base llega a ~176px; pedirlo a w1200 lo
+            // deja nítido en cualquier DPR.
             ClipRRect(
               borderRadius: BorderRadius.circular(14),
               child: SizedBox(
-                width: 48,
-                height: 48,
+                width: 64,
+                height: 64,
                 child: thumb != null && thumb.isNotEmpty
                     ? CoverImage(
                         source: Track.hiResThumbnail(thumb) ?? thumb,
-                        width: 48,
-                        height: 48,
-                        cacheWidth: 200,
+                        width: 64,
+                        height: 64,
+                        cacheWidth: 260,
                         fit: BoxFit.cover,
                         fallback: ColoredBox(
                           color: theme.colorScheme.surfaceContainerHighest,

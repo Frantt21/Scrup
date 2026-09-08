@@ -709,6 +709,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get artistAlbums => '专辑与单曲';
 
   @override
+  String get artistSingles => '单曲';
+
+  @override
   String get artistSubscribers => '位订阅者';
 
   @override

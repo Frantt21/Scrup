@@ -723,6 +723,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get artistAlbums => 'Álbuns e singles';
 
   @override
+  String get artistSingles => 'Singles';
+
+  @override
   String get artistSubscribers => 'inscritos';
 
   @override
@@ -1422,6 +1425,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get artistAlbums => 'Álbuns e singles';
+
+  @override
+  String get artistSingles => 'Singles';
 
   @override
   String get artistSubscribers => 'inscritos';

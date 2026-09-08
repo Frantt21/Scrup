@@ -711,6 +711,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get artistAlbums => '앨범 및 싱글';
 
   @override
+  String get artistSingles => '싱글';
+
+  @override
   String get artistSubscribers => '구독자';
 
   @override

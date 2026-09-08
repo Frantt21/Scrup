@@ -109,13 +109,15 @@ class YtmArtistDetail {
 }
 
 /// Álbum detectado en la página del artista: playlistId reproducible (se
-/// vuelve a leer con `fetchPlaylist`) + miniatura.
+/// vuelve a leer con `fetchPlaylist`) + miniatura + tipo de lanzamiento
+/// (álbum o single, del subtítulo de la card del canal).
 class YtmAlbum {
   const YtmAlbum({
     required this.playlistId,
     required this.title,
     this.thumbnailUrl,
     this.year,
+    this.isSingle = false,
   });
 
   final String playlistId;
@@ -124,6 +126,9 @@ class YtmAlbum {
 
   /// Año (cuando la fila lo trae).
   final String? year;
+
+  /// true = single (subtítulo "Single"/"EP"), false = álbum.
+  final bool isSingle;
 }
 
 /// Página de álbum leída con `fetchAlbumPage`: filas del tracklist (SIN
@@ -463,11 +468,16 @@ class YtMusicService {
               titleText != null) {
             final plId = bid;
             String? year;
+            bool isSingle = false;
             final subtitle = twoRow['subtitle'];
             if (subtitle is Map && subtitle['runs'] is List) {
               for (final r in (subtitle['runs'] as List).whereType<Map>()) {
                 final t = (r['text'] as String?)?.trim() ?? '';
-                if (RegExp(r'^(19|20)\d{2}$').hasMatch(t)) year = t;
+                if (RegExp(r'^(19|20)\d{2}$').hasMatch(t)) {
+                  year = t;
+                } else if (t == 'Single' || t == 'EP') {
+                  isSingle = true;
+                }
               }
             }
             if (titleText.isNotEmpty &&
@@ -478,6 +488,7 @@ class YtMusicService {
                   playlistId: plId,
                   title: titleText,
                   year: year,
+                  isSingle: isSingle,
                   thumbnailUrl: _hiRes(
                     _bestThumb(_thumbThumbs(twoRow['thumbnailRenderer'] as Map?)),
                   ),

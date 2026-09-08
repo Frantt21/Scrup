@@ -367,6 +367,7 @@
   },
   "artistTopTracks": "Populares",
   "artistAlbums": "Álbumes y sencillos",
+  "artistSingles": "Singles",
   "artistSubscribers": "suscriptores",
   "artistDetailEmpty": "No se pudo cargar este artista.",
   "retry": "Reintentar",

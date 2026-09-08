@@ -222,6 +222,7 @@
   "searchArtistPlaying": "Reproduzindo {name}",
   "artistTopTracks": "Populares",
   "artistAlbums": "Álbuns e singles",
+  "artistSingles": "Singles",
   "artistSubscribers": "inscritos",
   "artistDetailEmpty": "Não foi possível carregar este artista.",
   "retry": "Tentar novamente",

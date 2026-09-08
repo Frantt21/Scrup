@@ -22,13 +22,17 @@ Color _onColor(Color bg) =>
 ///
 /// Header with PLAYLIST DETAIL style and FULL ARTWORK: the channel image spans the full width (edge-to-edge, behind the status bar) with a gradient that blends into the background color — the same look as the playlist detail in its default style. Buttons use the accent EXTRACTED from the channel image (not the global theme primary). Scrolling shows the artist name in the collapsed appbar. It is mounted INSIDE the shell (nav + miniplayer present).
 class ArtistDetailView extends StatefulWidget {
-  const ArtistDetailView({super.key, required this.artist, this.onBack});
+  const ArtistDetailView({super.key, required this.artist, this.onBack, this.onAlbumOpenChanged});
 
   /// Artist derived from the search: channel + name (no avatar: the real face arrives with the detail).
   final YtmArtist artist;
 
   /// Returns to the search. On mobile it is provided by AppShell (screen mounted in the shell); if null, it pops the Navigator (desktop).
   final VoidCallback? onBack;
+
+  /// Notifies the shell when an album/single opens/closes inside this
+  /// screen, so the Android back gesture returns to the CHANNEL first.
+  final ValueChanged<bool>? onAlbumOpenChanged;
 
   @override
   State<ArtistDetailView> createState() => _ArtistDetailViewState();
@@ -39,13 +43,11 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   bool _loading = true;
   String? _error;
 
-  bool _showPinnedTitle = false;
-
   /// Acento extraído de la imagen del canal (mismo camino que el detalle de playlist: PaletteCacheStore + ArtworkPaletteService). Pinta los botones y tiñe el fondo (lerp 0.30, igual que el playlist completo).
   Color? _accent;
   String? _accentFor;
 
-  /// Álbum abierto: se muestra EMBEBIDO (en vez del contenido del artista, sin push de ruta) — nav + miniplayer visibles.
+  /// Álbum/single abierto: se muestra EMBEBIDO (en vez del contenido del artista, sin push de ruta) — nav + miniplayer visibles.
   YtmAlbum? _openedAlbum;
 
   @override
@@ -129,15 +131,17 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     );
   }
 
-  /// Álbum → muestra su tracklist EMbebIDO (sin Navigator.push): el
+  /// Álbum/single → muestra su tracklist EMBEBIDO (sin Navigator.push): el
   /// spinner vive DENTRO de esa vista mientras trae las pistas.
   Future<void> _openAlbum(YtmAlbum album) async {
     setState(() => _openedAlbum = album);
+    widget.onAlbumOpenChanged?.call(true);
   }
 
   void _back() {
     if (_openedAlbum != null) {
       setState(() => _openedAlbum = null);
+      widget.onAlbumOpenChanged?.call(false);
       return;
     }
     final cb = widget.onBack;
@@ -147,10 +151,6 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
       Navigator.of(context).maybePop();
     }
   }
-
-  /// Umbral (offset de scroll) a partir del cual la appbar colapsada muestra el nombre: justo antes de que el header expandido salga de pantalla.
-  double _titleThreshold(double expandedHeight) =>
-      (expandedHeight - 90).clamp(0.0, double.infinity);
 
   @override
   Widget build(BuildContext context) {
@@ -185,59 +185,40 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: NotificationListener<ScrollNotification>(
-        onNotification: (n) {
-          final visible = n.metrics.pixels > _titleThreshold(expandedH);
-          if (visible != _showPinnedTitle) {
-            setState(() => _showPinnedTitle = visible);
-          }
-          return false;
-        },
-        child: Stack(
-          children: [
-            CustomScrollView(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
-              slivers: [
-                // ── Header FULL ARTWORK (como la playlist detail) ──────
-                SliverAppBar(
-                  expandedHeight: expandedH,
-                  pinned: true,
-                  stretch: true,
-                  stretchTriggerOffset: 60,
-                  // Colapsado: fondo SÓLIDO del color del ambiente (nunca
-                  // transparente: el nombre se lee siempre).
-                  backgroundColor: bgColor,
-                  elevation: 0,
-                  automaticallyImplyLeading: false,
-                  centerTitle: true,
-                  // Nombre del artista SOLO cuando el header está colapsado.
-                  title: AnimatedOpacity(
-                    opacity: _showPinnedTitle ? 1 : 0,
-                    duration: const Duration(milliseconds: 180),
-                    child: Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  flexibleSpace: FlexibleSpaceBar(
-                    collapseMode: CollapseMode.pin,
-                    stretchModes: const [
-                      StretchMode.zoomBackground,
-                      StretchMode.blurBackground,
-                    ],
-                    background: _FullArtHeader(
-                      detail: detail,
-                      loading: loading,
-                      bgColor: bgColor,
-                    ),
+      body: Stack(
+        children: [
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            slivers: [
+              // ── Header FULL ARTWORK (como la playlist detail) ──────
+              // SIN pin: el header se va entero al scrollear y nunca se
+              // genera una appbar colapsada (el back flotante es un overlay
+              // externo al scroll, igual que la playlist detail).
+              SliverAppBar(
+                expandedHeight: expandedH,
+                pinned: false,
+                floating: false,
+                snap: false,
+                stretch: true,
+                stretchTriggerOffset: 60,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                automaticallyImplyLeading: false,
+                flexibleSpace: FlexibleSpaceBar(
+                  collapseMode: CollapseMode.pin,
+                  stretchModes: const [
+                    StretchMode.zoomBackground,
+                    StretchMode.blurBackground,
+                  ],
+                  background: _FullArtHeader(
+                    detail: detail,
+                    loading: loading,
+                    bgColor: bgColor,
                   ),
                 ),
+              ),
                 // ── Info + acciones ─────────────────────────────────────
                 SliverToBoxAdapter(
                   child: Padding(
@@ -344,49 +325,16 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                       );
                     },
                   ),
-                  // ── Álbumes: UNA SOLA FILA horizontal scrolleable ─────
-                  if (detail.albums.isNotEmpty) ...[
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                        child: Text(
-                          l10n.artistAlbums,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        // Portada 140 + título (1 línea) + año.
-                        height: 186,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: detail.albums.length,
-                          itemBuilder: (context, i) {
-                            final album = detail.albums[i];
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: _AlbumCard(
-                                album: album,
-                                onTap: () => unawaited(_openAlbum(album)),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
+                  // ── Álbumes y SINGLES: una fila horizontal por tipo ──
+                  ..._albumSections(detail),
                   const SliverToBoxAdapter(
                     child: SizedBox(height: 24),
                   ),
                 ],
               ],
             ),
-            // Back flotante SIEMPRE visible (sobre el artwork y sobre la
-            // appbar colapsada). NEUTRO: sin color de acento.
+            // Back flotante SIEMPRE visible (overlay externo al scroll,
+            // como la playlist detail): círculo al ACENTO del canal.
             Positioned(
               top: 0,
               left: 0,
@@ -403,30 +351,82 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
             ),
           ],
         ),
-      ),
     );
+  }
+
+  /// Secciones horizontales de discografía: Álbumes y Singles separados
+  /// (el subtítulo de la card del canal marca el tipo de lanzamiento).
+  List<Widget> _albumSections(YtmArtistDetail detail) {
+    final albums = [
+      for (final a in detail.albums)
+        if (!a.isSingle) a,
+    ];
+    final singles = [
+      for (final a in detail.albums)
+        if (a.isSingle) a,
+    ];
+    if (albums.isEmpty && singles.isEmpty) return const [];
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    Widget section(String title, List<YtmAlbum> items) =>
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              SizedBox(
+                // Portada 140 + título (1 línea) + año.
+                height: 186,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: items.length,
+                  itemBuilder: (context, i) {
+                    final album = items[i];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: _AlbumCard(
+                        album: album,
+                        onTap: () => unawaited(_openAlbum(album)),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+    return [
+      if (albums.isNotEmpty) section(l10n.artistAlbums, albums),
+      if (singles.isNotEmpty) section(l10n.artistSingles, singles),
+    ];
   }
 
   Widget _floatingCircleBtn(BuildContext context) {
     final theme = Theme.of(context);
-    // Con el header colapsado activo (nombre visible) el back va SIN fondo:
-    // sobre el fondo sólido del ambiente el círculo sobra. Expandido (sobre
-    // el artwork) conserva el fondo neutro para legibilidad.
-    final collapsed = _showPinnedTitle;
+    // MISMO estilo que la playlist detail (y el screen del álbum): círculo
+    // 40×40 al ACENTO del canal con icono contrastado.
+    final Color accent = _accent ?? theme.colorScheme.primary;
     return Container(
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: collapsed
-            ? Colors.transparent
-            : theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.9),
+        color: accent.withValues(alpha: 0.85),
         shape: BoxShape.circle,
       ),
       child: IconButton(
         icon: Icon(
           Icons.arrow_back_rounded,
           size: 20,
-          color: theme.colorScheme.onSurface,
+          color: _onColor(accent),
         ),
         onPressed: _back,
         padding: EdgeInsets.zero,
@@ -607,7 +607,7 @@ class _AlbumCard extends StatelessWidget {
   }
 }
 
-/// Tracklist de un álbum con el mismo estilo que el detalle de playlist en modo "acento plano" (flat): fondo del acento extraído de la propia portada del álbum (fallback al artista), portada 1:1 centrada, título y botones Play/Shuffle. Vista embebida (sin push): el spinner vive aquí, nunca en la card.
+/// Tracklist de un álbum/single con el mismo estilo que el detalle de playlist en modo "acento plano" (flat): fondo del acento extraído de la propia portada del álbum (fallback al artista), portada 1:1 centrada, título y botones Play/Shuffle. Vista embebida (sin push): el spinner vive aquí, nunca en la card.
 class ArtistAlbumView extends StatefulWidget {
   const ArtistAlbumView({
     super.key,

@@ -361,8 +361,13 @@ class _AppShellState extends State<AppShell> {
 
   /// Abre/cierra el detalle de artista (móvil): screen dentro del shell.
   void _openArtistDetail(YtmArtist artist) {
+    _artistAlbumOpenFlag = false;
     setState(() => _openArtist = artist);
   }
+
+  /// True mientras el detalle de artista tiene un álbum/single abierto:
+  /// el back de Android debe volver al CANAL, no a la búsqueda.
+  bool _artistAlbumOpenFlag = false;
 
   void _openSettings() {
     setState(() {
@@ -712,7 +717,12 @@ class _AppShellState extends State<AppShell> {
               ArtistDetailView(
                 key: ValueKey(openArtist.browseId),
                 artist: openArtist,
-                onBack: () => setState(() => _openArtist = null),
+                onBack: () => setState(() {
+                  _openArtist = null;
+                  _artistAlbumOpenFlag = false;
+                }),
+                onAlbumOpenChanged: (open) =>
+                    _artistAlbumOpenFlag = open,
               )
             else
               const SizedBox.shrink(),
@@ -823,7 +833,12 @@ class _AppShellState extends State<AppShell> {
       return;
     }
     if (_openArtist != null) {
-      setState(() => _openArtist = null);
+      if (_artistAlbumOpenFlag) {
+        // Dentro de un álbum/single del artista: back → vuelve al canal.
+        setState(() => _artistAlbumOpenFlag = false);
+      } else {
+        setState(() => _openArtist = null);
+      }
       return;
     }
     if (_showSettings) {

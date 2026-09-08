@@ -222,6 +222,7 @@
   "searchArtistPlaying": "Воспроизводится {name}",
   "artistTopTracks": "Популярное",
   "artistAlbums": "Альбомы и синглы",
+  "artistSingles": "Синглы",
   "artistSubscribers": "подписчиков",
   "artistDetailEmpty": "Не удалось загрузить этого исполнителя.",
   "retry": "Повторить",

@@ -722,6 +722,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get artistAlbums => 'Albums & singles';
 
   @override
+  String get artistSingles => 'Singles';
+
+  @override
   String get artistSubscribers => 'subscribers';
 
   @override

@@ -12,12 +12,14 @@ import 'ytmusic_service.dart';
 /// un día) y lectura desde disco en cada `read` (un archivo chico por
 /// artista; entrar al screen es gratis y no infla memoria).
 class ArtistCacheStore {
-  /// Versión del formato: v4 = invalida los detalles escritos por builds
+  /// Versión del formato: v5 = los álbumes llevan su tipo de lanzamiento
+  /// (álbum vs single). Entradas viejas se descartan al leerse.
+  /// v4 = invalida los detalles escritos por builds
   /// intermedios (parseo roto de la audiencia mensual: todas las screens
   /// mostraban el MISMO valor). Entradas viejas se descartan al leerse.
   /// v3 = canciones del shelf "Top songs" de la home (con reproducciones y
   /// portada limpia de álbum) + audiencia mensual.
-  static const int version = 4;
+  static const int version = 5;
 
   ArtistCacheStore({
     this.ttl = const Duration(hours: 24),
@@ -134,6 +136,7 @@ class ArtistCacheStore {
           'pl': a.playlistId,
           'title': a.title,
           'year': a.year,
+          'single': a.isSingle,
           'thumb': a.thumbnailUrl,
         },
     ],
@@ -173,6 +176,7 @@ class ArtistCacheStore {
             playlistId: pl,
             title: title,
             year: e['year'] is String ? e['year'] as String : null,
+            isSingle: e['single'] == true,
             thumbnailUrl: e['thumb'] is String ? e['thumb'] as String : null,
           ),
         );

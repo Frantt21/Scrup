@@ -729,6 +729,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get artistAlbums => 'Альбомы и синглы';
 
   @override
+  String get artistSingles => 'Синглы';
+
+  @override
   String get artistSubscribers => 'подписчиков';
 
   @override

@@ -222,6 +222,7 @@
   "searchArtistPlaying": "{name} 재생 중",
   "artistTopTracks": "인기 곡",
   "artistAlbums": "앨범 및 싱글",
+  "artistSingles": "싱글",
   "artistSubscribers": "구독자",
   "artistDetailEmpty": "이 아티스트를 불러올 수 없습니다.",
   "retry": "다시 시도",

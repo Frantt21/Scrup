@@ -725,6 +725,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get artistAlbums => 'Álbumes y sencillos';
 
   @override
+  String get artistSingles => 'Singles';
+
+  @override
   String get artistSubscribers => 'suscriptores';
 
   @override

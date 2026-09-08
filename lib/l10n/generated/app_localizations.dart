@@ -1417,6 +1417,12 @@ abstract class AppLocalizations {
   /// **'Álbumes y sencillos'**
   String get artistAlbums;
 
+  /// No description provided for @artistSingles.
+  ///
+  /// In es, this message translates to:
+  /// **'Singles'**
+  String get artistSingles;
+
   /// No description provided for @artistSubscribers.
   ///
   /// In es, this message translates to:

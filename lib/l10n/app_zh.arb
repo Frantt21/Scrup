@@ -222,6 +222,7 @@
   "searchArtistPlaying": "正在播放 {name}",
   "artistTopTracks": "热门歌曲",
   "artistAlbums": "专辑与单曲",
+  "artistSingles": "单曲",
   "artistSubscribers": "位订阅者",
   "artistDetailEmpty": "无法加载此歌手。",
   "retry": "重试",

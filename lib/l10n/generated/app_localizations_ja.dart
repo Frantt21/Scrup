@@ -711,6 +711,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get artistAlbums => 'アルバムとシングル';
 
   @override
+  String get artistSingles => 'シングル';
+
+  @override
   String get artistSubscribers => '人のチャンネル登録者';
 
   @override
