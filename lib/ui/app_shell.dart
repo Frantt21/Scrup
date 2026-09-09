@@ -359,7 +359,7 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  /// Abre/cierra el detalle de artista (móvil): screen dentro del shell.
+  /// Abre el detalle de artista (AMBAS plataformas): screen dentro del shell.
   /// La visita queda registrada (home: fila "Artistas visitados").
   void _openArtistDetail(YtmArtist artist) {
     _artistAlbumOpenFlag = false;
@@ -589,14 +589,21 @@ class _AppShellState extends State<AppShell> {
   // Contenido principal compartido: pila de vistas (+ player flotante desktop).
   Widget _buildMainStack(String barTitle) {
     final openPlaylist = _openPlaylist;
+    final openArtist = _openArtist;
     return Stack(
       children: [
         IndexedStack(
+          // Slots: 0 home, 1 búsqueda, 2 playlist, 3 ajustes, 4 letras,
+          // 5 ARTISTA. El canal del artista se monta DENTRO del shell en
+          // ambas plataformas (antes solo móvil: en desktop caía en un push
+          // de ruta a pantalla completa sin nav/miniplayer).
           index: _showLyrics
               ? 4
               : (openPlaylist != null
                     ? 2
-                    : (_showSettings ? 3 : _selectedIndex)),
+                    : (_showSettings
+                          ? 3
+                          : (openArtist != null ? 5 : _selectedIndex))),
           children: [
             HomeView(
               onSearch: _submitSearch,
@@ -608,6 +615,10 @@ class _AppShellState extends State<AppShell> {
               searchRequest: _searchRequest,
               focusRequest: _searchFocusRequest,
               onBack: _backToHome,
+              // En desktop TAMBIÉN va por el shell: sin esto el toque en un
+              // artista hacía Navigator.push a pantalla completa (fuera del
+              // contenedor central, sin nav/miniplayer).
+              onOpenArtist: _openArtistDetail,
             ),
             if (openPlaylist != null)
               PlaylistDetailView(
@@ -625,6 +636,18 @@ class _AppShellState extends State<AppShell> {
                     enabled: _showLyrics,
                     child: LyricsView(key: _fsLyricsKey),
                   ),
+            if (openArtist != null)
+              ArtistDetailView(
+                key: ValueKey('desktop-${openArtist.browseId}'),
+                artist: openArtist,
+                onBack: () => setState(() {
+                  _openArtist = null;
+                  _artistAlbumOpenFlag = false;
+                }),
+                onAlbumOpenChanged: (open) => _artistAlbumOpenFlag = open,
+              )
+            else
+              const SizedBox.shrink(),
           ],
         ),
         Align(

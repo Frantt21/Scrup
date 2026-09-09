@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/binaries.dart';
 import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
@@ -11,15 +12,70 @@ import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import '../../services/search_service.dart';
+import '../../services/ytmusic_service.dart' show YtmAlbum, YtMusicResult;
 import '../../services/settings_store.dart';
 import '../playlist_actions.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/scrup_toasts.dart';
 import '../widgets/track_tile.dart';
 
 /// Readable text over a background of the given color (black/white by luminance).
 Color _onColor(Color bg) =>
     bg.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+
+/// Desktop theme with the artist/album accent as PRIMARY (same approach as
+/// the playlist detail): FilledButtons and tints pick the extracted accent
+/// instead of the global theme primary.
+ThemeData _themeWithAccent(ThemeData base, Color accent) {
+  final onPrimary =
+      ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
+      ? Colors.white
+      : Colors.black;
+  return base.copyWith(
+    colorScheme: base.colorScheme.copyWith(
+      primary: accent,
+      onPrimary: onPrimary,
+    ),
+  );
+}
+
+/// Floating glass panel IDENTICAL to the desktop playlist detail: same margin
+/// (12 + player clearance below), radius 18, shadow and translucent
+/// background tinted with the accent (lerp 0.30).
+Widget _desktopPanel({
+  required ThemeData theme,
+  required Color? accent,
+  required Widget child,
+}) {
+  final bg = accent == null
+      ? theme.colorScheme.surfaceContainerHighest
+      : Color.lerp(theme.colorScheme.surfaceContainerHighest, accent, 0.30)!;
+  return Container(
+    constraints: const BoxConstraints.expand(),
+    margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(18),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.45),
+          blurRadius: 28,
+          offset: const Offset(0, 12),
+        ),
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: bg.withValues(alpha: 0.72),
+        ),
+        child: Material(color: Colors.transparent, child: child),
+      ),
+    ),
+  );
+}
 
 /// Artist detail (Android/desktop): data from the InnerTube channel page (top songs + albums) with its own 24h cache.
 ///
@@ -100,6 +156,19 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
         _error = detail == null ? 'no-data' : null;
       });
       unawaited(_maybeExtractAccent(detail?.thumbnailUrl));
+      // Los artistas derivados de la búsqueda NO traen avatar (solo canal):
+      // la fila de visita se actualiza con la cara real del canal para que
+      // la card de "Artistas visitados" del home no quede con placeholder.
+      final thumbUrl = detail?.thumbnailUrl ?? widget.artist.thumbnailUrl;
+      if (thumbUrl != null && thumbUrl.isNotEmpty) {
+        unawaited(
+          context.read<AppDatabase>().recordArtistVisit(
+            id: widget.artist.browseId,
+            name: detail?.name ?? widget.artist.name,
+            thumbnailUrl: thumbUrl,
+          ),
+        );
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -209,6 +278,152 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
         ? detail!.name
         : widget.artist.name;
 
+    // ── DESKTOP ──
+    // MISMO estilo que el detalle de playlist de desktop: panel de cristal
+    // flotante con hero (portada 160 + nombre + botones) y lista de tracks
+    // debajo. El acento va como PRIMARY del theme (buttons/tints, igual que
+    // la playlist usa su ambiente).
+    if (Binaries.isDesktop) {
+      final dtheme = _accent != null
+          ? _themeWithAccent(theme, _accent!)
+          : theme;
+      final onAccent = _onColor(_accent ?? theme.colorScheme.primary);
+      final tracks = detail?.tracks ?? const <YtMusicResult>[];
+      return _desktopPanel(
+        theme: theme,
+        accent: _accent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 24, 20),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Portada 160 con radio 16 (idéntico al hero de playlist).
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: SizedBox(
+                      width: 160,
+                      height: 160,
+                      child: (detail?.thumbnailUrl?.isNotEmpty ?? false)
+                          ? CoverImage(
+                              source: detail!.thumbnailUrl,
+                              fit: BoxFit.cover,
+                              cacheWidth: 400,
+                              fallback: ColoredBox(
+                                color: theme.colorScheme.surfaceContainerHigh,
+                                child: Icon(
+                                  Icons.person_rounded,
+                                  size: 56,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            )
+                          : ColoredBox(
+                              color: theme.colorScheme.surfaceContainerHigh,
+                              child: Icon(
+                                Icons.person_rounded,
+                                size: 56,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: dtheme.textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            height: 1.05,
+                          ),
+                        ),
+                        if (detail?.audienceText != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            detail!.audienceText!,
+                            style: dtheme.textTheme.bodyMedium?.copyWith(
+                              color: dtheme.colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            FilledButton.icon(
+                              onPressed:
+                                  (loading || tracks.isEmpty) ? null : _playAll,
+                              style: FilledButton.styleFrom(
+                                disabledBackgroundColor: _accent,
+                                disabledForegroundColor: onAccent.withValues(
+                                  alpha: 0.6,
+                                ),
+                                minimumSize: const Size(0, 44),
+                              ),
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label: Text(l10n.play),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : (detail == null || (_error != null && tracks.isEmpty))
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.person_off_rounded,
+                            size: 48,
+                            color: dtheme.colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(l10n.artistDetailEmpty),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: _load,
+                            child: Text(l10n.retry),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      itemCount: tracks.length,
+                      itemBuilder: (context, i) {
+                        final r = tracks[i];
+                        final track = r.toTrack();
+                        return TrackTile(
+                          track: track,
+                          subtitleSuffix: r.playCountText,
+                          onPlay: () => _playTrack(track, i),
+                          onAddToPlaylist: () =>
+                              showAddToPlaylistDialog(context, track),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── MÓVIL ──
     return Scaffold(
       backgroundColor: bgColor,
       body: Stack(
@@ -824,6 +1039,162 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
     final double expandedH = MediaQuery.sizeOf(context).width * (fullBleed ? 1.0 : 0.95);
     // Umbral del título de scroll: justo antes de que el hero salga.
     final double titleThreshold = (expandedH - 90).clamp(0.0, double.infinity);
+
+    // ── DESKTOP ──
+    // Panel de cristal IDENTICO al detalle de playlist de desktop: hero con
+    // portada 160 + título + año + nº de canciones + Play/Shuffle (botones
+    // del MISMO estilo que la playlist) y tracklist debajo.
+    if (Binaries.isDesktop) {
+      final dtheme = _themeWithAccent(theme, accent);
+      return _desktopPanel(
+        theme: theme,
+        accent: accent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 24, 20),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: SizedBox(
+                      width: 160,
+                      height: 160,
+                      child: (widget.album.thumbnailUrl?.isNotEmpty ?? false)
+                          ? CoverImage(
+                              source: widget.album.thumbnailUrl,
+                              fit: BoxFit.cover,
+                              cacheWidth: 400,
+                              fallback: ColoredBox(
+                                color: theme.colorScheme.surfaceContainerHigh,
+                                child: const Icon(
+                                  Icons.album_rounded,
+                                  size: 56,
+                                ),
+                              ),
+                            )
+                          : ColoredBox(
+                              color: theme.colorScheme.surfaceContainerHigh,
+                              child: const Icon(
+                                Icons.album_rounded,
+                                size: 56,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.album.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: dtheme.textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            height: 1.05,
+                          ),
+                        ),
+                        if (widget.album.year != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            widget.album.year!,
+                            style: dtheme.textTheme.bodyMedium?.copyWith(
+                              color: dtheme.colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 4),
+                        // Placeholder '—' mientras llega el tracklist: sin
+                        // flash 0 canciones → real.
+                        Text(
+                          tracks == null
+                              ? '—'
+                              : l10n.songCount(tracks.length),
+                          style: dtheme.textTheme.bodySmall?.copyWith(
+                            color: dtheme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            FilledButton.icon(
+                              onPressed:
+                                  (tracks == null || tracks.isEmpty)
+                                  ? null
+                                  : _playAll,
+                              // Colores fijos en disabled: sin flash
+                              // desactivado → activo al entrar.
+                              style: FilledButton.styleFrom(
+                                disabledBackgroundColor: accent,
+                                disabledForegroundColor: _onColor(accent)
+                                    .withValues(alpha: 0.6),
+                                minimumSize: const Size(0, 44),
+                              ),
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label: Text(l10n.play),
+                            ),
+                            const SizedBox(width: 12),
+                            FilledButton.icon(
+                              onPressed:
+                                  (tracks == null || tracks.isEmpty)
+                                  ? null
+                                  : _playShuffled,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: dtheme.colorScheme.primary,
+                                disabledBackgroundColor: Colors.white,
+                                disabledForegroundColor: dtheme
+                                    .colorScheme
+                                    .primary
+                                    .withValues(alpha: 0.6),
+                                minimumSize: const Size(0, 44),
+                              ),
+                              icon: const Icon(Icons.shuffle_rounded),
+                              label: Text(l10n.shuffle),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              // Sin spinner de 1 frame: espacio en blanco y swap silencioso.
+              child: tracks == null
+                  ? const SizedBox.expand()
+                  : tracks.isEmpty
+                  ? Center(child: Text(l10n.searchNoResults))
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      itemCount: tracks.length,
+                      itemBuilder: (context, i) {
+                        final track = tracks[i];
+                        return TrackTile(
+                          track: track,
+                          onPlay: () => unawaited(
+                            context.read<PlayerService>().playQueue(
+                              tracks,
+                              startIndex: i,
+                            ),
+                          ),
+                          onAddToPlaylist: () =>
+                              showAddToPlaylistDialog(context, track),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      );
+    }
 
     Widget buttonRow() => Row(
       mainAxisAlignment: MainAxisAlignment.center,

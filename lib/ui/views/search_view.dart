@@ -74,6 +74,15 @@ class _SearchViewState extends State<SearchView> {
     super.initState();
     widget.searchRequest?.addListener(_onExternalSearch);
     widget.focusRequest?.addListener(_onFocusRequest);
+    // En desktop el SearchView vive en el IndexedStack del shell: si llega
+    // una señal de focus ANTES de montarse, el listener no estaba. Con un
+    // valor > 0 pendiente (señal ya disparada), pide el foco en el primer
+    // frame.
+    if ((widget.focusRequest?.value ?? 0) > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocus.requestFocus();
+      });
+    }
     // Indicador de "en reproducción" en las filas de resultados
     final player = context.read<PlayerService>();
     _currentTrack = player.currentTrackValue;
@@ -294,38 +303,10 @@ class _SearchViewState extends State<SearchView> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          TextField(
-                            controller: _searchController,
-                            focusNode: _searchFocus,
-                            onSubmitted: _search,
-                            textInputAction: TextInputAction.search,
-                            decoration: InputDecoration(
-                              hintText: l10n.searchHint,
-                              prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon: _searching
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(12),
-                                      child: SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      ),
-                                    )
-                                  : null,
-                              filled: true,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(28),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 12,
-                              ),
-                            ),
-                          ),                          const SizedBox(height: 12),
                           // Historial como DROPDOWN (mismo widget que
-                          // móvil): overlay anclado al campo.
+                          // móvil): el campo vive DENTRO del dropdown (un
+                          // solo input; antes había un TextField duplicado
+                          // sobre el mismo controller/focus).
                           _HistoryDropdown(
                             controller: _searchController,
                             focusNode: _searchFocus,
@@ -654,13 +635,12 @@ class _HistoryDropdownState extends State<_HistoryDropdown> {
             builder: (context, c) {
               // Ancho del panel = ancho del CAMPO (leaderSize): el panel
               // queda alineado al input, sin desbordar por el borde derecho.
+              // Fallback al ancho disponible MENOS el padding derecho del
+              // header (antes sumaba el izquierdo y se desbordaba).
               final double fieldWidth = _link.leaderSize?.width ?? 0;
-              final EdgeInsets headerPad = Binaries.isMobile
-                  ? const EdgeInsets.fromLTRB(16, 16, 16, 8)
-                  : const EdgeInsets.fromLTRB(12, 12, 24, 8);
               final double maxWidth = fieldWidth > 0
                   ? fieldWidth
-                  : (c.biggest.width - headerPad.right + headerPad.left);
+                  : (c.biggest.width - 36).clamp(0.0, double.infinity);
               return ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: maxWidth.isFinite && maxWidth > 0

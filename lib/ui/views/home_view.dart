@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -91,12 +92,6 @@ class _HomeViewState extends State<HomeView> {
   /// en las tarjetas de playlists recientes).
   int? _activePlaylistId;
   VoidCallback? _onActivePlaylistChanged;
-
-  /// Card size and grid layout (desktop ~200px, mobile compact).
-  static const _cardExtent = 200.0;
-
-  /// Grid de recientes: 3 COLUMNAS × 3 FILAS (9 tarjetas) en móvil.
-  static const _rows = 3;
 
   @override
   void initState() {
@@ -216,15 +211,28 @@ class _HomeViewState extends State<HomeView> {
         // barra de estado queda detrás del degradado de acento), así que el
         // contenido se hunde con este inset para no quedar bajo la barra.
         final double topInset = MediaQuery.paddingOf(context).top;
-        // Desktop: cards ~200px. Mobile: exactamente 3 COLUMNAS × 2 FILAS.
-        final cols = mobile
+        // Recientes: SIEMPRE 2 FILAS horizontales; las columnas se adaptan
+        // al ancho disponible (cards cuadradas ~1:1). Móvil fija 3 columnas.
+        const int rows = 2;
+        final int cols = mobile
             ? 3
-            : ((constraints.maxWidth - 32) / (_cardExtent + 12)).floor().clamp(1, 10);
-        final rows = mobile ? _rows : _rows;
+            : ((constraints.maxWidth - 48 + 10) / (140 + 10))
+                  .floor()
+                  .clamp(2, 8);
+        // Tamaño EXACTO de la celda del grid de recientes (el SliverGrid
+        // reparte: ancho - padding 48 - spacing (cols-1)*10, dividido en
+        // cols). Las cards de playlists de desktop usan este mismo valor.
+        final double cellExtent = mobile
+            ? 0
+            : (constraints.maxWidth - 48 - (cols - 1) * 10) / cols;
         final visible = _recent.length.clamp(0, cols * rows);
 
         final recentPlaylists = _recentPlaylists;
 
+        // Campo de búsqueda (desktop): fondo TRANSLÚCIDO con BLUR (Back-
+        // dropFilter sobre el degradado de acento que pasa por detrás). El
+        // relleno sólido M3 ocultaba el degradado; el blur lo deja ver
+        // difuminado. Sin bordes.
         final Widget searchField = TextField(
           onSubmitted: _submitSearch,
           textInputAction: TextInputAction.search,
@@ -232,6 +240,7 @@ class _HomeViewState extends State<HomeView> {
             hintText: l10n.searchHint,
             prefixIcon: const Icon(Icons.search_rounded),
             filled: true,
+            fillColor: theme.colorScheme.surface.withValues(alpha: 0.45),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(28),
               borderSide: BorderSide.none,
@@ -281,7 +290,18 @@ class _HomeViewState extends State<HomeView> {
                       : SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-                            child: searchField,
+                            // BLUR real: el campo translúcido difumina el
+                            // degradado de acento que pasa por detrás.
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(28),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(
+                                  sigmaX: 14,
+                                  sigmaY: 14,
+                                ),
+                                child: searchField,
+                              ),
+                            ),
                           ),
                         ),
                   if (!_loaded)
@@ -326,7 +346,7 @@ class _HomeViewState extends State<HomeView> {
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: EdgeInsets.fromLTRB(
-                            mobile ? 16 : 24, 8, mobile ? 16 : 24, 12),
+                            mobile ? 16 : 24, 4, mobile ? 16 : 24, 8),
                         child: _recent.isEmpty
                             ? _EmptyHint(theme: theme)
                             : Text(
@@ -343,13 +363,13 @@ class _HomeViewState extends State<HomeView> {
                       // para que la última fila del grid quede accesible.
                       // En móvil no hay clearance (el mini-player vive aparte).
                       padding: EdgeInsets.fromLTRB(
-                        16, 0, 16, mobile ? 16 : kPlayerOverlayInset,
+                        mobile ? 16 : 24, 0, mobile ? 16 : 24, mobile ? 16 : kPlayerOverlayInset,
                       ),
                       sliver: SliverGrid(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: cols,
-                          mainAxisSpacing: mobile ? 6 : 12,
-                          crossAxisSpacing: mobile ? 6 : 12,
+                          mainAxisSpacing: mobile ? 6 : 10,
+                          crossAxisSpacing: mobile ? 6 : 10,
                           childAspectRatio: 1,
                         ),
                         delegate: SliverChildBuilderDelegate((context, i) {
@@ -363,15 +383,26 @@ class _HomeViewState extends State<HomeView> {
                         }, childCount: visible),
                       ),
                     ),
-                  // Recent playlists (DESPUÉS del grid de recientes)
+                  // Recent playlists (DESPUÉS del grid de recientes).
+                  // Desktop: GRID del MISMO tamaño que las cards de
+                  // recientes (mismas columnas que el grid de arriba).
                   if (recentPlaylists.isNotEmpty)
                     SliverToBoxAdapter(
-                      child: _RecentPlaylistsRow(
-                        playlists: recentPlaylists,
-                        activePlaylistId: _activePlaylistId,
-                        isPlaying: _playing,
-                        onOpen: _openPlaylist,
-                      ),
+                      child: mobile
+                          ? _RecentPlaylistsRow(
+                              playlists: recentPlaylists,
+                              activePlaylistId: _activePlaylistId,
+                              isPlaying: _playing,
+                              onOpen: _openPlaylist,
+                            )
+                          : _RecentPlaylistsGrid(
+                              playlists: recentPlaylists,
+                              cols: cols,
+                              cardExtent: cellExtent,
+                              activePlaylistId: _activePlaylistId,
+                              isPlaying: _playing,
+                              onOpen: _openPlaylist,
+                            ),
                     ),
                   // Artistas visitados (DESPUÉS de las playlists recientes,
                   // mismo estilo de fila horizontal)
@@ -1029,6 +1060,8 @@ class _VisitedArtistsRow extends StatelessWidget {
                     YtmArtist(
                       browseId: a.id,
                       name: a.name,
+                      // Avatar REAL guardado con la visita: la card pinta
+                      // la cara del canal, nunca un placeholder vacío.
                       thumbnailUrl: a.thumbnailUrl,
                     ),
                   ),
@@ -1058,11 +1091,15 @@ class _VisitedArtistCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: SizedBox(
-        width: 140,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Stack(
+      // 1:1 REAL: 140×140 centrado en la fila de 158 (antes la card
+      // estiraba al alto de la fila → 140×158, sin relación 1:1).
+      child: Center(
+        child: SizedBox(
+          width: 140,
+          height: 140,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Stack(
             fit: StackFit.expand,
             children: [
               if (hasCover)
@@ -1115,6 +1152,73 @@ class _VisitedArtistCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+      ),
+    );
+  }
+}
+
+/// Desktop: playlist cards EN GRID (mismas columnas/tamaño que las cards
+/// de recientes) — la fila horizontal scrolleable es cosa de móvil.
+class _RecentPlaylistsGrid extends StatelessWidget {
+  final List<Playlist> playlists;
+  final int cols;
+
+  /// Tamaño de card = celda EXACTA del grid de recientes.
+  final double cardExtent;
+  final int? activePlaylistId;
+  final bool isPlaying;
+  final ValueChanged<Playlist> onOpen;
+
+  const _RecentPlaylistsGrid({
+    required this.playlists,
+    required this.cols,
+    required this.cardExtent,
+    required this.activePlaylistId,
+    required this.isPlaying,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = context.watch<ThemeController>().accentColor ??
+        theme.colorScheme.primary;
+    if (playlists.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              AppLocalizations.of(context).recentPlaylistsTitle,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          // Máx. 2 filas como el grid de recientes.
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final playlist in playlists.take(cols * 2))
+                SizedBox(
+                  width: cardExtent,
+                  height: cardExtent,
+                  child: _RecentPlaylistCard(
+                    playlist: playlist,
+                    accent: accent,
+                    isCurrent: playlist.id == activePlaylistId,
+                    isPlaying: isPlaying,
+                    onTap: () => onOpen(playlist),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1204,12 +1308,12 @@ class _RecentPlaylistCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasCover = playlist.coverUrl != null && playlist.coverUrl!.isNotEmpty;
-    const width = 140.0;
 
     return GestureDetector(
       onTap: onTap,
-      child: SizedBox(
-        width: width,
+      // Llena el SizedBox del padre: móvil fija 140 (fila) y desktop la
+      // celda EXACTA del grid de recientes (mismo tamaño que esas cards).
+      child: SizedBox.expand(
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: Stack(
