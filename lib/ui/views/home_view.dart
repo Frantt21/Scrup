@@ -25,6 +25,11 @@ import '../widgets/now_playing_bars.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 
 /// Home screen: search bar on top and recent plays in a 1:1 grid of ONLY TWO ROWS (columns adjust to the window width; other recent tracks are not shown). Playlists live in the side container.
+///
+/// Escala de las cards de PAYLISTS recientes (desktop) respecto a la celda
+/// del grid de recientes: más grandes que las canciones recientes, con el
+/// MISMO gap de separación (10). Móvil no la usa (fila horizontal fija 140).
+const double kPlaylistCardScale = 1.25;
 class HomeView extends StatefulWidget {
   /// Called when submitting a search from home (AppShell switches to the Search view and passes the query).
   final ValueChanged<String>? onSearch;
@@ -225,6 +230,16 @@ class _HomeViewState extends State<HomeView> {
         final double cellExtent = mobile
             ? 0
             : (constraints.maxWidth - 48 - (cols - 1) * 10) / cols;
+        // Playlists recientes (desktop): cards MÁS GRANDES que las recientes,
+        // escalando la celda exacta del grid. La escala de columnas se
+        // recalcula para que fluyan el MISMO número máximo de filas (2) con
+        // el mismo gap (10) que el grid de recientes.
+        final double playlistExtent = cellExtent * kPlaylistCardScale;
+        final int pCols = mobile
+            ? 3
+            : ((constraints.maxWidth - 48 + 10) / (playlistExtent + 10))
+                  .floor()
+                  .clamp(1, 8);
         final visible = _recent.length.clamp(0, cols * rows);
 
         final recentPlaylists = _recentPlaylists;
@@ -412,8 +427,8 @@ class _HomeViewState extends State<HomeView> {
                             )
                           : _RecentPlaylistsGrid(
                               playlists: recentPlaylists,
-                              cols: cols,
-                              cardExtent: cellExtent,
+                              cols: pCols,
+                              cardExtent: playlistExtent,
                               activePlaylistId: _activePlaylistId,
                               isPlaying: _playing,
                               onOpen: _openPlaylist,
@@ -426,6 +441,9 @@ class _HomeViewState extends State<HomeView> {
                     SliverToBoxAdapter(
                       child: _VisitedArtistsRow(
                         artists: _visitedArtists,
+                        // Desktop: el MISMO tamaño que las recientes.
+                        // Móvil: tamaño fijo (null → 140) como siempre.
+                        cardSize: mobile ? null : cellExtent,
                         onOpen: widget.onOpenArtist,
                       ),
                     ),
@@ -1061,14 +1079,22 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
 }
 
 /// Fila horizontal de ARTISTAS visitados: mismo estilo que las playlists
-/// recientes (cards 140dp con título dentro). La miniatura viene de la
+/// recientes (cards cuadradas con título dentro). La miniatura viene de la
 /// visita; si el canal cambió su avatar, el screen del artista lo trae
 /// fresco al abrir (la visita se repuebla con la nueva URL).
 class _VisitedArtistsRow extends StatelessWidget {
   final List<VisitedArtist> artists;
   final ValueChanged<YtmArtist>? onOpen;
 
-  const _VisitedArtistsRow({required this.artists, required this.onOpen});
+  /// Tamaño de card (lado del cuadrado). Desktop lo pone al MISMO tamaño
+  /// que las recientes; null = tamaño fijo 140 (móvil).
+  final double? cardSize;
+
+  const _VisitedArtistsRow({
+    required this.artists,
+    required this.onOpen,
+    this.cardSize,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1076,6 +1102,7 @@ class _VisitedArtistsRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     if (artists.isEmpty) return const SizedBox.shrink();
 
+    final size = cardSize ?? 140.0;
     // MISMO inset lateral que Recent y Recently played playlists en cada
     // plataforma (16 móvil / 24 desktop): antes la fila usaba siempre 16 y
     // en desktop quedaba desalineada de las demás secciones.
@@ -1093,7 +1120,9 @@ class _VisitedArtistsRow extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 158,
+          // Alto de la fila = card + 18 (deja el margen vertical del
+          // centrado, igual que 158 = 140 + 18) en ambas plataformas.
+          height: size + 18,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.symmetric(horizontal: sidePad),
@@ -1101,9 +1130,13 @@ class _VisitedArtistsRow extends StatelessWidget {
             itemBuilder: (context, i) {
               final a = artists[i];
               return Padding(
-                padding: const EdgeInsets.only(right: 12),
+                // MISMO gap que el grid de recientes (10) en desktop.
+                padding: EdgeInsets.only(
+                  right: cardSize == null ? 12 : 10,
+                ),
                 child: _VisitedArtistCard(
                   artist: a,
+                  cardSize: cardSize,
                   onTap: () => onOpen?.call(
                     YtmArtist(
                       browseId: a.id,
@@ -1123,28 +1156,35 @@ class _VisitedArtistsRow extends StatelessWidget {
   }
 }
 
-/// Card de artista visitado (idéntica a la de playlist reciente: 140dp,
-/// portada 1:1 completa con el título dentro).
+/// Card de artista visitado (cuadrada: la portada 1:1 completa con el
+/// título dentro). [cardSize] = lado (desktop: el tamaño de las recientes;
+/// null = 140 en móvil).
 class _VisitedArtistCard extends StatelessWidget {
   final VisitedArtist artist;
   final VoidCallback onTap;
+  final double? cardSize;
 
-  const _VisitedArtistCard({required this.artist, required this.onTap});
+  const _VisitedArtistCard({
+    required this.artist,
+    required this.onTap,
+    this.cardSize,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final size = cardSize ?? 140.0;
     final hasCover = artist.thumbnailUrl != null &&
         artist.thumbnailUrl!.isNotEmpty;
 
     return GestureDetector(
       onTap: onTap,
-      // 1:1 REAL: 140×140 centrado en la fila de 158 (antes la card
-      // estiraba al alto de la fila → 140×158, sin relación 1:1).
+      // 1:1 REAL en el alto de la fila (antes la card estiraba al alto de
+      // la fila → 140×158, sin relación 1:1).
       child: Center(
         child: SizedBox(
-          width: 140,
-          height: 140,
+          width: size,
+          height: size,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(14),
             child: Stack(
@@ -1154,7 +1194,8 @@ class _VisitedArtistCard extends StatelessWidget {
                 CoverImage(
                   source: artist.thumbnailUrl,
                   fit: BoxFit.cover,
-                  cacheWidth: 300,
+                  // Decode acorde al tamaño en pantalla (desktop más grande).
+                  cacheWidth: cardSize == null ? 300 : 500,
                   fallback: Container(
                     color: theme.colorScheme.surfaceContainerHigh,
                     child: Icon(
@@ -1212,7 +1253,7 @@ class _RecentPlaylistsGrid extends StatelessWidget {
   final List<Playlist> playlists;
   final int cols;
 
-  /// Tamaño de card = celda EXACTA del grid de recientes.
+  /// Tamaño de card = celda del grid de recientes ESCALADA (más grande).
   final double cardExtent;
   final int? activePlaylistId;
   final bool isPlaying;
@@ -1362,86 +1403,94 @@ class _RecentPlaylistCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      // Desktop: la celda EXACTA del grid de recientes (SizedBox del padre).
-      // Móvil: el ListView horizontal da ancho ILIMITADO y SizedBox.expand
-      // colapsa la card a 0 (invisible en Android); se fija 140×140 centrado,
-      // mismo tamaño que desktop.
-      child: Center(
-        child: SizedBox(
-          width: 140,
-          height: 140,
-          child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Portada completa 1:1
-              if (hasCover)
-                CoverImage(
-                  source: playlist.coverUrl!,
-                  fit: BoxFit.cover,
-                  cacheWidth: 300,
-                  fallback: Container(
-                    color: theme.colorScheme.surfaceContainerHigh,
-                    child: Icon(
-                      Icons.queue_music_rounded,
-                      size: 40,
-                      color: theme.colorScheme.onSurfaceVariant,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Desktop: la celda llega ACOTADA desde el Wrap (SizedBox del
+          // padre) → el artwork ESCALA con la card. Móvil: el ListView
+          // horizontal da ancho ILIMITADO → solo ahí caemos al tamaño fijo
+          // 140×140 (antes SIEMPRE era 140 → el contenedor crecía pero el
+          // arte quedaba pequeño).
+          final bool bounded = constraints.maxWidth.isFinite;
+          final double size = bounded ? constraints.maxWidth : 140.0;
+          return Center(
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Portada completa 1:1
+                  if (hasCover)
+                    CoverImage(
+                      source: playlist.coverUrl!,
+                      fit: BoxFit.cover,
+                      // Decode acorde al tamaño en pantalla (desktop grande).
+                      cacheWidth: bounded ? 500 : 300,
+                      fallback: Container(
+                        color: theme.colorScheme.surfaceContainerHigh,
+                        child: Icon(
+                          Icons.queue_music_rounded,
+                          size: 40,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [accent, accent.withValues(alpha: 0.6)],
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.queue_music_rounded,
+                        size: 44,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  // Gradiente inferior para legibilidad del texto
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Colors.black54],
+                        stops: [0.5, 1.0],
+                      ),
                     ),
                   ),
-                )
-              else
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [accent, accent.withValues(alpha: 0.6)],
+                  // Title inside the card (bottom corner)
+                  Positioned(
+                    left: 10,
+                    right: 10,
+                    bottom: 10,
+                    child: Text(
+                      playlist.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                  child: Icon(
-                    Icons.queue_music_rounded,
-                    size: 44,
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
-                ),
-              // Gradiente inferior para legibilidad del texto
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black54],
-                    stops: [0.5, 1.0],
-                  ),
-                ),
+                  // "Now playing" indicator (same as desktop)
+                  if (isCurrent)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: NowPlayingBars(active: isPlaying, size: 13),
+                    ),
+                ],
               ),
-              // Title inside the card (bottom corner)
-              Positioned(
-                left: 10,
-                right: 10,
-                bottom: 10,
-                child: Text(
-                  playlist.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              // "Now playing" indicator (same as desktop)
-              if (isCurrent)
-                Positioned(
-                  top: 10,
-                  left: 10,
-                  child: NowPlayingBars(active: isPlaying, size: 13),
-                ),
-            ],
-          ),
-        ),
-        ),
+            ),
+            ),
+          );
+        },
       ),
     );
   }

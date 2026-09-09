@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/gestures.dart' show kPrimaryButton;
+import 'package:flutter/gestures.dart'
+    show kPrimaryButton, PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -752,11 +753,14 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
             SizedBox(
               // Portada 140 + título (1 línea) + año.
               height: 186,
-              // DragScroll: en desktop el ratón NO tiene gesto de arrastre
-              // sobre un ListView (solo rueda); con esto arrastrar con el
-              // botón presionado desliza la fila (en móvil queda igual).
+              // _DragScroll: en desktop el ratón NO tiene gesto de arrastre
+              // sobre un ListView (solo rueda); aquí la rueda se convierte
+              // en scroll horizontal y el arrastre con botón presionado
+              // desliza la fila (en móvil queda igual). El controller lo
+              // gestiona el propio _DragScroll (compartido con la lista).
               child: _DragScroll(
-                child: ListView.builder(
+                builder: (controller) => ListView.builder(
+                  controller: controller,
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: items.length,
@@ -1780,17 +1784,44 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
 /// horizontal y lo desliza con el botón presionado (los ListViews
 /// horizontales solo responden a la rueda). En móvil no interfiere: el
 /// drag de ratón no ocurre y el tacto usa el gesto nativo.
+/// Arrastre + rueda del ratón sobre una fila horizontal. En desktop el
+/// ListView horizontal NO responde a la rueda (el delta vertical lo ignora:
+/// su eje es horizontal) → la fila quedaba muerta. Este widget:
+///  - Es PADRE del ListView y posee el [ScrollController] (antes usaba
+///    `Scrollable.maybeOf` desde ARRIBA del ListView → buscaba en los
+///    ancestros, no en el descendiente, y nunca encontraba la posición).
+///  - Convierte el scroll vertical de la rueda en scroll horizontal.
+///  - Mantiene el arrastre con botón presionado (móvil igual que siempre).
 class _DragScroll extends StatefulWidget {
-  const _DragScroll({required this.child});
+  const _DragScroll({required this.builder});
 
-  final Widget child;
+  /// Construye el ListView horizontal pasándole el controller compartido.
+  final Widget Function(ScrollController controller) builder;
 
   @override
   State<_DragScroll> createState() => _DragScrollState();
 }
 
 class _DragScrollState extends State<_DragScroll> {
+  final ScrollController _controller = ScrollController();
   bool _dragging = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// Desplaza el viewport horizontal por [delta] (sin salir de los límites).
+  void _scrollBy(double delta) {
+    if (!_controller.hasClients) return;
+    final pos = _controller.position;
+    if (!pos.hasContentDimensions) return;
+    pos.jumpTo((pos.pixels + delta).clamp(
+      pos.minScrollExtent,
+      pos.maxScrollExtent,
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1805,21 +1836,21 @@ class _DragScrollState extends State<_DragScroll> {
         },
         onPointerMove: (d) {
           if (!_dragging) return;
-          // Scroll físico del viewport padre: el Listener envuelve DIRECTO
-          // al viewport, así que la posición apunta a su Scrollable. Antes
-          // este widget creaba su propio controller que NUNCA se adjuntaba
-          // a la lista (hasClients siempre false) y el drag era un no-op.
-          final state = Scrollable.maybeOf(context, axis: Axis.horizontal);
-          final pos = state?.position;
-          if (pos == null || !pos.hasContentDimensions) return;
-          pos.jumpTo((pos.pixels - d.delta.dx).clamp(
-            pos.minScrollExtent,
-            pos.maxScrollExtent,
-          ));
+          // Arrastre con botón presionado: delta horizontal del puntero.
+          _scrollBy(-d.delta.dx);
         },
         onPointerUp: (_) => _dragging = false,
         onPointerCancel: (_) => _dragging = false,
-        child: widget.child,
+        onPointerSignal: (event) {
+          // Rueda del ratón: el delta VERTICAL (el normal de un ratón) se
+          // convierte en scroll horizontal. El delta horizonal puro (shift+
+          // rueda, trackpads) lo gestiona el propio Scrollable: aquí solo
+          // actuamos si la rueda fue puramente vertical para no duplicar.
+          if (event is! PointerScrollEvent) return;
+          if (event.scrollDelta.dx != 0) return;
+          _scrollBy(event.scrollDelta.dy);
+        },
+        child: widget.builder(_controller),
       ),
     );
   }
