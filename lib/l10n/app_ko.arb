@@ -228,5 +228,7 @@
   "retry": "다시 시도",
   "playAll": "전체 재생",
   "createPlaylistFromAlbum": "이 앨범으로 플레이리스트 만들기",
-  "visitedArtistsTitle": "최근 방문한 아티스트"
+  "visitedArtistsTitle": "최근 방문한 아티스트",
+  "crossfade": "크로스페이드",
+  "crossfadeHint": "노래 간 페이드: 현재 곡이 끝나기 전에 다음 곡이 재생됩니다"
 }

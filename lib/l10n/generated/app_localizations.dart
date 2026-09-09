@@ -1458,6 +1458,18 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Artistas visitados'**
   String get visitedArtistsTitle;
+
+  /// No description provided for @crossfade.
+  ///
+  /// In es, this message translates to:
+  /// **'Crossfade'**
+  String get crossfade;
+
+  /// No description provided for @crossfadeHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Fundido entre canciones: la siguiente pista empieza antes de que termine la actual'**
+  String get crossfadeHint;
 }
 
 class _AppLocalizationsDelegate

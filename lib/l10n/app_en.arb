@@ -365,5 +365,7 @@
   "artistDetailEmpty": "Could not load this artist.",
   "retry": "Retry",
   "playAll": "Play all",
-  "visitedArtistsTitle": "Recently visited artists"
+  "visitedArtistsTitle": "Recently visited artists",
+  "crossfade": "Crossfade",
+  "crossfadeHint": "Fade between songs: the next track starts before the current one ends"
 }

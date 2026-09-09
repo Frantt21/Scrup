@@ -228,5 +228,7 @@
   "retry": "重试",
   "playAll": "播放全部",
   "createPlaylistFromAlbum": "用此专辑创建播放列表",
-  "visitedArtistsTitle": "最近浏览的艺术家"
+  "visitedArtistsTitle": "最近浏览的艺术家",
+  "crossfade": "淡入淡出",
+  "crossfadeHint": "歌曲之间的淡入淡出：当前歌曲结束前开始播放下一首"
 }

@@ -748,4 +748,11 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get visitedArtistsTitle => 'Недавно просмотренные исполнители';
+
+  @override
+  String get crossfade => 'Кроссфейд';
+
+  @override
+  String get crossfadeHint =>
+      'Плавный переход между песнями: следующая дорожка начинается до окончания текущей';
 }

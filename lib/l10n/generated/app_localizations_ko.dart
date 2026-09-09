@@ -730,4 +730,10 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get visitedArtistsTitle => '최근 방문한 아티스트';
+
+  @override
+  String get crossfade => '크로스페이드';
+
+  @override
+  String get crossfadeHint => '노래 간 페이드: 현재 곡이 끝나기 전에 다음 곡이 재생됩니다';
 }

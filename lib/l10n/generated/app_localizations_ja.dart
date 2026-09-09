@@ -730,4 +730,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get visitedArtistsTitle => '最近閲覧したアーティスト';
+
+  @override
+  String get crossfade => 'クロスフェード';
+
+  @override
+  String get crossfadeHint => '曲のフェード: 現在の曲が終わる前に次の曲を再生開始します';
 }

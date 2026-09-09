@@ -8,6 +8,7 @@ import '../core/queue_shuffle.dart';
 import '../core/track.dart';
 import '../core/app_log.dart';
 import 'audio_backend.dart';
+import 'crossfade_backend.dart';
 
 /// Loop modes (own enum to avoid clash with Flutter's RepeatMode).
 enum LoopMode { off, all, one }
@@ -50,6 +51,10 @@ class PlayerService {
   final Future<Track?> Function(Track track)? enrich;
   final Future<void> Function(Track track)? onPlayed;
   final Future<void> Function(Track track)? onEnriched;
+
+  /// Callback de persistencia del crossfade: llega al SettingsStore desde
+  /// main.dart para no acoplar el servicio al almacenamiento.
+  final Future<void> Function(double seconds)? onCrossfadeChanged;
 
   final Future<void> Function(bool enabled)? onShuffleChanged;
   final Future<void> Function(bool enabled)? onRadioChanged;
@@ -163,6 +168,7 @@ class PlayerService {
     this.preload,
     this.onPlayed,
     this.onEnriched,
+    this.onCrossfadeChanged,
     this.onShuffleChanged,
     this.onRadioChanged,
     this.onRepeatChanged,
@@ -177,6 +183,7 @@ class PlayerService {
         _lastPositionEmit = now;
         _positionController.add(p);
       }
+      _checkCrossfadeWindow(p);
     });
     _player.durationStream.listen((d) {
       _lastDuration = d;
@@ -612,6 +619,119 @@ class PlayerService {
   }
 
   // ── Internal ─────────────────────────────────────────────────────────
+  // ── Crossfade ──────────────────────────────────────────────────────────
+
+  /// Segundos de crossfade (0 = desactivado). Lo ajusta Settings (slider).
+  /// Activado solo si el backend es [CrossfadeBackend].
+  double _crossfadeSeconds = 0;
+
+  /// true mientras el auto-advance de fin de pista lo gestiona el crossfade
+  /// (el `completed` de la pista saliente se IGNORA para no doble-avanzar).
+  bool _crossfading = false;
+
+  /// Configura el crossfade (llamado por Settings vía main.dart).
+  Future<void> setCrossfade(double seconds) async {
+    _crossfadeSeconds = seconds.clamp(0.0, 12.0);
+    final cb = onCrossfadeChanged;
+    if (cb != null) {
+      try {
+        await cb(_crossfadeSeconds);
+      } catch (_) {}
+    }
+  }
+
+  /// Segundos actuales (para que Settings muestre el valor persistido).
+  double get crossfadeSeconds => _crossfadeSeconds;
+
+  /// true si el wrapper de crossfade está activo (Android/desktop con el
+  /// backend envuelto).
+  bool get crossfadeSupported => _player is CrossfadeBackend;
+
+  /// Cuando la pista está por terminar: monta y arranca la SIGUIENTE en el
+  /// reproductor secundario y funde volúmenes. Devuelve true si el cambio
+  /// quedó a cargo del crossfade (el `completed` entrante debe ignorarse).
+  Future<bool> _maybeStartCrossfade() async {
+    final seconds = _crossfadeSeconds;
+    if (seconds <= 0 || _crossfading) return false;
+    final backend = _player;
+    if (backend is! CrossfadeBackend) return false;
+
+    // Solo hay crossfade si hay siguiente pista real (repeat-one y radio no
+    // se funden: requieren cambiar de pista conocida antes del fin).
+    final hasNext = _queueIndex >= 0 && _queueIndex < _queue.length - 1;
+    if (!hasNext) return false;
+
+    final incoming = _queue[_queueIndex + 1];
+    final incomingIndex = _queueIndex + 1;
+    final current = _currentTrack;
+    if (current == null) return false;
+
+    _crossfading = true;
+    try {
+      // Resuelve la fuente ENTRANTE con la MISMA canalización que un cambio
+      // normal (caché en disco/yt-dlp). Sin token check aquí: el fade se
+      // cancela en open()/pause()/stop() del wrapper si llega otra orden.
+      final srcFuture = resolveSource(incoming);
+      final enrichFuture = _enrich(incoming);
+      final src = await srcFuture;
+      await backend.openIncoming(_mediaUri(src));
+      await backend.startIncoming();
+
+      // publicar la ENTRANTE al terminar la rampa (los streams del backend
+      // ya apuntan al nuevo principal tras el swap).
+      await backend.beginFade(
+        duration: Duration(milliseconds: (seconds * 1000).round()),
+      );
+      // Fundido CANCELADO (pause/seek/next del usuario durante la rampa):
+      // no se publica la entrante ni se intercambian roles.
+      if (backend.fadeCancelled) return false;
+      backend.swapAfterFade();
+
+      _queueIndex = incomingIndex;
+      _notifyQueueChanged();
+      _publishTrack(incoming);
+      _openedAt = DateTime.now();
+      _lastSourceIsLocal = src.isLocal;
+      unawaited(_notifyPlayed(incoming));
+      unawaited(_enrichThenApply(incoming, enrichFuture, _playToken));
+      _schedulePreloads();
+      appLog('TRACK', 'crossfade → ${incoming.id} (${seconds}s)');
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      _crossfading = false;
+    }
+  }
+
+  /// Punto de entrada del crossfade en la ventana final (posición dentro de
+  /// los últimos N segundos): un timer se lanza UNA vez por pista (clave =
+  /// id de la pista actual, para re-armar en la ENTRANTE tras el swap).
+  bool _crossfadeArmed = false;
+  String? _crossfadeArmedFor;
+  Timer? _crossfadeStartTimer;
+
+  void _checkCrossfadeWindow(Duration p) {
+    final seconds = _crossfadeSeconds;
+    if (seconds <= 0) return;
+    final dur = _lastDuration;
+    if (dur == null || dur <= Duration.zero) return;
+    // Ventana: últimos `seconds` de la pista (y solo si la pista es más
+    // larga que el propio fundido).
+    if (dur <= Duration(milliseconds: (seconds * 1000).round())) return;
+    if (p >= dur - Duration(milliseconds: (seconds * 1000).round()) &&
+        p < dur) {
+      final currentId = _currentTrack?.id;
+      if (_crossfadeArmed && _crossfadeArmedFor == currentId) return;
+      _crossfadeArmed = true;
+      _crossfadeArmedFor = currentId;
+      _crossfadeStartTimer?.cancel();
+      _crossfadeStartTimer = Timer(Duration.zero, () {
+        unawaited(_maybeStartCrossfade());
+      });
+    }
+  }
+
   Future<void> _onTrackCompleted() async {
     final token = _playToken;
     final current = _currentTrack;
@@ -637,6 +757,12 @@ class PlayerService {
       await _retryPrematureCut(current);
       return;
     }
+
+    // Crossfade en curso: el fin real de la pista saliente ya no avanza
+    // (la entrante fue montada y publicada por el fundido; su propio fin
+    // disparará el siguiente). Si el fundido NO llegó a arrancar (fallo de
+    // resolución), el completed avanza con la lógica normal de abajo.
+    if (_crossfading) return;
 
     // Repeat one: replay current track.
     if (repeatMode.value == LoopMode.one && current != null) {
@@ -700,7 +826,6 @@ class PlayerService {
 
   /// Cuántas pistas siguientes se precargan. Las primeras 2 arrancan de inmediato; el servicio de caché limita la concurrencia ([AudioCacheService.maxConcurrentPreloads] = 2) y encola el resto en orden, así las 3-5 nunca compiten por ancho de banda con las 2 prioritarias.
   static const int _preloadAhead = 5;
-
   void _schedulePreloads() {
     final fn = preload;
     if (fn == null || _queueIndex < 0 || _queue.isEmpty) return;
@@ -965,6 +1090,8 @@ class PlayerService {
   Future<void> dispose() async {
     _fakeTimer?.cancel();
     _fakeTimer = null;
+    _crossfadeStartTimer?.cancel();
+    _crossfadeStartTimer = null;
     _player.audioDevice.removeListener(_syncAudioDevice);
     _player.audioDevices.removeListener(_syncAudioDevices);
     await _player.dispose();

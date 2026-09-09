@@ -728,4 +728,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get visitedArtistsTitle => '最近浏览的艺术家';
+
+  @override
+  String get crossfade => '淡入淡出';
+
+  @override
+  String get crossfadeHint => '歌曲之间的淡入淡出：当前歌曲结束前开始播放下一首';
 }

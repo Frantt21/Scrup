@@ -741,4 +741,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get visitedArtistsTitle => 'Recently visited artists';
+
+  @override
+  String get crossfade => 'Crossfade';
+
+  @override
+  String get crossfadeHint =>
+      'Fade between songs: the next track starts before the current one ends';
 }

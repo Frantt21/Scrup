@@ -742,6 +742,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get visitedArtistsTitle => 'Artistas visitados';
+
+  @override
+  String get crossfade => 'Crossfade';
+
+  @override
+  String get crossfadeHint =>
+      'Transição suave entre músicas: a próxima faixa começa antes de a atual terminar';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1452,4 +1459,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get visitedArtistsTitle => 'Artistas visitados';
+
+  @override
+  String get crossfade => 'Crossfade';
+
+  @override
+  String get crossfadeHint =>
+      'Transição suave entre músicas: a próxima faixa começa antes de a atual terminar';
 }

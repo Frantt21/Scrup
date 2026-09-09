@@ -12,8 +12,10 @@ import 'core/binaries.dart';
 import 'core/track.dart';
 import 'data/database.dart';
 import 'l10n/generated/app_localizations.dart';
+import 'services/audio_backend.dart';
 import 'services/audio_cache_service.dart';
 import 'services/artwork_cache_service.dart';
+import 'services/crossfade_backend.dart';
 import 'services/just_audio_backend.dart';
 import 'services/media_kit_backend.dart';
 import 'services/artist_avatar_cache_store.dart';
@@ -137,6 +139,11 @@ Future<void> main() async {
   } catch (_) {}
   try {
     await settings.loadSkipSilenceEnabled();
+  } catch (_) {}
+  // Crossfade persistido: el valor vive en el PlayerService (el slider de
+  // ajustes lee/escribe a través de él).
+  try {
+    await settings.loadCrossfade();
   } catch (_) {}
   // Cachea el estilo de header (flat/full-bleed) para lectura SÍNCRONA al
   // abrir playlist/álbum/single: sin flash de estilo al entrar.
@@ -269,11 +276,23 @@ class ScrupApp extends StatelessWidget {
             // Debounce de la persistencia de la cola (ver onQueueChanged):
             // se cancela y reprograma en cada cambio de la cola.
             Timer? queueDebounce;
+            // Crossfade: el backend real (just_audio en Android, media_kit
+            // en desktop) se envuelve en un wrapper de DOS reproductores con
+            // rampa de volumen; con crossfade=0 es un passthrough.
+            final AudioBackend rawBackend;
+            if (Platform.isAndroid) {
+              // Android: just_audio (ExoPlayer) - reuses the audio pipeline
+              // between tracks and transitions do not tear down the player.
+              rawBackend = CrossfadeBackend(
+                JustAudioBackend(),
+                JustAudioBackend.new,
+              );
+            } else {
+              // Desktop/flatpak: media_kit (libmpv).
+              rawBackend = CrossfadeBackend(MediaKitBackend(), MediaKitBackend.new);
+            }
             final player = PlayerService(
-              // Android: just_audio (ExoPlayer) - reuses the audio pipeline between tracks and transitions do not tear down the player. Desktop/flatpak: media_kit (libmpv).
-              audioBackend: Platform.isAndroid
-                  ? JustAudioBackend()
-                  : MediaKitBackend(),
+              audioBackend: rawBackend,
               resolveSource: (track) async {
                 final source = await cache.ensureStreaming(
                   track.id,
@@ -299,6 +318,8 @@ class ScrupApp extends StatelessWidget {
               onPlayed: (track) async => db.recordPlay(track),
               onShuffleChanged: (enabled) =>
                   settings.saveShuffleEnabled(enabled),
+              onCrossfadeChanged: (seconds) =>
+                  settings.saveCrossfade(seconds),
               onRadioChanged: (enabled) => settings.saveRadioEnabled(enabled),
               onRepeatChanged: (mode) => settings.saveRepeatMode(mode.name),
               onQueueChanged: (snapshot) async {
@@ -312,6 +333,9 @@ class ScrupApp extends StatelessWidget {
             player.shuffle.value = initialShuffleEnabled;
             player.repeatMode.value = initialRepeatMode;
             player.radio.value = initialRadioEnabled;
+            // Crossfade persistido (0 = desactivado). setCrossfade asigna el
+            // valor de forma síncrona; el write-back es el mismo valor.
+            unawaited(player.setCrossfade(settings.crossfadeCache));
             context.read<ScrupAudioHandler>().attach(
               player,
               db: db,

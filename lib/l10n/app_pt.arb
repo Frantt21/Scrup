@@ -228,5 +228,7 @@
   "retry": "Tentar novamente",
   "playAll": "Reproduzir tudo",
   "createPlaylistFromAlbum": "Criar playlist com este álbum",
-  "visitedArtistsTitle": "Artistas visitados"
+  "visitedArtistsTitle": "Artistas visitados",
+  "crossfade": "Crossfade",
+  "crossfadeHint": "Transição suave entre músicas: a próxima faixa começa antes de a atual terminar"
 }

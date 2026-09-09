@@ -228,5 +228,7 @@
   "retry": "再試行",
   "playAll": "すべて再生",
   "createPlaylistFromAlbum": "このアルバムでプレイリストを作成",
-  "visitedArtistsTitle": "最近閲覧したアーティスト"
+  "visitedArtistsTitle": "最近閲覧したアーティスト",
+  "crossfade": "クロスフェード",
+  "crossfadeHint": "曲のフェード: 現在の曲が終わる前に次の曲を再生開始します"
 }

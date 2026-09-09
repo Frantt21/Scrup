@@ -744,4 +744,11 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get visitedArtistsTitle => 'Artistas visitados';
+
+  @override
+  String get crossfade => 'Crossfade';
+
+  @override
+  String get crossfadeHint =>
+      'Fundido entre canciones: la siguiente pista empieza antes de que termine la actual';
 }

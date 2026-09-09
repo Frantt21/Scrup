@@ -20,7 +20,24 @@ class SettingsStore {
   static const _queueIndexKey = 'player.queue_index';
   static const _activePlaylistIdKey = 'player.active_playlist_id';
   static const _flatPlaylistHeaderKey = 'ui.flat_playlist_header';
+  static const _crossfadeKey = 'player.crossfade_seconds';
   static const _resumeKey = 'player.resume';  static const _cacheMaxSizeKey = 'cache.max_size_mb';  static const lyricsSweepKey = 'lyrics_sweep_enabled';  final ValueNotifier<bool> playerAnimationEnabled = ValueNotifier(true);  final ValueNotifier<bool> lyricsSweepEnabled = ValueNotifier(false);
+
+  /// Segundos de crossfade persistidos (0 = off). El slider de ajustes
+  /// lee/escribe a través de este valor; el PlayerService lo consume.
+  double crossfadeCache = 0;
+
+  Future<void> saveCrossfade(double seconds) async {
+    crossfadeCache = seconds.clamp(0.0, 12.0);
+    final prefs = await _instance;
+    await prefs.setDouble(_crossfadeKey, crossfadeCache);
+  }
+
+  Future<double> loadCrossfade() async {
+    final prefs = await _instance;
+    crossfadeCache = (prefs.getDouble(_crossfadeKey) ?? 0).clamp(0.0, 12.0);
+    return crossfadeCache;
+  }
 
   SharedPreferences? _prefs;
 

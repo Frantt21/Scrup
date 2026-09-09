@@ -15,6 +15,7 @@ import '../../services/artwork_cache_service.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/discord/discord_presence_service.dart';
 import '../../services/palette_cache_store.dart';
+import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
 import '../locale_controller.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
@@ -47,6 +48,12 @@ class _SettingsViewState extends State<SettingsView> {
 
   /// Skip silence (automatically skip silent gaps).
   bool _skipSilenceEnabled = true;
+
+  /// Crossfade activado (segundos > 0).
+  double _crossfadeSeconds = 0;
+
+  /// Valor de la barra mientras se arrastra (commit en onChangeEnd).
+  double? _crossfadeDrag;
 
   /// Límite del caché de audio en MiB (null = por defecto, 40 GiB).
   int? _cacheLimitMb;
@@ -153,10 +160,12 @@ class _SettingsViewState extends State<SettingsView> {
       final settings = context.read<SettingsStore>();
       final sweep = await settings.loadLyricsSweepEnabled();
       final skipSilence = await settings.loadSkipSilenceEnabled();
+      final crossfade = await settings.loadCrossfade();
       if (!mounted) return;
       setState(() {
         _lyricsSweepEnabled = sweep;
         _skipSilenceEnabled = skipSilence;
+        _crossfadeSeconds = crossfade;
       });
     } catch (_) {
       // La configuración nunca debe romper la vista.
@@ -595,6 +604,7 @@ class _SettingsViewState extends State<SettingsView> {
   Widget _buildPlayerSection(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
     final settings = context.read<SettingsStore>();
+    final player = context.read<PlayerService>();
 
     return _SectionCard(
       icon: Icons.lyrics_rounded,
@@ -602,6 +612,68 @@ class _SettingsViewState extends State<SettingsView> {
       caption: l10n.syncLyricsTitle,
       child: Column(
         children: [
+          // CROSSFADE: interruptor + barra de segundos (0-12, pasos de 1s;
+          // el fundido real es continuo aunque el ajuste vaya a enteros).
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            tileColor: Colors.transparent,
+            title: SizedBox(
+              width: Binaries.isMobile ? null : 240,
+              child: Text(
+                l10n.crossfade,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+            subtitle: Text(
+              l10n.crossfadeHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            value: _crossfadeSeconds > 0,
+            onChanged: (value) async {
+              setState(() {
+                _crossfadeDrag = null;
+                _crossfadeSeconds = value ? 4 : 0;
+              });
+              await player.setCrossfade(_crossfadeSeconds);
+            },
+          ),
+          if (_crossfadeSeconds > 0)
+            Row(
+              children: [
+                Expanded(
+                  child: Slider(
+                    // El valor mostrado prioriza el arrastre en vivo.
+                    value: (_crossfadeDrag ?? _crossfadeSeconds).clamp(1, 12),
+                    min: 1,
+                    max: 12,
+                    divisions: 11,
+                    label: '${(_crossfadeDrag ?? _crossfadeSeconds).toStringAsFixed(0)}s',
+                    onChanged: (v) => setState(() => _crossfadeDrag = v),
+                    onChangeEnd: (v) async {
+                      setState(() {
+                        _crossfadeDrag = null;
+                        _crossfadeSeconds = v;
+                      });
+                      await player.setCrossfade(v);
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 40,
+                  child: Text(
+                    '${(_crossfadeDrag ?? _crossfadeSeconds).toStringAsFixed(0)}s',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+              ],
+            ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             tileColor: Colors.transparent,
