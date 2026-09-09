@@ -727,4 +727,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get playAll => '전체 재생';
+
+  @override
+  String get visitedArtistsTitle => '최근 방문한 아티스트';
 }

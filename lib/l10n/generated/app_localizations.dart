@@ -1452,6 +1452,12 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Reproducir todo'**
   String get playAll;
+
+  /// No description provided for @visitedArtistsTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Artistas visitados'**
+  String get visitedArtistsTitle;
 }
 
 class _AppLocalizationsDelegate

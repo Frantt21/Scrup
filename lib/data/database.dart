@@ -37,7 +37,7 @@ class Playlist {
 }
 
 @DriftDatabase(
-  tables: [Tracks, History, Playlists, PlaylistTracks, Lyrics, PaletteCache],
+  tables: [Tracks, History, Playlists, PlaylistTracks, Lyrics, PaletteCache, ArtistVisits],
 )
 class AppDatabase extends _$AppDatabase {
   /// [executor] lets tests inject an in-memory database.
@@ -45,7 +45,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -88,6 +88,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 9) {
         // Last played timestamp for a playlist (for "recent playlists").
         await m.addColumn(playlists, playlists.lastPlayedAt);
+      }
+      if (from < 10) {
+        // Visited artists (home "visited artists" row).
+        await m.createTable(artistVisits);
       }
     },
   );
@@ -581,6 +585,38 @@ class AppDatabase extends _$AppDatabase {
         );
       }
     });
+  }
+
+  // -------------------------------------------------- artistas visitados
+
+  /// Registra/actualiza la visita a un canal (el más reciente queda
+  /// primero en `watchVisitedArtists`). Best-effort: sin artista no pasa
+  /// nada.
+  Future<void> recordArtistVisit({
+    required String id,
+    required String name,
+    String? thumbnailUrl,
+  }) async {
+    try {
+      await into(
+        artistVisits,
+      ).insertOnConflictUpdate(
+        ArtistVisitsCompanion.insert(
+          id: id,
+          name: name,
+          thumbnailUrl: Value(thumbnailUrl),
+          visitedAt: DateTime.now(),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  /// Artistas visitados, el más reciente primero (home).
+  Stream<List<VisitedArtist>> watchVisitedArtists({int limit = 12}) {
+    return (select(artistVisits)
+          ..orderBy([(a) => OrderingTerm.desc(a.visitedAt)])
+          ..limit(limit))
+        .watch();
   }
 
   // ------------------------------------------------------------- helpers

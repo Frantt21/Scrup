@@ -360,9 +360,17 @@ class _AppShellState extends State<AppShell> {
   }
 
   /// Abre/cierra el detalle de artista (móvil): screen dentro del shell.
+  /// La visita queda registrada (home: fila "Artistas visitados").
   void _openArtistDetail(YtmArtist artist) {
     _artistAlbumOpenFlag = false;
     setState(() => _openArtist = artist);
+    unawaited(
+      context.read<AppDatabase>().recordArtistVisit(
+        id: artist.browseId,
+        name: artist.name,
+        thumbnailUrl: artist.thumbnailUrl,
+      ),
+    );
   }
 
   /// True mientras el detalle de artista tiene un álbum/single abierto:
@@ -590,7 +598,12 @@ class _AppShellState extends State<AppShell> {
                     ? 2
                     : (_showSettings ? 3 : _selectedIndex)),
           children: [
-            HomeView(onSearch: _submitSearch, onOpenSearch: _openSearch, onOpenPlaylist: _selectPlaylist),
+            HomeView(
+              onSearch: _submitSearch,
+              onOpenSearch: _openSearch,
+              onOpenPlaylist: _selectPlaylist,
+              onOpenArtist: _openArtistDetail,
+            ),
             SearchView(
               searchRequest: _searchRequest,
               focusRequest: _searchFocusRequest,
@@ -655,7 +668,12 @@ class _AppShellState extends State<AppShell> {
             // Home sin SafeArea superior (edge-to-edge): el degradado de
             // acento del inicio se extiende detr�s de la barra de estado.
             // El propio HomeView aplica el inset superior a su contenido.
-            HomeView(onSearch: _submitSearch, onOpenSearch: _openSearch, onOpenPlaylist: _selectPlaylist),
+            HomeView(
+              onSearch: _submitSearch,
+              onOpenSearch: _openSearch,
+              onOpenPlaylist: _selectPlaylist,
+              onOpenArtist: _openArtistDetail,
+            ),
             // bottom: FALSE: el inset inferior del sistema ya lo absorbe la
             // NavigationBar del shell (64+inset). Con el SafeArea completo
             // el inset se aplicaba DOS veces y dejaba una banda vacía oscura

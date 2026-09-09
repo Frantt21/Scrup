@@ -851,11 +851,17 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                 onPressed: !_tracksLoaded || count == 0
                                     ? null
                                     : _playAll,
-                                // Fixed CONTRAST colors on the first frame:
-                                // the async ambient arrives after the first
-                                // build and with the M3 default the labels
-                                // flash (disabled gray → final color).
+                                // Colores FIJOS también en disabled: sin
+                                // esto el botón nace con el estilo M3 de
+                                // deshabilitado (gris pálido) y el frame
+                                // siguiente pasa al real (flash desactivado
+                                // → activo al entrar al screen).
                                 style: FilledButton.styleFrom(
+                                  disabledBackgroundColor:
+                                      _ambientColor ?? Colors.white,
+                                  disabledForegroundColor: _onAccent(
+                                    _ambientColor ?? Colors.white,
+                                  ).withValues(alpha: 0.6),
                                   backgroundColor:
                                       _ambientColor ?? Colors.white,
                                   foregroundColor: _onAccent(
@@ -872,6 +878,11 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                     ? null
                                     : _playShuffled,
                                 style: FilledButton.styleFrom(
+                                  disabledBackgroundColor:
+                                      _ambientColor ?? Colors.white,
+                                  disabledForegroundColor: _onAccent(
+                                    _ambientColor ?? Colors.white,
+                                  ).withValues(alpha: 0.6),
                                   backgroundColor:
                                       _ambientColor ?? Colors.white,
                                   foregroundColor: _onAccent(

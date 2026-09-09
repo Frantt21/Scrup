@@ -227,5 +227,6 @@
   "artistDetailEmpty": "이 아티스트를 불러올 수 없습니다.",
   "retry": "다시 시도",
   "playAll": "전체 재생",
-  "createPlaylistFromAlbum": "이 앨범으로 플레이리스트 만들기"
+  "createPlaylistFromAlbum": "이 앨범으로 플레이리스트 만들기",
+  "visitedArtistsTitle": "최근 방문한 아티스트"
 }

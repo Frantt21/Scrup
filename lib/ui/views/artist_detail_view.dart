@@ -829,13 +829,16 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         FilledButton.icon(
-          // Deshabilitado hasta tener pistas: el label aparece YA montado, sin
-          // el flash "sin texto → texto".
+          // Deshabilitado hasta tener pistas, pero con los MISMOS colores
+          // fijos: el estilo M3 disabled (gris pálido) mostraba un flash
+          // "desactivado → activo" al cargar el tracklist.
           onPressed: (tracks == null || tracks.isEmpty) ? null : _playAll,
           style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 44),
+            disabledBackgroundColor: accent,
+            disabledForegroundColor: _onColor(accent).withValues(alpha: 0.6),
             backgroundColor: accent,
             foregroundColor: _onColor(accent),
+            minimumSize: const Size(0, 44),
           ),
           icon: const Icon(Icons.play_arrow_rounded),
           label: Text(l10n.play),
@@ -844,9 +847,11 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
         FilledButton.icon(
           onPressed: (tracks == null || tracks.isEmpty) ? null : _playShuffled,
           style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 44),
+            disabledBackgroundColor: accent,
+            disabledForegroundColor: _onColor(accent).withValues(alpha: 0.6),
             backgroundColor: accent,
             foregroundColor: _onColor(accent),
+            minimumSize: const Size(0, 44),
           ),
           icon: const Icon(Icons.shuffle_rounded),
           label: Text(l10n.shuffle),

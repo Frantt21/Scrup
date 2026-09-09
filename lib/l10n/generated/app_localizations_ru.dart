@@ -745,4 +745,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get playAll => 'Слушать всё';
+
+  @override
+  String get visitedArtistsTitle => 'Недавно просмотренные исполнители';
 }

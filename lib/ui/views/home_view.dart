@@ -13,6 +13,7 @@ import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/player_service.dart';
+import '../../services/search_service.dart' show YtmArtist;
 import '../playback.dart';
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
@@ -33,11 +34,15 @@ class HomeView extends StatefulWidget {
   /// Called when tapping a recent playlist on home (AppShell opens its detail).
   final ValueChanged<Playlist>? onOpenPlaylist;
 
+  /// Called when tapping a visited artist (AppShell opens the artist screen).
+  final ValueChanged<YtmArtist>? onOpenArtist;
+
   const HomeView({
     super.key,
     this.onSearch,
     this.onOpenSearch,
     this.onOpenPlaylist,
+    this.onOpenArtist,
   });
 
   @override
@@ -59,6 +64,10 @@ class _HomeViewState extends State<HomeView> {
   List<Track> _likes = const [];
   StreamSubscription<List<Playlist>>? _recentPlaylistsSub;
   List<Playlist> _recentPlaylists = const [];
+
+  // Artistas visitados (fila de home, igual que las playlists recientes).
+  StreamSubscription<List<VisitedArtist>>? _visitedArtistsSub;
+  List<VisitedArtist> _visitedArtists = const [];
 
   /// Debounce de recientes: ELIMINADO (forawn-style: instantáneo). El delay
   /// difería el rebuild pero se percibía como lag en la UI; con imágenes
@@ -85,7 +94,9 @@ class _HomeViewState extends State<HomeView> {
 
   /// Card size and grid layout (desktop ~200px, mobile compact).
   static const _cardExtent = 200.0;
-  static const _rows = 2;
+
+  /// Grid de recientes: 3 COLUMNAS × 3 FILAS (9 tarjetas) en móvil.
+  static const _rows = 3;
 
   @override
   void initState() {
@@ -112,6 +123,13 @@ class _HomeViewState extends State<HomeView> {
           .listen((playlists) {
         if (!mounted) return;
         setState(() => _recentPlaylists = playlists);
+      });
+      _visitedArtistsSub = context
+          .read<AppDatabase>()
+          .watchVisitedArtists(limit: 12)
+          .listen((artists) {
+        if (!mounted) return;
+        setState(() => _visitedArtists = artists);
       });
       // Banner de favoritos (no bloquea _loaded: es optativo).
       unawaited(
@@ -164,6 +182,7 @@ class _HomeViewState extends State<HomeView> {
     _playingSub?.cancel();
     _likesSub?.cancel();
     _recentPlaylistsSub?.cancel();
+    _visitedArtistsSub?.cancel();
     _nullTrackTimer?.cancel();
     if (_onActivePlaylistChanged != null) {
       context.read<PlayerService>().activePlaylistId.removeListener(
@@ -230,14 +249,15 @@ class _HomeViewState extends State<HomeView> {
                   // otras vistas con SafeArea. En desktop se mantiene el campo
                   // de búsqueda scrolleable dentro del panel.
                   mobile
-                      ? SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              16, topInset + 16, 16, 8,
-                            ),
+                      ? SliverPersistentHeader(
+                          // Header FIJO y transparente: siempre visible al
+                          // scrollear (pinned) y sin fondo — el contenido y
+                          // el degradado de acento pasan por detrás.
+                          pinned: true,
+                          floating: false,
+                          delegate: _HomeHeaderDelegate(
+                            topInset: topInset,
                             child: Row(
-                              // Título y botón CENTRADOS verticalmente (no el
-                              // título arriba y los botones en medio).
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 Expanded(
@@ -353,6 +373,21 @@ class _HomeViewState extends State<HomeView> {
                         onOpen: _openPlaylist,
                       ),
                     ),
+                  // Artistas visitados (DESPUÉS de las playlists recientes,
+                  // mismo estilo de fila horizontal)
+                  if (_visitedArtists.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _VisitedArtistsRow(
+                        artists: _visitedArtists,
+                        onOpen: widget.onOpenArtist,
+                      ),
+                    ),
+                  // Espacio inferior: desktop despeja el player flotante.
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: mobile ? 16 : kPlayerOverlayInset,
+                    ),
+                  ),
                 ],
               );
 
@@ -907,6 +942,177 @@ class _TopAccentGradient extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Header FIJO de home (móvil): pinned y SIN fondo — el contenido pasa por
+/// detrás al scrollear. Reproduce el layout del header original (título +
+/// botón de búsqueda hundido con el inset de la barra de estado).
+class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _HomeHeaderDelegate({required this.topInset, required this.child});
+
+  final double topInset;
+  final Widget child;
+
+  static const double _contentH = 56.0;
+
+  @override
+  double get minExtent => topInset + _contentH;
+
+  @override
+  double get maxExtent => topInset + _contentH;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    // Sin fondo a propósito (transparente); padding lateral 16 + vertical
+    // como el header original.
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, topInset + 16, 16, 8),
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_HomeHeaderDelegate oldDelegate) =>
+      oldDelegate.topInset != topInset || oldDelegate.child != child;
+}
+
+/// Fila horizontal de ARTISTAS visitados: mismo estilo que las playlists
+/// recientes (cards 140dp con título dentro). La miniatura viene de la
+/// visita; si el canal cambió su avatar, el screen del artista lo trae
+/// fresco al abrir (la visita se repuebla con la nueva URL).
+class _VisitedArtistsRow extends StatelessWidget {
+  final List<VisitedArtist> artists;
+  final ValueChanged<YtmArtist>? onOpen;
+
+  const _VisitedArtistsRow({required this.artists, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    if (artists.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text(
+            l10n.visitedArtistsTitle,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 158,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: artists.length,
+            itemBuilder: (context, i) {
+              final a = artists[i];
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: _VisitedArtistCard(
+                  artist: a,
+                  onTap: () => onOpen?.call(
+                    YtmArtist(
+                      browseId: a.id,
+                      name: a.name,
+                      thumbnailUrl: a.thumbnailUrl,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Card de artista visitado (idéntica a la de playlist reciente: 140dp,
+/// portada 1:1 completa con el título dentro).
+class _VisitedArtistCard extends StatelessWidget {
+  final VisitedArtist artist;
+  final VoidCallback onTap;
+
+  const _VisitedArtistCard({required this.artist, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasCover = artist.thumbnailUrl != null &&
+        artist.thumbnailUrl!.isNotEmpty;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 140,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (hasCover)
+                CoverImage(
+                  source: artist.thumbnailUrl,
+                  fit: BoxFit.cover,
+                  cacheWidth: 300,
+                  fallback: Container(
+                    color: theme.colorScheme.surfaceContainerHigh,
+                    child: Icon(
+                      Icons.person_rounded,
+                      size: 40,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  color: theme.colorScheme.surfaceContainerHigh,
+                  child: Icon(
+                    Icons.person_rounded,
+                    size: 44,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black54],
+                    stops: [0.5, 1.0],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 10,
+                right: 10,
+                bottom: 10,
+                child: Text(
+                  artist.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

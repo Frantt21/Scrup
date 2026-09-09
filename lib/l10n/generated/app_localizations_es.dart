@@ -741,4 +741,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get playAll => 'Reproducir todo';
+
+  @override
+  String get visitedArtistsTitle => 'Artistas visitados';
 }

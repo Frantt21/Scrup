@@ -738,4 +738,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get playAll => 'Play all';
+
+  @override
+  String get visitedArtistsTitle => 'Recently visited artists';
 }

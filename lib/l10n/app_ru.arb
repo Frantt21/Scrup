@@ -227,5 +227,6 @@
   "artistDetailEmpty": "Не удалось загрузить этого исполнителя.",
   "retry": "Повторить",
   "playAll": "Слушать всё",
-  "createPlaylistFromAlbum": "Создать плейлист из этого альбома"
+  "createPlaylistFromAlbum": "Создать плейлист из этого альбома",
+  "visitedArtistsTitle": "Недавно просмотренные исполнители"
 }

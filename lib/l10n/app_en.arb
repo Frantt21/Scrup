@@ -364,5 +364,6 @@
   "artistSubscribers": "subscribers",
   "artistDetailEmpty": "Could not load this artist.",
   "retry": "Retry",
-  "playAll": "Play all"
+  "playAll": "Play all",
+  "visitedArtistsTitle": "Recently visited artists"
 }

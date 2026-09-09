@@ -725,4 +725,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get playAll => '播放全部';
+
+  @override
+  String get visitedArtistsTitle => '最近浏览的艺术家';
 }

@@ -225,7 +225,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final int? durationSeconds;
   final String? thumbnailUrl;
 
-  /// Álbum enriquecido vía Deezer (null si aún no se ha enriquecido).
+  /// Album enriched via Deezer (null until it has been enriched).
   final String? album;
   final DateTime? lastPlayed;
   final int playCount;
@@ -988,17 +988,16 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
   final String name;
   final DateTime createdAt;
 
-  /// Portada de la playlist (URL del artwork de una de sus canciones, o
-  /// null si aún no tiene).
+  /// Playlist cover (URL of the artwork of one of its songs, or null if none yet).
   final String? coverUrl;
 
-  /// Descripción opcional escrita por el usuario.
+  /// Optional description written by the user.
   final String? description;
 
-  /// Playlist especial de Favoritos (siempre al final, no se puede borrar).
+  /// Special Favorites playlist (always last, cannot be deleted).
   final bool isFavorites;
 
-  /// Última vez que se reprodujo la playlist (para las "recientes" del inicio).
+  /// Last time the playlist was played (for the home recent playlists section).
   final DateTime? lastPlayedAt;
   const PlaylistRow({
     required this.id,
@@ -2218,6 +2217,320 @@ class PaletteCacheCompanion extends UpdateCompanion<PaletteRow> {
   }
 }
 
+class $ArtistVisitsTable extends ArtistVisits
+    with TableInfo<$ArtistVisitsTable, VisitedArtist> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ArtistVisitsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _thumbnailUrlMeta = const VerificationMeta(
+    'thumbnailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> thumbnailUrl = GeneratedColumn<String>(
+    'thumbnail_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _visitedAtMeta = const VerificationMeta(
+    'visitedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> visitedAt = GeneratedColumn<DateTime>(
+    'visited_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, thumbnailUrl, visitedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'artist_visits';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<VisitedArtist> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('thumbnail_url')) {
+      context.handle(
+        _thumbnailUrlMeta,
+        thumbnailUrl.isAcceptableOrUnknown(
+          data['thumbnail_url']!,
+          _thumbnailUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('visited_at')) {
+      context.handle(
+        _visitedAtMeta,
+        visitedAt.isAcceptableOrUnknown(data['visited_at']!, _visitedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_visitedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  VisitedArtist map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return VisitedArtist(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      thumbnailUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}thumbnail_url'],
+      ),
+      visitedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}visited_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ArtistVisitsTable createAlias(String alias) {
+    return $ArtistVisitsTable(attachedDatabase, alias);
+  }
+}
+
+class VisitedArtist extends DataClass implements Insertable<VisitedArtist> {
+  final String id;
+  final String name;
+  final String? thumbnailUrl;
+  final DateTime visitedAt;
+  const VisitedArtist({
+    required this.id,
+    required this.name,
+    this.thumbnailUrl,
+    required this.visitedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || thumbnailUrl != null) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl);
+    }
+    map['visited_at'] = Variable<DateTime>(visitedAt);
+    return map;
+  }
+
+  ArtistVisitsCompanion toCompanion(bool nullToAbsent) {
+    return ArtistVisitsCompanion(
+      id: Value(id),
+      name: Value(name),
+      thumbnailUrl: thumbnailUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(thumbnailUrl),
+      visitedAt: Value(visitedAt),
+    );
+  }
+
+  factory VisitedArtist.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return VisitedArtist(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      thumbnailUrl: serializer.fromJson<String?>(json['thumbnailUrl']),
+      visitedAt: serializer.fromJson<DateTime>(json['visitedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'thumbnailUrl': serializer.toJson<String?>(thumbnailUrl),
+      'visitedAt': serializer.toJson<DateTime>(visitedAt),
+    };
+  }
+
+  VisitedArtist copyWith({
+    String? id,
+    String? name,
+    Value<String?> thumbnailUrl = const Value.absent(),
+    DateTime? visitedAt,
+  }) => VisitedArtist(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    thumbnailUrl: thumbnailUrl.present ? thumbnailUrl.value : this.thumbnailUrl,
+    visitedAt: visitedAt ?? this.visitedAt,
+  );
+  VisitedArtist copyWithCompanion(ArtistVisitsCompanion data) {
+    return VisitedArtist(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      thumbnailUrl: data.thumbnailUrl.present
+          ? data.thumbnailUrl.value
+          : this.thumbnailUrl,
+      visitedAt: data.visitedAt.present ? data.visitedAt.value : this.visitedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VisitedArtist(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('visitedAt: $visitedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, thumbnailUrl, visitedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is VisitedArtist &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.thumbnailUrl == this.thumbnailUrl &&
+          other.visitedAt == this.visitedAt);
+}
+
+class ArtistVisitsCompanion extends UpdateCompanion<VisitedArtist> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String?> thumbnailUrl;
+  final Value<DateTime> visitedAt;
+  final Value<int> rowid;
+  const ArtistVisitsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.thumbnailUrl = const Value.absent(),
+    this.visitedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ArtistVisitsCompanion.insert({
+    required String id,
+    required String name,
+    this.thumbnailUrl = const Value.absent(),
+    required DateTime visitedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       visitedAt = Value(visitedAt);
+  static Insertable<VisitedArtist> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? thumbnailUrl,
+    Expression<DateTime>? visitedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (thumbnailUrl != null) 'thumbnail_url': thumbnailUrl,
+      if (visitedAt != null) 'visited_at': visitedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ArtistVisitsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String?>? thumbnailUrl,
+    Value<DateTime>? visitedAt,
+    Value<int>? rowid,
+  }) {
+    return ArtistVisitsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      visitedAt: visitedAt ?? this.visitedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (thumbnailUrl.present) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl.value);
+    }
+    if (visitedAt.present) {
+      map['visited_at'] = Variable<DateTime>(visitedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ArtistVisitsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('visitedAt: $visitedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2227,6 +2540,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $PlaylistTracksTable playlistTracks = $PlaylistTracksTable(this);
   late final $LyricsTable lyrics = $LyricsTable(this);
   late final $PaletteCacheTable paletteCache = $PaletteCacheTable(this);
+  late final $ArtistVisitsTable artistVisits = $ArtistVisitsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2238,6 +2552,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     playlistTracks,
     lyrics,
     paletteCache,
+    artistVisits,
   ];
 }
 
@@ -4079,6 +4394,189 @@ typedef $$PaletteCacheTableProcessedTableManager =
       PaletteRow,
       PrefetchHooks Function()
     >;
+typedef $$ArtistVisitsTableCreateCompanionBuilder =
+    ArtistVisitsCompanion Function({
+      required String id,
+      required String name,
+      Value<String?> thumbnailUrl,
+      required DateTime visitedAt,
+      Value<int> rowid,
+    });
+typedef $$ArtistVisitsTableUpdateCompanionBuilder =
+    ArtistVisitsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String?> thumbnailUrl,
+      Value<DateTime> visitedAt,
+      Value<int> rowid,
+    });
+
+class $$ArtistVisitsTableFilterComposer
+    extends Composer<_$AppDatabase, $ArtistVisitsTable> {
+  $$ArtistVisitsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get visitedAt => $composableBuilder(
+    column: $table.visitedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ArtistVisitsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ArtistVisitsTable> {
+  $$ArtistVisitsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get visitedAt => $composableBuilder(
+    column: $table.visitedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ArtistVisitsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ArtistVisitsTable> {
+  $$ArtistVisitsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get visitedAt =>
+      $composableBuilder(column: $table.visitedAt, builder: (column) => column);
+}
+
+class $$ArtistVisitsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ArtistVisitsTable,
+          VisitedArtist,
+          $$ArtistVisitsTableFilterComposer,
+          $$ArtistVisitsTableOrderingComposer,
+          $$ArtistVisitsTableAnnotationComposer,
+          $$ArtistVisitsTableCreateCompanionBuilder,
+          $$ArtistVisitsTableUpdateCompanionBuilder,
+          (
+            VisitedArtist,
+            BaseReferences<_$AppDatabase, $ArtistVisitsTable, VisitedArtist>,
+          ),
+          VisitedArtist,
+          PrefetchHooks Function()
+        > {
+  $$ArtistVisitsTableTableManager(_$AppDatabase db, $ArtistVisitsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ArtistVisitsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ArtistVisitsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ArtistVisitsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> thumbnailUrl = const Value.absent(),
+                Value<DateTime> visitedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ArtistVisitsCompanion(
+                id: id,
+                name: name,
+                thumbnailUrl: thumbnailUrl,
+                visitedAt: visitedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                Value<String?> thumbnailUrl = const Value.absent(),
+                required DateTime visitedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => ArtistVisitsCompanion.insert(
+                id: id,
+                name: name,
+                thumbnailUrl: thumbnailUrl,
+                visitedAt: visitedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ArtistVisitsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ArtistVisitsTable,
+      VisitedArtist,
+      $$ArtistVisitsTableFilterComposer,
+      $$ArtistVisitsTableOrderingComposer,
+      $$ArtistVisitsTableAnnotationComposer,
+      $$ArtistVisitsTableCreateCompanionBuilder,
+      $$ArtistVisitsTableUpdateCompanionBuilder,
+      (
+        VisitedArtist,
+        BaseReferences<_$AppDatabase, $ArtistVisitsTable, VisitedArtist>,
+      ),
+      VisitedArtist,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4095,4 +4593,6 @@ class $AppDatabaseManager {
       $$LyricsTableTableManager(_db, _db.lyrics);
   $$PaletteCacheTableTableManager get paletteCache =>
       $$PaletteCacheTableTableManager(_db, _db.paletteCache);
+  $$ArtistVisitsTableTableManager get artistVisits =>
+      $$ArtistVisitsTableTableManager(_db, _db.artistVisits);
 }

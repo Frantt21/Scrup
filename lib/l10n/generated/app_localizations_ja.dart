@@ -727,4 +727,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get playAll => 'すべて再生';
+
+  @override
+  String get visitedArtistsTitle => '最近閲覧したアーティスト';
 }

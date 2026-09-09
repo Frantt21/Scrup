@@ -227,5 +227,6 @@
   "artistDetailEmpty": "Não foi possível carregar este artista.",
   "retry": "Tentar novamente",
   "playAll": "Reproduzir tudo",
-  "createPlaylistFromAlbum": "Criar playlist com este álbum"
+  "createPlaylistFromAlbum": "Criar playlist com este álbum",
+  "visitedArtistsTitle": "Artistas visitados"
 }

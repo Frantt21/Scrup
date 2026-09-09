@@ -372,5 +372,6 @@
   "artistSubscribers": "suscriptores",
   "artistDetailEmpty": "No se pudo cargar este artista.",
   "retry": "Reintentar",
-  "playAll": "Reproducir todo"
+  "playAll": "Reproducir todo",
+  "visitedArtistsTitle": "Artistas visitados"
 }

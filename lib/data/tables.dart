@@ -86,3 +86,17 @@ class PlaylistTracks extends Table {
     {playlistId, trackId},
   ];
 }
+
+/// Artistas (canales) visitados: alimenta la fila "Artistas visitados" de
+/// home, igual que las playlists recientes. Una fila por artista; abrir el
+/// screen de nuevo repuebla el timestamp (el más reciente queda primero).
+@DataClassName('VisitedArtist')
+class ArtistVisits extends Table {
+  TextColumn get id => text()(); // browseId del canal (UC…)
+  TextColumn get name => text()();
+  TextColumn get thumbnailUrl => text().nullable()();
+  DateTimeColumn get visitedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}

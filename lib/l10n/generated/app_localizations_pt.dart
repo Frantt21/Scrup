@@ -739,6 +739,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get playAll => 'Reproduzir tudo';
+
+  @override
+  String get visitedArtistsTitle => 'Artistas visitados';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1446,4 +1449,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get playAll => 'Reproduzir tudo';
+
+  @override
+  String get visitedArtistsTitle => 'Artistas visitados';
 }
