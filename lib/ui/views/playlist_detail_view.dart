@@ -26,6 +26,10 @@ import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/scrup_toasts.dart';
 import '../widgets/track_tile.dart';
 
+/// Readable text over a background of the given color (black/white by luminance).
+Color _onAccent(Color bg) =>
+    bg.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+
 /// Floating glass container showing playlist detail with hero, tracks, drag reorder, context menus and ambient color from cover art.
 class PlaylistDetailView extends StatefulWidget {
   final Playlist playlist;
@@ -847,7 +851,16 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                 onPressed: !_tracksLoaded || count == 0
                                     ? null
                                     : _playAll,
+                                // Fixed CONTRAST colors on the first frame:
+                                // the async ambient arrives after the first
+                                // build and with the M3 default the labels
+                                // flash (disabled gray → final color).
                                 style: FilledButton.styleFrom(
+                                  backgroundColor:
+                                      _ambientColor ?? Colors.white,
+                                  foregroundColor: _onAccent(
+                                    _ambientColor ?? Colors.white,
+                                  ),
                                   minimumSize: const Size(0, 44),
                                 ),
                                 icon: const Icon(Icons.play_arrow_rounded),
@@ -859,6 +872,11 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                     ? null
                                     : _playShuffled,
                                 style: FilledButton.styleFrom(
+                                  backgroundColor:
+                                      _ambientColor ?? Colors.white,
+                                  foregroundColor: _onAccent(
+                                    _ambientColor ?? Colors.white,
+                                  ),
                                   minimumSize: const Size(0, 44),
                                 ),
                                 icon: const Icon(Icons.shuffle_rounded),

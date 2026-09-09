@@ -60,6 +60,25 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   @override
   void initState() {
     super.initState();
+    // Hot cache (same session): paint the FIRST frame with the real data —
+    // no placeholder flash for the ~1 frame the async read takes. The
+    // accent is also read synchronously from the palette store (no setState
+    // here: direct field assignment before the first build).
+    final peek = context
+        .read<SearchService>()
+        .peekArtistDetail(widget.artist.browseId);
+    if (peek != null) {
+      _detail = peek;
+      _loading = false;
+      final thumb = peek.thumbnailUrl;
+      if (thumb != null && thumb.isNotEmpty) {
+        final stored = context.read<PaletteCacheStore>().get(thumb);
+        if (stored != null) {
+          _accentFor = thumb;
+          _accent = stored;
+        }
+      }
+    }
     unawaited(_load());
   }
 

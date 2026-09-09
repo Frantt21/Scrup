@@ -312,7 +312,13 @@ class ScrupApp extends StatelessWidget {
             player.shuffle.value = initialShuffleEnabled;
             player.repeatMode.value = initialRepeatMode;
             player.radio.value = initialRadioEnabled;
-            context.read<ScrupAudioHandler>().attach(player, db: db);
+            context.read<ScrupAudioHandler>().attach(
+              player,
+              db: db,
+              // Notification artwork from the ON-DISK cache (file://):
+              // offline the web URL does not download.
+              artworkCache: context.read<ArtworkCacheService>(),
+            );
             player.currentTrack.listen((t) {
               if (t != null) settings.saveLastTrackId(t.id);
             });

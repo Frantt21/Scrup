@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../core/track.dart';
 import '../core/app_log.dart';
 import '../data/database.dart';
+import 'artwork_cache_service.dart';
 import 'player_service.dart';
 
 /// Bridge to OS media controls via audio_service:
@@ -21,7 +22,12 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
 
   PlayerService? _player;
   AppDatabase? _db;
+  ArtworkCacheService? _artworkCache;
   final List<StreamSubscription> _subs = [];
+
+  /// Track cuyo artwork ya se publicó como archivo LOCAL (file://): bloquea
+  /// la mejora web de [_maybeUpgradeArtwork] para no pisar el arte offline.
+  String? _localArtFor;
 
   bool _hasTrack = false;
   bool _playing = false;
@@ -39,16 +45,22 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
   int _lastPublishedSec = -1;
 
   // Connects handler to player. Idempotent (admite cablear [db] más tarde).
-  void attach(PlayerService player, {AppDatabase? db}) {
+  void attach(
+    PlayerService player, {
+    AppDatabase? db,
+    ArtworkCacheService? artworkCache,
+  }) {
     if (_player != null) {
       if (db != null && _db == null) {
         _db = db;
         unawaited(_setupFavorites());
       }
+      if (artworkCache != null) _artworkCache = artworkCache;
       return;
     }
     _player = player;
     _db = db;
+    _artworkCache = artworkCache;
     _shuffle = player.shuffle.value;
     player.shuffle.addListener(_onShuffleChanged);
     _subs.addAll([
@@ -71,6 +83,9 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
           'art=${shortUrl(track.thumbnailUrl)}',
         );
         _maybeUpgradeArtwork(track);
+        // Prefer the LOCAL copy (file://): offline the web URL never loads
+        // and the notification stays without artwork.
+        unawaited(_resolveLocalArtwork(track));
         _watchFavorite();
         _publishPlaybackState();
       }),
@@ -145,7 +160,10 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   MediaItem _mediaItemFor(Track track) {
-    // The notification downloads the artUri on its own. The ORIGINAL URL is published instantly (always resolves) and [_maybeUpgradeArtwork] upgrades it to high resolution only if it verifies 200 — `maxresdefault.jpg` does not exist for every video and a 404 would leave the notification without art.
+    // Initial MediaItem with the web URL (always available); [_resolveLocalArtwork]
+    // replaces it with the on-disk copy (file://) when it exists — offline that is
+    // the only one SystemUI can paint — and [_maybeUpgradeArtwork] upgrades it to
+    // high resolution only if it verifies 200.
     final raw = track.thumbnailUrl;
     final art = (raw == null || raw.isEmpty) ? null : Uri.tryParse(raw);
     return MediaItem(
@@ -187,6 +205,9 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
           .timeout(const Duration(seconds: 4));
       if (resp.statusCode == 200) {
         _remember(_verifiedHiRes, hi);
+        // A local file:// was already published for this track: do not
+        // downgrade it to a web URL (offline it would break the art).
+        if (_localArtFor == trackId) return;
         _reemitArtwork(trackId, hi);
       } else {
         // 404 y demás: la variante HQ no existe para este video.
@@ -205,12 +226,35 @@ class ScrupAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   void _reemitArtwork(String trackId, String artUrl) {
+    final uri = Uri.tryParse(artUrl);
+    if (uri == null) return;
+    _reemitArtUri(trackId, uri);
+  }
+
+  void _reemitArtUri(String trackId, Uri uri) {
     if (_currentTrack?.id != trackId) return;
     final item = mediaItem.value;
     if (item == null || item.id != trackId) return;
-    final uri = Uri.tryParse(artUrl);
-    if (uri == null || item.artUri == uri) return;
+    if (item.artUri == uri) return;
     mediaItem.add(item.copyWith(artUri: uri));
+  }
+
+  /// Publishes the notification artwork from the ON-DISK cache (file://):
+  /// offline the web URL does not download and the notification would stay
+  /// without art. Tries the hi-res key first, then the original URL.
+  Future<void> _resolveLocalArtwork(Track track) async {
+    final cache = _artworkCache;
+    final raw = track.thumbnailUrl;
+    if (cache == null || raw == null || raw.isEmpty) return;
+    final hi = Track.hiResThumbnail(raw) ?? raw;
+    for (final key in <String>{hi, raw}) {
+      final path = await cache.filePathFor(key);
+      if (path == null) continue;
+      if (_currentTrack?.id != track.id) return;
+      _localArtFor = track.id;
+      _reemitArtUri(track.id, Uri.file(path));
+      return;
+    }
   }
 
   // Publishes playback state to OS. No-op if no track loaded.

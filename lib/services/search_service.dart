@@ -169,6 +169,12 @@ class SearchService {
     ];
   }
 
+  /// Artist detail ALREADY IN MEMORY of this session (no I/O): the screen
+  /// paints its FIRST frame with real data — `fetchArtistDetail` is async
+  /// and answers one frame late even with a hot cache (placeholder flash).
+  YtmArtistDetail? peekArtistDetail(String browseId) =>
+      _artistCache?.peekSync(browseId.trim());
+
   /// Artist detail (top songs + albums + subscribers) with its OWN on-disk cache (one JSON per artist, 24h TTL - the catalog of an artist almost never changes in a day; entering/leaving the screen is cheap).
   Future<YtmArtistDetail?> fetchArtistDetail(
     String browseId, {

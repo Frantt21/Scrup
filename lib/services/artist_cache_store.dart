@@ -75,6 +75,12 @@ class ArtistCacheStore {
     }
   }
 
+  /// Detalle YA EN MEMORIA de esta sesión (sin I/O, sirve síncronamente).
+  /// Permite que el screen del artista pinte su PRIMER frame con los datos
+  /// (sin flash de placeholders): `read()` es async (lookup de directorio)
+  /// y responde un frame tarde aunque el caché esté caliente.
+  YtmArtistDetail? peekSync(String browseId) => _mem[browseId];
+
   /// Guarda (memoria + disco). El disco se escribe en diferido para no
   /// bloquear el frame del primer render del screen.
   Future<void> write(YtmArtistDetail detail) async {
