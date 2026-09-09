@@ -711,7 +711,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get artistTopTracks => '人気の曲';
 
   @override
-  String get artistAlbums => 'アルバムとシングル';
+  String get artistAlbums => 'Albums';
 
   @override
   String get artistSingles => 'シングル';
@@ -736,4 +736,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get crossfadeHint => '曲のフェード: 現在の曲が終わる前に次の曲を再生開始します';
+
+  @override
+  String get back => '戻る';
 }

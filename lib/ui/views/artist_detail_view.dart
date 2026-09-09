@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -15,6 +16,7 @@ import '../../services/search_service.dart';
 import '../../services/ytmusic_service.dart' show YtmAlbum, YtMusicResult;
 import '../../services/settings_store.dart';
 import '../playlist_actions.dart';
+import '../widgets/context_menu_item.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/scrup_toasts.dart';
@@ -23,6 +25,49 @@ import '../widgets/track_tile.dart';
 /// Readable text over a background of the given color (black/white by luminance).
 Color _onColor(Color bg) =>
     bg.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+
+/// Menú contextual de pista COMPARTIDO por canal y álbum/single: favorito
+/// + añadir a playlist. Vive a nivel de archivo porque los dos estados
+/// (_ArtistDetailViewState y _ArtistAlbumViewState) lo usan.
+Future<void> _showTrackMenuShared(
+  BuildContext context,
+  Track track,
+  Offset position,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final isFav = await isTrackFavorite(context, track);
+  if (!context.mounted) return;
+  final action = await showMenu<String>(
+    context: context,
+    position: RelativeRect.fromLTRB(
+      position.dx,
+      position.dy,
+      position.dx,
+      position.dy,
+    ),
+    clipBehavior: Clip.antiAlias,
+    items: [
+      ContextMenuItem(
+        value: 'fav',
+        icon: isFav
+            ? Icons.favorite_rounded
+            : Icons.favorite_border_rounded,
+        label: isFav ? l10n.removeFromFavorites : l10n.addToFavorites,
+      ),
+      ContextMenuItem(
+        value: 'add',
+        icon: Icons.playlist_add_rounded,
+        label: l10n.addToPlaylist,
+      ),
+    ],
+  );
+  if (!context.mounted || action == null) return;
+  if (action == 'fav') {
+    await toggleTrackFavorite(context, track, current: isFav);
+  } else if (action == 'add') {
+    await showAddToPlaylistDialog(context, track);
+  }
+}
 
 /// Desktop theme with the artist/album accent as PRIMARY (same approach as
 /// the playlist detail): FilledButtons and tints pick the extracted accent
@@ -81,7 +126,18 @@ Widget _desktopPanel({
 ///
 /// Header with PLAYLIST DETAIL style and FULL ARTWORK: the channel image spans the full width (edge-to-edge, behind the status bar) with a gradient that blends into the background color — the same look as the playlist detail in its default style. Buttons use the accent EXTRACTED from the channel image (not the global theme primary). Scrolling shows the artist name in the collapsed appbar. It is mounted INSIDE the shell (nav + miniplayer present).
 class ArtistDetailView extends StatefulWidget {
-  const ArtistDetailView({super.key, required this.artist, this.onBack, this.onAlbumOpenChanged});
+  const ArtistDetailView({
+    super.key,
+    required this.artist,
+    this.onBack,
+    this.onAlbumOpenChanged,
+    this.albumOpen = false,
+  });
+
+  /// Mirror of the shell's open-album flag: when the shell flips it to
+  /// false (back button / back gesture), this widget closes its internal
+  /// album state via didUpdateWidget.
+  final bool albumOpen;
 
   /// Artist derived from the search: channel + name (no avatar: the real face arrives with the detail).
   final YtmArtist artist;
@@ -112,6 +168,17 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
 
   /// Álbum/single abierto: se muestra EMBEBIDO (en vez del contenido del artista, sin push de ruta) — nav + miniplayer visibles.
   YtmAlbum? _openedAlbum;
+
+  @override
+  void didUpdateWidget(covariant ArtistDetailView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // El shell cerró el álbum (botón atrás de la titlebar en desktop o back
+    // de Android): limpia el estado interno. Antes solo se togglaba el flag
+    // del shell y el álbum seguía abierto → el botón "no hacía nada".
+    if (!widget.albumOpen && oldWidget.albumOpen && _openedAlbum != null) {
+      setState(() => _openedAlbum = null);
+    }
+  }
 
   @override
   void initState() {
@@ -380,6 +447,9 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
               ),
             ),
             Expanded(
+              // UN SOLO scroll vertical (antes la lista era Expanded: las
+              // secciones de discografía quedaban fuera y sin scroll):
+              // Popular + Álbumes + Singles desplazan juntos.
               child: loading
                   ? const Center(child: CircularProgressIndicator())
                   : (detail == null || (_error != null && tracks.isEmpty))
@@ -402,20 +472,41 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                         ],
                       ),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                      itemCount: tracks.length,
-                      itemBuilder: (context, i) {
-                        final r = tracks[i];
-                        final track = r.toTrack();
-                        return TrackTile(
-                          track: track,
-                          subtitleSuffix: r.playCountText,
-                          onPlay: () => _playTrack(track, i),
-                          onAddToPlaylist: () =>
-                              showAddToPlaylistDialog(context, track),
-                        );
-                      },
+                  : SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Popular: encogible (el scroll vive fuera).
+                          ...[
+                            for (var i = 0; i < tracks.length; i++)
+                              () {
+                                final r = tracks[i];
+                                final track = r.toTrack();
+                                return GestureDetector(
+                                  onSecondaryTapUp: (d) => unawaited(
+                                    _showTrackMenuShared(
+                                      context,
+                                      track,
+                                      d.globalPosition,
+                                    ),
+                                  ),
+                                  child: TrackTile(
+                                    track: track,
+                                    subtitleSuffix: r.playCountText,
+                                    onPlay: () => _playTrack(track, i),
+                                    onAddToPlaylist: () =>
+                                        showAddToPlaylistDialog(context, track),
+                                  ),
+                                );
+                              }(),
+                          ],
+                          // Discografía: MISMAS filas horizontales que la
+                          // vista móvil (los ListViews horizontales
+                          // internos mantienen SU propio scroll lateral).
+                          ..._albumSections(detail),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
                     ),
             ),
           ],
@@ -565,18 +656,24 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                     itemBuilder: (context, i) {
                       final r = detail.tracks[i];
                       final track = r.toTrack();
-                      return TrackTile(
-                        track: track,
-                        // Reproducciones de la canción ("1.2M plays").
-                        subtitleSuffix: r.playCountText,
-                        onPlay: () => _playTrack(track, i),
-                        onAddToPlaylist: () =>
-                            showAddToPlaylistDialog(context, track),
+                      return GestureDetector(
+                        onSecondaryTapUp: (d) =>
+                            unawaited(_showTrackMenuShared(context, track, d.globalPosition)),
+                        child: TrackTile(
+                          track: track,
+                          // Reproducciones de la canción ("1.2M plays").
+                          subtitleSuffix: r.playCountText,
+                          onPlay: () => _playTrack(track, i),
+                          onAddToPlaylist: () =>
+                              showAddToPlaylistDialog(context, track),
+                        ),
                       );
                     },
                   ),
                   // ── Álbumes y SINGLES: una fila horizontal por tipo ──
-                  ..._albumSections(detail),
+                  ..._albumSections(
+                    detail,
+                  ).map((w) => SliverToBoxAdapter(child: w)),
                   const SliverToBoxAdapter(
                     child: SizedBox(height: 24),
                   ),
@@ -626,6 +723,8 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
 
   /// Secciones horizontales de discografía: Álbumes y Singles separados
   /// (el subtítulo de la card del canal marca el tipo de lanzamiento).
+  /// Devuelve WIDGETS normales (servibles en Column de desktop); el llamado
+  /// móvil los envuelve en [SliverToBoxAdapter].
   List<Widget> _albumSections(YtmArtistDetail detail) {
     final albums = [
       for (final a in detail.albums)
@@ -638,23 +737,25 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     if (albums.isEmpty && singles.isEmpty) return const [];
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    Widget section(String title, List<YtmAlbum> items) =>
-        SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                child: Text(
-                  title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+    Widget section(String title, List<YtmAlbum> items) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+              child: Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              SizedBox(
-                // Portada 140 + título (1 línea) + año.
-                height: 186,
+            ),
+            SizedBox(
+              // Portada 140 + título (1 línea) + año.
+              height: 186,
+              // DragScroll: en desktop el ratón NO tiene gesto de arrastre
+              // sobre un ListView (solo rueda); con esto arrastrar con el
+              // botón presionado desliza la fila (en móvil queda igual).
+              child: _DragScroll(
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -671,8 +772,8 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                   },
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         );
     return [
       if (albums.isNotEmpty) section(l10n.artistAlbums, albums),
@@ -1177,16 +1278,20 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
                       itemCount: tracks.length,
                       itemBuilder: (context, i) {
                         final track = tracks[i];
-                        return TrackTile(
-                          track: track,
-                          onPlay: () => unawaited(
-                            context.read<PlayerService>().playQueue(
-                              tracks,
-                              startIndex: i,
+                        return GestureDetector(
+                          onSecondaryTapUp: (d) =>
+                              unawaited(_showTrackMenuShared(context, track, d.globalPosition)),
+                          child: TrackTile(
+                            track: track,
+                            onPlay: () => unawaited(
+                              context.read<PlayerService>().playQueue(
+                                tracks,
+                                startIndex: i,
+                              ),
                             ),
+                            onAddToPlaylist: () =>
+                                showAddToPlaylistDialog(context, track),
                           ),
-                          onAddToPlaylist: () =>
-                              showAddToPlaylistDialog(context, track),
                         );
                       },
                     ),
@@ -1385,16 +1490,20 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
                     itemCount: tracks.length,
                     itemBuilder: (context, i) {
                       final track = tracks[i];
-                      return TrackTile(
-                        track: track,
-                        onPlay: () => unawaited(
-                          context.read<PlayerService>().playQueue(
-                            tracks,
-                            startIndex: i,
+                      return GestureDetector(
+                        onSecondaryTapUp: (d) =>
+                            unawaited(_showTrackMenuShared(context, track, d.globalPosition)),
+                        child: TrackTile(
+                          track: track,
+                          onPlay: () => unawaited(
+                            context.read<PlayerService>().playQueue(
+                              tracks,
+                              startIndex: i,
+                            ),
                           ),
+                          onAddToPlaylist: () =>
+                              showAddToPlaylistDialog(context, track),
                         ),
-                        onAddToPlaylist: () =>
-                            showAddToPlaylistDialog(context, track),
                       );
                     },
                   ),
@@ -1662,6 +1771,55 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
           const SizedBox(height: 16),
           buttonRow(),
         ],
+      ),
+    );
+  }
+}
+
+/// Scroll por ARRASTRE del ratón (desktop): envuelve un scrollable
+/// horizontal y lo desliza con el botón presionado (los ListViews
+/// horizontales solo responden a la rueda). En móvil no interfiere: el
+/// drag de ratón no ocurre y el tacto usa el gesto nativo.
+class _DragScroll extends StatefulWidget {
+  const _DragScroll({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_DragScroll> createState() => _DragScrollState();
+}
+
+class _DragScrollState extends State<_DragScroll> {
+  bool _dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: _dragging
+          ? SystemMouseCursors.grabbing
+          : SystemMouseCursors.basic,
+      child: Listener(
+        onPointerDown: (d) {
+          if (d.buttons & kPrimaryButton == 0) return;
+          _dragging = true;
+        },
+        onPointerMove: (d) {
+          if (!_dragging) return;
+          // Scroll físico del viewport padre: el Listener envuelve DIRECTO
+          // al viewport, así que la posición apunta a su Scrollable. Antes
+          // este widget creaba su propio controller que NUNCA se adjuntaba
+          // a la lista (hasClients siempre false) y el drag era un no-op.
+          final state = Scrollable.maybeOf(context, axis: Axis.horizontal);
+          final pos = state?.position;
+          if (pos == null || !pos.hasContentDimensions) return;
+          pos.jumpTo((pos.pixels - d.delta.dx).clamp(
+            pos.minScrollExtent,
+            pos.maxScrollExtent,
+          ));
+        },
+        onPointerUp: (_) => _dragging = false,
+        onPointerCancel: (_) => _dragging = false,
+        child: widget.child,
       ),
     );
   }

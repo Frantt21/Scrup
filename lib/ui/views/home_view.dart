@@ -266,6 +266,9 @@ class _HomeViewState extends State<HomeView> {
                           floating: false,
                           delegate: _HomeHeaderDelegate(
                             topInset: topInset,
+                            // Alineado con el header de LIBRERÍA: título
+                            // headlineSmall a la izquierda + botón tonal de
+                            // 40dp a la derecha (misma altura de fila).
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
@@ -278,10 +281,16 @@ class _HomeViewState extends State<HomeView> {
                                         ),
                                   ),
                                 ),
-                                IconButton.filledTonal(
-                                  onPressed: widget.onOpenSearch,
-                                  icon: const Icon(Icons.search_rounded),
-                                  tooltip: l10n.searchHint,
+                                SizedBox(
+                                  width: 40,
+                                  height: 40,
+                                  child: IconButton.filledTonal(
+                                    onPressed: widget.onOpenSearch,
+                                    icon: const Icon(Icons.search_rounded),
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    tooltip: l10n.searchHint,
+                                  ),
                                 ),
                               ],
                             ),
@@ -359,11 +368,13 @@ class _HomeViewState extends State<HomeView> {
                     ),
                   if (_loaded && _recent.isNotEmpty)
                     SliverPadding(
-                      // El player flotante cubre la parte inferior: dejar espacio
-                      // para que la última fila del grid quede accesible.
-                      // En móvil no hay clearance (el mini-player vive aparte).
+                      // Sin clearance inferior: el player flotante NO tapa
+                      // esta zona (está a mitad del panel) y el hueco que
+                      // dejaba (104px) era el gran vacío antes de las
+                      // playlists recientes. El espaciador del final se
+                      // encarga del despeje del player.
                       padding: EdgeInsets.fromLTRB(
-                        mobile ? 16 : 24, 0, mobile ? 16 : 24, mobile ? 16 : kPlayerOverlayInset,
+                        mobile ? 16 : 24, 0, mobile ? 16 : 24, mobile ? 12 : 8,
                       ),
                       sliver: SliverGrid(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -386,9 +397,13 @@ class _HomeViewState extends State<HomeView> {
                   // Recent playlists (DESPUÉS del grid de recientes).
                   // Desktop: GRID del MISMO tamaño que las cards de
                   // recientes (mismas columnas que el grid de arriba).
+                  // Sin clearance extra: el grid de recientes ya deja su
+                  // propio hueco inferior; aquí solo el gap de sección.
                   if (recentPlaylists.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: mobile
+                    SliverPadding(
+                      padding: EdgeInsets.only(top: mobile ? 4 : 2),
+                      sliver: SliverToBoxAdapter(
+                        child: mobile
                           ? _RecentPlaylistsRow(
                               playlists: recentPlaylists,
                               activePlaylistId: _activePlaylistId,
@@ -403,6 +418,7 @@ class _HomeViewState extends State<HomeView> {
                               isPlaying: _playing,
                               onOpen: _openPlaylist,
                             ),
+                      ),
                     ),
                   // Artistas visitados (DESPUÉS de las playlists recientes,
                   // mismo estilo de fila horizontal)
@@ -515,6 +531,13 @@ class _RecentCardState extends State<_RecentCard> {
       clipBehavior: Clip.antiAlias,
       items: [
         ContextMenuItem(
+          value: 'fav',
+          icon: Icons.favorite_rounded,
+          label: await isTrackFavorite(context, widget.track)
+              ? l10n.removeFromFavorites
+              : l10n.addToFavorites,
+        ),
+        ContextMenuItem(
           value: 'add',
           icon: Icons.playlist_add_rounded,
           label: l10n.addToPlaylist,
@@ -527,7 +550,13 @@ class _RecentCardState extends State<_RecentCard> {
       ],
     );
     if (!mounted || action == null) return;
-    if (action == 'add') {
+    if (action == 'fav') {
+      await toggleTrackFavorite(
+        context,
+        widget.track,
+        current: await isTrackFavorite(context, widget.track),
+      );
+    } else if (action == 'add') {
       await showAddToPlaylistDialog(context, widget.track);
     } else if (action == 'recalc') {
       final url = widget.track.thumbnailUrl;
@@ -625,6 +654,11 @@ class _RecentCardState extends State<_RecentCard> {
             ),
             const Divider(height: 1),
             ListTile(
+              leading: const Icon(Icons.favorite_rounded),
+              title: Text(l10n.addToFavorites),
+              onTap: () => Navigator.pop(ctx, 'fav'),
+            ),
+            ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
               title: Text(l10n.addToPlaylist),
               onTap: () => Navigator.pop(ctx, 'add'),
@@ -640,7 +674,13 @@ class _RecentCardState extends State<_RecentCard> {
       ),
     );
     if (!mounted || action == null) return;
-    if (action == 'add') {
+    if (action == 'fav') {
+      await toggleTrackFavorite(
+        context,
+        widget.track,
+        current: await isTrackFavorite(context, widget.track),
+      );
+    } else if (action == 'add') {
       await showAddToPlaylistDialog(context, widget.track);
     } else if (action == 'recalc') {
       final url = widget.track.thumbnailUrl;
@@ -989,7 +1029,10 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
   final double topInset;
   final Widget child;
 
-  static const double _contentH = 56.0;
+  // MISMA altura de fila que el header de librería (Padding 16/8 + fila
+  // de botones de 40dp): el título y el botón quedan a la misma altura
+  // visual entre screens.
+  static const double _contentH = 64.0;
 
   @override
   double get minExtent => topInset + _contentH;
@@ -1003,11 +1046,12 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    // Sin fondo a propósito (transparente); padding lateral 16 + vertical
-    // como el header original.
+    // Sin fondo a propósito (transparente); mismos paddings que librería
+    // (16 laterales, 16 arriba, 8 abajo). El contenido se centra en la
+    // franja fija para que el botón no baile al scrollear.
     return Padding(
       padding: EdgeInsets.fromLTRB(16, topInset + 16, 16, 8),
-      child: child,
+      child: SizedBox(height: 40, child: child),
     );
   }
 
@@ -1032,11 +1076,15 @@ class _VisitedArtistsRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     if (artists.isEmpty) return const SizedBox.shrink();
 
+    // MISMO inset lateral que Recent y Recently played playlists en cada
+    // plataforma (16 móvil / 24 desktop): antes la fila usaba siempre 16 y
+    // en desktop quedaba desalineada de las demás secciones.
+    final double sidePad = Binaries.isMobile ? 16 : 24;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          padding: EdgeInsets.fromLTRB(sidePad, 8, sidePad, 8),
           child: Text(
             l10n.visitedArtistsTitle,
             style: theme.textTheme.titleMedium?.copyWith(
@@ -1048,7 +1096,7 @@ class _VisitedArtistsRow extends StatelessWidget {
           height: 158,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.symmetric(horizontal: sidePad),
             itemCount: artists.length,
             itemBuilder: (context, i) {
               final a = artists[i];
@@ -1249,11 +1297,14 @@ class _RecentPlaylistsRow extends StatelessWidget {
     final accent = context.watch<ThemeController>().accentColor ??
         theme.colorScheme.primary;
 
+    // MISMO inset lateral que las demás secciones en cada plataforma
+    // (16 móvil / 24 desktop): antes la fila quedaba fija a 16.
+    final double sidePad = Binaries.isMobile ? 16 : 24;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          padding: EdgeInsets.fromLTRB(sidePad, 8, sidePad, 8),
           child: Text(
             l10n.recentPlaylistsTitle,
             style: theme.textTheme.titleMedium?.copyWith(
@@ -1265,7 +1316,7 @@ class _RecentPlaylistsRow extends StatelessWidget {
           height: 158,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.symmetric(horizontal: sidePad),
             itemCount: playlists.length,
             itemBuilder: (context, i) {
               final playlist = playlists[i];
@@ -1311,10 +1362,15 @@ class _RecentPlaylistCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      // Llena el SizedBox del padre: móvil fija 140 (fila) y desktop la
-      // celda EXACTA del grid de recientes (mismo tamaño que esas cards).
-      child: SizedBox.expand(
-        child: ClipRRect(
+      // Desktop: la celda EXACTA del grid de recientes (SizedBox del padre).
+      // Móvil: el ListView horizontal da ancho ILIMITADO y SizedBox.expand
+      // colapsa la card a 0 (invisible en Android); se fija 140×140 centrado,
+      // mismo tamaño que desktop.
+      child: Center(
+        child: SizedBox(
+          width: 140,
+          height: 140,
+          child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: Stack(
             fit: StackFit.expand,
@@ -1384,6 +1440,7 @@ class _RecentPlaylistCard extends StatelessWidget {
                 ),
             ],
           ),
+        ),
         ),
       ),
     );

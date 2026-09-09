@@ -221,7 +221,7 @@
   "searchArtistsSection": "Artista",
   "searchArtistPlaying": "Reproduzindo {name}",
   "artistTopTracks": "Populares",
-  "artistAlbums": "Álbuns e singles",
+  "artistAlbums": "Albums",
   "artistSingles": "Singles",
   "artistSubscribers": "inscritos",
   "artistDetailEmpty": "Não foi possível carregar este artista.",
@@ -230,5 +230,6 @@
   "createPlaylistFromAlbum": "Criar playlist com este álbum",
   "visitedArtistsTitle": "Artistas visitados",
   "crossfade": "Crossfade",
-  "crossfadeHint": "Transição suave entre músicas: a próxima faixa começa antes de a atual terminar"
+  "crossfadeHint": "Transição suave entre músicas: a próxima faixa começa antes de a atual terminar",
+  "back": "Voltar"
 }

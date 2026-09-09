@@ -221,7 +221,7 @@
   "searchArtistsSection": "歌手",
   "searchArtistPlaying": "正在播放 {name}",
   "artistTopTracks": "热门歌曲",
-  "artistAlbums": "专辑与单曲",
+  "artistAlbums": "Albums",
   "artistSingles": "单曲",
   "artistSubscribers": "位订阅者",
   "artistDetailEmpty": "无法加载此歌手。",
@@ -230,5 +230,6 @@
   "createPlaylistFromAlbum": "用此专辑创建播放列表",
   "visitedArtistsTitle": "最近浏览的艺术家",
   "crossfade": "淡入淡出",
-  "crossfadeHint": "歌曲之间的淡入淡出：当前歌曲结束前开始播放下一首"
+  "crossfadeHint": "歌曲之间的淡入淡出：当前歌曲结束前开始播放下一首",
+  "back": "返回"
 }

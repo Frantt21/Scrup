@@ -723,7 +723,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get artistTopTracks => 'Populares';
 
   @override
-  String get artistAlbums => 'Álbuns e singles';
+  String get artistAlbums => 'Albums';
 
   @override
   String get artistSingles => 'Singles';
@@ -749,6 +749,9 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get crossfadeHint =>
       'Transição suave entre músicas: a próxima faixa começa antes de a atual terminar';
+
+  @override
+  String get back => 'Voltar';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1440,7 +1443,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get artistTopTracks => 'Populares';
 
   @override
-  String get artistAlbums => 'Álbuns e singles';
+  String get artistAlbums => 'Albums';
 
   @override
   String get artistSingles => 'Singles';
@@ -1466,4 +1469,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get crossfadeHint =>
       'Transição suave entre músicas: a próxima faixa começa antes de a atual terminar';
+
+  @override
+  String get back => 'Voltar';
 }

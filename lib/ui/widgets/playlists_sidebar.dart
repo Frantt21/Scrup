@@ -9,6 +9,8 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
+import '../playlist_actions.dart';
+import 'context_menu_item.dart';
 import 'cover_image.dart';
 import 'create_playlist_dialog.dart';
 import 'now_playing_bars.dart';
@@ -76,6 +78,55 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   void _onActivePlaylistChanged() {
     if (!mounted) return;
     setState(() => _activePlaylistId = _player.activePlaylistId.value);
+  }
+
+  /// Menú contextual (clic derecho) sobre una playlist: reproducir y
+  /// añadir a favoritos la pista EN REPRODUCCIÓN de esa playlist (si la
+  /// hay). La eliminación sigue en el icono de hover de cada fila.
+  Future<void> _showPlaylistMenu(Playlist playlist, Offset position) async {
+    final l10n = AppLocalizations.of(context);
+    final db = context.read<AppDatabase>();
+    final current = _player.currentTrackValue;
+    final fromThis = current != null && _activePlaylistId == playlist.id;
+    final isFav = current != null
+        ? (await db.playlistIdsContainingTrack(current.id)).contains(
+            await db.ensureFavoritesPlaylist(),
+          )
+        : false;
+    if (!mounted) return;
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      clipBehavior: Clip.antiAlias,
+      items: [
+        ContextMenuItem(
+          value: 'play',
+          icon: Icons.play_arrow_rounded,
+          label: l10n.play,
+        ),
+        if (fromThis)
+          ContextMenuItem(
+            value: 'fav',
+            icon: isFav
+                ? Icons.favorite_rounded
+                : Icons.favorite_border_rounded,
+            label: isFav
+                ? l10n.removeFromFavorites
+                : l10n.addToFavorites,
+          ),
+      ],
+    );
+    if (!mounted || action == null) return;
+    if (action == 'play') {
+      widget.onSelectPlaylist(playlist);
+    } else if (action == 'fav' && current != null) {
+      await toggleTrackFavorite(context, current, current: isFav);
+    }
   }
 
   Future<void> _loadGridMode() async {
@@ -285,6 +336,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
             count: _counts[playlist.id] ?? 0,
             selected: playlist.id == widget.openPlaylistId,
             onTap: () => widget.onSelectPlaylist(playlist),
+            onMenu: (pos) => _showPlaylistMenu(playlist, pos),
             onDelete: () => _deletePlaylist(playlist),
             // Favoritos: diseño especial con corazón y sin borrar.
             showDelete: !playlist.isFavorites,
@@ -329,6 +381,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
           count: _counts[playlist.id] ?? 0,
           selected: playlist.id == widget.openPlaylistId,
           onTap: () => widget.onSelectPlaylist(playlist),
+          onMenu: (pos) => _showPlaylistMenu(playlist, pos),
           onDelete: () => _deletePlaylist(playlist),
           // Favoritos: diseño especial con corazón y sin borrar.
           showDelete: !playlist.isFavorites,
@@ -456,6 +509,9 @@ class _PlaylistRow extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
+  /// Clic derecho: menú contextual (reproducir / favorito).
+  final void Function(Offset position)? onMenu;
+
   /// `false` en Favoritos: no se muestra el botón de borrar.
   final bool showDelete;
 
@@ -471,6 +527,7 @@ class _PlaylistRow extends StatefulWidget {
     required this.selected,
     required this.onTap,
     required this.onDelete,
+    this.onMenu,
     this.showDelete = true,
     this.nowPlaying = false,
     this.isPlaying = false,
@@ -491,7 +548,11 @@ class _PlaylistRowState extends State<_PlaylistRow> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: Material(
+      child: GestureDetector(
+        onSecondaryTapUp: widget.onMenu == null
+            ? null
+            : (d) => widget.onMenu!(d.globalPosition),
+        child: Material(
         color: widget.selected
             ? theme.colorScheme.primary.withValues(alpha: 0.15)
             : Colors.transparent,
@@ -563,6 +624,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -629,6 +691,9 @@ class _PlaylistGridCell extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
+  /// Clic derecho: menú contextual (reproducir / favorito).
+  final void Function(Offset position)? onMenu;
+
   final bool showDelete;
   final bool nowPlaying;
   final bool isPlaying;
@@ -639,6 +704,7 @@ class _PlaylistGridCell extends StatefulWidget {
     required this.selected,
     required this.onTap,
     required this.onDelete,
+    this.onMenu,
     this.showDelete = true,
     this.nowPlaying = false,
     this.isPlaying = false,
@@ -681,6 +747,9 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
+        onSecondaryTapUp: widget.onMenu == null
+            ? null
+            : (d) => widget.onMenu!(d.globalPosition),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -359,7 +359,7 @@
   "searchArtistsSection": "Artist",
   "searchArtistPlaying": "Playing {name}",
   "artistTopTracks": "Popular",
-  "artistAlbums": "Albums & singles",
+  "artistAlbums": "Albums",
   "artistSingles": "Singles",
   "artistSubscribers": "subscribers",
   "artistDetailEmpty": "Could not load this artist.",
@@ -367,5 +367,6 @@
   "playAll": "Play all",
   "visitedArtistsTitle": "Recently visited artists",
   "crossfade": "Crossfade",
-  "crossfadeHint": "Fade between songs: the next track starts before the current one ends"
+  "crossfadeHint": "Fade between songs: the next track starts before the current one ends",
+  "back": "Back"
 }

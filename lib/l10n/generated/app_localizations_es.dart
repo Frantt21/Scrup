@@ -725,7 +725,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get artistTopTracks => 'Populares';
 
   @override
-  String get artistAlbums => 'Álbumes y sencillos';
+  String get artistAlbums => 'Albums';
 
   @override
   String get artistSingles => 'Singles';
@@ -751,4 +751,7 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get crossfadeHint =>
       'Fundido entre canciones: la siguiente pista empieza antes de que termine la actual';
+
+  @override
+  String get back => 'Atrás';
 }

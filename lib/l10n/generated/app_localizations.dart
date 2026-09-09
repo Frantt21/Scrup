@@ -1420,7 +1420,7 @@ abstract class AppLocalizations {
   /// No description provided for @artistAlbums.
   ///
   /// In es, this message translates to:
-  /// **'Álbumes y sencillos'**
+  /// **'Albums'**
   String get artistAlbums;
 
   /// No description provided for @artistSingles.
@@ -1470,6 +1470,12 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Fundido entre canciones: la siguiente pista empieza antes de que termine la actual'**
   String get crossfadeHint;
+
+  /// No description provided for @back.
+  ///
+  /// In es, this message translates to:
+  /// **'Atrás'**
+  String get back;
 }
 
 class _AppLocalizationsDelegate

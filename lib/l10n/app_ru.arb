@@ -221,7 +221,7 @@
   "searchArtistsSection": "Исполнитель",
   "searchArtistPlaying": "Воспроизводится {name}",
   "artistTopTracks": "Популярное",
-  "artistAlbums": "Альбомы и синглы",
+  "artistAlbums": "Albums",
   "artistSingles": "Синглы",
   "artistSubscribers": "подписчиков",
   "artistDetailEmpty": "Не удалось загрузить этого исполнителя.",
@@ -230,5 +230,6 @@
   "createPlaylistFromAlbum": "Создать плейлист из этого альбома",
   "visitedArtistsTitle": "Недавно просмотренные исполнители",
   "crossfade": "Кроссфейд",
-  "crossfadeHint": "Плавный переход между песнями: следующая дорожка начинается до окончания текущей"
+  "crossfadeHint": "Плавный переход между песнями: следующая дорожка начинается до окончания текущей",
+  "back": "Назад"
 }

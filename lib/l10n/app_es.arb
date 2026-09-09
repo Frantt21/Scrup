@@ -367,7 +367,7 @@
     }
   },
   "artistTopTracks": "Populares",
-  "artistAlbums": "Álbumes y sencillos",
+  "artistAlbums": "Albums",
   "artistSingles": "Singles",
   "artistSubscribers": "suscriptores",
   "artistDetailEmpty": "No se pudo cargar este artista.",
@@ -375,5 +375,6 @@
   "playAll": "Reproducir todo",
   "visitedArtistsTitle": "Artistas visitados",
   "crossfade": "Crossfade",
-  "crossfadeHint": "Fundido entre canciones: la siguiente pista empieza antes de que termine la actual"
+  "crossfadeHint": "Fundido entre canciones: la siguiente pista empieza antes de que termine la actual",
+  "back": "Atrás"
 }

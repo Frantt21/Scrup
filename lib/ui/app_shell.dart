@@ -399,10 +399,13 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final openPlaylist = _openPlaylist;
-    final inZone = _showSettings || openPlaylist != null;
+    // "Zona" con botones home/search en la titlebar: playlist, ajustes y
+    // TAMBIÉN el canal del artista (antes el screen de artista no los
+    // mostraba porque no contaba como zona).
+    final inZone = _showSettings || openPlaylist != null || _openArtist != null;
     final barTitle = _showSettings
         ? l10n.settings
-        : (openPlaylist?.name ?? 'Scrup');
+        : (openPlaylist?.name ?? (_openArtist?.name ?? 'Scrup'));
     final List<Widget> barActions = [
       if (inZone) ...[
         IconButton(
@@ -415,8 +418,22 @@ class _AppShellState extends State<AppShell> {
             _showSettings = false;
             _openPlaylist = null;
             _showLyrics = false;
+            _openArtist = null;
+            _artistAlbumOpenFlag = false;
             _selectedIndex = 0;
           }),
+        ),
+        // BOTÓN ATRÁS (desktop): DESPUÉS de home. Retrocede UNA pantalla
+        // con la misma lógica que el back de Android (álbum → canal del
+        // artista; playlist abierta desde el canal → vuelve al canal), NO
+        // salta a home (para eso está el botón de arriba).
+        IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+          padding: EdgeInsets.zero,
+          tooltip: l10n.back,
+          onPressed: _navigateBack,
         ),
         IconButton(
           icon: const Icon(Icons.search_rounded),
@@ -428,6 +445,8 @@ class _AppShellState extends State<AppShell> {
             _showSettings = false;
             _openPlaylist = null;
             _showLyrics = false;
+            _openArtist = null;
+            _artistAlbumOpenFlag = false;
             _selectedIndex = 1;
           }),
         ),
@@ -640,11 +659,14 @@ class _AppShellState extends State<AppShell> {
               ArtistDetailView(
                 key: ValueKey('desktop-${openArtist.browseId}'),
                 artist: openArtist,
+                albumOpen: _artistAlbumOpenFlag,
                 onBack: () => setState(() {
                   _openArtist = null;
                   _artistAlbumOpenFlag = false;
                 }),
-                onAlbumOpenChanged: (open) => _artistAlbumOpenFlag = open,
+                onAlbumOpenChanged: (open) => setState(
+                  () => _artistAlbumOpenFlag = open,
+                ),
               )
             else
               const SizedBox.shrink(),
@@ -758,12 +780,13 @@ class _AppShellState extends State<AppShell> {
               ArtistDetailView(
                 key: ValueKey(openArtist.browseId),
                 artist: openArtist,
+                albumOpen: _artistAlbumOpenFlag,
                 onBack: () => setState(() {
                   _openArtist = null;
                   _artistAlbumOpenFlag = false;
                 }),
                 onAlbumOpenChanged: (open) =>
-                    _artistAlbumOpenFlag = open,
+                    setState(() => _artistAlbumOpenFlag = open),
               )
             else
               const SizedBox.shrink(),
@@ -864,9 +887,24 @@ class _AppShellState extends State<AppShell> {
       // Desktop: el shell no interfiere con el back de rutas.
       return;
     }
+    _navigateBack();
+  }
+
+  /// Retrocede UNA pantalla (compartido por el back de Android y el botón
+  /// de la titlebar de desktop): álbum/single → canal del artista;
+  /// playlist → donde estuviera (el shell recuerda el origen); canal →
+  /// cierra el screen. Solo en el inicio sale del app (móvil).
+  void _navigateBack() {
     // Orden de cierre (de lo más superficial a lo más profundo).
     if (_showLyrics) {
       setState(() => _showLyrics = false);
+      return;
+    }
+    if (_openArtist != null && _artistAlbumOpenFlag) {
+      // Dentro de un álbum/single del artista: back → vuelve al canal.
+      // El setState en el shell re-renderiza ArtistDetailView con
+      // albumOpen=false y su didUpdateWidget cierra el álbum interno.
+      setState(() => _artistAlbumOpenFlag = false);
       return;
     }
     if (_openPlaylist != null) {
@@ -874,12 +912,10 @@ class _AppShellState extends State<AppShell> {
       return;
     }
     if (_openArtist != null) {
-      if (_artistAlbumOpenFlag) {
-        // Dentro de un álbum/single del artista: back → vuelve al canal.
-        setState(() => _artistAlbumOpenFlag = false);
-      } else {
-        setState(() => _openArtist = null);
-      }
+      setState(() {
+        _openArtist = null;
+        _artistAlbumOpenFlag = false;
+      });
       return;
     }
     if (_showSettings) {
@@ -890,8 +926,9 @@ class _AppShellState extends State<AppShell> {
       setState(() => _selectedIndex = 0);
       return;
     }
-    // Nada abierto y en el inicio: salir del app (comportamiento estándar).
-    SystemNavigator.pop();
+    // Nada abierto y en el inicio: salir del app SOLO en móvil (comportamiento
+    // estándar de Android); en desktop no hay nada que cerrar.
+    if (!Binaries.isDesktop) SystemNavigator.pop();
   }
 
   void _selectMobileNav(int i) {

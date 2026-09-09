@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/track.dart';
+import '../data/database.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
 import 'widgets/scrup_toasts.dart';
@@ -34,4 +35,10 @@ Future<void> playQueue(
     startIndex: startIndex,
     playlistId: playlistId,
   );
+  // "Playlists recientes" (home): marca la playlist como reproducida
+  // DESDE AQUÍ y no solo en el detalle: las reproducciones desde el banner
+  // de favoritos, recientes o la cola del artista también deben contar.
+  if (playlistId != null) {
+    await context.read<AppDatabase>().markPlaylistPlayed(playlistId);
+  }
 }

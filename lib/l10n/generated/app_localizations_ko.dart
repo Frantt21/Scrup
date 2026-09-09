@@ -711,7 +711,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get artistTopTracks => '인기 곡';
 
   @override
-  String get artistAlbums => '앨범 및 싱글';
+  String get artistAlbums => 'Albums';
 
   @override
   String get artistSingles => '싱글';
@@ -736,4 +736,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get crossfadeHint => '노래 간 페이드: 현재 곡이 끝나기 전에 다음 곡이 재생됩니다';
+
+  @override
+  String get back => '뒤로';
 }

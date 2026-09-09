@@ -729,7 +729,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get artistTopTracks => 'Популярное';
 
   @override
-  String get artistAlbums => 'Альбомы и синглы';
+  String get artistAlbums => 'Albums';
 
   @override
   String get artistSingles => 'Синглы';
@@ -755,4 +755,7 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get crossfadeHint =>
       'Плавный переход между песнями: следующая дорожка начинается до окончания текущей';
+
+  @override
+  String get back => 'Назад';
 }

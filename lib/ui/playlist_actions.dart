@@ -34,6 +34,38 @@ Future<void> showAddToPlaylistDialog(BuildContext context, Track track) async {
   showScrupToast(l10n.addedToPlaylist, kind: ScrupToastKind.success);
 }
 
+/// Añade [track] a la playlist de FAVORITOS (o la quita si [current] es
+/// true). Compartido por todos los context menus (recientes, player,
+/// listas de artista/álbum): una sola fuente de verdad para el toggle.
+Future<void> toggleTrackFavorite(
+  BuildContext context,
+  Track track, {
+  required bool current,
+}) async {
+  final db = context.read<AppDatabase>();
+  final id = await db.ensureFavoritesPlaylist();
+  if (current) {
+    await db.removeFromPlaylist(id, track.id);
+  } else {
+    await db.addToPlaylist(id, track);
+  }
+  if (!context.mounted) return;
+  final l10n = AppLocalizations.of(context);
+  showScrupToast(
+    current ? l10n.removeFromFavorites : l10n.addToFavorites,
+    kind: ScrupToastKind.success,
+  );
+}
+
+/// ¿Está [track] en la playlist de favoritos? (consulta puntual; para
+/// estado reactivo usa [AppDatabase.watchTrackInPlaylist]).
+Future<bool> isTrackFavorite(BuildContext context, Track track) async {
+  final db = context.read<AppDatabase>();
+  final id = await db.ensureFavoritesPlaylist();
+  final ids = await db.playlistIdsContainingTrack(track.id);
+  return ids.contains(id);
+}
+
 /// Modal de selección: plano, con buscador para filtrar por nombre y las
 /// playlists en grid de 3 columnas.
 class _AddToPlaylistDialog extends StatefulWidget {

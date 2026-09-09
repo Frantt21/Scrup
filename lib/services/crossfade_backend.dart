@@ -165,6 +165,11 @@ class CrossfadeBackend implements AudioBackend {
     _incoming = outgoing;
     _rebindStreams();
     _volCtrl.add(_userVolume);
+    // RE-ANUNCIA el estado del nuevo principal: just_audio NO emite un
+    // evento de `playing` al rebindear (ya venía sonando desde la rampa) y
+    // PlayerService heredaba el estado del reproductor SALIENTE (que acaba
+    // de pararse) → el botón quedaba en pausa aunque la pista sonara.
+    _playingCtrl.add(_main.isPlaying);
   }
 
   /// Cancela el fundido en curso: para el secundario y restaura el volumen

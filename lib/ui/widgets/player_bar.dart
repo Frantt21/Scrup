@@ -163,6 +163,15 @@ class _PlayerBarState extends State<PlayerBar>
       clipBehavior: Clip.antiAlias,
       items: [
         ContextMenuItem(
+          value: 'fav',
+          icon: _isFavorite
+              ? Icons.favorite_rounded
+              : Icons.favorite_border_rounded,
+          label: _isFavorite
+              ? l10n.removeFromFavorites
+              : l10n.addToFavorites,
+        ),
+        ContextMenuItem(
           value: 'edit',
           icon: Icons.edit_rounded,
           label: l10n.editMetadata,
@@ -180,7 +189,9 @@ class _PlayerBarState extends State<PlayerBar>
       ],
     );
     if (!mounted || action == null) return;
-    if (action == 'edit') {
+    if (action == 'fav') {
+      await toggleTrackFavorite(context, track, current: _isFavorite);
+    } else if (action == 'edit') {
       await _showEditMetadataDialog(track);
     } else if (action == 'add') {
       await showAddToPlaylistDialog(context, track);

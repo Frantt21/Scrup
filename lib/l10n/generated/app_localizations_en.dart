@@ -722,7 +722,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get artistTopTracks => 'Popular';
 
   @override
-  String get artistAlbums => 'Albums & singles';
+  String get artistAlbums => 'Albums';
 
   @override
   String get artistSingles => 'Singles';
@@ -748,4 +748,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get crossfadeHint =>
       'Fade between songs: the next track starts before the current one ends';
+
+  @override
+  String get back => 'Back';
 }

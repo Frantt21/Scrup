@@ -221,7 +221,7 @@
   "searchArtistsSection": "아티스트",
   "searchArtistPlaying": "{name} 재생 중",
   "artistTopTracks": "인기 곡",
-  "artistAlbums": "앨범 및 싱글",
+  "artistAlbums": "Albums",
   "artistSingles": "싱글",
   "artistSubscribers": "구독자",
   "artistDetailEmpty": "이 아티스트를 불러올 수 없습니다.",
@@ -230,5 +230,6 @@
   "createPlaylistFromAlbum": "이 앨범으로 플레이리스트 만들기",
   "visitedArtistsTitle": "최근 방문한 아티스트",
   "crossfade": "크로스페이드",
-  "crossfadeHint": "노래 간 페이드: 현재 곡이 끝나기 전에 다음 곡이 재생됩니다"
+  "crossfadeHint": "노래 간 페이드: 현재 곡이 끝나기 전에 다음 곡이 재생됩니다",
+  "back": "뒤로"
 }

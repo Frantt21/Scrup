@@ -709,7 +709,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get artistTopTracks => '热门歌曲';
 
   @override
-  String get artistAlbums => '专辑与单曲';
+  String get artistAlbums => 'Albums';
 
   @override
   String get artistSingles => '单曲';
@@ -734,4 +734,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get crossfadeHint => '歌曲之间的淡入淡出：当前歌曲结束前开始播放下一首';
+
+  @override
+  String get back => '返回';
 }
