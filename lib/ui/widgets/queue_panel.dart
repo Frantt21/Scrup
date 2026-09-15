@@ -8,6 +8,7 @@ import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
+import '../theme_controller.dart';
 import 'track_tile.dart';
 
 /// Fixed width of the open queue panel (same philosophy as the sidebar).
@@ -57,12 +58,19 @@ class QueueSheet extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final player = context.read<PlayerService>();
 
+    // Fondo igual al sheet de letras del player móvil: acento del artwork
+    // oscurecido para contrastar (o un oscuro neutro sin acento).
+    final accent = context.read<ThemeController>().accentColor;
+    final bg = accent != null
+        ? Color.lerp(accent, Colors.black, 0.35)!
+        : const Color(0xFF141414);
+
     return Container(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.sizeOf(context).height * 0.88,
       ),
       child: Material(
-        color: theme.colorScheme.surfaceContainerHigh,
+        color: bg,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         clipBehavior: Clip.antiAlias,
         child: SafeArea(
