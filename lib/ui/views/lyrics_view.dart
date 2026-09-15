@@ -161,9 +161,12 @@ class _LyricsViewState extends State<LyricsView>
     });
     _playing = player.isPlaying;
     _playingSub = player.playing.listen((playing) {
+      // El stream puede entregar eventos DESPUÉS del dispose (el listener se
+      // cancela de forma asíncrona): usar el player capturado en initState
+      // en vez de context.read, que revienta sobre un widget desactivado.
       if (!mounted) return;
       _playing = playing;
-      final service = context.read<PlayerService>();
+      final service = player;
       if (playing) {
         _smoothBasePosition = service.positionValue;
         _smoothBaseAt = DateTime.now();

@@ -368,7 +368,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                   context,
                 ).copyWith(scrollbars: false),
                 child: ListView.builder(
-                controller: _controller,
+                  controller: _controller,
                 // Embebido: primer renglón a la altura del top del artwork
                 // (aire inferior solo para el anclaje de auto-scroll);
                 // normal: 200px arriba y abajo para centrar la línea activa.

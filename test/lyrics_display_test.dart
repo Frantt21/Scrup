@@ -193,4 +193,150 @@ void main() {
       );
     });
   });
+
+  group('scroll', () {
+    final manyLines = SyncedLyrics(
+      songTitle: 'Tema',
+      artist: 'Artista',
+      lines: [
+        for (var i = 0; i < 60; i++)
+          LyricLine(
+            timestamp: Duration(seconds: i * 2),
+            text: 'Línea número $i de la canción',
+          ),
+      ],
+    );
+
+    testWidgets('el usuario puede scrollear a mano la lista', (tester) async {
+      final position = ValueNotifier<Duration>(Duration.zero);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 600,
+              child: LyricsDisplay(
+                lyrics: manyLines,
+                positionNotifier: position,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // El auto-scroll inicial centra la línea 0; la lista debe poder
+      // moverse a mano desde ahí.
+      final controller = tester.state<ScrollableState>(
+        find.byType(Scrollable).first,
+      );
+      final start = controller.position.pixels;
+
+      await tester.drag(find.byType(ListView), const Offset(0, -200));
+      await tester.pumpAndSettle();
+
+      expect(
+        controller.position.pixels,
+        greaterThan(start + 100),
+        reason: 'el drag manual debe mover la lista',
+      );
+    });
+
+    testWidgets('el scroll funciona bajo el pan detector del miniplayer', (
+      tester,
+    ) async {
+      // Imita la estructura del Miniplayer: GestureDetector con onPan*
+      // envolviendo TODO el contenido (el panel del player).
+      final position = ValueNotifier<Duration>(Duration.zero);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: GestureDetector(
+              onTap: () {},
+              onPanStart: (_) {},
+              onPanUpdate: (_) {},
+              onPanEnd: (_) {},
+              child: SizedBox(
+                width: 400,
+                height: 600,
+                child: LyricsDisplay(
+                  lyrics: manyLines,
+                  positionNotifier: position,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final controller = tester.state<ScrollableState>(
+        find.byType(Scrollable).first,
+      );
+      final start = controller.position.pixels;
+
+      await tester.drag(find.byType(ListView), const Offset(0, -200));
+      await tester.pumpAndSettle();
+
+      expect(
+        controller.position.pixels,
+        greaterThan(start + 100),
+        reason: 'el drag manual debe ganar al pan del panel',
+      );
+    });
+
+    testWidgets('el scroll funciona con ShaderMask + Stack encima', (
+      tester,
+    ) async {
+      // Imita la estructura real: ShaderMask envolviendo la lista y un
+      // Stack hermano (botón de sync) encima.
+      final position = ValueNotifier<Duration>(Duration.zero);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Stack(
+              children: [
+                ShaderMask(
+                  shaderCallback: (rect) => const LinearGradient(
+                    colors: [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
+                    stops: [0.0, 0.1, 0.9, 1.0],
+                  ).createShader(rect),
+                  blendMode: BlendMode.dstIn,
+                  child: SizedBox(
+                    width: 400,
+                    height: 600,
+                    child: LyricsDisplay(
+                      lyrics: manyLines,
+                      positionNotifier: position,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final controller = tester.state<ScrollableState>(
+        find.byType(Scrollable).first,
+      );
+      final start = controller.position.pixels;
+
+      await tester.drag(find.byType(ListView), const Offset(0, -200));
+      await tester.pumpAndSettle();
+
+      expect(
+        controller.position.pixels,
+        greaterThan(start + 100),
+        reason: 'el ShaderMask no debe bloquear el scroll',
+      );
+    });
+  });
 }

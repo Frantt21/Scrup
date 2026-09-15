@@ -1422,10 +1422,14 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
         //    FUERA del SafeArea inferior: su fondo llega al borde real de la
         //    pantalla (edge-to-edge, por detrás de la barra transparente del
         //    sistema); el contenido respeta el inset dentro del propio sheet.
-        //    Va en un [Positioned.fill] (no en un [Positioned] sin altura)
-        //    para que el LayoutBuilder interno reciba una altura ACOTADA:
-        //    con altura infinita el cálculo del sheet da NaN y no se pinta.
-        Positioned.fill(
+        //    Va anclado a la base con [Positioned] (sin altura impuesta):
+        //    el widget ocupa SOLO su propia altura, de modo que la región
+        //    por encima del sheet NO captura eventos (el [Align] a pantalla
+        //    completa absorbía todos los gestos y congelaba el player).
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
           child: _LyricsPeek(
             enabled: lyricsActive,
             onChanged: widget.onLyricsOpenChanged,
@@ -2090,18 +2094,18 @@ class _LyricsPeekState extends State<_LyricsPeek> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // (El color del sheet lo calcula el tween del `LayoutBuilder`: fondo
-    // plano = acento oscurecido para contrastar con el player.)
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: LayoutBuilder(
-        builder: (context, c) {
-          // Altura de referencia: si el padre no acota la altura (p. ej. un
-          // [Positioned] sin top/height), usa la pantalla para que el cálculo
-          // del sheet sea finito (con ∞ el resultado es NaN y no se pinta).
-          final double maxH = c.maxHeight.isFinite
-              ? c.maxHeight
-              : MediaQuery.sizeOf(context).height;
+    // Sin Align exterior: el padre lo ancla a la base con [Positioned] y el
+    // widget ocupa SOLO el alto del sheet (el LayoutBuilder se ajusta al
+    // child). Un [Align] a pantalla completa absorbía todos los gestos por
+    // encima del sheet y congelaba el player.
+    return LayoutBuilder(
+      builder: (context, c) {
+        // Altura de referencia: si el padre no acota la altura (p. ej. un
+        // [Positioned] sin top/height), usa la pantalla para que el cálculo
+        // del sheet sea finito (con ∞ el resultado es NaN y no se pinta).
+        final double maxH = c.maxHeight.isFinite
+            ? c.maxHeight
+            : MediaQuery.sizeOf(context).height;
           // Inset inferior del sistema (gestos ~24dp, 3 botones ~48-60dp): el
           // sheet se apoya en el borde real de la pantalla (su fondo llega
           // abajo del todo), pero su CONTENIDO (handle + letras) respeta el
@@ -2283,7 +2287,6 @@ class _LyricsPeekState extends State<_LyricsPeek> {
             ),
           );
         },
-      ),
     );
   }
 }
