@@ -1444,11 +1444,9 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // [playlist] Titulo/artista [favorito]: los botones flanquean el
-        // título centrado (como pidió el usuario). Los botones extremos se
-        // desplazan hacia afuera para que su GLIFO quede alineado con el
-        // extremo del artwork (el IconButton centra el icono en su área
-        // táctil de 48dp; [_flushGlyph] compensa esa holgura).
+        // Titulo/artista a la IZQUIERDA, favorito al extremo derecho. El
+        // [_flushGlyph] compensa la holgura interna del IconButton para que
+        // el glifo quede alineado con el borde del artwork.
         ListenableBuilder(
           listenable: Listenable.merge([
             _nTrack,
@@ -1463,36 +1461,15 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
             final fav = _nFav.value;
             return Row(
               children: [
-                // Botón de playlist: el BOTÓN COMPLETO (icono + área táctil
-                // de 48dp) queda alineado al extremo IZQUIERDO del artwork.
-                // El [_flushGlyph] solo compensa la holgura INTERNA del
-                // IconButton (el glifo se descentra 11px dentro del botón)
-                // para que el icono no parezca flotando; el botón entero
-                // ocupa el extremo. Sin desplazamientos externos: los
-                // Transform.translate extra empujaban el botón FUERA del
-                // artwork (desalineados hacia afuera).
-                IconButton(
-                  icon: _flushGlyph(
-                    right: false,
-                    icon: const Icon(Icons.playlist_add_rounded),
-                  ),
-                  // Contraste adaptativo: negro sobre acentos claros (igual
-                  // que el título, el favorito y el transporte).
-                  color: _staticWhite,
-                  tooltip: 'Agregar a playlist',
-                  onPressed: track == null
-                      ? null
-                      : () => showAddToPlaylistDialog(context, track),
-                ),
                 Expanded(
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         track?.title ?? 'Scrup',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                           color: track == null
@@ -1507,7 +1484,6 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
                             track.artist,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: _staticWhiteA(0.85),
                             ),
@@ -1516,9 +1492,7 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
                     ],
                   ),
                 ),
-                // Botón de favorito: espejo del de playlist — el BOTÓN
-                // COMPLETO en el extremo derecho del artwork, con su glifo
-                // re-centrado dentro del área táctil (sin translate extra).
+                // Favorito: glifo alineado al extremo derecho del artwork.
                 IconButton(
                   icon: _flushGlyph(
                     right: true,
@@ -1544,10 +1518,9 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
         // overlay no se reconstruye por el tick de 1Hz ni por el arrastre.
         _SeekBar(posN: _nPos, durN: _nDur, onSeek: (d) => _player.seek(d)),
         const SizedBox(height: 8),
-        // Transporte: spaceBetween para que el primero y el último botón
-        // queden en los EXTREMOS del bloque. Los extremos (shuffle/repeat)
-        // se desplazan hacia afuera con [_flushGlyph] para que su glifo
-        // quede alineado con el extremo del artwork (igual que la barra).
+        // Transporte: prev | play | next. Prev y next van en contenedores
+        // cuadrados translúcidos (mockup de referencia); shuffle/repeat y
+        // añadir a playlist viven en el contenedor ancho de abajo.
         ListenableBuilder(
           listenable: Listenable.merge([
             _nTrack,
@@ -1555,8 +1528,6 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
             _nPreparingActive,
             _nPlaying,
             _nBuffering,
-            _player.shuffle,
-            _player.repeatMode,
             _theme,
           ]),
           builder: (context, _) {
@@ -1564,56 +1535,83 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
             final playing = _nPlaying.value;
             final buffering = _nBuffering.value;
             final preparingActive = _nPreparingActive.value;
-            final accent = _theme.accentColor ?? _kIdleSurface;
             final bool blockLoader =
                 (buffering || preparingActive) && _nBlockLoader.value;
             return Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Transform.translate(
-                  // Desplaza todo el botón hacia afuera para que su glifo
-                  // quede alineado con el extremo izquierdo del artwork.
-                  offset: const Offset(-11, 0),
-                  child: _ModeButton(
-                    icon: Icons.shuffle_rounded,
-                    active: _player.shuffle.value,
-                    color: _staticWhite,
-                    onPressed: _player.toggleShuffle,
-                  ),
-                ),
-                _ControlButton(
+                _SquareButton(
                   icon: Icons.skip_previous_rounded,
-                  size: 40,
                   color: _staticWhite,
                   onPressed: track == null ? null : _goPrev,
                 ),
                 _PlayPauseButton(
                   playing: playing,
-                  accent: accent,
                   darkContent: _darkContent,
-                  // Loader SOLO tras ~250ms de carga real (el montaje normal
-                  // tarda ~30-80ms con el caché caliente: un loader de 1-2
-                  // frames parpadea). El estado `playing` manda: si suena, se
-                  // muestra pausa/play, no el loader.
+                  // Loader SOLO tras ~250ms de carga real: un loader de 1-2
+                  // frames parpadea. El estado `playing` manda sobre el loader.
                   loading: blockLoader,
                   onPressed: track == null ? null : _player.togglePlayPause,
                 ),
-                _ControlButton(
+                _SquareButton(
                   icon: Icons.skip_next_rounded,
-                  size: 40,
                   color: _staticWhite,
                   onPressed: track == null ? null : _goNext,
                 ),
-                Transform.translate(
-                  offset: const Offset(11, 0),
-                  child: _ModeButton(
-                    icon: _repeatIcon(_player.repeatMode.value),
-                    active: _player.repeatMode.value != LoopMode.off,
-                    color: _staticWhite,
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        // Contenedor ancho (mismo ancho que el artwork): shuffle | repeat |
+        // añadir a playlist. Activo = opacidad completa; inactivo = tenue.
+        ListenableBuilder(
+          listenable: Listenable.merge([
+            _player.shuffle,
+            _player.repeatMode,
+            _nTrack,
+            _theme,
+          ]),
+          builder: (context, _) {
+            final track = _showingNow;
+            return Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: _tileColor,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  IconButton(
+                    iconSize: 26,
+                    icon: const Icon(Icons.shuffle_rounded),
+                    color: _player.shuffle.value
+                        ? _staticWhite
+                        : _staticWhite.withValues(alpha: 0.55),
+                    tooltip: 'Aleatorio',
+                    onPressed: _player.toggleShuffle,
+                  ),
+                  IconButton(
+                    iconSize: 26,
+                    icon: Icon(_repeatIcon(_player.repeatMode.value)),
+                    color: _player.repeatMode.value != LoopMode.off
+                        ? _staticWhite
+                        : _staticWhite.withValues(alpha: 0.55),
+                    tooltip: 'Repetir',
                     onPressed: _player.toggleRepeat,
                   ),
-                ),
-              ],
+                  IconButton(
+                    iconSize: 24,
+                    icon: const Icon(Icons.playlist_add_rounded),
+                    color: _staticWhite,
+                    tooltip: 'Agregar a playlist',
+                    onPressed: track == null
+                        ? null
+                        : () => showAddToPlaylistDialog(context, track),
+                  ),
+                ],
+              ),
             );
           },
         ),
@@ -1621,6 +1619,10 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
       ],
     );
   }
+
+  /// Relleno translúcido de los contenedores cuadrado/ancho del transporte.
+  /// Idéntico al de los botones prev/play/next para que se vean uniformes.
+  Color get _tileColor => _staticWhite.withValues(alpha: 0.10);
 
   /// Compensa la holgura interna del [IconButton] (el glifo queda centrado
   /// en el área táctil de 48dp): lo desplaza hacia el borde de la fila para
@@ -1663,44 +1665,48 @@ String _fmtDur(Duration? d) {
   return '$m:$s';
 }
 
-class _ControlButton extends StatelessWidget {
+/// Botón cuadrado translúcido (prev/next del player expandido): contenedor
+/// redondeado con el glifo centrado, como el mockup de referencia.
+class _SquareButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onPressed;
-  final double size;
+  final Color color;
 
-  const _ControlButton({
+  const _SquareButton({
     required this.icon,
     required this.onPressed,
-    this.size = 38,
-    this.color,
+    required this.color,
   });
-
-  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      iconSize: size,
-      color: (color ?? Colors.white).withValues(alpha: 0.9),
-      onPressed: onPressed,
-      icon: Icon(icon),
+    return SizedBox(
+      width: 88,
+      height: 64,
+      child: Material(
+        color: color.withValues(alpha: 0.10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: Center(child: Icon(icon, size: 30, color: color)),
+        ),
+      ),
     );
   }
 }
 
 class _PlayPauseButton extends StatelessWidget {
   final bool playing;
-  final Color accent;
   final bool loading;
 
-  /// Acento claro → el círculo pasa a NEGRO y el icono/loader a claro.
+  /// Acento claro → contenido NEGRO sobre el tile claro.
   final bool darkContent;
 
   final VoidCallback? onPressed;
 
   const _PlayPauseButton({
     required this.playing,
-    required this.accent,
     required this.loading,
     required this.onPressed,
     this.darkContent = false,
@@ -1708,39 +1714,32 @@ class _PlayPauseButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final circle = darkContent ? Colors.black : Colors.white;
-    final glyph = darkContent ? accent : accent;
+    // Mismo tile translúcido que los botones cuadrados de prev/next: los
+    // tres controles forman una fila uniforme.
+    final base = darkContent ? Colors.black : Colors.white;
     return SizedBox(
-      // Círculo de TAMAÑO FIJO en ambos estados: con el loader el botón no
-      // se encoge (antes el círculo derivaba del tamaño del hijo y el loader
-      // de 24px lo achicaba).
-      width: 64,
+      width: 88,
       height: 64,
       child: Material(
-        color: circle,
-        shape: const CircleBorder(),
+        color: base.withValues(alpha: 0.10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onPressed,
           child: Center(
             child: loading
                 ? SizedBox(
-                    // Loader casi del tamaño óptico del icono de play (46),
-                    // no un puntito: reemplaza al icono dentro del mismo
-                    // botón mientras la pista se carga.
-                    width: 36,
-                    height: 36,
+                    width: 26,
+                    height: 26,
                     child: CircularProgressIndicator(
-                      strokeWidth: 4,
-                      color: darkContent
-                          ? Colors.white.withValues(alpha: 0.9)
-                          : accent,
+                      strokeWidth: 3,
+                      color: base,
                     ),
                   )
                 : Icon(
                     playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    size: 46,
-                    color: glyph,
+                    size: 34,
+                    color: base,
                   ),
           ),
         ),
@@ -1749,30 +1748,7 @@ class _PlayPauseButton extends StatelessWidget {
   }
 }
 
-class _ModeButton extends StatelessWidget {
-  final IconData icon;
-  final bool active;
-  final VoidCallback onPressed;
 
-  const _ModeButton({
-    required this.icon,
-    required this.active,
-    required this.onPressed,
-    this.color = Colors.white,
-  });
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      iconSize: 26,
-      color: active ? color : color.withValues(alpha: 0.6),
-      onPressed: onPressed,
-      icon: Icon(icon),
-    );
-  }
-}
 
 /// Barra de progreso del player expandido (slider + tiempos), hoja reactiva
 /// aislada: escucha SOLO posición/duración y gestiona su propio estado de
