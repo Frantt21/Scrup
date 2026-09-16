@@ -231,5 +231,17 @@
   "visitedArtistsTitle": "Недавно просмотренные исполнители",
   "crossfade": "Кроссфейд",
   "crossfadeHint": "Плавный переход между песнями: следующая дорожка начинается до окончания текущей",
-  "back": "Назад"
+  "back": "Назад",
+  "downloadPlaylist": "Скачать плейлист",
+  "downloadPlaylistHint": "Скачивает все треки для прослушивания офлайн",
+  "availableOffline": "Доступно офлайн",
+  "player": "Плеер",
+  "searchCacheInfo": "{count} поисков в кэше · профили артистов 24 ч",
+  "@searchCacheInfo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

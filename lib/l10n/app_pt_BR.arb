@@ -231,5 +231,17 @@
   "visitedArtistsTitle": "Artistas visitados",
   "crossfade": "Crossfade",
   "crossfadeHint": "Transição suave entre músicas: a próxima faixa começa antes de a atual terminar",
-  "back": "Voltar"
+  "back": "Voltar",
+  "downloadPlaylist": "Baixar playlist",
+  "downloadPlaylistHint": "Baixa todas as faixas para ouvir offline",
+  "availableOffline": "Disponível offline",
+  "player": "Player",
+  "searchCacheInfo": "{count} buscas em cache · perfis de artista por 24 h",
+  "@searchCacheInfo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

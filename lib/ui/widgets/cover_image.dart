@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/artwork_cache_service.dart';
 import '../../core/app_log.dart';
+import '../../core/track.dart';
 
 /// Render an image that can come from a network URL (YouTube/Deezer artwork) or from a local file on the device (playlist cover chosen by the user from their disk).
 ///
@@ -125,23 +126,34 @@ class _CoverImageState extends State<CoverImage> {
   }
 
   /// Descarga y guarda los bytes del artwork en disco (sin bloquear la UI;
-  /// si falla, la imagen igual se muestra desde la red).
+  /// si falla, la imagen igual se muestra desde la red). Intenta primero la
+  /// variante hi-res: es la MISMA clave canónica bajo la que el extractor de
+  /// paletas guarda sus bytes, así ambos caminos comparten una entrada y el
+  /// modo sin conexión encuentra el arte venga de donde venga.
   Future<void> _persistToCache(ArtworkCacheService cache, String src) {
     final inFlight = _persisting[src];
     if (inFlight != null) return inFlight;
     final future = () async {
       try {
-        final resp = await http
-            .get(
-              Uri.parse(src),
-              headers: const {'User-Agent': 'Scrup/0.1 (music player)'},
-            )
-            .timeout(const Duration(seconds: 15));
-        if (resp.statusCode == 200 && resp.bodyBytes.isNotEmpty) {
-          await cache.save(src, resp.bodyBytes);
+        final hi = Track.hiResThumbnail(src) ?? src;
+        final candidates = hi == src ? [src] : [hi, src];
+        for (final candidate in candidates) {
+          try {
+            final resp = await http
+                .get(
+                  Uri.parse(candidate),
+                  headers: const {'User-Agent': 'Scrup/0.1 (music player)'},
+                )
+                .timeout(const Duration(seconds: 15));
+            if (resp.statusCode == 200 && resp.bodyBytes.isNotEmpty) {
+              // save() canonicaliza la clave: raw y hi-res caen en la misma.
+              await cache.save(src, resp.bodyBytes);
+              break;
+            }
+          } catch (_) {
+            // Siguiente candidato.
+          }
         }
-      } catch (_) {
-        // No crítico: la imagen ya se muestra desde red.
       } finally {
         _persisting.remove(src);
       }

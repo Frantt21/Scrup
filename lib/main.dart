@@ -27,6 +27,7 @@ import 'services/discord/discord_presence_service.dart';
 import 'services/lyrics_service.dart';
 import 'services/palette_cache_store.dart';
 import 'services/player_service.dart';
+import 'services/playlist_download_service.dart';
 import 'services/scrup_audio_handler.dart';
 import 'services/settings_store.dart';
 import 'services/silence_skip_service.dart';
@@ -246,6 +247,12 @@ class ScrupApp extends StatelessWidget {
         Provider<AudioCacheService>(
           create: (context) =>
               AudioCacheService(ytdlp: context.read<YtDlpService>()),
+        ),
+        // App-lifetime playlist batch downloader: survives playlist screen
+        // close, UI rows just subscribe for progress.
+        Provider<PlaylistDownloadService>(
+          create: (context) =>
+              PlaylistDownloadService(context.read<AudioCacheService>()),
         ),
         Provider<ArtworkCacheService>(create: (_) => ArtworkCacheService()),
         Provider<SearchService>(

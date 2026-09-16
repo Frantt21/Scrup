@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -251,6 +252,9 @@ class SearchCacheStore {
       unawaited(_flush());
     });
   }
+
+  /// Nº de consultas cacheadas (memoria; útil para el detalle en ajustes).
+  int get entryCount => _mem.length;
 
   /// Vacía el caché (p. ej. acción de "limpiar caché" en ajustes).
   Future<void> clear() async {

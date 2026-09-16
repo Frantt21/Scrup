@@ -751,4 +751,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get back => 'Back';
+
+  @override
+  String get downloadPlaylist => 'Download playlist';
+
+  @override
+  String get downloadPlaylistHint =>
+      'Download all tracks for offline listening';
+
+  @override
+  String get availableOffline => 'Available offline';
+
+  @override
+  String get player => 'Player';
+
+  @override
+  String searchCacheInfo(int count) {
+    return '$count cached searches · artist profiles cached for 24 h';
+  }
 }

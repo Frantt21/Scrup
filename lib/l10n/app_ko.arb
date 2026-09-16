@@ -231,5 +231,17 @@
   "visitedArtistsTitle": "최근 방문한 아티스트",
   "crossfade": "크로스페이드",
   "crossfadeHint": "노래 간 페이드: 현재 곡이 끝나기 전에 다음 곡이 재생됩니다",
-  "back": "뒤로"
+  "back": "뒤로",
+  "downloadPlaylist": "플레이리스트 다운로드",
+  "downloadPlaylistHint": "모든 곡을 오프라인 청취용으로 다운로드",
+  "availableOffline": "오프라인 재생 가능",
+  "player": "플레이어",
+  "searchCacheInfo": "검색 캐시 {count}개 · 아티스트 프로필 24시간",
+  "@searchCacheInfo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

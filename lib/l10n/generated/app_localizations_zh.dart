@@ -737,4 +737,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get back => '返回';
+
+  @override
+  String get downloadPlaylist => '下载播放列表';
+
+  @override
+  String get downloadPlaylistHint => '下载所有曲目以便离线收听';
+
+  @override
+  String get availableOffline => '可离线播放';
+
+  @override
+  String get player => '播放器';
+
+  @override
+  String searchCacheInfo(int count) {
+    return '已缓存 $count 次搜索 · 艺人资料 24 小时';
+  }
 }

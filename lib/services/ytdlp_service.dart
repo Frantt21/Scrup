@@ -50,6 +50,16 @@ bool _isSharingViolation(Object error) {
       msg.contains('process_win.cc');
 }
 
+// Log SIEMPRE visible (debug y release): cada etapa de la búsqueda,
+// descarga y streaming de yt-dlp con millis desde el arranque del proceso
+// (facilita correlacionar con `adb logcat -d | grep yt-dlp`). Independiente
+// de kPaletteLog (ese flag apaga los SCPR de paleta/UI, no estos).
+final DateTime _ytdlpBoot = DateTime.now();
+void _ytLog(String msg) {
+  final ms = DateTime.now().difference(_ytdlpBoot).inMilliseconds;
+  debugPrint('[yt-dlp +${ms}ms] $msg');
+}
+
 // In-progress streaming download. The .part file grows while downloading.
 class StreamingDownload {
   final Future<String> playablePath;
@@ -148,6 +158,7 @@ class YtDlpService {
     }
     debugPrint('[yt-dlp] jni ${args.join(' ')}');
     final logPath = await _jniLogPath();
+    final t0 = DateTime.now();
     try {
       final res = await _androidChannel
           .invokeMethod<Map<dynamic, dynamic>>(
@@ -157,18 +168,22 @@ class YtDlpService {
           .timeout(timeout);
       final exitCode = (res?['exitCode'] as num?)?.toInt() ?? 1;
       final output = (res?['output'] as String?) ?? '';
+      final elapsedMs = DateTime.now().difference(t0).inMilliseconds;
       if (exitCode != 0) {
         final err = output.trim();
-        debugPrint('[yt-dlp] jni failed (exit=$exitCode): '
+        _ytLog('jni exit=$exitCode after ${elapsedMs}ms '
             '${err.substring(0, err.length.clamp(0, 500))}');
         throw YtDlpException(err.isNotEmpty ? err : 'yt-dlp error');
       }
+      _ytLog('jni ok exit=0 after ${elapsedMs}ms '
+          '(out ${output.length} chars)');
       return ProcessResult(0, exitCode, output, '');
     } on TimeoutException {
+      _ytLog('jni TIMEOUT after ${timeout.inSeconds}s, cancelando');
       await _jniCancel();
       throw YtDlpException('yt-dlp timed out.');
     } catch (e) {
-      debugPrint('[yt-dlp] jni exception: $e');
+      _ytLog('jni exception: $e');
       rethrow;
     }
   }
@@ -229,6 +244,7 @@ class YtDlpService {
     final script = launcher.length > 1 ? launcher[1] : null;
     final processArgs = script != null ? [script, ...args] : [...launcher.sublist(1), ...args];
     debugPrint('[yt-dlp] $executable ${processArgs.join(' ')}');
+    final t0 = DateTime.now();
     final result = await _retryOnSharingViolation(
       () => Process.run(
         executable,
@@ -238,14 +254,19 @@ class YtDlpService {
         environment: _envWithSidecars(),
       ).timeout(timeout),
     );
+    final elapsedMs = DateTime.now().difference(t0).inMilliseconds;
 
     if (result.exitCode != 0) {
       final err = (result.stderr as String).trim();
       final out = (result.stdout as String).trim();
+      _ytLog('run FAILED exit=${result.exitCode} after ${elapsedMs}ms: '
+          '${(err.isNotEmpty ? err : out).substring(0, ((err.isNotEmpty ? err : out).length).clamp(0, 500))}');
       throw YtDlpException(
         err.isNotEmpty ? err : (out.isNotEmpty ? out : 'Error de yt-dlp'),
       );
     }
+    _ytLog('run ok exit=0 after ${elapsedMs}ms '
+        '(out ${(result.stdout as String).length} chars)');
     return result;
   }
 
@@ -353,6 +374,8 @@ class YtDlpService {
     }
 
     debugPrint('[yt-dlp] stream $videoId');
+    final started = DateTime.now();
+    _ytLog('stream start id=$videoId title=${title ?? '-'}');
     final launcher = _launcher(ytdlp);
     final executable = launcher.first;
     final script = launcher.length > 1 ? launcher[1] : null;
@@ -364,8 +387,8 @@ class YtDlpService {
         environment: _envWithSidecars(),
       ),
     );
+    _ytLog('stream pid=${process.pid} started');
 
-    final started = DateTime.now();
     final progressRe = RegExp(r'\[download\]\s+(\d+(?:\.\d+)?)%');
     final destinationRe = RegExp(r'\[download\]\s+Destination:\s+(.+)$');
     final partialCompleter = Completer<String>();
@@ -374,6 +397,7 @@ class YtDlpService {
     var printedPath = '';
     var destinationPath = '';
     var processExited = false;
+    var lastLoggedPct = -1.0;
 
     process.stdout
         .transform(utf8.decoder)
@@ -381,7 +405,13 @@ class YtDlpService {
         .listen((line) {
           final m = progressRe.firstMatch(line);
           if (m != null) {
-            onProgress?.call(double.parse(m.group(1)!) / 100);
+            final pct = double.parse(m.group(1)!) / 100;
+            onProgress?.call(pct);
+            // Log cada ~10% (sin spam: el texto completo lo imprime yt-dlp).
+            if (pct - lastLoggedPct >= 0.099) {
+              lastLoggedPct = pct;
+              _ytLog('stream id=$videoId ${(pct * 100).round()}%');
+            }
           }
           final dm = destinationRe.firstMatch(line);
           if (dm != null) {
@@ -410,6 +440,10 @@ class YtDlpService {
             final elapsedMs = DateTime.now().difference(started).inMilliseconds;
             if (size >= minBytes || (elapsedMs >= 6000 && size >= 64 * 1024)) {
               if (!partialCompleter.isCompleted) {
+                _ytLog(
+                  'stream id=$videoId PARTIAL reproducible '
+                  '+${elapsedMs}ms (${size}B) -> $known',
+                );
                 partialCompleter.complete(known);
               }
               return;
@@ -418,6 +452,10 @@ class YtDlpService {
             final finalPath = await _findFinal(outputDir, videoId);
             if (finalPath != null) {
               if (!partialCompleter.isCompleted) {
+                _ytLog(
+                  'stream id=$videoId PARTIAL via final file '
+                  '($finalPath)',
+                );
                 partialCompleter.complete(finalPath);
               }
               return;
@@ -456,6 +494,7 @@ class YtDlpService {
         code = await process.exitCode.timeout(const Duration(minutes: 10));
       } on TimeoutException {
         process.kill();
+        _ytLog('stream id=$videoId TIMEOUT 10min, proceso matado');
         final err = 'La descarga de "${title ?? videoId}" tardó demasiado.';
         onProgress?.call(null);
         if (!doneCompleter.isCompleted) {
@@ -474,6 +513,10 @@ class YtDlpService {
         } else {
           finalPath = await _findFinal(outputDir, videoId);
         }
+        _ytLog(
+          'stream id=$videoId exit=0 +${DateTime.now().difference(started).inMilliseconds}ms '
+          'final=${finalPath ?? 'NULL'}',
+        );
         if (finalPath == null) {
           final err =
               'La descarga de "${title ?? videoId}" no produjo '
@@ -496,6 +539,8 @@ class YtDlpService {
         final err = stderr.trim().isNotEmpty
             ? stderr.trim()
             : 'No se pudo descargar "${title ?? videoId}".';
+        _ytLog('stream id=$videoId FAILED exit=$code: '
+            '${err.substring(0, err.length.clamp(0, 400))}');
         onProgress?.call(null);
         if (!doneCompleter.isCompleted) {
           doneCompleter.completeError(YtDlpException(err));
@@ -522,7 +567,7 @@ class YtDlpService {
     void Function(double? percent)? onProgress,
   }) async {
     await Binaries.ensureAndroidToolchain();
-    debugPrint('[yt-dlp] stream(jni) $videoId');
+    _ytLog('stream(jni) start id=$videoId title=${title ?? '-'}');
 
     // Step 1: Get streaming URL via yt-dlp --get-url (fast, no download).
     String? streamUrl;
@@ -541,10 +586,10 @@ class YtDlpService {
       final url = (result.stdout as String).trim();
       if (url.isNotEmpty && url.startsWith('http')) {
         streamUrl = url;
-        debugPrint('[yt-dlp] got URL for $videoId (${url.length} chars)');
+        _ytLog('stream(jni) id=$videoId URL ok (${url.length} chars)');
       }
     } catch (e) {
-      debugPrint('[yt-dlp] --get-url failed: $e');
+      _ytLog('stream(jni) id=$videoId --get-url FAILED: $e');
     }
 
     // Step 2: Stream the audio via HTTP (progressive download).
@@ -558,7 +603,7 @@ class YtDlpService {
     }
 
     // Step 3: Fallback — InnerTube HTTP streaming.
-    debugPrint('[yt-dlp] url fetch failed, trying InnerTube fallback');
+    _ytLog('stream(jni) id=$videoId sin URL, fallback InnerTube');
     return _startStreamingInnerTube(
       videoId,
       outputDir: outputDir,
@@ -584,16 +629,19 @@ class YtDlpService {
 
     unawaited(() async {
       try {
+        _ytLog('http start id=$videoId (${url.length} chars url)');
         final req = await HttpClient().getUrl(Uri.parse(url));
         final res = await req.close();
         if (res.statusCode != 200) {
           throw YtDlpException('HTTP ${res.statusCode} streaming audio');
         }
         final totalLen = res.contentLength;
+        _ytLog('http id=$videoId status=${res.statusCode} len=$totalLen');
         var received = 0;
         final sink = File(partialPath).openWrite();
         await for (final chunk in res) {
           if (cancelled) {
+            _ytLog('http id=$videoId CANCELADO (${received}B)');
             await sink.close();
             try {
               File(partialPath).deleteSync();
@@ -607,6 +655,7 @@ class YtDlpService {
           if (!partialCompleter.isCompleted &&
               (received >= 1024 * 1024 ||
                (elapsedMs >= 6000 && received >= 64 * 1024))) {
+            _ytLog('http id=$videoId PARTIAL +${elapsedMs}ms (${received}B)');
             partialCompleter.complete(partialPath);
           }
           if (totalLen > 0) {
@@ -617,9 +666,9 @@ class YtDlpService {
         File(partialPath).renameSync(outputPath);
         if (!doneCompleter.isCompleted) doneCompleter.complete(outputPath);
         if (!partialCompleter.isCompleted) partialCompleter.complete(outputPath);
-        debugPrint('[stream] HTTP download done: $outputPath ($received bytes)');
+        _ytLog('http id=$videoId done ${received}B -> $outputPath');
       } catch (e) {
-        debugPrint('[stream] HTTP download error: $e');
+        _ytLog('http id=$videoId ERROR: $e');
         final msg = e is YtDlpException ? e.message : '$e';
         if (!doneCompleter.isCompleted) doneCompleter.completeError(YtDlpException(msg));
         if (!partialCompleter.isCompleted) partialCompleter.completeError(YtDlpException(msg));
@@ -646,10 +695,11 @@ class YtDlpService {
     String? title,
     void Function(double? percent)? onProgress,
   }) async {
-    debugPrint('[innertube] stream $videoId');
+    _ytLog('innertube start id=$videoId');
     final doneCompleter = Completer<String>();
     final partialCompleter = Completer<String>();
     var cancelled = false;
+    final started = DateTime.now();
 
     unawaited(() async {
       try {
@@ -657,7 +707,7 @@ class YtDlpService {
         if (url == null) {
           throw YtDlpException('InnerTube no devolvió URL de audio para $videoId');
         }
-        debugPrint('[innertube] got audio URL, downloading...');
+        _ytLog('innertube id=$videoId URL ok, descargando...');
         // Download to .part first, rename on completion.
         final outputPath = p.join(outputDir, '$videoId.webm');
         final partialPath = '$outputPath.part';
@@ -671,6 +721,7 @@ class YtDlpService {
         final sink = File(partialPath).openWrite();
         await for (final chunk in res) {
           if (cancelled) {
+            _ytLog('innertube id=$videoId CANCELADO (${received}B)');
             await sink.close();
             try { File(partialPath).deleteSync(); } catch (_) {}
             return;
@@ -680,6 +731,9 @@ class YtDlpService {
           if (!partialCompleter.isCompleted &&
               (received >= 1024 * 1024 ||
                (totalLen > 0 && received >= totalLen))) {
+            _ytLog('innertube id=$videoId PARTIAL '
+                '+${DateTime.now().difference(started).inMilliseconds}ms '
+                '(${received}B)');
             partialCompleter.complete(partialPath);
           }
           if (totalLen > 0) {
@@ -691,8 +745,9 @@ class YtDlpService {
         File(partialPath).renameSync(outputPath);
         if (!doneCompleter.isCompleted) doneCompleter.complete(outputPath);
         if (!partialCompleter.isCompleted) partialCompleter.complete(outputPath);
+        _ytLog('innertube id=$videoId done ${received}B -> $outputPath');
       } catch (e) {
-        debugPrint('[innertube] stream error: $e');
+        _ytLog('innertube id=$videoId ERROR: $e');
         final msg = e is YtDlpException ? e.message : '$e';
         if (!doneCompleter.isCompleted) doneCompleter.completeError(YtDlpException(msg));
         if (!partialCompleter.isCompleted) partialCompleter.completeError(YtDlpException(msg));

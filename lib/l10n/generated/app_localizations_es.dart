@@ -754,4 +754,22 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get back => 'Atrás';
+
+  @override
+  String get downloadPlaylist => 'Descargar playlist';
+
+  @override
+  String get downloadPlaylistHint =>
+      'Descarga todas las pistas para escuchar sin conexión';
+
+  @override
+  String get availableOffline => 'Disponible sin conexión';
+
+  @override
+  String get player => 'Reproductor';
+
+  @override
+  String searchCacheInfo(int count) {
+    return '$count búsquedas en caché · perfiles de artista por 24 h';
+  }
 }

@@ -58,12 +58,18 @@ class QueueSheet extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final player = context.read<PlayerService>();
 
-    // Fondo igual al sheet de letras del player móvil: acento del artwork
-    // oscurecido para contrastar (o un oscuro neutro sin acento).
+    // Fondo SÓLIDO con el mismo tono que los botones del player móvil:
+    // overlay blanco/negro al 10% compuesto sobre el color real del player
+    // (acento del artwork, o surfaceContainerHigh en idle).
     final accent = context.read<ThemeController>().accentColor;
-    final bg = accent != null
-        ? Color.lerp(accent, Colors.black, 0.35)!
-        : const Color(0xFF141414);
+    final darkContent = accent != null && accent.computeLuminance() > 0.55;
+    final overlayBase = darkContent ? Colors.black : Colors.white;
+    final playerBase =
+        accent ?? theme.colorScheme.surfaceContainerHigh;
+    final bg = Color.alphaBlend(
+      overlayBase.withValues(alpha: 0.10),
+      playerBase,
+    );
 
     return Container(
       constraints: BoxConstraints(
@@ -79,15 +85,17 @@ class QueueSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Asa de arrastre.
-              const Padding(
-                padding: EdgeInsets.only(top: 10, bottom: 4),
+              Padding(
+                padding: const EdgeInsets.only(top: 10, bottom: 4),
                 child: SizedBox(
                   width: 36,
                   height: 4,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Color(0x66FFFFFF),
-                      borderRadius: BorderRadius.all(Radius.circular(2)),
+                      color: darkContent
+                          ? Colors.black.withValues(alpha: 0.6)
+                          : Colors.white.withValues(alpha: 0.6),
+                      borderRadius: const BorderRadius.all(Radius.circular(2)),
                     ),
                   ),
                 ),

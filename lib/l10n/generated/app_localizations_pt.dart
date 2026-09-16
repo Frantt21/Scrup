@@ -752,6 +752,23 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get back => 'Voltar';
+
+  @override
+  String get downloadPlaylist => 'Baixar playlist';
+
+  @override
+  String get downloadPlaylistHint => 'Baixa todas as faixas para ouvir offline';
+
+  @override
+  String get availableOffline => 'Disponível offline';
+
+  @override
+  String get player => 'Player';
+
+  @override
+  String searchCacheInfo(int count) {
+    return '$count buscas em cache · perfis de artista por 24 h';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1472,4 +1489,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get back => 'Voltar';
+
+  @override
+  String get downloadPlaylist => 'Baixar playlist';
+
+  @override
+  String get downloadPlaylistHint => 'Baixa todas as faixas para ouvir offline';
+
+  @override
+  String get availableOffline => 'Disponível offline';
+
+  @override
+  String get player => 'Player';
+
+  @override
+  String searchCacheInfo(int count) {
+    return '$count buscas em cache · perfis de artista por 24 h';
+  }
 }

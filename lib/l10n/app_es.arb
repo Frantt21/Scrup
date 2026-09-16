@@ -376,5 +376,17 @@
   "visitedArtistsTitle": "Artistas visitados",
   "crossfade": "Crossfade",
   "crossfadeHint": "Fundido entre canciones: la siguiente pista empieza antes de que termine la actual",
-  "back": "Atrás"
+  "back": "Atrás",
+  "downloadPlaylist": "Descargar playlist",
+  "downloadPlaylistHint": "Descarga todas las pistas para escuchar sin conexión",
+  "availableOffline": "Disponible sin conexión",
+  "player": "Reproductor",
+  "searchCacheInfo": "{count} búsquedas en caché · perfiles de artista por 24 h",
+  "@searchCacheInfo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

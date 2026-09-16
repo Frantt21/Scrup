@@ -9,19 +9,28 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'audio_cache_service.dart' show CacheStats;
+import '../core/track.dart';
 
 /// On-disk artwork byte cache with LRU eviction. Names are SHA-256 hashes.
 class ArtworkCacheService {
-  ArtworkCacheService({int? maxSizeBytes})
+  ArtworkCacheService({int? maxSizeBytes, this.directoryOverride})
     : maxSizeBytes = maxSizeBytes ?? _defaultMaxSize;
 
   static const int _defaultMaxSize = 500 * 1024 * 1024;
 
   final int maxSizeBytes;
 
+  /// Test hook: alternate cache directory (production uses app support).
+  final Directory? directoryOverride;
+
   Directory? _dir;
 
   Future<Directory> cacheDir() async {
+    final override = directoryOverride;
+    if (override != null) {
+      await override.create(recursive: true);
+      return override;
+    }
     final existing = _dir;
     if (existing != null) return existing;
     final base = await getApplicationSupportDirectory();
@@ -31,33 +40,56 @@ class ArtworkCacheService {
     return dir;
   }
 
+  // Canonical storage key: the hi-res variant of the URL. CoverImage asks
+  // with the raw thumbnail (hqdefault, InnerTube params) while the palette
+  // extractor asks with the hi-res one; without this both would save a
+  // separate copy and offline lookups from the other path would miss.
+  static String _storageKey(String url) => Track.hiResThumbnail(url) ?? url;
+
+  // Candidate keys for lookups: canonical first, then the raw URL (legacy
+  // entries saved before canonicalization).
+  static List<String> _lookupKeys(String url) =>
+      url == _storageKey(url) ? [url] : [_storageKey(url), url];
+
   static String _hashName(String url) =>
-      sha256.convert(utf8.encode(url)).toString();
+      sha256.convert(utf8.encode(_storageKey(url))).toString();
 
   // Returns file path on disk (touching LRU) or null.
   Future<String?> filePathFor(String url) async {
     final dir = await cacheDir();
-    final file = File(p.join(dir.path, _hashName(url)));
-    try {
-      if (!await file.exists()) return null;
-      await file.setLastModified(DateTime.now());
-      return file.path;
-    } catch (_) {
-      return null;
+    for (final key in _lookupKeys(url)) {
+      final file = File(
+        p.join(
+          dir.path,
+          sha256.convert(utf8.encode(key)).toString(),
+        ),
+      );
+      try {
+        if (!await file.exists()) continue;
+        await file.setLastModified(DateTime.now());
+        return file.path;
+      } catch (_) {}
     }
+    return null;
   }
 
   // Reads cached artwork bytes from disk, touching LRU.
   Future<Uint8List?> load(String url) async {
     final dir = await cacheDir();
-    final file = File(p.join(dir.path, _hashName(url)));
-    try {
-      if (!await file.exists()) return null;
-      await file.setLastModified(DateTime.now());
-      return await file.readAsBytes();
-    } catch (_) {
-      return null;
+    for (final key in _lookupKeys(url)) {
+      final file = File(
+        p.join(
+          dir.path,
+          sha256.convert(utf8.encode(key)).toString(),
+        ),
+      );
+      try {
+        if (!await file.exists()) continue;
+        await file.setLastModified(DateTime.now());
+        return await file.readAsBytes();
+      } catch (_) {}
     }
+    return null;
   }
 
   Future<void> save(String url, Uint8List bytes) async {

@@ -9,9 +9,9 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../services/playlist_cover_store.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/create_playlist_dialog.dart';
+import '../widgets/screen_header.dart';
 import '../widgets/scrup_toasts.dart';
 import '../widgets/spotify_import_dialog.dart';
-
 
 /// Mobile library view: all playlists displayed in a grid.
 class LibraryView extends StatefulWidget {
@@ -48,8 +48,15 @@ class _LibraryViewState extends State<LibraryView> {
   static String _normQuery(String s) {
     var out = s.toLowerCase();
     const accents = {
-      'á': 'a', 'à': 'a', 'é': 'e', 'è': 'e', 'í': 'i', 'ó': 'o',
-      'ú': 'u', 'ü': 'u', 'ñ': 'n',
+      'á': 'a',
+      'à': 'a',
+      'é': 'e',
+      'è': 'e',
+      'í': 'i',
+      'ó': 'o',
+      'ú': 'u',
+      'ü': 'u',
+      'ñ': 'n',
     };
     accents.forEach((k, v) => out = out.replaceAll(k, v));
     return out;
@@ -171,9 +178,14 @@ class _LibraryViewState extends State<LibraryView> {
 
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        // Header FIJO (pinned, transparente) igual al de home: mismo inset
+        // superior, mismos paddings y botones tonales de 40dp — el contenido
+        // pasa por detrás al scrollear.
+        SliverPersistentHeader(
+          pinned: true,
+          floating: false,
+          delegate: ScreenHeaderDelegate(
+            topInset: MediaQuery.paddingOf(context).top,
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
               switchInCurve: Curves.easeOutCubic,
@@ -191,12 +203,13 @@ class _LibraryViewState extends State<LibraryView> {
               child: _searchOpen
                   ? Row(
                       key: const ValueKey('search_open'),
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        IconButton.filledTonal(
-                          onPressed: _closeSearch,
-                          icon: const Icon(Icons.arrow_back_rounded),
+                        headerActionButton(
+                          context,
+                          icon: Icons.arrow_back_rounded,
                           tooltip: l10n.searchHint,
+                          onTap: _closeSearch,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -238,22 +251,25 @@ class _LibraryViewState extends State<LibraryView> {
                             ),
                           ),
                         ),
-                        IconButton.filledTonal(
-                          onPressed: _openSearch,
-                          icon: const Icon(Icons.search_rounded),
+                        headerActionButton(
+                          context,
+                          icon: Icons.search_rounded,
                           tooltip: l10n.searchHint,
+                          onTap: _openSearch,
                         ),
                         const SizedBox(width: 8),
-                        IconButton.filledTonal(
-                          onPressed: _importFromSpotify,
-                          icon: const Icon(Icons.sync_alt_rounded),
+                        headerActionButton(
+                          context,
+                          icon: Icons.sync_alt_rounded,
                           tooltip: l10n.importSpotify,
+                          onTap: _importFromSpotify,
                         ),
                         const SizedBox(width: 8),
-                        IconButton.filledTonal(
-                          onPressed: _createPlaylist,
-                          icon: const Icon(Icons.add_rounded),
+                        headerActionButton(
+                          context,
+                          icon: Icons.add_rounded,
                           tooltip: l10n.newPlaylist,
+                          onTap: _createPlaylist,
                         ),
                       ],
                     ),
@@ -276,8 +292,9 @@ class _LibraryViewState extends State<LibraryView> {
                   const SizedBox(height: 12),
                   Text(
                     searching ? l10n.noMatchingPlaylists : l10n.noPlaylists,
-                    style: theme.textTheme.bodyLarge
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -294,9 +311,7 @@ class _LibraryViewState extends State<LibraryView> {
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
                 mainAxisExtent:
-                    (MediaQuery.sizeOf(context).width - 12 * 2 - 12) /
-                        2 +
-                    48,
+                    (MediaQuery.sizeOf(context).width - 12 * 2 - 12) / 2 + 48,
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, i) => _PlaylistGridCard(

@@ -368,5 +368,17 @@
   "visitedArtistsTitle": "Recently visited artists",
   "crossfade": "Crossfade",
   "crossfadeHint": "Fade between songs: the next track starts before the current one ends",
-  "back": "Back"
+  "back": "Back",
+  "downloadPlaylist": "Download playlist",
+  "downloadPlaylistHint": "Download all tracks for offline listening",
+  "availableOffline": "Available offline",
+  "player": "Player",
+  "searchCacheInfo": "{count} cached searches · artist profiles cached for 24 h",
+  "@searchCacheInfo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

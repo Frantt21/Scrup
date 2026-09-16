@@ -15,10 +15,12 @@ import '../../services/artwork_cache_service.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/discord/discord_presence_service.dart';
 import '../../services/palette_cache_store.dart';
+import '../../services/search_service.dart';
 import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
 import '../locale_controller.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
+import '../widgets/screen_header.dart';
 import '../widgets/scrup_toasts.dart';
 
 /// Settings screen: a floating glass container (like the playlist detail) with three sections: language (i18n, persisted between sessions), cache (used size / clear), and about.
@@ -327,51 +329,62 @@ class _SettingsViewState extends State<SettingsView> {
 
     final Widget body = Material(
       color: Colors.transparent,
-      child: ListView(
-        // El contenedor ya termina por encima del player (margen
-        // inferior), así que aquí solo hace falta un respiro pequeño.
-        padding: EdgeInsets.fromLTRB(
-          mobile ? 16 : 20,
-          mobile ? 16 : 20,
-          mobile ? 16 : 20,
-          12,
-        ),
-        children: [
-          // En móvil el título va en una caja de la MISMA altura que las
-          // filas con botón de Inicio/Librería (48dp, centrada): así los
-          // glifos quedan a la misma altura visual que esos títulos.
-          mobile
-              ? SizedBox(
-                  height: 48,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      AppLocalizations.of(context).settings,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
+      child: CustomScrollView(
+        slivers: [
+          // Header FIJO (pinned, transparente) igual al de home: el título
+          // vive en el header pinned y no dentro de la lista.
+          if (mobile)
+            SliverPersistentHeader(
+              pinned: true,
+              floating: false,
+              delegate: ScreenHeaderDelegate(
+                topInset: MediaQuery.paddingOf(context).top,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        AppLocalizations.of(context).settings,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                )
-              : Text(
-                  AppLocalizations.of(context).settings,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  ],
                 ),
-          const SizedBox(height: 20),
-          _buildLanguageSection(theme),
-          SizedBox(height: mobile ? 8 : 16),
-          _buildDiscordSection(theme),
-          SizedBox(height: mobile ? 8 : 16),
-          _buildPlayerSection(theme),
-          SizedBox(height: mobile ? 8 : 16),
-          _buildCacheSection(theme),
-          SizedBox(height: mobile ? 8 : 16),
-          // Los atajos de teclado no existen en Android: se ocultan.
-          if (!mobile) _buildShortcutsSection(theme),
-          if (!mobile) const SizedBox(height: 16),
-          _buildAboutSection(theme),
+              ),
+            ),
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              mobile ? 16 : 20,
+              mobile ? 8 : 20,
+              mobile ? 16 : 20,
+              12,
+            ),
+            sliver: SliverList.list(
+              children: [
+                if (!mobile)
+                  Text(
+                    AppLocalizations.of(context).settings,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                const SizedBox(height: 20),
+                _buildLanguageSection(theme),
+                SizedBox(height: mobile ? 20 : 16),
+                _buildDiscordSection(theme),
+                SizedBox(height: mobile ? 20 : 16),
+                _buildPlayerSection(theme),
+                SizedBox(height: mobile ? 20 : 16),
+                _buildCacheSection(theme),
+                SizedBox(height: mobile ? 20 : 16),
+                // Los atajos de teclado no existen en Android: se ocultan.
+                if (!mobile) _buildShortcutsSection(theme),
+                if (!mobile) const SizedBox(height: 16),
+                _buildAboutSection(theme),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -420,7 +433,6 @@ class _SettingsViewState extends State<SettingsView> {
     return _SectionCard(
       icon: Icons.language_rounded,
       title: l10n.language,
-      caption: l10n.languageHint,
       // Campo compacto RECTANGULAR (no ocupa todo el ancho de la tarjeta ni
       // es una píldora larga y fina): ancho fijo de 240px y el mismo radio de
       // esquinas redondeadas (14) que usan las tarjetas de sección. Abre un
@@ -544,7 +556,6 @@ class _SettingsViewState extends State<SettingsView> {
     return _SectionCard(
       icon: Icons.headphones_rounded,
       title: l10n.discordPresence,
-      caption: l10n.discordPresenceHint,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -607,9 +618,8 @@ class _SettingsViewState extends State<SettingsView> {
     final player = context.read<PlayerService>();
 
     return _SectionCard(
-      icon: Icons.lyrics_rounded,
-      title: l10n.lyrics,
-      caption: l10n.syncLyricsTitle,
+      icon: Icons.music_note_rounded,
+      title: l10n.player,
       child: Column(
         children: [
           // CROSSFADE: interruptor + barra de segundos (0-12, pasos de 1s;
@@ -651,7 +661,8 @@ class _SettingsViewState extends State<SettingsView> {
                     min: 1,
                     max: 12,
                     divisions: 11,
-                    label: '${(_crossfadeDrag ?? _crossfadeSeconds).toStringAsFixed(0)}s',
+                    label:
+                        '${(_crossfadeDrag ?? _crossfadeSeconds).toStringAsFixed(0)}s',
                     onChanged: (v) => setState(() => _crossfadeDrag = v),
                     onChangeEnd: (v) async {
                       setState(() {
@@ -737,10 +748,14 @@ class _SettingsViewState extends State<SettingsView> {
     final stats = _stats;
     final muted = theme.colorScheme.onSurfaceVariant;
 
+    // Search metadata caches (queries + artist profiles). Both live inside
+    // SearchService (not registered as standalone providers), so read them
+    // through it. entryCount is an in-memory getter, cheap.
+    final searchCache = context.read<SearchService>().cache;
+
     return _SectionCard(
       icon: Icons.sd_storage_rounded,
       title: l10n.cache,
-      caption: l10n.cacheHint,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -770,6 +785,13 @@ class _SettingsViewState extends State<SettingsView> {
                 ),
               ],
             ],
+          ),
+          // Search metadata caches: queries cached by SearchCacheStore and
+          // artist profiles (one JSON per channel, 24h TTL).
+          const SizedBox(height: 6),
+          Text(
+            l10n.searchCacheInfo(searchCache?.entryCount ?? 0),
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
           ),
           const SizedBox(height: 14),
           // Límite del caché: selector con presets.
@@ -836,16 +858,18 @@ class _SettingsViewState extends State<SettingsView> {
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: Text(l10n.refresh),
               ),
-              FilledButton.icon(
-                onPressed: _openCacheFolder,
-                style: FilledButton.styleFrom().copyWith(
-                  mouseCursor: WidgetStateProperty.all(
-                    SystemMouseCursors.click,
+              // Open folder: desktop only (Android cannot browse app dirs).
+              if (Binaries.isDesktop)
+                FilledButton.icon(
+                  onPressed: _openCacheFolder,
+                  style: FilledButton.styleFrom().copyWith(
+                    mouseCursor: WidgetStateProperty.all(
+                      SystemMouseCursors.click,
+                    ),
                   ),
+                  icon: const Icon(Icons.folder_open_rounded, size: 18),
+                  label: Text(l10n.openFolder),
                 ),
-                icon: const Icon(Icons.folder_open_rounded, size: 18),
-                label: Text(l10n.openFolder),
-              ),
               FilledButton.icon(
                 onPressed: _clearing ? null : _clearCache,
                 style:
@@ -1212,14 +1236,12 @@ class _LocaleOption {
 class _SectionCard extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String? caption;
   final Widget child;
 
   const _SectionCard({
     required this.icon,
     required this.title,
     required this.child,
-    this.caption,
   });
 
   @override
@@ -1242,32 +1264,42 @@ class _SectionCard extends StatelessWidget {
             ),
           ],
         ),
-        if (caption != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            caption!,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
         const SizedBox(height: 12),
         child,
       ],
     );
 
     if (Binaries.isMobile) {
+      // Título de categoría FUERA del contenedor + card con el contenido.
       return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          content,
-          Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.18),
+          Row(
+            children: [
+              Icon(icon, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              // SÓLIDO: sobre el fondo negro puro del scaffold, el alpha 0.5
+              // componía a ~#0A0A0A y el card era invisible.
+              color: theme.colorScheme.surfaceContainer,
             ),
+            child: child,
           ),
         ],
       );

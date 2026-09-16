@@ -739,4 +739,21 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get back => '뒤로';
+
+  @override
+  String get downloadPlaylist => '플레이리스트 다운로드';
+
+  @override
+  String get downloadPlaylistHint => '모든 곡을 오프라인 청취용으로 다운로드';
+
+  @override
+  String get availableOffline => '오프라인 재생 가능';
+
+  @override
+  String get player => '플레이어';
+
+  @override
+  String searchCacheInfo(int count) {
+    return '검색 캐시 $count개 · 아티스트 프로필 24시간';
+  }
 }

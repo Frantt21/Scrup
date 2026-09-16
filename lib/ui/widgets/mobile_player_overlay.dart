@@ -808,16 +808,20 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
         );
     final double artSide = (w * 0.88).clamp(120.0, maxSide);
     final double artLeft = (w - artSide) / 2;
-    // Margen superior que reparte por igual el espacio sobrante entre el
-    // header y el sheet (acotado para nunca dejar al arte pegado al header).
+    // Margen superior que reparte el espacio sobrante entre el header y el
+    // sheet (acotado para nunca dejar al arte pegado al header). El reparto
+    // NO es 50/50: el bloque de controles real mide menos que la estimación
+    // y todo el sobrante acababa abajo → arte demasiado hundido. Dando al
+    // top ~1/3 del sobrante el conjunto sube y la separación queda más
+    // pareja (algo más de aire abajo que arriba).
     final double topSlack =
         ((fullH -
                     headerH -
                     artSide -
                     artContentGap -
                     contentEst -
-                    lyricsPeekEst) /
-                2)
+                    lyricsPeekEst) *
+                0.32)
             .clamp(8.0, 160.0);
     final double artTop = headerH + topSlack;
 
@@ -1542,25 +1546,35 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
             final bool blockLoader =
                 (buffering || preparingActive) && _nBlockLoader.value;
             return Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // Los 3 botones llenan el ancho del artwork con gaps de 12px:
+              // el mismo gap vertical entre la fila y el contenedor de abajo,
+              // así la retícula queda simétrica.
               children: [
-                _SquareButton(
-                  icon: Icons.skip_previous_rounded,
-                  color: _staticWhite,
-                  onPressed: track == null ? null : _goPrev,
+                Expanded(
+                  child: _SquareButton(
+                    icon: Icons.skip_previous_rounded,
+                    color: _staticWhite,
+                    onPressed: track == null ? null : _goPrev,
+                  ),
                 ),
-                _PlayPauseButton(
-                  playing: playing,
-                  darkContent: _darkContent,
-                  // Loader SOLO tras ~250ms de carga real: un loader de 1-2
-                  // frames parpadea. El estado `playing` manda sobre el loader.
-                  loading: blockLoader,
-                  onPressed: track == null ? null : _player.togglePlayPause,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _PlayPauseButton(
+                    playing: playing,
+                    darkContent: _darkContent,
+                    // Loader SOLO tras ~250ms de carga real: un loader de 1-2
+                    // frames parpadea. El estado `playing` manda sobre el loader.
+                    loading: blockLoader,
+                    onPressed: track == null ? null : _player.togglePlayPause,
+                  ),
                 ),
-                _SquareButton(
-                  icon: Icons.skip_next_rounded,
-                  color: _staticWhite,
-                  onPressed: track == null ? null : _goNext,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _SquareButton(
+                    icon: Icons.skip_next_rounded,
+                    color: _staticWhite,
+                    onPressed: track == null ? null : _goNext,
+                  ),
                 ),
               ],
             );
@@ -1685,8 +1699,8 @@ class _SquareButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 88,
       height: 64,
+      width: double.infinity,
       child: Material(
         color: color.withValues(alpha: 0.10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -1722,7 +1736,7 @@ class _PlayPauseButton extends StatelessWidget {
     // tres controles forman una fila uniforme.
     final base = darkContent ? Colors.black : Colors.white;
     return SizedBox(
-      width: 88,
+      width: double.infinity,
       height: 64,
       child: Material(
         color: base.withValues(alpha: 0.10),
@@ -1742,7 +1756,7 @@ class _PlayPauseButton extends StatelessWidget {
                   )
                 : Icon(
                     playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    size: 34,
+                    size: 36,
                     color: base,
                   ),
           ),
@@ -1969,8 +1983,28 @@ class _LyricsPeekState extends State<_LyricsPeek> {
 
   late final ThemeController _theme;
 
-  /// Acento actual del sheet (color oscurecido para contrastar con el player).
+  /// Acento actual del sheet (reservado; el fondo ahora usa el color de los
+  /// botones del player).
   Color _accent = _kIdleSurface;
+
+  // Mismo esquema que los botones del player: blanco estático (o negro con
+  // acento claro) — así el sheet comparte el fondo de los controles.
+  bool get _darkContent =>
+      _theme.accentColor != null &&
+      _theme.accentColor!.computeLuminance() > 0.55;
+
+  Color get _staticWhite => _darkContent ? Colors.black : Colors.white;
+
+  Color _staticWhiteA(double a) => _darkContent
+      ? Colors.black.withValues(alpha: a)
+      : Colors.white.withValues(alpha: a);
+
+  // Fondo sólido equivalente a los botones del player: overlay blanco/negro
+  // al 10% compuesto sobre el color real del player (acento o surface idle).
+  Color _sheetSolidColor(ThemeData theme) {
+    final base = _theme.accentColor ?? theme.colorScheme.surfaceContainerHigh;
+    return Color.alphaBlend(_staticWhiteA(0.10), base);
+  }
 
   @override
   void initState() {
@@ -2125,7 +2159,10 @@ class _LyricsPeekState extends State<_LyricsPeek> {
           // adelantaba al fondo. El AnimatedContainer interior conserva SOLO
           // la animación de altura; el color lo pinta el tween exterior para
           // no encadenar dos animaciones implícitas.
-          final Color target = Color.lerp(_accent, Colors.black, 0.35)!;
+          // SÓLIDO (no translúcido): mismo tono que los botones (overlay
+          // 10% blanco/negro) compuesto sobre el fondo real del player
+          // (acento, o surfaceContainerHigh en idle).
+          final Color target = _sheetSolidColor(Theme.of(context));
           final Color begin = _sheetPrev ?? target;
           if (_sheetPrev != target) {
             appLog('UI', 'sheet ${colorHex(_sheetPrev)} → ${colorHex(target)}');
@@ -2184,7 +2221,7 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                             width: 36,
                             height: 4,
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.6),
+                              color: _staticWhiteA(0.6),
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
@@ -2193,7 +2230,7 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                             child: Text(
                               'Letras',
                               style: theme.textTheme.titleSmall?.copyWith(
-                                color: Colors.white,
+                                color: _staticWhite,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -2239,9 +2276,7 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                                               _lyricsActionIcon(action),
                                               size: 20,
                                             ),
-                                            color: Colors.white.withValues(
-                                              alpha: 0.9,
-                                            ),
+                                            color: _staticWhiteA(0.9),
                                             tooltip: _lyricsActionTooltip(
                                               action,
                                             ),
@@ -2262,7 +2297,7 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                                   ? Icons.keyboard_arrow_down_rounded
                                   : Icons.keyboard_arrow_up_rounded,
                             ),
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: _staticWhiteA(0.9),
                             onPressed: _toggle,
                           ),
                           const SizedBox(width: 4),
@@ -2278,8 +2313,28 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                   if (widget.enabled)
                     TickerMode(
                       enabled: _open >= 0.35,
-                      child: const Expanded(
-                        child: LyricsView(embedded: true),
+                      child: Expanded(
+                        // Misma validación blanco/negro que los botones del
+                        // sheet: con acento claro el contenido interno pasa a
+                        // negro (y viceversa) para no perder contraste.
+                        child: Theme(
+                          data: theme.copyWith(
+                            colorScheme: theme.colorScheme.copyWith(
+                              primary: _staticWhite,
+                              onPrimary: _darkContent
+                                  ? Colors.white
+                                  : Colors.black,
+                              onSurface: _staticWhite,
+                              onSurfaceVariant: _staticWhiteA(0.7),
+                              secondaryContainer: _staticWhiteA(0.12),
+                              onSecondaryContainer: _staticWhite,
+                            ),
+                            iconTheme: theme.iconTheme.copyWith(
+                              color: _staticWhite,
+                            ),
+                          ),
+                          child: const LyricsView(embedded: true),
+                        ),
                       ),
                     ),
                 ],

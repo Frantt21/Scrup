@@ -231,5 +231,17 @@
   "visitedArtistsTitle": "最近閲覧したアーティスト",
   "crossfade": "クロスフェード",
   "crossfadeHint": "曲のフェード: 現在の曲が終わる前に次の曲を再生開始します",
-  "back": "戻る"
+  "back": "戻る",
+  "downloadPlaylist": "プレイリストをダウンロード",
+  "downloadPlaylistHint": "すべての曲をオフライン再生用にダウンロード",
+  "availableOffline": "オフラインで再生可能",
+  "player": "プレイヤー",
+  "searchCacheInfo": "検索キャッシュ {count} 件 · アーティスト情報 24時間",
+  "@searchCacheInfo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

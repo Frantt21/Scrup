@@ -13,6 +13,7 @@ import 'artist_detail_view.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/screen_header.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 import '../widgets/track_tile.dart';
 
@@ -176,10 +177,7 @@ class _SearchViewState extends State<SearchView> {
   }
 
   /// Avatares (disco, instantáneo) + revalidación en background: cuando un canal cambia su avatar, [onUpdated] repinta esa fila.
-  Future<void> _resolveArtistAvatars(
-    List<YtmArtist> artists,
-    int token,
-  ) async {
+  Future<void> _resolveArtistAvatars(List<YtmArtist> artists, int token) async {
     final map = await context.read<SearchService>().resolveArtistAvatars(
       artists,
       onUpdated: (browseId, url) {
@@ -216,21 +214,16 @@ class _SearchViewState extends State<SearchView> {
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header idéntico al de home: solo el título (sin botón —
+              // el campo de búsqueda vive justo debajo). Misma caja de 40dp
+              // que el delegate del resto de screens para alinear el texto.
               Padding(
-                // Misma alineación de header que Library en móvil (16px).
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Móvil: header sin botón (la navegación vive en la
-                    // NavigationBar inferior). El título va en una caja de la
-                    // MISMA altura que las filas con botón de Inicio/Librería
-                    // (48dp, centrada): así los glifos quedan a la misma
-                    // altura visual que esos títulos.
-                    SizedBox(
-                      height: 48,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  height: 40,
+                  child: Row(
+                    children: [
+                      Expanded(
                         child: Text(
                           l10n.searchTitle,
                           style: theme.textTheme.headlineSmall?.copyWith(
@@ -238,22 +231,25 @@ class _SearchViewState extends State<SearchView> {
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Historial como DROPDOWN: overlay anclado al campo.
-                    // Se despliega al enfocar el input y se cierra al
-                    // buscar o perder el foco (sin pills fijas).
-                    _HistoryDropdown(
-                      controller: _searchController,
-                      focusNode: _searchFocus,
-                      history: _history,
-                      searching: _searching,
-                      onPick: (q) {
-                        _searchController.text = q;
-                        _search(q);
-                      },
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Historial como DROPDOWN: overlay anclado al campo.
+              // Se despliega al enfocar el input y se cierra al
+              // buscar o perder el foco (sin pills fijas).
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                child: _HistoryDropdown(
+                  controller: _searchController,
+                  focusNode: _searchFocus,
+                  history: _history,
+                  searching: _searching,
+                  onPick: (q) {
+                    _searchController.text = q;
+                    _search(q);
+                  },
                 ),
               ),
               Expanded(child: _buildBody(theme)),
@@ -428,9 +424,7 @@ class _SearchViewState extends State<SearchView> {
       return;
     }
     Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ArtistDetailView(artist: artist),
-      ),
+      MaterialPageRoute<void>(builder: (_) => ArtistDetailView(artist: artist)),
     );
   }
 }
@@ -607,9 +601,9 @@ class _HistoryDropdownState extends State<_HistoryDropdown> {
     final theme = Theme.of(context);
     final items = widget.history
         .where(
-          (q) => q
-              .toLowerCase()
-              .contains(widget.controller.text.trim().toLowerCase()),
+          (q) => q.toLowerCase().contains(
+            widget.controller.text.trim().toLowerCase(),
+          ),
         )
         .toList();
     if (items.isEmpty) return const SizedBox.shrink();

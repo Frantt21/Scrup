@@ -50,6 +50,11 @@ class AudioCacheService {
   final ValueNotifier<String?> downloadingId = ValueNotifier<String?>(null);
   final ValueNotifier<double?> progress = ValueNotifier<double?>(null);
 
+  // Progress (0..1) of background preloads (playlist downloads), keyed by
+  // videoId. Foreground (user-waiting) downloads use [progress] instead.
+  final ValueNotifier<Map<String, double>> backgroundProgress =
+      ValueNotifier(const {});
+
   // In-flight downloads keyed by videoId (dedup concurrent requests). The slot is reserved synchronously before any await.
   final Map<String, Completer<StreamingDownload>> _inflight = {};
 
@@ -111,18 +116,25 @@ class AudioCacheService {
     String? title,
   }) async {
     final cached = await cachedPath(videoId);
-    if (cached != null) return StreamingSource(cached, fromCache: true);
+    if (cached != null) {
+      debugPrint('[audio] cache HIT id=$videoId -> $cached');
+      return StreamingSource(cached, fromCache: true);
+    }
+    debugPrint('[audio] cache MISS id=$videoId (streaming)');
 
     var completer = _inflight[videoId];
     if (completer == null) {
       completer = Completer<StreamingDownload>();
       _inflight[videoId] = completer;
       unawaited(_startDownload(videoId, completer, title: title));
+    } else {
+      debugPrint('[audio] id=$videoId ya en descarga, reutilizando slot');
     }
     final download = await completer.future;
     final path = await download.playablePath.timeout(
       const Duration(seconds: 25),
     );
+    debugPrint('[audio] id=$videoId playable -> $path');
     return StreamingSource(path);
   }
 
@@ -173,19 +185,19 @@ class AudioCacheService {
     }
   }
 
-  // Background preload with bandwidth-awareness and a concurrency limit.
+  // Background preload with a concurrency limit. Reports per-id progress via
+  // [backgroundProgress] so playlist batch downloads can show per-row loaders.
+  // Best-effort: never throws, callers verify via [cachedPath].
   Future<void> preload(String videoId, {String? title}) async {
     try {
-      if (await cachedPath(videoId) != null) return;
-      while (downloadingId.value != null) {
-        await Future<void>.delayed(const Duration(milliseconds: 400));
+      if (await cachedPath(videoId) != null) {
+        debugPrint('[audio] preload SKIP id=$videoId (ya en caché)');
+        return;
       }
       await _acquirePreloadSlot();
       try {
         if (await cachedPath(videoId) != null) return;
-        while (downloadingId.value != null) {
-          await Future<void>.delayed(const Duration(milliseconds: 400));
-        }
+        debugPrint('[audio] preload start id=$videoId');
         var completer = _inflight[videoId];
         if (completer == null) {
           completer = Completer<StreamingDownload>();
@@ -228,30 +240,54 @@ class AudioCacheService {
     String? title,
     bool background = false,
   }) async {
+    debugPrint('[audio] download start id=$videoId '
+        '${background ? '(fondo)' : '(frente)'}');
     try {
       final dir = await cacheDir();
       if (!background) {
         downloadingId.value = videoId;
         progress.value = null;
+      } else {
+        _setBackgroundProgress(videoId, null);
       }
       final download = await ytdlp.startStreaming(
         videoId,
         outputDir: dir.path,
         title: title,
-        onProgress: background ? null : (pct) => progress.value = pct,
+        onProgress: (pct) {
+          if (background) {
+            _setBackgroundProgress(videoId, pct);
+          } else {
+            progress.value = pct;
+          }
+        },
       );
       _trackDownload(download, videoId, completer);
       if (!completer.isCompleted) completer.complete(download);
     } catch (e) {
+      debugPrint('[audio] download FAILED id=$videoId: $e');
       if (!background && downloadingId.value == videoId) {
         downloadingId.value = null;
         progress.value = null;
+      } else if (background) {
+        _setBackgroundProgress(videoId, null);
       }
       if (identical(_inflight[videoId], completer)) {
         _inflight.remove(videoId);
       }
       if (!completer.isCompleted) completer.completeError(e);
     }
+  }
+
+  // Add/update/clear one background download's progress and fire listeners.
+  void _setBackgroundProgress(String videoId, double? pct) {
+    final map = Map<String, double>.of(backgroundProgress.value);
+    if (pct == null) {
+      map.remove(videoId);
+    } else {
+      map[videoId] = pct.clamp(0.0, 1.0);
+    }
+    backgroundProgress.value = map;
   }
 
   // Fire-and-forget: applies LRU on completion, cleans up .part on failure.
@@ -269,12 +305,14 @@ class AudioCacheService {
       }
       try {
         await download.finalPath;
+        debugPrint('[audio] download COMPLETE id=$videoId');
         await _enforceLimit(dir);
       } catch (_) {
+        debugPrint('[audio] download cleanup id=$videoId (final no generado)');
+        _setBackgroundProgress(videoId, null);
         try {
           await _cleanupPartial(dir, videoId);
-        } catch (_) {
-        }
+        } catch (_) {}
       } finally {
         if (identical(_inflight[videoId], completer)) {
           _inflight.remove(videoId);
@@ -283,6 +321,7 @@ class AudioCacheService {
           downloadingId.value = null;
           progress.value = null;
         }
+        _setBackgroundProgress(videoId, null);
       }
     }());
   }
@@ -318,12 +357,31 @@ class AudioCacheService {
       files.sort(
         (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
       );
+      var evicted = 0;
       for (final f in files) {
         if (total <= limit) return;
         final size = f.statSync().size;
         f.deleteSync();
         total -= size;
+        evicted++;
       }
+      debugPrint('[audio] LRU: ${total}B descontado tras eliminar '
+          '$evicted archivos');
+    });
+  }
+
+  // VideoIds currently on disk. Runs in isolate.
+  Future<Set<String>> cachedIds() async {
+    final dir = await cacheDir();
+    final dirPath = dir.path;
+    return Isolate.run(() {
+      final d = Directory(dirPath);
+      if (!d.existsSync()) return <String>{};
+      return d
+          .listSync()
+          .whereType<File>()
+          .map((f) => p.basenameWithoutExtension(f.path))
+          .toSet();
     });
   }
 

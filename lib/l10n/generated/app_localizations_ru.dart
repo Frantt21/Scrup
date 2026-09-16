@@ -758,4 +758,22 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get back => 'Назад';
+
+  @override
+  String get downloadPlaylist => 'Скачать плейлист';
+
+  @override
+  String get downloadPlaylistHint =>
+      'Скачивает все треки для прослушивания офлайн';
+
+  @override
+  String get availableOffline => 'Доступно офлайн';
+
+  @override
+  String get player => 'Плеер';
+
+  @override
+  String searchCacheInfo(int count) {
+    return '$count поисков в кэше · профили артистов 24 ч';
+  }
 }

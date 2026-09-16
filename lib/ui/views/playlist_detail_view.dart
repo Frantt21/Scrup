@@ -11,9 +11,11 @@ import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
+import '../../services/audio_cache_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/player_service.dart';
+import '../../services/playlist_download_service.dart';
 import '../../services/settings_store.dart';
 import '../playback.dart';
 import '../theme_controller.dart';
@@ -68,6 +70,9 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
 
   Playlist? _playlist;
 
+  // App-lifetime batch downloader: read once, listened per-row.
+  late final PlaylistDownloadService _downloads;
+
   late final PaletteCacheStore _store;
 
   Color? _ambientColor;
@@ -82,6 +87,10 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
   static final Set<String> _pendingTrackColors = {};
 
   bool _coverHovered = false;
+
+  // Offline-download state: cached ids come from disk; batch progress lives
+  // in the app-wide PlaylistDownloadService (survives leaving this screen).
+  Set<String> _cachedIds = {};
 
   bool _filterOpen = false;
   final TextEditingController _filterCtrl = TextEditingController();
@@ -124,11 +133,13 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
       });
     });
     _store = context.read<PaletteCacheStore>();
+    _downloads = context.read<PlaylistDownloadService>();
     _player = context.read<PlayerService>();
     _currentTrack = _player.currentTrackValue;
     _playing = _player.isPlaying;
     _activePlaylistId = _player.activePlaylistId.value;
     _player.activePlaylistId.addListener(_onActivePlaylistChanged);
+    _downloads.addListener(_onDownloadsChanged);
     _trackSub = _player.currentTrack.listen((t) {
       if (!mounted) return;
       if (t == null) {
@@ -150,6 +161,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
       duration: const Duration(milliseconds: 250),
     );
     _maybeExtractAmbient(widget.playlist.coverUrl);
+    _refreshCachedIds();
     context.read<SettingsStore>().loadFlatPlaylistHeader().then((flat) {
       if (!mounted || flat == null) return;
       setState(() => _flatHeader = flat);
@@ -164,6 +176,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
     _playingSub?.cancel();
     _nullTrackTimer?.cancel();
     _player.activePlaylistId.removeListener(_onActivePlaylistChanged);
+    _downloads.removeListener(_onDownloadsChanged);
     _searchAnimController.dispose();
     _filterCtrl.dispose();
     _filterFocus.dispose();
@@ -173,6 +186,14 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
   void _onActivePlaylistChanged() {
     if (!mounted) return;
     setState(() => _activePlaylistId = _player.activePlaylistId.value);
+  }
+
+  // Batch progress tick: rebuild rows with the current loader; when the
+  // batch ends, re-scan disk so finished tracks flip to the offline badge.
+  void _onDownloadsChanged() {
+    if (!mounted) return;
+    setState(() {});
+    if (!_downloads.isRunning) _refreshCachedIds();
   }
 
   Color? _trackColorFor(Track track) {
@@ -278,6 +299,31 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
     final player = context.read<PlayerService>();
     if (!player.shuffle.value) player.toggleShuffle();
     await playQueue(context, _tracks, playlistId: widget.playlist.id);
+  }
+
+  // Refresh which track videoIds are already on disk (drives the offline
+  // badge next to the drag handle).
+  Future<void> _refreshCachedIds() async {
+    try {
+      final ids = await context.read<AudioCacheService>().cachedIds();
+      if (!mounted) return;
+      setState(() => _cachedIds = ids);
+    } catch (_) {}
+  }
+
+  // Download every playlist track offline via the app-wide background
+  // service (already-cached tracks are skipped inside the service).
+  Future<void> _downloadAllTracks() async {
+    if (_tracks.isEmpty) return;
+    final svc = context.read<PlaylistDownloadService>();
+    final queued = await svc.downloadPlaylist(_tracks);
+    if (!mounted) return;
+    if (queued == 0) {
+      showScrupToast(
+        AppLocalizations.of(context).downloadPlaylistHint,
+        kind: ScrupToastKind.success,
+      );
+    }
   }
 
   bool get _filterActive => _filterCtrl.text.trim().isNotEmpty;
@@ -636,6 +682,8 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
         key: ValueKey(track.id),
         index: i,
         accentColor: _trackColorFor(track) ?? playlistColor,
+        isCached: _cachedIds.contains(track.id),
+        downloadProgress: _downloads.progressFor(track.id),
         child: GestureDetector(
           onLongPress: () => _showMobileTrackMenu(track),
           onSecondaryTapUp: (details) =>
@@ -873,11 +921,11 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                 label: Text(l10n.play),
                               ),
                               const SizedBox(width: 12),
-                              FilledButton.icon(
+                              IconButton.filledTonal(
                                 onPressed: !_tracksLoaded || count == 0
                                     ? null
                                     : _playShuffled,
-                                style: FilledButton.styleFrom(
+                                style: IconButton.styleFrom(
                                   disabledBackgroundColor:
                                       _ambientColor ?? Colors.white,
                                   disabledForegroundColor: _onAccent(
@@ -888,10 +936,54 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                   foregroundColor: _onAccent(
                                     _ambientColor ?? Colors.white,
                                   ),
-                                  minimumSize: const Size(0, 44),
+                                  minimumSize: const Size(44, 44),
                                 ),
                                 icon: const Icon(Icons.shuffle_rounded),
-                                label: Text(l10n.shuffle),
+                                tooltip: l10n.shuffle,
+                              ),
+                              const SizedBox(width: 12),
+                              IconButton.filledTonal(
+                                onPressed: !_tracksLoaded || count == 0
+                                    ? null
+                                    : _downloadAllTracks,
+                                style: IconButton.styleFrom(
+                                  backgroundColor: _ambientColor ?? Colors.white,
+                                  foregroundColor: _onAccent(
+                                    _ambientColor ?? Colors.white,
+                                  ),
+                                  minimumSize: const Size(44, 44),
+                                ),
+                                icon: ListenableBuilder(
+                                  listenable: context
+                                      .watch<PlaylistDownloadService>(),
+                                  builder: (context, _) {
+                                    final svc = context
+                                        .read<PlaylistDownloadService>();
+                                    return AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 250,
+                                      ),
+                                      child: svc.isRunning
+                                          ? SizedBox(
+                                              key: const ValueKey('spinner'),
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: _onAccent(
+                                                  _ambientColor ??
+                                                      Colors.white,
+                                                ),
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.download_rounded,
+                                              key: ValueKey('icon'),
+                                            ),
+                                    );
+                                  },
+                                ),
+                                tooltip: l10n.downloadPlaylist,
                               ),
                             ],
                           ),
@@ -1470,6 +1562,8 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
         key: ValueKey(track.id),
         index: i,
         accentColor: _trackColorFor(track) ?? playlistColor,
+        isCached: _cachedIds.contains(track.id),
+        downloadProgress: _downloads.progressFor(track.id),
         child: MouseRegion(
           cursor: SystemMouseCursors.click,
           child: GestureDetector(
@@ -1600,21 +1694,65 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                     icon: const Icon(Icons.play_arrow_rounded),
                                     label: Text(l10n.play),
                                   ),
-                                  FilledButton.icon(
+                                  const SizedBox(width: 8),
+                                  IconButton.filledTonal(
                                     onPressed: !_tracksLoaded || count == 0
                                         ? null
                                         : _playShuffled,
-                                    style: FilledButton.styleFrom(
+                                    style: IconButton.styleFrom(
                                       backgroundColor: Colors.white,
                                       foregroundColor:
                                           theme.colorScheme.primary,
                                       minimumSize: const Size(
-                                        0,
+                                        _heroControlHeight,
                                         _heroControlHeight,
                                       ),
                                     ),
                                     icon: const Icon(Icons.shuffle_rounded),
-                                    label: Text(l10n.shuffle),
+                                    tooltip: l10n.shuffle,
+                                  ),
+                                  IconButton.filledTonal(
+                                    onPressed: !_tracksLoaded || count == 0
+                                        ? null
+                                        : _downloadAllTracks,
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor:
+                                          theme.colorScheme.primary,
+                                      minimumSize: const Size(
+                                        _heroControlHeight,
+                                        _heroControlHeight,
+                                      ),
+                                    ),
+                                    icon: ListenableBuilder(
+                                      listenable: context
+                                          .watch<PlaylistDownloadService>(),
+                                      builder: (context, _) {
+                                        final running = context
+                                            .read<PlaylistDownloadService>()
+                                            .isRunning;
+                                        return AnimatedSwitcher(
+                                          duration: const Duration(
+                                            milliseconds: 250,
+                                          ),
+                                          child: running
+                                              ? const SizedBox(
+                                                  key: ValueKey('spinner'),
+                                                  width: 20,
+                                                  height: 20,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                  ),
+                                                )
+                                              : const Icon(
+                                                  Icons.download_rounded,
+                                                  key: ValueKey('icon'),
+                                                ),
+                                        );
+                                      },
+                                    ),
+                                    tooltip: l10n.downloadPlaylist,
                                   ),
                                   AnimatedContainer(
                                     duration: const Duration(milliseconds: 250),
@@ -1887,11 +2025,21 @@ class _SortableTrackRow extends StatefulWidget {
   /// Color de acento (artwork/playlist) para el grip; null usa el primario.
   final Color? accentColor;
 
+  /// Track is on the audio cache: shows the offline-available badge next to
+  /// the drag grip.
+  final bool isCached;
+
+  /// Live batch-download progress (0..1) from PlaylistDownloadService; null
+  /// when this row isn't part of a running batch.
+  final double? downloadProgress;
+
   const _SortableTrackRow({
     super.key,
     required this.index,
     required this.child,
     required this.accentColor,
+    this.isCached = false,
+    this.downloadProgress,
   });
 
   @override
@@ -1916,6 +2064,39 @@ class _SortableTrackRowState extends State<_SortableTrackRow> {
         child: Row(
           children: [
             Expanded(child: widget.child),
+            // Download slot next to the grip: live progress loader while the
+            // batch runs, offline badge once the file is on disk.
+            if (widget.downloadProgress != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: SizedBox(
+                  width: isMobile ? 18 : 16,
+                  height: isMobile ? 18 : 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    value: widget.downloadProgress == 0
+                        ? null
+                        : widget.downloadProgress,
+                    color: (widget.accentColor ?? theme.colorScheme.primary)
+                        .withValues(alpha: showColor ? 0.9 : 0.6),
+                  ),
+                ),
+              )
+            else if (widget.isCached)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Tooltip(
+                  message: AppLocalizations.of(context).availableOffline,
+                  child: Icon(
+                    Icons.download_done_rounded,
+                    size: isMobile ? 18 : 16,
+                    color: (showColor
+                            ? (widget.accentColor ?? theme.colorScheme.primary)
+                            : theme.colorScheme.outlineVariant)
+                        .withValues(alpha: showColor ? 0.8 : 0.5),
+                  ),
+                ),
+              ),
             ReorderableDragStartListener(
               index: widget.index,
               child: Padding(

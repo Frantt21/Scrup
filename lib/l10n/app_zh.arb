@@ -231,5 +231,17 @@
   "visitedArtistsTitle": "最近浏览的艺术家",
   "crossfade": "淡入淡出",
   "crossfadeHint": "歌曲之间的淡入淡出：当前歌曲结束前开始播放下一首",
-  "back": "返回"
+  "back": "返回",
+  "downloadPlaylist": "下载播放列表",
+  "downloadPlaylistHint": "下载所有曲目以便离线收听",
+  "availableOffline": "可离线播放",
+  "player": "播放器",
+  "searchCacheInfo": "已缓存 {count} 次搜索 · 艺人资料 24 小时",
+  "@searchCacheInfo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

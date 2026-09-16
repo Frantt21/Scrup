@@ -32,6 +32,9 @@ class SearchService {
   /// embedded): las búsquedas van siempre a red.
   final SearchCacheStore? _cache;
 
+  /// Exposición de solo lectura para el detalle de ajustes (nº de entradas).
+  SearchCacheStore? get cache => _cache;
+
   /// Caché de detalles de artista (JSON por browseId, TTL 24h). `null` =
   /// desactivada (tests): el detalle va siempre a red.
   final ArtistCacheStore? _artistCache;

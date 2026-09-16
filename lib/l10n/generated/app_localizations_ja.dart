@@ -739,4 +739,21 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get back => '戻る';
+
+  @override
+  String get downloadPlaylist => 'プレイリストをダウンロード';
+
+  @override
+  String get downloadPlaylistHint => 'すべての曲をオフライン再生用にダウンロード';
+
+  @override
+  String get availableOffline => 'オフラインで再生可能';
+
+  @override
+  String get player => 'プレイヤー';
+
+  @override
+  String searchCacheInfo(int count) {
+    return '検索キャッシュ $count 件 · アーティスト情報 24時間';
+  }
 }

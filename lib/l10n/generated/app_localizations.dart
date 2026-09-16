@@ -1476,6 +1476,36 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Atrás'**
   String get back;
+
+  /// No description provided for @downloadPlaylist.
+  ///
+  /// In es, this message translates to:
+  /// **'Descargar playlist'**
+  String get downloadPlaylist;
+
+  /// No description provided for @downloadPlaylistHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Descarga todas las pistas para escuchar sin conexión'**
+  String get downloadPlaylistHint;
+
+  /// No description provided for @availableOffline.
+  ///
+  /// In es, this message translates to:
+  /// **'Disponible sin conexión'**
+  String get availableOffline;
+
+  /// No description provided for @player.
+  ///
+  /// In es, this message translates to:
+  /// **'Reproductor'**
+  String get player;
+
+  /// No description provided for @searchCacheInfo.
+  ///
+  /// In es, this message translates to:
+  /// **'{count} búsquedas en caché · perfiles de artista por 24 h'**
+  String searchCacheInfo(int count);
 }
 
 class _AppLocalizationsDelegate
