@@ -749,7 +749,7 @@ class _RecentCardState extends State<_RecentCard> {
           ),
           child: ClipRRect(
             // canción en reproducción.
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(12),
             child: Stack(
               fit: StackFit.expand,
               children: [
