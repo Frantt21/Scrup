@@ -828,7 +828,7 @@ class PlayerService {
     }
   }
 
-  /// Cuántas pistas siguientes se precargan. Las primeras 2 arrancan de inmediato; el servicio de caché limita la concurrencia ([AudioCacheService.maxConcurrentPreloads] = 2) y encola el resto en orden, así las 3-5 nunca compiten por ancho de banda con las 2 prioritarias.
+  /// Cuántas pistas siguientes se precargan. Las primeras arrancan de inmediato; el servicio de caché limita la concurrencia ([AudioCacheService.maxConcurrentPreloads] = 3) y encola el resto en orden, así las siguientes nunca compiten por ancho de banda con las prioritarias.
   static const int _preloadAhead = 5;
   void _schedulePreloads() {
     final fn = preload;

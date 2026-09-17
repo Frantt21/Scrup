@@ -58,7 +58,7 @@ class AudioCacheService {
   // In-flight downloads keyed by videoId (dedup concurrent requests). The slot is reserved synchronously before any await.
   final Map<String, Completer<StreamingDownload>> _inflight = {};
 
-  static const int maxConcurrentPreloads = 2;
+  static const int maxConcurrentPreloads = 3;
 
   int _activePreloads = 0;
 

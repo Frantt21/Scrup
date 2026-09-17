@@ -167,22 +167,26 @@ void main() {
   });
 
   test('preload limita la concurrencia a maxConcurrentPreloads', () async {
-    final f1 = cache.preload('v1');
-    final f2 = cache.preload('v2');
-    final f3 = cache.preload('v3');
+    final n = AudioCacheService.maxConcurrentPreloads;
+    final ids = [for (var i = 0; i < n + 1; i++) 'v$i'];
+    final fs = [for (final id in ids) cache.preload(id)];
     await Future<void>.delayed(const Duration(milliseconds: 50));
-    // v1 y v2 ocupan los slots; v3 espera.
-    expect(ytdlp.startCalls, 2);
+    // Los primeros n ocupan los slots; el n+1 espera.
+    expect(ytdlp.startCalls, n);
 
-    ytdlp.finishPending(); // v1 y v2 terminan → liberan slots
+    ytdlp.finishPending(); // terminan los n → liberan slots
     await Future<void>.delayed(const Duration(milliseconds: 80));
-    expect(ytdlp.startCalls, 3, reason: 'v3 arranca al liberarse un slot');
+    expect(
+      ytdlp.startCalls,
+      n + 1,
+      reason: 'el siguiente arranca al liberarse un slot',
+    );
 
-    ytdlp.finishPending(); // v3 termina
-    await Future.wait([f1, f2, f3]);
-    expect(await cache.cachedPath('v1'), isNotNull);
-    expect(await cache.cachedPath('v2'), isNotNull);
-    expect(await cache.cachedPath('v3'), isNotNull);
+    ytdlp.finishPending(); // termina el último
+    await Future.wait(fs);
+    for (final id in ids) {
+      expect(await cache.cachedPath(id), isNotNull);
+    }
   });
 
   test('preload best-effort: una descarga fallida no lanza', () async {
