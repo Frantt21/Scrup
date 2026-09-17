@@ -74,6 +74,11 @@ class SearchService {
     final cached = await _cache?.get(q, n);
     if (cached != null) {
       appLog('SEARCH', 'cache hit "$q" (${cached.length})');
+      // Android first-play fast path: presolve the cached results too (the
+      // persistent cache outlives the in-memory URL cache by hours).
+      unawaited(
+        _ytDlp.preResolveUrls(cached.map((t) => t.id).toList()),
+      );
       return cached;
     }
 
@@ -82,7 +87,14 @@ class SearchService {
     final future = _doSearch(q, n);
     _inflight[q] = future;
     try {
-      return await future;
+      final tracks = await future;
+      // Android first-play fast path: batch-resolve the streaming URLs of
+      // the results in ONE yt-dlp run so a later play skips the ~9s python
+      // boot. Fire-and-forget; desktop ignores it.
+      unawaited(
+        _ytDlp.preResolveUrls(tracks.map((t) => t.id).toList()),
+      );
+      return tracks;
     } finally {
       _inflight.remove(q);
     }

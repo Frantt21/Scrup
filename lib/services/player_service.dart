@@ -47,6 +47,9 @@ class PlayerService {
   /// Precache por disco: "despierta" page cache de las próximas pistas que ya están en disco ([AudioCacheService.warmUpcoming] lee los primeros bytes en un isolate para que el backend las tenga calientes al montar la pista). `null` donde no aplica; las que no están en disco las cubre [preload].
   final void Function(List<String> trackIds)? prepareCached;
 
+  /// Android: batch URL pre-resolve (one yt-dlp run for N video ids).
+  final Future<void> Function(List<String> videoIds)? preResolveUrls;
+
   final Future<List<Track>> Function(Track track)? recommend;
   final Future<Track?> Function(Track track)? enrich;
   final Future<void> Function(Track track)? onPlayed;
@@ -163,6 +166,7 @@ class PlayerService {
     required AudioBackend audioBackend,
     required this.resolveSource,
     required this.prepareCached,
+    this.preResolveUrls,
     this.recommend,
     this.enrich,
     this.preload,
@@ -828,7 +832,12 @@ class PlayerService {
   static const int _preloadAhead = 5;
   void _schedulePreloads() {
     final fn = preload;
-    if (fn == null || _queueIndex < 0 || _queue.isEmpty) return;
+    // Si el preload ya no está (p. ej. build sin preload en tests), los
+    // otros pasos (URL presolve / warm) aún corren.
+    if (fn == null || _queueIndex < 0 || _queue.isEmpty) {
+      unawaited(preResolveUrls?.call(const []));
+      return;
+    }
     final targets = <Track>[];
     for (var i = 1; i <= _preloadAhead; i++) {
       final idx = _queueIndex + i;
@@ -839,6 +848,10 @@ class PlayerService {
     for (final t in targets) {
       unawaited(_preloadTrack(fn, t));
     }
+    // Android: batch-resuelve las URLs de las siguientes pistas en UNA
+    // ejecución de yt-dlp (python bootea una vez) para que el auto-advance
+    // no pague la extracción en caliente. Fire-and-forget.
+    unawaited(preResolveUrls?.call(targets.map((t) => t.id).toList()));
     // Camino 2: las pistas siguientes que YA están en disco se "despiertan" de page cache (isolate leyendo sus primeros bytes). Barato (sin red, fuera del UI thread) y se salta las que ya pasaron por aquí.
     final warm = prepareCached;
     if (warm != null) {

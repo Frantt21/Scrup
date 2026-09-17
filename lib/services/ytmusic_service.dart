@@ -168,7 +168,9 @@ class YtMusicService {
   static const _endpoint = 'https://music.youtube.com/youtubei/v1/search';
   static const _browseEndpoint = 'https://music.youtube.com/youtubei/v1/browse';
   static const _clientName = 'WEB_REMIX';
-  static const _clientVersion = '1.20240403.01.00';
+  // Tracks the current yt-dlp web_music version: stale versions get softer
+  // results or outright rejection as the API evolves.
+  static const _clientVersion = '1.20260707.12.00';
 
   static const _songsFilterParam = 'EgWKAQIIAWoKEAkQBRAKEAMQBA==';
   static final _clockRe = RegExp(r'^\d{1,2}:\d{2}(?::\d{2})?$');
@@ -226,7 +228,83 @@ class YtMusicService {
     } catch (_) {
       throw const YtMusicException('bad-json');
     }
-    return parseResponse(data, limit);
+    var results = parseResponse(data, limit);
+    // Paginación: la primera página trae ~20 items y un token de
+    // continuación (~0.7s por página). Sin esto, cualquier búsqueda de más
+    // de 20 resultados caía SIEMPRE al fallback de yt-dlp (+8-10s de python
+    // en Android) aunque InnerTube podía servir el resto.
+    while (results.length < limit) {
+      final token = _findSearchContinuation(data);
+      if (token == null) break;
+      http.Response pageRes;
+      try {
+        pageRes = await _client
+            .post(
+              Uri.parse('$_endpoint?prettyPrint=false'),
+              headers: const {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0',
+                'X-YouTube-Client-Name': '67',
+                'X-YouTube-Client-Version': _clientVersion,
+              },
+              body: jsonEncode({
+                'context': _context(),
+                'continuation': token,
+              }),
+            )
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {
+        break;
+      }
+      if (pageRes.statusCode != 200) break;
+      Object? pageData;
+      try {
+        pageData = jsonDecode(utf8.decode(pageRes.bodyBytes));
+      } catch (_) {
+        break;
+      }
+      final before = results.length;
+      results = [
+        ...results,
+        ...parseResponse(pageData, limit - results.length),
+      ];
+      // Página sin items nuevos: evita un bucle infinito con el mismo token.
+      if (results.length == before) break;
+      data = pageData;
+    }
+    return results;
+  }
+
+  /// Token de continuación del shelf de canciones (primera pag. y páginas
+  /// siguientes: misma estructura `musicShelfRenderer.contuations`).
+  static String? _findSearchContinuation(Object? node) {
+    String? found;
+    void walk(Object? n) {
+      if (found != null || n == null) return;
+      if (n is Map) {
+        final shelf = n['musicShelfRenderer'];
+        if (shelf is Map) {
+          final conts = shelf['continuations'];
+          if (conts is List && conts.isNotEmpty) {
+            final data = conts.first;
+            final token =
+                (data is Map ? data['nextContinuationData'] as Map? : null)?['continuation'];
+            if (token is String && token.isNotEmpty) {
+              found = token;
+              return;
+            }
+          }
+        }
+        n.values.forEach(walk);
+      } else if (n is List) {
+        for (final v in n) {
+          walk(v);
+        }
+      }
+    }
+
+    walk(node);
+    return found;
   }
 
   /// Búsqueda de ARTISTAS en InnerTube: misma query, SIN el filtro de
@@ -1142,6 +1220,13 @@ class YtMusicService {
   static const _playerEndpoint = 'https://music.youtube.com/youtubei/v1/player';
   static const _playerApiKey = 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w';
 
+  // www.youtube.com player (ANDROID client): serves ANY video (music
+  // endpoint rejects non-catalog ones) and muxed formats. WITHOUT the API
+  // key the endpoint answers 400 "Precondition check failed".
+  static const _wwwPlayerEndpoint =
+      'https://www.youtube.com/youtubei/v1/player';
+  static const _wwwPlayerApiKey = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+
   Future<String?> getAudioStreamUrl(String videoId) async {
     final body = jsonEncode({
       'videoId': videoId,
@@ -1152,12 +1237,14 @@ class YtMusicService {
     try {
       res = await _client
           .post(
-            Uri.parse('$_playerEndpoint?prettyPrint=false'),
+            Uri.parse(
+              '$_playerEndpoint?key=$_playerApiKey&prettyPrint=false',
+            ),
             headers: const {
               'Content-Type': 'application/json',
               'User-Agent': 'Mozilla/5.0',
               'X-YouTube-Client-Name': '67',
-              'X-YouTube-Client-Version': '1.20240403.01.00',
+              'X-YouTube-Client-Version': '1.20260707.12.00',
             },
             body: body,
           )
@@ -1198,6 +1285,143 @@ class YtMusicService {
       if (url != null && url.isNotEmpty) return url;
     }
     return null;
+  }
+
+  /// Like [getAudioStreamUrl] but returns the MUXED (combined video+audio)
+  /// format URL when available. Audio-only formats are PO-token gated
+  /// (googlevideo answers 403); muxed formats have historically not been.
+  /// Returns null if the track has no muxed format or the URL is absent.
+  Future<String?> getMuxedStreamUrl(String videoId) async {
+    final body = jsonEncode({
+      'videoId': videoId,
+      'context': _context(),
+      'params': 'CgIQBg==',
+    });
+    http.Response res;
+    try {
+      res = await _client
+          .post(
+            Uri.parse(
+              '$_playerEndpoint?key=$_playerApiKey&prettyPrint=false',
+            ),
+            headers: const {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0',
+              'X-YouTube-Client-Name': '67',
+              'X-YouTube-Client-Version': '1.20260707.12.00',
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {
+      return null;
+    }
+    if (res.statusCode != 200) return null;
+    final Map<String, dynamic> data;
+    try {
+      data = jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (_) {
+      return null;
+    }
+    if (data['playabilityStatus']?['status'] != 'OK') return null;
+    final streamingData = data['streamingData'];
+    if (streamingData == null) return null;
+    // Muxed formats live in `formats` (itag 18 = 360p mp4, itag 22 = 720p).
+    final formats = streamingData['formats'] as List<dynamic>? ?? [];
+    for (final fmt in formats) {
+      if (fmt is! Map<String, dynamic>) continue;
+      final url = fmt['url'] as String?;
+      if (url != null && url.isNotEmpty) return url;
+    }
+    return null;
+  }
+
+  /// MUXED stream URL from the ANDROID player client on
+  /// www.youtube.com (NOT music.youtube). Unlike WEB_REMIX/music — which
+  /// rejects non-catalog videos with "This video is unavailable" — the
+  /// ANDROID client serves ANY YouTube video, returns muxed formats (itag
+  /// 18/22) with plain URLs and is not PO-token gated. One HTTPS POST,
+  /// ~300ms: this is the first-play fast path (vs ~9s yt-dlp python boot).
+  ///
+  /// The clientVersion MUST track the current YouTube app: stale versions
+  /// answer 400 "Precondition check failed" on EVERY call (verified live —
+  /// 19.09.37 was rejected, 21.26.364 works). If this path starts failing
+  /// with 400 again, bump the version strings below.
+  static const _androidClientVersion = '21.26.364';
+  Future<String?> getAndroidMuxedStreamUrl(String videoId) async {
+    final body = jsonEncode({
+      'videoId': videoId,
+      'context': {
+        'client': {
+          'clientName': 'ANDROID',
+          'clientVersion': _androidClientVersion,
+          'androidSdkVersion': 30,
+          'osName': 'Android',
+          'osVersion': '11',
+          'hl': 'en',
+          'gl': 'US',
+        },
+      },
+      'contentCheckOk': true,
+      'racyCheckOk': true,
+    });
+    http.Response res;
+    try {
+      res = await _client
+          .post(
+            Uri.parse(
+              '$_wwwPlayerEndpoint?key=$_wwwPlayerApiKey&prettyPrint=false',
+            ),
+            headers: const {
+              'Content-Type': 'application/json',
+              'User-Agent':
+                  'com.google.android.youtube/$_androidClientVersion (Linux; U; Android 11) gzip',
+              'X-YouTube-Client-Name': '3',
+              'X-YouTube-Client-Version': _androidClientVersion,
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      return null;
+    }
+    if (res.statusCode != 200) {
+      debugPrint('[innertube-android] HTTP ${res.statusCode}');
+      return null;
+    }
+    final Map<String, dynamic> data;
+    try {
+      data = jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (_) {
+      return null;
+    }
+    final status = data['playabilityStatus']?['status'];
+    if (status != 'OK') {
+      debugPrint(
+        '[innertube-android] status=$status '
+        'reason=${data['playabilityStatus']?['reason']}',
+      );
+      return null;
+    }
+    final streamingData = data['streamingData'];
+    if (streamingData == null) {
+      debugPrint('[innertube-android] sin streamingData');
+      return null;
+    }
+    // Muxed formats: prefer itag 18 (mp4 360p, aac ~128k), then 22.
+    final formats = streamingData['formats'] as List<dynamic>? ?? [];
+    String? any;
+    for (final fmt in formats) {
+      if (fmt is! Map<String, dynamic>) continue;
+      final url = fmt['url'] as String?;
+      if (url == null || url.isEmpty) {
+        debugPrint('[innertube-android] itag ${fmt['itag']} CIPHER');
+        continue;
+      }
+      if (fmt['itag'] == 18) return url;
+      any ??= url;
+    }
+    return any;
   }
 
   void close() => _client.close();

@@ -20,6 +20,17 @@ class MediaKitBackend implements AudioBackend {
   final List<StreamSubscription> _subs = [];
 
   MediaKitBackend() {
+    // Low-latency network demuxer: start playback as soon as ~1s of media is
+    // buffered instead of mpv's default fill-ahead (local files are instant
+    // anyway; this only affects remote streams).
+    unawaited(() async {
+      try {
+        final native = _player.platform as dynamic;
+        await native.setProperty('cache-pause', 'no');
+        await native.setProperty('demuxer-readahead-secs', '1');
+        await native.setProperty('demuxer-max-bytes', '1048576');
+      } catch (_) {}
+    }());
     _subs.addAll([
       _player.stream.audioDevice.listen((d) => _audioDevice.value = d),
       _player.stream.audioDevices.listen((d) => _audioDevices.value = d),

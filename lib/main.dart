@@ -176,33 +176,43 @@ Future<void> _restoreSession(
     if (volume != null) {
       await player.setVolume(volume.clamp(0.0, 1.0));
     }
-    final resume = await settings.loadResumePosition();
-    int positionFor(String trackId) =>
-        resume != null && resume.trackId == trackId ? resume.seconds : 0;
-    final savedQueue = await settings.loadQueue();
-    if (savedQueue != null && savedQueue.isNotEmpty) {
-      final tracks = <Track>[];
-      for (final id in savedQueue) {
-        final t = await db.getCachedTrack(id);
-        if (t != null) tracks.add(t);
-      }
-      if (tracks.isNotEmpty) {
-        final index = (await settings.loadQueueIndex() ?? 0).clamp(
-          0,
-          tracks.length - 1,
-        );
-        final playlistId = await settings.loadActivePlaylistId();
-        final original = await settings.loadOriginalQueue();
-        await player.restoreQueue(
-          tracks,
-          startIndex: index,
-          playlistId: playlistId,
-          originalTrackIds: original,
-          positionSeconds: positionFor(tracks[index].id),
-        );
-        return;
-      }
+  final resume = await settings.loadResumePosition();
+  int positionFor(String trackId) =>
+      resume != null && resume.trackId == trackId ? resume.seconds : 0;
+  final savedQueue = await settings.loadQueue();
+  if (savedQueue != null && savedQueue.isNotEmpty) {
+    final tracks = <Track>[];
+    for (final id in savedQueue) {
+      final t = await db.getCachedTrack(id);
+      if (t != null) tracks.add(t);
     }
+    if (tracks.isNotEmpty) {
+      final index = (await settings.loadQueueIndex() ?? 0).clamp(
+        0,
+        tracks.length - 1,
+      );
+      // Android warm start: presolve the UP-UPCOMING queue URLs (not the
+      // current track, it may be cached) so python boots into a hot session
+      // BEFORE the user taps play — the first play can hit a ready URL.
+      if (Platform.isAndroid) {
+        unawaited(
+          YtDlpService().preResolveUrls(
+            tracks.skip(index + 1).take(5).map((t) => t.id).toList(),
+          ),
+        );
+      }
+      final playlistId = await settings.loadActivePlaylistId();
+      final original = await settings.loadOriginalQueue();
+      await player.restoreQueue(
+        tracks,
+        startIndex: index,
+        playlistId: playlistId,
+        originalTrackIds: original,
+        positionSeconds: positionFor(tracks[index].id),
+      );
+      return;
+    }
+  }
     final lastId = await settings.loadLastTrackId();
     if (lastId == null) return;
     final track = await db.getCachedTrack(lastId);
@@ -321,6 +331,11 @@ class ScrupApp extends StatelessWidget {
               preload: (track) => cache.preload(track.id, title: track.title),
               // Path 2 of prefetch: tracks already cached -> isolate that reads their first bytes (hot page cache for the mount).
               prepareCached: cache.warmUpcoming,
+              // Android first-play fast path: batch-resolves streaming URLs
+              // for upcoming tracks in ONE yt-dlp run (URLs cached ~5h).
+              preResolveUrls: Platform.isAndroid
+                  ? (ids) => YtDlpService().preResolveUrls(ids)
+                  : null,
               onEnriched: (track) async => db.updateTrackMetadata(track),
               onPlayed: (track) async => db.recordPlay(track),
               onShuffleChanged: (enabled) =>

@@ -148,6 +148,7 @@ class YtDlpService {
   Future<ProcessResult> _runJni(
     List<String> args, {
     Duration timeout = const Duration(seconds: 60),
+    bool throwOnFail = true,
   }) async {
     final ready = await Binaries.ensureAndroidToolchain();
     if (!ready) {
@@ -169,11 +170,14 @@ class YtDlpService {
       final exitCode = (res?['exitCode'] as num?)?.toInt() ?? 1;
       final output = (res?['output'] as String?) ?? '';
       final elapsedMs = DateTime.now().difference(t0).inMilliseconds;
-      if (exitCode != 0) {
+      if (exitCode != 0 && throwOnFail) {
         final err = output.trim();
         _ytLog('jni exit=$exitCode after ${elapsedMs}ms '
             '${err.substring(0, err.length.clamp(0, 500))}');
         throw YtDlpException(err.isNotEmpty ? err : 'yt-dlp error');
+      }
+      if (exitCode != 0) {
+        _ytLog('jni exit=$exitCode (tolerado) after ${elapsedMs}ms');
       }
       _ytLog('jni ok exit=0 after ${elapsedMs}ms '
           '(out ${output.length} chars)');
@@ -227,9 +231,14 @@ class YtDlpService {
   Future<ProcessResult> _run(
     List<String> args, {
     Duration timeout = const Duration(seconds: 60),
+    bool throwOnFail = true,
   }) async {
     if (_isAndroid) {
-      return _runJni(args, timeout: timeout);
+      return _runJni(
+        args,
+        timeout: timeout,
+        throwOnFail: throwOnFail,
+      );
     }
     final ytdlp = await Binaries.resolveYtDlp();
     if (ytdlp == null) {
@@ -558,66 +567,122 @@ class YtDlpService {
     );
   }
 
-  // Streaming on Android: use yt-dlp --get-url to extract the audio URL,
-  // then download via HTTP for progressive playback (no blocking wait).
+  // Streaming on Android. From this pipeline every audio-only route (WEB,
+  // tv, android_vr, InnerTube/WEB_REMIX) ends in googlevideo 403: YouTube
+  // PO-token-gates those formats. The MUXED format is NOT gated, so two
+  // muxed resolvers race: an InnerTube muxed URL (one HTTPS POST, ~300ms)
+  // beats yt-dlp's ~9s python boot. Both go through the 1-byte range probe
+  // so a dead URL never reaches the player, and the resolved-URL cache
+  // short-circuits everything when the track was pre-resolved by a search.
   Future<StreamingDownload> _startStreamingAndroid(
     String videoId, {
     required String outputDir,
     String? title,
     void Function(double? percent)? onProgress,
   }) async {
-    await Binaries.ensureAndroidToolchain();
-    _ytLog('stream(jni) start id=$videoId title=${title ?? '-'}');
+    _ytLog('stream(android) start id=$videoId title=${title ?? '-'}');
 
-    // Step 1: Get streaming URL via yt-dlp --get-url (fast, no download).
+    final ytdlpUrlF = _androidGetUrl(videoId);
+    final innertubeF = _innertubeMuxedValidatedUrl(videoId);
+
     String? streamUrl;
     try {
-      final getUrlArgs = <String>[
-        '--no-playlist',
-        '--no-warnings',
-        '-f', 'best',
-        '--get-url',
-        'https://www.youtube.com/watch?v=$videoId',
-      ];
-      if (_isAndroid) {
-        getUrlArgs.add('--no-check-certificates');
+      streamUrl = await innertubeF.timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => null,
+      );
+      if (streamUrl != null) {
+        _ytLog('stream(android) id=$videoId innertube muxed URL ok');
       }
-      final result = await _run(getUrlArgs, timeout: const Duration(seconds: 30));
-      final url = (result.stdout as String).trim();
-      if (url.isNotEmpty && url.startsWith('http')) {
-        streamUrl = url;
-        _ytLog('stream(jni) id=$videoId URL ok (${url.length} chars)');
-      }
-    } catch (e) {
-      _ytLog('stream(jni) id=$videoId --get-url FAILED: $e');
-    }
+    } catch (_) {}
+    final bool fromInnertube = streamUrl != null;
 
-    // Step 2: Stream the audio via HTTP (progressive download).
-    if (streamUrl != null) {
-      return _streamHttp(
-        streamUrl,
-        videoId,
-        outputDir: outputDir,
-        onProgress: onProgress,
+    // InnerTube sin URL (o caído): la extracción de yt-dlp. PERO si ese
+    // get-url se está sirviendo de un presolve BATCH en curso (espera por
+    // lote), no bloquear detrás de las 12 URLs del lote: esperar como máximo
+    // [_presolveJoinWait] y si no llegó, extraer SOLO este vídeo en paralelo
+    // (una URL llega mucho antes que el lote completo).
+    if (!fromInnertube) {
+      streamUrl = await ytdlpUrlF.timeout(
+        _presolveJoinWait,
+        onTimeout: () => _doAndroidGetUrl(videoId),
+      );
+    }
+    if (streamUrl == null) {
+      _ytLog('stream(android) id=$videoId sin URL');
+      throw YtDlpException(
+        'No se pudo obtener la URL de audio de "${title ?? videoId}".',
       );
     }
 
-    // Step 3: Fallback — InnerTube HTTP streaming.
-    _ytLog('stream(jni) id=$videoId sin URL, fallback InnerTube');
-    return _startStreamingInnerTube(
+    return _streamHttp(
+      streamUrl,
       videoId,
       outputDir: outputDir,
       title: title,
+      fromInnertube: fromInnertube,
       onProgress: onProgress,
     );
   }
 
-  // Downloads an audio URL via HTTP with progressive streaming.
-  // The partial file is completed as soon as enough data arrives for playback.
+  /// Cuánto espera el primer play a un presolve batch en curso antes de
+  /// extraer por su cuenta. El lote (python boot + N URLs) tarda bastante
+  /// más que una extracción individual; esperar completo era parte de los
+  /// 9-10s percibidos en el primer play.
+  static const Duration _presolveJoinWait = Duration(seconds: 4);
+
+  // InnerTube ANDROID-client MUXED URL (www.youtube.com — serves any video,
+  // unlike the music endpoint) accepted only if it passes the range probe.
+  // Not PO-token gated; ~300ms. Fast path for the first play.
+  Future<String?> _innertubeMuxedValidatedUrl(String videoId) async {
+    try {
+      final yt = YtMusicService();
+      final u =
+          await yt.getAndroidMuxedStreamUrl(videoId) ??
+          // Music-catalog tracks: WEB_REMIX muxed as second try.
+          await yt.getMuxedStreamUrl(videoId);
+      if (u == null) return null;
+      if (await _urlAcceptsRange(u)) {
+        _cacheResolvedUrl(videoId, u);
+        return u;
+      }
+      _ytLog('stream(android) id=$videoId innertube muxed rechazada');
+    } catch (e) {
+      _ytLog('stream(android) id=$videoId innertube muxed FAILED: $e');
+    }
+    return null;
+  }
+
+  // Range GET (bytes=0-0) probe: 200/206 means the URL is alive. Costs one
+  // tiny request and saves the player from a 403 on throttled/expired URLs.
+  static Future<bool> _urlAcceptsRange(String url) async {
+    HttpClient? client;
+    try {
+      client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 6);
+      final req = await client.getUrl(Uri.parse(url));
+      req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-0');
+      final res = await req.close();
+      final ok = res.statusCode == 200 || res.statusCode == 206;
+      await res.drain<void>();
+      return ok;
+    } catch (_) {
+      return false;
+    } finally {
+      client?.close(force: true);
+    }
+  }
+
+  // Downloads an audio URL via HTTP with progressive streaming. The partial
+  // file is playable as soon as ~1MB arrives; if the download FAILS before
+  // playback started it retries once with a URL from the OTHER resolver
+  // (validated before use), since either URL can be throttled or expired.
   Future<StreamingDownload> _streamHttp(
     String url,
     String videoId, {
     required String outputDir,
+    required bool fromInnertube,
+    String? title,
     void Function(double? percent)? onProgress,
   }) async {
     final doneCompleter = Completer<String>();
@@ -627,26 +692,23 @@ class YtDlpService {
     final outputPath = p.join(outputDir, '$videoId.webm');
     final partialPath = '$outputPath.part';
 
-    unawaited(() async {
+    // Single body for one download attempt. Returns true on success.
+    Future<bool> attempt(String dlUrl) async {
+      _ytLog('http start id=$videoId (${dlUrl.length} chars url)');
+      final req = await HttpClient().getUrl(Uri.parse(dlUrl));
+      final res = await req.close();
+      if (res.statusCode != 200) {
+        throw YtDlpException('HTTP ${res.statusCode} streaming audio');
+      }
+      final totalLen = res.contentLength;
+      _ytLog('http id=$videoId status=${res.statusCode} len=$totalLen');
+      var received = 0;
+      final sink = File(partialPath).openWrite();
       try {
-        _ytLog('http start id=$videoId (${url.length} chars url)');
-        final req = await HttpClient().getUrl(Uri.parse(url));
-        final res = await req.close();
-        if (res.statusCode != 200) {
-          throw YtDlpException('HTTP ${res.statusCode} streaming audio');
-        }
-        final totalLen = res.contentLength;
-        _ytLog('http id=$videoId status=${res.statusCode} len=$totalLen');
-        var received = 0;
-        final sink = File(partialPath).openWrite();
         await for (final chunk in res) {
           if (cancelled) {
             _ytLog('http id=$videoId CANCELADO (${received}B)');
-            await sink.close();
-            try {
-              File(partialPath).deleteSync();
-            } catch (_) {}
-            return;
+            return true; // handled by cancel(); do NOT retry
           }
           sink.add(chunk);
           received += chunk.length;
@@ -662,14 +724,49 @@ class YtDlpService {
             onProgress?.call(received / totalLen);
           }
         }
+      } finally {
         await sink.close();
-        File(partialPath).renameSync(outputPath);
-        if (!doneCompleter.isCompleted) doneCompleter.complete(outputPath);
-        if (!partialCompleter.isCompleted) partialCompleter.complete(outputPath);
-        _ytLog('http id=$videoId done ${received}B -> $outputPath');
+      }
+      File(partialPath).renameSync(outputPath);
+      if (!doneCompleter.isCompleted) doneCompleter.complete(outputPath);
+      if (!partialCompleter.isCompleted) partialCompleter.complete(outputPath);
+      _ytLog('http id=$videoId done ${received}B -> $outputPath');
+      return true;
+    }
+
+    unawaited(() async {
+      try {
+        try {
+          await attempt(url);
+          return;
+        } catch (e) {
+          if (cancelled || partialCompleter.isCompleted) rethrow;
+          _ytLog('http id=$videoId attempt 1 failed: $e');
+        }
+        // Retry: a validated InnerTube URL, else a fresh muxed extraction
+        // (URLs expire/throttle; a second muxed request usually works).
+        _ytLog('http id=$videoId retry con URL alternativa');
+        String? alt;
+        if (fromInnertube) {
+          alt = await _androidGetUrl(videoId);
+        } else {
+          alt = await _innertubeMuxedValidatedUrl(videoId);
+        }
+        if (alt == null || alt == url) {
+          // The cached URL 403'd before expiry: drop it and re-extract.
+          _resolvedUrls.remove(videoId);
+          alt = await _androidGetUrl(videoId);
+        }
+        if (alt == null || alt == url) {
+          throw YtDlpException('streaming audio sin URL de reintento');
+        }
+        await attempt(alt);
       } catch (e) {
         _ytLog('http id=$videoId ERROR: $e');
         final msg = e is YtDlpException ? e.message : '$e';
+        try {
+          if (File(partialPath).existsSync()) File(partialPath).deleteSync();
+        } catch (_) {}
         if (!doneCompleter.isCompleted) doneCompleter.completeError(YtDlpException(msg));
         if (!partialCompleter.isCompleted) partialCompleter.completeError(YtDlpException(msg));
       }
@@ -687,78 +784,251 @@ class YtDlpService {
     );
   }
 
-  // InnerTube HTTP streaming fallback for Android.
-  // Gets audio URL from InnerTube player endpoint and downloads via HTTP.
-  Future<StreamingDownload> _startStreamingInnerTube(
-    String videoId, {
-    required String outputDir,
-    String? title,
-    void Function(double? percent)? onProgress,
-  }) async {
-    _ytLog('innertube start id=$videoId');
-    final doneCompleter = Completer<String>();
-    final partialCompleter = Completer<String>();
-    var cancelled = false;
-    final started = DateTime.now();
+  // ── Resolved-URL cache (Android first-play fast path) ──────────────────
+  // A googlevideo muxed URL stays valid for ~6h. Caching them turns the
+  // FIRST play of an already-searched track into a pure HTTP download
+  // (~1-2s) instead of a python boot + extraction (~9s). Persisted to disk:
+  // URLs resolved in PREVIOUS sessions still hit (searching yesterday must
+  // not pay extraction again today).
+  static const Duration _resolvedUrlTtl = Duration(hours: 5);
 
-    unawaited(() async {
+  // videoId -> (url, resolvedAt, muxed). STATIC: SearchService, PlayerService
+  // y los presets comparten la misma caché entre instancias.
+  static final Map<String, (String, DateTime, bool)> _resolvedUrls = {};
+
+  static File? _urlCacheFile;
+  static bool _urlCacheLoaded = false;
+  static Timer? _urlCacheFlush;
+  static bool _urlCacheDirty = false;
+
+  static Future<File?> _urlCachePath() async {
+    if (_urlCacheFile != null) return _urlCacheFile;
+    try {
+      final base = await getApplicationSupportDirectory();
+      _urlCacheFile = File(p.join(base.path, 'resolved_urls.json'));
+    } catch (_) {}
+    return _urlCacheFile;
+  }
+
+  static Future<void> _loadUrlCache() async {
+    if (_urlCacheLoaded) return;
+    _urlCacheLoaded = true;
+    try {
+      final f = await _urlCachePath();
+      if (f == null || !await f.exists()) return;
+      final raw = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+      final now = DateTime.now();
+      raw.forEach((id, v) {
+        if (v is! Map<String, dynamic>) return;
+        final at = DateTime.tryParse(v['at'] as String? ?? '');
+        final url = v['url'] as String?;
+        if (at == null || url == null) return;
+        if (now.difference(at) > _resolvedUrlTtl) return;
+        _resolvedUrls[id] = (url, at, true);
+      });
+      _ytLog('urlcache loaded: ${_resolvedUrls.length} entradas');
+    } catch (_) {}
+  }
+
+  // Debounced flush (1s): batches rapid multi-resolve bursts into one write.
+  static void _scheduleUrlCacheFlush() {
+    _urlCacheDirty = true;
+    _urlCacheFlush ??= Timer(const Duration(seconds: 1), () async {
+      _urlCacheFlush = null;
+      if (!_urlCacheDirty) return;
+      _urlCacheDirty = false;
       try {
-        final url = await YtMusicService().getAudioStreamUrl(videoId);
-        if (url == null) {
-          throw YtDlpException('InnerTube no devolvió URL de audio para $videoId');
-        }
-        _ytLog('innertube id=$videoId URL ok, descargando...');
-        // Download to .part first, rename on completion.
-        final outputPath = p.join(outputDir, '$videoId.webm');
-        final partialPath = '$outputPath.part';
-        final req = await HttpClient().getUrl(Uri.parse(url));
-        final res = await req.close();
-        if (res.statusCode != 200) {
-          throw YtDlpException('HTTP ${res.statusCode} downloading audio');
-        }
-        final totalLen = res.contentLength;
-        var received = 0;
-        final sink = File(partialPath).openWrite();
-        await for (final chunk in res) {
-          if (cancelled) {
-            _ytLog('innertube id=$videoId CANCELADO (${received}B)');
-            await sink.close();
-            try { File(partialPath).deleteSync(); } catch (_) {}
-            return;
-          }
-          sink.add(chunk);
-          received += chunk.length;
-          if (!partialCompleter.isCompleted &&
-              (received >= 1024 * 1024 ||
-               (totalLen > 0 && received >= totalLen))) {
-            _ytLog('innertube id=$videoId PARTIAL '
-                '+${DateTime.now().difference(started).inMilliseconds}ms '
-                '(${received}B)');
-            partialCompleter.complete(partialPath);
-          }
-          if (totalLen > 0) {
-            onProgress?.call(received / totalLen);
-          }
-        }
-        await sink.close();
-        // Rename .part to final.
-        File(partialPath).renameSync(outputPath);
-        if (!doneCompleter.isCompleted) doneCompleter.complete(outputPath);
-        if (!partialCompleter.isCompleted) partialCompleter.complete(outputPath);
-        _ytLog('innertube id=$videoId done ${received}B -> $outputPath');
-      } catch (e) {
-        _ytLog('innertube id=$videoId ERROR: $e');
-        final msg = e is YtDlpException ? e.message : '$e';
-        if (!doneCompleter.isCompleted) doneCompleter.completeError(YtDlpException(msg));
-        if (!partialCompleter.isCompleted) partialCompleter.completeError(YtDlpException(msg));
-      }
-    }());
+        final f = await _urlCachePath();
+        if (f == null) return;
+        final now = DateTime.now();
+        final map = {
+          for (final e in _resolvedUrls.entries)
+            if (now.difference(e.value.$2) <= _resolvedUrlTtl)
+              e.key: {'url': e.value.$1, 'at': e.value.$2.toIso8601String()},
+        };
+        await f.writeAsString(jsonEncode(map), flush: true);
+      } catch (_) {}
+    });
+  }
 
-    return StreamingDownload(
-      playablePath: partialCompleter.future,
-      finalPath: doneCompleter.future,
-      cancel: () { cancelled = true; },
-    );
+  // Dedupes concurrent single extractions of the same video.
+  static final Map<String, Future<String?>> _resolveInflight = {};
+
+  // Per-id waiters for an in-flight batch presolve: a first play that lands
+  // mid-batch JOINS it instead of booting another python (~9s saved).
+  static final Map<String, Completer<String?>> _presolveWaiters = {};
+
+  static String? _cachedResolvedUrl(String videoId) {
+    final e = _resolvedUrls[videoId];
+    if (e == null) return null;
+    if (DateTime.now().difference(e.$2) > _resolvedUrlTtl) {
+      _resolvedUrls.remove(videoId);
+      return null;
+    }
+    return e.$1;
+  }
+
+  static void _cacheResolvedUrl(String videoId, String url) {
+    _resolvedUrls[videoId] = (url, DateTime.now(), true);
+    _scheduleUrlCacheFlush();
+  }
+
+  /// Batch-resolves streaming URLs for [videoIds] so later plays start
+  /// instantly (pure HTTP download). Two layers, both best-effort and
+  /// fire-and-forget:
+  ///  1. InnerTube muxed URLs — one POST per video in parallel (~300ms).
+  ///  2. yt-dlp batch — ONE python run for all pending ids (~9s total).
+  /// Only muxed URLs are cached: audio-only formats are PO-token gated.
+  Future<void> preResolveUrls(List<String> videoIds) async {
+    if (!_isAndroid || videoIds.isEmpty) return;
+    await _loadUrlCache();
+    final pending = videoIds
+        .where(
+          (id) =>
+              id.isNotEmpty &&
+              _cachedResolvedUrl(id) == null &&
+              !_presolveWaiters.containsKey(id),
+        )
+        .take(12)
+        .toList();
+    if (pending.isEmpty) return;
+
+    final waiters = {for (final id in pending) id: Completer<String?>()};
+    _presolveWaiters.addAll(waiters);
+    void done(String id, String? url) {
+      final w = waiters[id];
+      if (w != null && !w.isCompleted) w.complete(url);
+    }
+
+    // Layer 1: InnerTube ANDROID-client muxed, parallel (~300ms each).
+    unawaited(() async {
+      var ok = 0;
+      await Future.wait([
+        for (final id in pending)
+          () async {
+            final u = await _innertubeMuxedValidatedUrl(id);
+            if (u != null) {
+              ok++;
+              done(id, u);
+            }
+          }(),
+      ]);
+      _ytLog('presolve innertube: $ok/${pending.length} URLs');
+    }());      // Layer 2: yt-dlp batch (one python boot for all). yt-dlp exits
+      // NONZERO if any single video fails — but stdout still holds the URLs
+      // it did resolve. Parse them regardless (throwOnFail: false) so one
+      // bad video does not poison the whole batch.
+      unawaited(() async {
+        var cached = 0;
+        try {
+          await Binaries.ensureAndroidToolchain();
+          final args = <String>[
+            '--no-playlist',
+            '--no-warnings',
+            // Muxed itag 18 first: audio-only formats are PO-token gated and
+            // 22 (720p) triples the download for audio nobody hears.
+            '-f', '18/best',
+            '--get-url',
+            '--no-check-certificates',
+          ];
+          final cookies = Binaries.cookiesPath;
+          if (cookies != null) args.addAll(['--cookies', cookies]);
+          for (final id in pending) {
+            args.add('https://www.youtube.com/watch?v=$id');
+          }
+          final result = await _run(
+            args,
+            timeout: const Duration(minutes: 2),
+            throwOnFail: false,
+          );
+          final lines = (result.stdout as String)
+              .split('\n')
+              .map((l) => l.trim())
+              .where((l) => l.startsWith('http'))
+              .toList();
+          final n = lines.length < pending.length
+              ? lines.length
+              : pending.length;
+          final now = DateTime.now();
+          for (var i = 0; i < n; i++) {
+            if (_cachedResolvedUrl(pending[i]) != null) continue;
+            _cacheResolvedUrl(pending[i], lines[i]);
+            cached++;
+            done(pending[i], lines[i]);
+          }
+        } catch (e) {
+          _ytLog('presolve batch FAILED: $e');
+        } finally {
+          _ytLog('presolve batch: $cached/${pending.length} URLs');
+          for (final id in pending) {
+            done(id, _cachedResolvedUrl(id));
+            _presolveWaiters.remove(id);
+          }
+        }
+      }());
+  }
+
+  // yt-dlp --get-url. Returns the MUXED format (-f best): audio-only formats
+  // are PO-token gated (googlevideo answers 403); muxed is not. Cookies are
+  // passed when bundled (auth-gated videos). Served from the resolved-URL
+  // cache when fresh.
+  Future<String?> _androidGetUrl(String videoId) async {
+    await _loadUrlCache();
+    final cached = _cachedResolvedUrl(videoId);
+    if (cached != null) {
+      _ytLog('stream(android) id=$videoId URL desde caché');
+      return cached;
+    }
+    // A batch presolve for this id is running: join it instead of booting
+    // another python runtime.
+    final waiter = _presolveWaiters[videoId];
+    if (waiter != null) {
+      _ytLog('stream(android) id=$videoId esperando presolve en curso');
+      final u = await waiter.future.timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => null,
+      );
+      if (u != null) {
+        _ytLog('stream(android) id=$videoId URL desde presolve');
+        return u;
+      }
+    }
+    final inflight = _resolveInflight[videoId];
+    if (inflight != null) return inflight;
+    final f = _doAndroidGetUrl(videoId);
+    _resolveInflight[videoId] = f;
+    try {
+      return await f;
+    } finally {
+      _resolveInflight.remove(videoId);
+    }
+  }
+
+  Future<String?> _doAndroidGetUrl(String videoId) async {
+    try {
+      await Binaries.ensureAndroidToolchain();
+      final args = <String>[
+        '--no-playlist',
+        '--no-warnings',
+        // Muxed itag 18 first (audio-only is PO-token gated; 22 is 720p).
+        '-f',
+        '18/best',
+        '--get-url',
+        'https://www.youtube.com/watch?v=$videoId',
+        '--no-check-certificates',
+      ];
+      final cookies = Binaries.cookiesPath;
+      if (cookies != null) {
+        args.addAll(['--cookies', cookies]);
+      }
+      final result = await _run(args, timeout: const Duration(seconds: 30));
+      final url = (result.stdout as String).trim().split('\n').last.trim();
+      if (url.startsWith('http')) {
+        _cacheResolvedUrl(videoId, url);
+        return url;
+      }
+    } catch (_) {}
+    return null;
   }
 
   // Extracts full track metadata. Uses the android client (~20% faster
