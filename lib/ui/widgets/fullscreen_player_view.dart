@@ -807,91 +807,74 @@ class _TransportControlsState extends State<_TransportControls> {
           valueListenable: player.preparingTrackId,
           builder: (context, preparingId, _) {
             final preparing = preparingId != null;
-            const iconSize = 26.0;
-            const btnConstraints = BoxConstraints.tightFor(
-              width: 46,
-              height: 52,
-            );
 
+            // Transporte con el estilo "tile" del player de Android:
+            // contenedores translúcidos redondeados (white @ 10%, radio 14)
+            // con el glifo centrado; el activo toma el acento.
             return Row(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Shuffle (se enciende con el acento cuando está activo).
                 ValueListenableBuilder<bool>(
                   valueListenable: player.shuffle,
-                  builder: (context, on, _) => IconButton(
-                    icon: Icon(Icons.shuffle_rounded, size: iconSize),
-                    constraints: btnConstraints,
-                    padding: EdgeInsets.zero,
+                  builder: (context, on, _) => _TileControl(
+                    width: 56,
+                    height: 52,
+                    icon: Icons.shuffle_rounded,
+                    iconSize: 24,
                     color: on ? accent : muted,
                     tooltip: on ? l10n.shuffleOn : l10n.shuffle,
-                    onPressed: player.toggleShuffle,
+                    onTap: player.toggleShuffle,
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.skip_previous_rounded),
-                  constraints: btnConstraints,
-                  padding: EdgeInsets.zero,
+                const SizedBox(width: 10),
+                _TileControl(
+                  width: 56,
+                  height: 52,
+                  icon: Icons.skip_previous_rounded,
+                  iconSize: 26,
                   color: accent,
                   tooltip: l10n.previous,
-                  onPressed: player.previous,
+                  onTap: player.previous,
                 ),
-                // Play / Pausa (o loader) con footprint fijo.
-                SizedBox(
-                  width: 60,
+                const SizedBox(width: 10),
+                _TileControl(
+                  width: 72,
                   height: 52,
-                  child: Center(
-                    child: preparing
-                        ? const SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: CircularProgressIndicator(strokeWidth: 2.5),
-                          )
-                        : IconButton(
-                            iconSize: 52,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(
-                              width: 56,
-                              height: 52,
-                            ),
-                            icon: Icon(
-                              _playing
-                                  ? Icons.pause_circle_filled_rounded
-                                  : Icons.play_circle_fill_rounded,
-                              color: accent,
-                            ),
-                            tooltip: _playing ? l10n.pause : l10n.play,
-                            onPressed: player.togglePlayPause,
-                          ),
-                  ),
+                  icon: _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  iconSize: 32,
+                  color: accent,
+                  tooltip: _playing ? l10n.pause : l10n.play,
+                  loading: preparing,
+                  onTap: player.togglePlayPause,
                 ),
-                IconButton(
-                  icon: const Icon(Icons.skip_next_rounded),
-                  constraints: btnConstraints,
-                  padding: EdgeInsets.zero,
+                const SizedBox(width: 10),
+                _TileControl(
+                  width: 56,
+                  height: 52,
+                  icon: Icons.skip_next_rounded,
+                  iconSize: 26,
                   color: accent,
                   tooltip: l10n.next,
-                  onPressed: player.next,
+                  onTap: player.next,
                 ),
+                const SizedBox(width: 10),
                 ValueListenableBuilder<LoopMode>(
                   valueListenable: player.repeatMode,
-                  builder: (context, mode, _) => IconButton(
-                    icon: Icon(
-                      mode == LoopMode.one
-                          ? Icons.repeat_one_rounded
-                          : Icons.repeat_rounded,
-                      size: iconSize,
-                    ),
-                    constraints: btnConstraints,
-                    padding: EdgeInsets.zero,
+                  builder: (context, mode, _) => _TileControl(
+                    width: 56,
+                    height: 52,
+                    icon: mode == LoopMode.one
+                        ? Icons.repeat_one_rounded
+                        : Icons.repeat_rounded,
+                    iconSize: 24,
                     color: mode != LoopMode.off ? accent : muted,
                     tooltip: switch (mode) {
                       LoopMode.off => l10n.repeatOff,
                       LoopMode.all => l10n.repeatAll,
                       LoopMode.one => l10n.repeatOne,
                     },
-                    onPressed: player.toggleRepeat,
+                    onTap: player.toggleRepeat,
                   ),
                 ),
               ],
@@ -1010,5 +993,60 @@ class _CenterHeader extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Control "tile" del transporte fullscreen: contenedor translúcido
+/// redondeado con el glifo centrado, mismo lenguaje visual que el player
+/// expandido de Android (white @ 10%, radio 14).
+class _TileControl extends StatelessWidget {
+  final IconData icon;
+  final double iconSize;
+  final double width;
+  final double height;
+  final Color color;
+  final String? tooltip;
+  final VoidCallback? onTap;
+  final bool loading;
+
+  const _TileControl({
+    required this.icon,
+    required this.iconSize,
+    required this.width,
+    required this.height,
+    required this.color,
+    this.tooltip,
+    this.onTap,
+    this.loading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget button = Opacity(
+      opacity: onTap == null ? 0.45 : 1.0,
+      child: Material(
+        color: color.withValues(alpha: onTap == null ? 0.06 : 0.10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: Center(
+              child: loading
+                  ? SizedBox(
+                      width: iconSize - 4,
+                      height: iconSize - 4,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    )
+                  : Icon(icon, size: iconSize, color: color),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (tooltip == null) return button;
+    return Tooltip(message: tooltip!, child: button);
   }
 }

@@ -277,9 +277,15 @@ class _PlayerBarState extends State<PlayerBar>
         ? Duration(milliseconds: (_dragValue! * total.inMilliseconds).round())
         : _position;
 
-    final base = theme.colorScheme.surfaceContainerHighest.withValues(
-      alpha: 0.55,
-    );
+    // Fondo PLANO de acento (mismo lenguaje que el player expandido de
+    // Android) con contenido en contraste automático (negro sobre acentos
+    // claros, blanco sobre oscuros).
+    final accent =
+        themeController.accentColor ?? theme.colorScheme.primary;
+    final onAccent = accent.computeLuminance() > 0.5
+        ? Colors.black
+        : Colors.white;
+    final mutedAccent = onAccent.withValues(alpha: 0.65);
 
     return GestureDetector(
       onSecondaryTapUp: (details) => _showContextMenu(details.globalPosition),
@@ -298,34 +304,16 @@ class _PlayerBarState extends State<PlayerBar>
           borderRadius: BorderRadius.circular(18),
           child: Stack(
             children: [
-              Positioned.fill(
-                child: DecoratedBox(decoration: BoxDecoration(color: base)),
-              ),
+              // Acento plano con crossfade al cambiar de pista (350ms,
+              // como el _AccentBackground de Android).
               Positioned.fill(
                 child: TweenAnimationBuilder<Color?>(
-                  tween: ColorTween(
-                    end:
-                        themeController.accentColor ??
-                        theme.colorScheme.primary,
-                  ),
-                  duration: const Duration(milliseconds: 700),
+                  tween: ColorTween(end: accent),
+                  duration: const Duration(milliseconds: 350),
                   curve: Curves.easeOutCubic,
                   builder: (context, color, _) {
                     return DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Colors.transparent,
-                            (color ?? theme.colorScheme.primary).withValues(
-                              alpha: 0.25,
-                            ),
-                            Colors.transparent,
-                          ],
-                          stops: const [0.0, 0.5, 1.0],
-                        ),
-                      ),
+                      decoration: BoxDecoration(color: color ?? accent),
                     );
                   },
                 ),
@@ -341,7 +329,13 @@ class _PlayerBarState extends State<PlayerBar>
                       child: Row(
                         children: [
                           Expanded(
-                            child: _buildTrackInfo(theme, cache, player),
+                            child: _buildTrackInfo(
+                              theme,
+                              cache,
+                              player,
+                              onAccent: onAccent,
+                              mutedAccent: mutedAccent,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -352,7 +346,7 @@ class _PlayerBarState extends State<PlayerBar>
                                   theme,
                                   player,
                                   hasTrack,
-                                  accent: themeController.seededPrimary,
+                                  accent: onAccent,
                                 ),
                                 SizedBox(
                                   height: 22,
@@ -368,9 +362,7 @@ class _PlayerBarState extends State<PlayerBar>
                                           ),
                                           style: theme.textTheme.labelSmall
                                               ?.copyWith(
-                                                color: theme
-                                                    .colorScheme
-                                                    .onSurfaceVariant,
+                                                color: mutedAccent,
                                                 fontFeatures: const [
                                                   FontFeature.tabularFigures(),
                                                 ],
@@ -393,8 +385,7 @@ class _PlayerBarState extends State<PlayerBar>
                                                 ),
                                             showValueIndicator:
                                                 ShowValueIndicator.never,
-                                            activeTrackColor:
-                                                theme.colorScheme.primary,
+                                            activeTrackColor: onAccent,
                                           ),
                                           child: Slider(
                                             value: shownProgress,
@@ -426,9 +417,7 @@ class _PlayerBarState extends State<PlayerBar>
                                           textAlign: TextAlign.right,
                                           style: theme.textTheme.labelSmall
                                               ?.copyWith(
-                                                color: theme
-                                                    .colorScheme
-                                                    .onSurfaceVariant,
+                                                color: mutedAccent,
                                                 fontFeatures: const [
                                                   FontFeature.tabularFigures(),
                                                 ],
@@ -443,7 +432,15 @@ class _PlayerBarState extends State<PlayerBar>
                           ),
                           const SizedBox(width: 12),
                           // Derecha: botón de cola + volumen
-                          Expanded(child: _buildRight(context, theme, player)),
+                          Expanded(
+                            child: _buildRight(
+                              context,
+                              theme,
+                              player,
+                              onAccent: onAccent,
+                              mutedAccent: mutedAccent,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -460,8 +457,10 @@ class _PlayerBarState extends State<PlayerBar>
   Widget _buildTrackInfo(
     ThemeData theme,
     AudioCacheService cache,
-    PlayerService player,
-  ) {
+    PlayerService player, {
+    required Color onAccent,
+    required Color mutedAccent,
+  }) {
     if (_track == null) {
       return Align(
         alignment: Alignment.centerLeft,
@@ -470,7 +469,7 @@ class _PlayerBarState extends State<PlayerBar>
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+            color: mutedAccent,
           ),
         ),
       );
@@ -531,7 +530,9 @@ class _PlayerBarState extends State<PlayerBar>
                           label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: onAccent,
+                          ),
                         );
                       },
                     );
@@ -542,7 +543,7 @@ class _PlayerBarState extends State<PlayerBar>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                    color: mutedAccent,
                   ),
                 ),
               ],
@@ -562,9 +563,7 @@ class _PlayerBarState extends State<PlayerBar>
             tooltip: _isFavorite
                 ? AppLocalizations.of(context).removeFromFavorites
                 : AppLocalizations.of(context).addToFavorites,
-            color: _isFavorite
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurfaceVariant,
+            color: _isFavorite ? onAccent : mutedAccent,
             onPressed: _toggleFavorite,
           ),
         ],
@@ -579,10 +578,7 @@ class _PlayerBarState extends State<PlayerBar>
     required Color accent,
   }) {
     final l10n = AppLocalizations.of(context);
-    final primary = theme.colorScheme.primary;
-    final muted = theme.colorScheme.onSurfaceVariant;
-    const iconSize = 20.0;
-    const btnConstraints = BoxConstraints.tightFor(width: 34, height: 40);
+    const tileH = 36.0;
 
     return ValueListenableBuilder<String?>(
       valueListenable: player.preparingTrackId,
@@ -595,63 +591,53 @@ class _PlayerBarState extends State<PlayerBar>
           children: [
             ValueListenableBuilder<bool>(
               valueListenable: player.shuffle,
-              builder: (context, on, _) => IconButton(
-                icon: Icon(Icons.shuffle_rounded, size: iconSize),
-                constraints: btnConstraints,
-                padding: EdgeInsets.zero,
-                color: on ? primary : muted,
+              builder: (context, on, _) => _TileButton(
+                width: 36,
+                height: tileH,
+                radius: 12,
+                icon: Icons.shuffle_rounded,
+                iconSize: 22,
+                color: on ? accent : accent.withValues(alpha: 0.45),
                 tooltip: on ? l10n.shuffleOn : l10n.shuffle,
-                onPressed: player.toggleShuffle,
+                onTap: player.toggleShuffle,
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.skip_previous_rounded),
-              constraints: btnConstraints,
-              padding: EdgeInsets.zero,
+            const SizedBox(width: 6),
+            _TileButton(
+              width: 36,
+              height: tileH,
+              radius: 12,
+              icon: Icons.skip_previous_rounded,
+              iconSize: 22,
               color: accent,
               tooltip: l10n.previous,
-              onPressed: hasTrack
+              onTap: hasTrack
                   ? () {
                       _pendingSwipeDir = -1;
                       player.previous();
                     }
                   : null,
             ),
-            SizedBox(
-              width: 44,
-              height: 40,
-              child: Center(
-                child: preparing || _buffering
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2.5),
-                      )
-                    : IconButton(
-                        iconSize: 36,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(
-                          width: 40,
-                          height: 40,
-                        ),
-                        icon: Icon(
-                          _playing
-                              ? Icons.pause_circle_filled_rounded
-                              : Icons.play_circle_fill_rounded,
-                          color: primary,
-                        ),
-                        tooltip: _playing ? l10n.pause : l10n.play,
-                        onPressed: hasTrack ? player.togglePlayPause : null,
-                      ),
-              ),
+            _TileButton(
+              width: 48,
+              height: tileH,
+              radius: 12,
+              icon: _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              iconSize: 26,
+              color: accent,
+              tooltip: _playing ? l10n.pause : l10n.play,
+              loading: preparing || _buffering,
+              onTap: hasTrack ? player.togglePlayPause : null,
             ),
-            IconButton(
-              icon: const Icon(Icons.skip_next_rounded),
-              constraints: btnConstraints,
-              padding: EdgeInsets.zero,
+            _TileButton(
+              width: 36,
+              height: tileH,
+              radius: 12,
+              icon: Icons.skip_next_rounded,
+              iconSize: 22,
               color: accent,
               tooltip: l10n.next,
-              onPressed: hasTrack
+              onTap: hasTrack
                   ? () {
                       _pendingSwipeDir = 1;
                       player.next();
@@ -660,26 +646,24 @@ class _PlayerBarState extends State<PlayerBar>
             ),
             ValueListenableBuilder<LoopMode>(
               valueListenable: player.repeatMode,
-              builder: (context, mode, _) {
-                final active = mode != LoopMode.off;
-                return IconButton(
-                  icon: Icon(
-                    mode == LoopMode.one
-                        ? Icons.repeat_one_rounded
-                        : Icons.repeat_rounded,
-                    size: iconSize,
-                  ),
-                  constraints: btnConstraints,
-                  padding: EdgeInsets.zero,
-                  color: active ? primary : muted,
-                  tooltip: switch (mode) {
-                    LoopMode.off => l10n.repeatOff,
-                    LoopMode.all => l10n.repeatAll,
-                    LoopMode.one => l10n.repeatOne,
-                  },
-                  onPressed: player.toggleRepeat,
-                );
-              },
+              builder: (context, mode, _) => _TileButton(
+                width: 36,
+                height: tileH,
+                radius: 12,
+                icon: mode == LoopMode.one
+                    ? Icons.repeat_one_rounded
+                    : Icons.repeat_rounded,
+                iconSize: 22,
+                color: mode != LoopMode.off
+                    ? accent
+                    : accent.withValues(alpha: 0.45),
+                tooltip: switch (mode) {
+                  LoopMode.off => l10n.repeatOff,
+                  LoopMode.all => l10n.repeatAll,
+                  LoopMode.one => l10n.repeatOne,
+                },
+                onTap: player.toggleRepeat,
+              ),
             ),
           ],
         );
@@ -701,51 +685,66 @@ class _PlayerBarState extends State<PlayerBar>
   Widget _buildRight(
     BuildContext context,
     ThemeData theme,
-    PlayerService player,
-  ) {
+    PlayerService player, {
+    required Color onAccent,
+    required Color mutedAccent,
+  }) {
     final l10n = AppLocalizations.of(context);
-    final primary = theme.colorScheme.primary;
-    final muted = theme.colorScheme.onSurfaceVariant;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.lyrics_rounded, size: 20),
-          constraints: const BoxConstraints.tightFor(width: 34, height: 40),
-          padding: EdgeInsets.zero,
-          color: widget.lyricsOpen ? primary : muted,
-          tooltip: l10n.lyrics,
-          onPressed: widget.onToggleLyrics,
+    // Un SOLO contenedor translúcido redondeado (como el tile ancho de
+    // Android con shuffle/repeat/añadir): lyrics | radio | cola | volumen
+    // viven juntos dentro del mismo grupo.
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: onAccent.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(12),
         ),
-        ValueListenableBuilder<bool>(
-          valueListenable: player.radio,
-          builder: (context, on, _) => IconButton(
-            icon: Icon(
-              Icons.radio_rounded,
-              size: 20,
-              color: on ? primary : muted,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.lyrics_rounded, size: 20),
+              constraints: const BoxConstraints.tightFor(width: 30, height: 36),
+              padding: EdgeInsets.zero,
+              color: widget.lyricsOpen ? onAccent : mutedAccent,
+              tooltip: l10n.lyrics,
+              onPressed: widget.onToggleLyrics,
             ),
-            constraints: const BoxConstraints.tightFor(width: 34, height: 40),
-            padding: EdgeInsets.zero,
-            tooltip: on ? l10n.radioOn : l10n.radioOff,
-            onPressed: player.toggleRadio,
-          ),
+            ValueListenableBuilder<bool>(
+              valueListenable: player.radio,
+              builder: (context, on, _) => IconButton(
+                icon: Icon(
+                  Icons.radio_rounded,
+                  size: 20,
+                  color: on ? onAccent : mutedAccent,
+                ),
+                constraints: const BoxConstraints.tightFor(
+                  width: 30,
+                  height: 36,
+                ),
+                padding: EdgeInsets.zero,
+                tooltip: on ? l10n.radioOn : l10n.radioOff,
+                onPressed: player.toggleRadio,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.queue_music_rounded, size: 20),
+              constraints: const BoxConstraints.tightFor(width: 30, height: 36),
+              padding: EdgeInsets.zero,
+              color: widget.queueOpen ? onAccent : mutedAccent,
+              tooltip: l10n.queue,
+              onPressed: widget.onToggleQueue,
+            ),
+            Tooltip(
+              message: l10n.audioOutput,
+              child: _VolumeSection(player: player, muted: mutedAccent, onAccent: onAccent),
+            ),
+          ],
         ),
-        IconButton(
-          icon: const Icon(Icons.queue_music_rounded, size: 20),
-          constraints: const BoxConstraints.tightFor(width: 34, height: 40),
-          padding: EdgeInsets.zero,
-          color: widget.queueOpen ? primary : muted,
-          tooltip: l10n.queue,
-          onPressed: widget.onToggleQueue,
-        ),
-        const SizedBox(width: 2),
-        Tooltip(
-          message: l10n.audioOutput,
-          child: _VolumeSection(player: player, muted: muted),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -755,7 +754,11 @@ class _VolumeSection extends StatefulWidget {
   final PlayerService player;
   final Color muted;
 
-  const _VolumeSection({required this.player, required this.muted});
+  /// Color de contraste (negro/blanco según el acento) para el chevron
+  /// en hover.
+  final Color? onAccent;
+
+  const _VolumeSection({required this.player, required this.muted, this.onAccent});
 
   @override
   State<_VolumeSection> createState() => _VolumeSectionState();
@@ -873,7 +876,7 @@ class _VolumeSectionState extends State<_VolumeSection> {
                     Icons.keyboard_arrow_down_rounded,
                     size: 18,
                     color: _hovering
-                        ? theme.colorScheme.primary
+                        ? (widget.onAccent ?? theme.colorScheme.primary)
                         : widget.muted,
                   ),
                 ),
@@ -890,6 +893,13 @@ class _VolumeSectionState extends State<_VolumeSection> {
                   overlayShape: const RoundSliderOverlayShape(
                     overlayRadius: 11,
                   ),
+                  // Contraste sobre el fondo de acento del player.
+                  activeTrackColor:
+                      widget.onAccent ?? theme.colorScheme.primary,
+                  inactiveTrackColor: (
+                    widget.onAccent ?? theme.colorScheme.primary
+                  ).withValues(alpha: 0.30),
+                  thumbColor: widget.onAccent ?? theme.colorScheme.primary,
                 ),
                 child: Slider(
                   value: vol.clamp(0.0, 1.0),
@@ -901,5 +911,62 @@ class _VolumeSectionState extends State<_VolumeSection> {
         );
       },
     );
+  }
+}
+
+/// Botón "tile" del transporte: contenedor translúcido redondeado con el
+/// glifo centrado (mismo lenguaje visual que el player expandido de Android:
+/// white @ 10% sobre el fondo, radio 12 y altura contenida en la barra).
+class _TileButton extends StatelessWidget {
+  final IconData icon;
+  final double iconSize;
+  final double width;
+  final double height;
+  final double radius;
+  final Color color;
+  final String? tooltip;
+  final VoidCallback? onTap;
+  final bool loading;
+
+  const _TileButton({
+    required this.icon,
+    required this.iconSize,
+    required this.width,
+    required this.height,
+    required this.radius,
+    required this.color,
+    this.tooltip,
+    this.onTap,
+    this.loading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget button = Opacity(
+      opacity: onTap == null ? 0.45 : 1.0,
+      child: Material(
+        color: color.withValues(alpha: onTap == null ? 0.06 : 0.10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: Center(
+              child: loading
+                  ? SizedBox(
+                      width: iconSize - 4,
+                      height: iconSize - 4,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    )
+                  : Icon(icon, size: iconSize, color: color),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (tooltip == null) return button;
+    return Tooltip(message: tooltip!, child: button);
   }
 }
