@@ -794,7 +794,10 @@ class _TransportControlsState extends State<_TransportControls> {
     final player = context.read<PlayerService>();
     final l10n = AppLocalizations.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
-    final accent = context.read<ThemeController>().seededPrimary;
+    // MISMO acento que el miniplayer y el panel de lyrics: el color extraído
+    // del artwork (accentColor), no el derivado del tema.
+    final accent = context.watch<ThemeController>().accentColor ??
+        theme.colorScheme.primary;
     final progress = _total.inMilliseconds > 0
         ? (_position.inMilliseconds / _total.inMilliseconds).clamp(0.0, 1.0)
         : 0.0;
@@ -822,17 +825,18 @@ class _TransportControlsState extends State<_TransportControls> {
                     height: 52,
                     icon: Icons.shuffle_rounded,
                     iconSize: 24,
-                    color: on ? accent : muted,
+                    color: on ? accent : accent.withValues(alpha: 0.45),
                     tooltip: on ? l10n.shuffleOn : l10n.shuffle,
                     onTap: player.toggleShuffle,
                   ),
                 ),
                 const SizedBox(width: 10),
                 _TileControl(
-                  width: 56,
+                  // Mismo tamaño que tenía el botón de play (72×52).
+                  width: 72,
                   height: 52,
                   icon: Icons.skip_previous_rounded,
-                  iconSize: 26,
+                  iconSize: 28,
                   color: accent,
                   tooltip: l10n.previous,
                   onTap: player.previous,
@@ -850,10 +854,10 @@ class _TransportControlsState extends State<_TransportControls> {
                 ),
                 const SizedBox(width: 10),
                 _TileControl(
-                  width: 56,
+                  width: 72,
                   height: 52,
                   icon: Icons.skip_next_rounded,
-                  iconSize: 26,
+                  iconSize: 28,
                   color: accent,
                   tooltip: l10n.next,
                   onTap: player.next,
@@ -868,7 +872,9 @@ class _TransportControlsState extends State<_TransportControls> {
                         ? Icons.repeat_one_rounded
                         : Icons.repeat_rounded,
                     iconSize: 24,
-                    color: mode != LoopMode.off ? accent : muted,
+                    color: mode != LoopMode.off
+                        ? accent
+                        : accent.withValues(alpha: 0.45),
                     tooltip: switch (mode) {
                       LoopMode.off => l10n.repeatOff,
                       LoopMode.all => l10n.repeatAll,
