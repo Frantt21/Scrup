@@ -245,7 +245,18 @@ class _FullscreenPlayerViewState extends State<FullscreenPlayerView>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final palette = _palette;
+    // Paleta del shader DERIVADA DEL ACENTO (el mismo color fiel del artwork
+    // que usan miniplayer/lyrics), no del trío multi-hue de la paleta: con
+    // variantes de luminancia del acento el fondo nunca desentona con tonos
+    // ajenos (verdes/morados) que no están en la portada.
+    final accent = context.watch<ThemeController>().accentColor;
+    final palette = accent != null
+        ? <Color>[
+            accent,
+            Color.lerp(accent, Colors.black, 0.42)!,
+            Color.lerp(accent, Colors.black, 0.68)!,
+          ]
+        : _palette;
 
     return AnimatedBuilder(
       animation: _transition,
