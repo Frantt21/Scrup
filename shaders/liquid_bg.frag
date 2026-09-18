@@ -1,17 +1,11 @@
-// Fondo "iridiscente" del fullscreen (adaptado del componente LiquidChrome/
-// Iridescence de React+ogl).
+// Fondo líquido del fullscreen.
 //
-// TRUCO CENTRAL — FEEDBACK LOOP: dos acumuladores (`a`, `d`) se
-// retroalimentan durante 8 iteraciones: `a` integra cosenos de la posición
-// X deformada por `d`, y `d` integra senos de Y deformado por `a`. El
-// resultado es un patrón orgánico tipo aceite sobre agua imposible de
-// lograr con ruido plano.
+// El patrón fluido (feedback loop de cosenos/senos, igual que antes) ya no
+// genera color: SOLO modula BRILLO y decide la MEZCLA entre los tres colores
+// de la paleta del artwork. Así cada tinte del fondo pertenece al convexo de
+// esa paleta — nunca aparecen tonos ajenos (verdes, morados) que desentonen
+// con el acento real de la pista.
 //
-// El tinte sale de una PALETA DE COSENOS (patrón → fase → cos) modulada
-// por la paleta tricolor del artwork (uniforms ya interpolados en Dart).
-// Un factor de atenuación global mantiene el fondo lo bastante oscuro para
-// los lyrics; cubre todo el lienzo borde a borde y el tiempo nunca se
-// detiene.
 #version 460 core
 
 #include <flutter/runtime_effect.glsl>
@@ -29,7 +23,7 @@ const float kSpeed = 0.45;    // velocidad del flujo
 const float kDim = 0.80;      // atenuación global (contraste lyrics)
 
 void main() {
-  // Coordenadas centradas escaladas por el lado menor (como el original).
+  // Coordenadas centradas escaladas por el lado menor.
   float mr = min(uResolution.x, uResolution.y);
   vec2 uv = (FlutterFragCoord().xy * 2.0 - uResolution) / mr;
 
@@ -44,19 +38,20 @@ void main() {
   }
   d += t * 0.5;
 
-  // Patrón iridiscente: canal R/G desde el campo deformado, B del par (a,d).
-  vec3 pat = vec3(
-    cos(uv * vec2(d, a)) * 0.6 + 0.4,
-    cos(a + d) * 0.5 + 0.5
-  );
-  // Paleta de cosenos: patrón → fase → cos (los negativos caen a negro al
-  // escribir el framebuffer, como en el original WebGL).
-  vec3 wave = cos(pat * cos(vec3(d, a, 2.5)) * 0.5 + 0.5);
+  // Campos escalares suaves 0..1 derivados del dominio deformado: deciden
+  // QUÉ color de la paleta se pinta en cada punto (sin tocar canales por
+  // separado, que era lo que creaba tonos ajenos).
+  float m1 = 0.5 + 0.5 * cos(uv.x * d + uv.y * a + a * 0.7);
+  float m2 = 0.5 + 0.5 * cos((uv.y - uv.x) * a * 0.6 + d * 0.8);
+  float shade = 0.5 + 0.5 * cos(a + d + uv.x * 1.5 - uv.y * 1.2);
 
-  // Tinte tricolor: A/B se reparten según la fase `d`, C entra con `a` —
-  // los tres colores fluyen por zonas distintas del patrón.
-  vec3 base = mix(uColorA, uColorB, clamp(0.5 + 0.5 * sin(d * 0.7), 0.0, 1.0));
-  base = mix(base, uColorC, clamp(0.5 + 0.5 * cos(a * 0.6), 0.0, 1.0));
+  // Mezcla DENTRO de la paleta: A↔B según m1, C entra parcialmente encima.
+  vec3 col = mix(uColorA, uColorB, m1);
+  col = mix(col, uColorC, m2 * 0.85);
 
-  fragColor = vec4(max(wave, 0.0) * base * kDim, 1.0);
+  // Variación de brillo que preserva el tono (multiplica los 3 canales por
+  // igual): profundidad del fluido sin desviar el color.
+  col *= 0.55 + 0.65 * shade;
+
+  fragColor = vec4(col * kDim, 1.0);
 }
