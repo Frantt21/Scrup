@@ -441,9 +441,10 @@ class _HomeViewState extends State<HomeView> {
                     SliverToBoxAdapter(
                       child: _VisitedArtistsRow(
                         artists: _visitedArtists,
-                        // Desktop: el MISMO tamaño que las recientes.
-                        // Móvil: tamaño fijo (null → 140) como siempre.
-                        cardSize: mobile ? null : cellExtent,
+                        // Desktop: el MISMO tamaño que las playlists
+                        // recientes (celda × escala). Móvil: tamaño fijo
+                        // (null → 140) como siempre.
+                        cardSize: mobile ? null : playlistExtent,
                         onOpen: widget.onOpenArtist,
                       ),
                     ),
@@ -593,7 +594,7 @@ class _RecentCardState extends State<_RecentCard> {
     }
   }
 
-  /// Bottom sheet contextual (long press) en móvil.
+  /// Bottom sheet contextual (long press) en android.
   Future<void> _showMobileMenu() async {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);

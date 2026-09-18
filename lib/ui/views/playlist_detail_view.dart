@@ -1686,7 +1686,14 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                         ? null
                                         : _playAll,
                                     style: FilledButton.styleFrom(
-                                    minimumSize: const Size(
+                                      // Densidad estándar explícita: el tema
+                                      // usa la adaptativa (compact en
+                                      // desktop, −8px) y encogía SOLO este
+                                      // botón frente a los cuadrados.
+                                      visualDensity: VisualDensity.standard,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      minimumSize: const Size(
                                         0,
                                         _heroControlHeight,
                                       ),
@@ -1694,19 +1701,25 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                     icon: const Icon(Icons.play_arrow_rounded),
                                     label: Text(l10n.play),
                                   ),
-                                  const SizedBox(width: 8),
                                   IconButton.filledTonal(
                                     onPressed: !_tracksLoaded || count == 0
                                         ? null
                                         : _playShuffled,
                                     style: IconButton.styleFrom(
-                                      backgroundColor: Colors.white,
-                                      foregroundColor:
-                                          theme.colorScheme.primary,
-                                      minimumSize: const Size(
+                                      backgroundColor:
+                                          _ambientColor ?? Colors.white,
+                                      foregroundColor: _onAccent(
+                                        _ambientColor ?? Colors.white,
+                                      ),
+                                      fixedSize: const Size(
                                         _heroControlHeight,
                                         _heroControlHeight,
                                       ),
+                                      visualDensity: VisualDensity.standard,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      iconSize: 20,
+                                      padding: EdgeInsets.zero,
                                     ),
                                     icon: const Icon(Icons.shuffle_rounded),
                                     tooltip: l10n.shuffle,
@@ -1716,13 +1729,20 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                         ? null
                                         : _downloadAllTracks,
                                     style: IconButton.styleFrom(
-                                      backgroundColor: Colors.white,
-                                      foregroundColor:
-                                          theme.colorScheme.primary,
-                                      minimumSize: const Size(
+                                      backgroundColor:
+                                          _ambientColor ?? Colors.white,
+                                      foregroundColor: _onAccent(
+                                        _ambientColor ?? Colors.white,
+                                      ),
+                                      fixedSize: const Size(
                                         _heroControlHeight,
                                         _heroControlHeight,
                                       ),
+                                      visualDensity: VisualDensity.standard,
+                                      iconSize: 20,
+                                      padding: EdgeInsets.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
                                     ),
                                     icon: ListenableBuilder(
                                       listenable: context
@@ -1736,13 +1756,17 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                             milliseconds: 250,
                                           ),
                                           child: running
-                                              ? const SizedBox(
-                                                  key: ValueKey('spinner'),
+                                              ? SizedBox(
+                                                  key: const ValueKey('spinner'),
                                                   width: 20,
                                                   height: 20,
                                                   child:
                                                       CircularProgressIndicator(
                                                     strokeWidth: 2,
+                                                    color: _onAccent(
+                                                      _ambientColor ??
+                                                          Colors.white,
+                                                    ),
                                                   ),
                                                 )
                                               : const Icon(
@@ -2047,17 +2071,12 @@ class _SortableTrackRow extends StatefulWidget {
 }
 
 class _SortableTrackRowState extends State<_SortableTrackRow> {
-  bool _hovered = false;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isMobile = Binaries.isMobile;
-    final showColor = isMobile || _hovered;
     return MouseRegion(
       cursor: SystemMouseCursors.basic,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
       child: Padding(
         // Sustituye al separatorBuilder del ListView anterior.
         padding: const EdgeInsets.only(bottom: 4),
@@ -2078,7 +2097,7 @@ class _SortableTrackRowState extends State<_SortableTrackRow> {
                         ? null
                         : widget.downloadProgress,
                     color: (widget.accentColor ?? theme.colorScheme.primary)
-                        .withValues(alpha: showColor ? 0.9 : 0.6),
+                        .withValues(alpha: 0.9),
                   ),
                 ),
               )
@@ -2090,10 +2109,8 @@ class _SortableTrackRowState extends State<_SortableTrackRow> {
                   child: Icon(
                     Icons.download_done_rounded,
                     size: isMobile ? 18 : 16,
-                    color: (showColor
-                            ? (widget.accentColor ?? theme.colorScheme.primary)
-                            : theme.colorScheme.outlineVariant)
-                        .withValues(alpha: showColor ? 0.8 : 0.5),
+                    color: (widget.accentColor ?? theme.colorScheme.primary)
+                        .withValues(alpha: 0.8),
                   ),
                 ),
               ),
@@ -2107,12 +2124,8 @@ class _SortableTrackRowState extends State<_SortableTrackRow> {
                 child: Icon(
                   Icons.drag_indicator_rounded,
                   size: isMobile ? 20 : 18,
-                  color:
-                      (showColor
-                              ? (widget.accentColor ??
-                                    theme.colorScheme.primary)
-                              : theme.colorScheme.outlineVariant)
-                          .withValues(alpha: showColor ? 0.75 : 0.45),
+                  color: (widget.accentColor ?? theme.colorScheme.primary)
+                      .withValues(alpha: 0.75),
                 ),
               ),
             ),

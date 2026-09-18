@@ -1239,6 +1239,12 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
                                 disabledBackgroundColor: accent,
                                 disabledForegroundColor: _onColor(accent)
                                     .withValues(alpha: 0.6),
+                                // Densidad estándar explícita: el tema usa
+                                // la adaptativa (compact en desktop, −8px)
+                                // y encogía SOLO este botón.
+                                visualDensity: VisualDensity.standard,
+                                tapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
                                 minimumSize: const Size(0, 44),
                               ),
                               icon: const Icon(Icons.play_arrow_rounded),
@@ -1251,13 +1257,18 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
                                   ? null
                                   : _playShuffled,
                               style: FilledButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: dtheme.colorScheme.primary,
-                                disabledBackgroundColor: Colors.white,
-                                disabledForegroundColor: dtheme
-                                    .colorScheme
-                                    .primary
-                                    .withValues(alpha: 0.6),
+                                backgroundColor: _accent ?? Colors.white,
+                                foregroundColor: _onColor(
+                                  _accent ?? Colors.white,
+                                ),
+                                disabledBackgroundColor:
+                                    _accent ?? Colors.white,
+                                disabledForegroundColor: _onColor(
+                                  _accent ?? Colors.white,
+                                ).withValues(alpha: 0.6),
+                                visualDensity: VisualDensity.standard,
+                                tapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
                                 minimumSize: const Size(0, 44),
                               ),
                               icon: const Icon(Icons.shuffle_rounded),
@@ -1318,6 +1329,8 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
             disabledForegroundColor: _onColor(accent).withValues(alpha: 0.6),
             backgroundColor: accent,
             foregroundColor: _onColor(accent),
+            visualDensity: VisualDensity.standard,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             minimumSize: const Size(0, 44),
           ),
           icon: const Icon(Icons.play_arrow_rounded),
@@ -1331,6 +1344,8 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
             disabledForegroundColor: _onColor(accent).withValues(alpha: 0.6),
             backgroundColor: accent,
             foregroundColor: _onColor(accent),
+            visualDensity: VisualDensity.standard,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             minimumSize: const Size(0, 44),
           ),
           icon: const Icon(Icons.shuffle_rounded),
