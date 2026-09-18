@@ -607,15 +607,10 @@ class _KaraokeLineState extends State<_KaraokeLine> {
     ], false);
   }
 
-  // Aclara acentos muy oscuros para que se lean sobre fondo oscuro. Los
-  // colores de CONTRASTE puro (negro/blanco, desktop) pasan sin tocar:
-  // la línea enfocada debe ser negro/blanco puro, no un gris intermedio.
-  static Color _readableAccent(Color c) {
-    if (c == Colors.black || c == Colors.white) return c;
-    return c.computeLuminance() < 0.35
-        ? Color.lerp(c, Colors.white, 0.5)!
-        : c;
-  }
+  // El acento pasa CRUDO (sin aclarados): los lyrics deben usar EXACTAMENTE
+  // el mismo color que el miniplayer. La legibilidad ya la resuelve el
+  // contraste del fondo en cada plataforma.
+  static Color _readableAccent(Color c) => c;
 
   Color get _activeColor =>
       accentColor == null ? Colors.white : _readableAccent(accentColor!);
