@@ -857,7 +857,8 @@ class _VolumeSectionState extends State<_VolumeSection> {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Icono de volumen con mute
+            // Icono de volumen con mute (SIEMPRE contraste puro, sin
+            // atenuar: negro/blanco según el acento).
             IconButton(
               icon: Icon(icon, size: 20),
               constraints: const BoxConstraints.tightFor(
@@ -865,7 +866,7 @@ class _VolumeSectionState extends State<_VolumeSection> {
                 height: 40,
               ),
               padding: EdgeInsets.zero,
-              color: widget.muted,
+              color: widget.onAccent ?? widget.muted,
               tooltip: vol <= 0 ? l10n.unmute : l10n.mute,
               onPressed: player.toggleMute,
             ),
