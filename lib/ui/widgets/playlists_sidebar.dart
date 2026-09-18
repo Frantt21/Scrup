@@ -307,6 +307,20 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
                           ),
                         ),
                       ),
+                      // Acciones de cabecera: importar y crear (antes
+                      // vivían dentro del contenido como tiles/celdas).
+                      IconButton(
+                        icon: const Icon(Icons.sync_alt_rounded, size: 20),
+                        visualDensity: VisualDensity.compact,
+                        tooltip: l10n.importSpotify,
+                        onPressed: _importFromSpotify,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add_rounded, size: 22),
+                        visualDensity: VisualDensity.compact,
+                        tooltip: l10n.newPlaylist,
+                        onPressed: _createPlaylist,
+                      ),
                       _ViewToggle(
                         gridMode: _gridMode,
                         onChanged: _toggleGridMode,
@@ -344,12 +358,6 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
             isPlaying: _playing,
           ),
         const SizedBox(height: 4),
-        _CreatePlaylistTile(onTap: _createPlaylist),
-        _CreatePlaylistTile(
-          onTap: _importFromSpotify,
-          icon: Icons.sync_alt_rounded,
-          label: AppLocalizations.of(context).importSpotify,
-        ),
       ],
     );
   }
@@ -363,18 +371,8 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
         crossAxisSpacing: 10,
         childAspectRatio: 0.78,
       ),
-      itemCount: _playlists.length + 2,
+      itemCount: _playlists.length,
       itemBuilder: (context, i) {
-        if (i == _playlists.length) {
-          return _CreateGridCell(onTap: _createPlaylist);
-        }
-        if (i == _playlists.length + 1) {
-          return _CreateGridCell(
-            onTap: _importFromSpotify,
-            icon: Icons.sync_alt_rounded,
-            label: AppLocalizations.of(context).importSpotify,
-          );
-        }
         final playlist = _playlists[i];
         return _PlaylistGridCell(
           playlist: playlist,
@@ -862,115 +860,3 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
 }
 
 /// Button to create or import a new playlist (list view).
-class _CreatePlaylistTile extends StatelessWidget {
-  final VoidCallback onTap;
-  final IconData icon;
-  final String? label;
-
-  const _CreatePlaylistTile({
-    required this.onTap,
-    this.icon = Icons.add_rounded,
-    this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onTap,
-        mouseCursor: SystemMouseCursors.click,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(6),
-                  color: theme.colorScheme.primary.withValues(alpha: 0.10),
-                ),
-                child: Icon(icon, size: 20, color: theme.colorScheme.primary),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label ?? AppLocalizations.of(context).newPlaylist,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Button to create or import a new playlist (grid view).
-class _CreateGridCell extends StatelessWidget {
-  final VoidCallback onTap;
-  final IconData icon;
-  final String? label;
-
-  const _CreateGridCell({
-    required this.onTap,
-    this.icon = Icons.add_rounded,
-    this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                ),
-                child: Center(
-                  child: Icon(icon, size: 32, color: theme.colorScheme.primary),
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label ?? AppLocalizations.of(context).newPlaylist,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.primary,
-              ),
-            ),
-            Text(
-              AppLocalizations.of(context).newPlaylistHint,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
