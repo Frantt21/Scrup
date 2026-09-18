@@ -386,6 +386,12 @@ class _PlayerBarState extends State<PlayerBar>
                                             showValueIndicator:
                                                 ShowValueIndicator.never,
                                             activeTrackColor: onAccent,
+                                            // Pista restante también en color
+                                            // de contraste (el default del
+                                            // tema no se adapta al acento).
+                                            inactiveTrackColor: onAccent
+                                                .withValues(alpha: 0.30),
+                                            thumbColor: onAccent,
                                           ),
                                           child: Slider(
                                             value: shownProgress,
@@ -604,7 +610,7 @@ class _PlayerBarState extends State<PlayerBar>
             ),
             const SizedBox(width: 6),
             _TileButton(
-              width: 36,
+              width: 48,
               height: tileH,
               radius: 12,
               icon: Icons.skip_previous_rounded,
@@ -618,6 +624,7 @@ class _PlayerBarState extends State<PlayerBar>
                     }
                   : null,
             ),
+            const SizedBox(width: 6),
             _TileButton(
               width: 48,
               height: tileH,
@@ -629,8 +636,9 @@ class _PlayerBarState extends State<PlayerBar>
               loading: preparing || _buffering,
               onTap: hasTrack ? player.togglePlayPause : null,
             ),
+            const SizedBox(width: 6),
             _TileButton(
-              width: 36,
+              width: 48,
               height: tileH,
               radius: 12,
               icon: Icons.skip_next_rounded,
@@ -644,6 +652,7 @@ class _PlayerBarState extends State<PlayerBar>
                     }
                   : null,
             ),
+            const SizedBox(width: 6),
             ValueListenableBuilder<LoopMode>(
               valueListenable: player.repeatMode,
               builder: (context, mode, _) => _TileButton(

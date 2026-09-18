@@ -27,6 +27,12 @@ class DraggablePlayerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Fondo PLANO de acento (mismo lenguaje que el player expandido de
+    // Android) con crossfade al cambiar de pista; el contenido usa contraste
+    // automático (negro/blanco según luminancia del acento).
+    final accent =
+        context.watch<ThemeController>().accentColor ??
+        Theme.of(context).colorScheme.primary;
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.6,
@@ -37,8 +43,12 @@ class DraggablePlayerSheet extends StatelessWidget {
       builder: (context, scrollController) {
         return ClipRRect(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-          child: Material(
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          child: TweenAnimationBuilder<Color?>(
+            tween: ColorTween(end: accent),
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+            builder: (context, color, child) =>
+                Material(color: color ?? accent, child: child),
             child: _PlayerContent(scrollController: scrollController),
           ),
         );
@@ -151,6 +161,11 @@ class _PlayerContentState extends State<_PlayerContent> {
     final cs = theme.colorScheme;
     final accent =
         context.watch<ThemeController>().accentColor ?? cs.primary;
+    // Contraste automático (misma validación que Android): negro sobre
+    // acentos claros, blanco sobre oscuros.
+    final onAccent =
+        accent.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+    final mutedAccent = onAccent.withValues(alpha: 0.65);
 
     final track = _track;
     final dur = _dur;
@@ -166,7 +181,7 @@ class _PlayerContentState extends State<_PlayerContent> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+              color: onAccent.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -209,7 +224,7 @@ class _PlayerContentState extends State<_PlayerContent> {
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w800,
-            color: track == null ? cs.onSurfaceVariant : null,
+            color: track == null ? mutedAccent : onAccent,
           ),
         ),
         if (track != null && track.artist.isNotEmpty) ...[
@@ -220,7 +235,7 @@ class _PlayerContentState extends State<_PlayerContent> {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: cs.onSurfaceVariant,
+              color: mutedAccent,
             ),
           ),
         ],
@@ -229,8 +244,9 @@ class _PlayerContentState extends State<_PlayerContent> {
         Slider(
           value: _progress.clamp(0.0, total <= 0 ? 1 : total).toDouble(),
           max: total <= 0 ? 1 : total,
-          activeColor: accent,
-          inactiveColor: cs.surfaceContainerHighest,
+          activeColor: onAccent,
+          inactiveColor: onAccent.withValues(alpha: 0.30),
+          thumbColor: onAccent,
           onChangeStart: (_) => setState(() => _dragging = true),
           onChanged: (v) => setState(() => _dragValue = v),
           onChangeEnd: (v) {
@@ -251,13 +267,13 @@ class _PlayerContentState extends State<_PlayerContent> {
                     ? Duration(milliseconds: _dragValue.round())
                     : _pos),
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: cs.onSurfaceVariant,
+                  color: mutedAccent,
                 ),
               ),
               Text(
                 _fmt(dur),
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: cs.onSurfaceVariant,
+                  color: mutedAccent,
                 ),
               ),
             ],
@@ -271,12 +287,13 @@ class _PlayerContentState extends State<_PlayerContent> {
             _ModeButton(
               icon: Icons.shuffle_rounded,
               active: _player.shuffle.value,
-              accent: accent,
+              accent: onAccent,
               onPressed: _player.toggleShuffle,
             ),
             _ControlButton(
               icon: Icons.skip_previous_rounded,
               size: 34,
+              onAccent: onAccent,
               onPressed: track == null ? null : _player.previous,
             ),
             _PlayPauseButton(
@@ -287,23 +304,27 @@ class _PlayerContentState extends State<_PlayerContent> {
             _ControlButton(
               icon: Icons.skip_next_rounded,
               size: 34,
+              onAccent: onAccent,
               onPressed: track == null ? null : _player.next,
             ),
             _ModeButton(
               icon: _repeatIcon(_player.repeatMode.value),
               active: _player.repeatMode.value != LoopMode.off,
-              accent: accent,
+              accent: onAccent,
               onPressed: _player.toggleRepeat,
             ),
           ],
         ),
         const SizedBox(height: 12),
         if (_buffering && track != null) ...[
-          const Center(
+          Center(
             child: SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2.5),
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: onAccent,
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -324,13 +345,13 @@ class _PlayerContentState extends State<_PlayerContent> {
   }
 
   Widget _fallback(ThemeData theme) {
-    return ColoredBox(
-      color: theme.colorScheme.surfaceContainerHighest,
+    return const ColoredBox(
+      color: Colors.black26,
       child: Center(
         child: Icon(
           Icons.music_note_rounded,
           size: 56,
-          color: theme.colorScheme.onSurfaceVariant,
+          color: Colors.white70,
         ),
       ),
     );
@@ -342,10 +363,14 @@ class _ControlButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final double size;
 
+  /// Color de contraste (negro/blanco según el acento del sheet).
+  final Color? onAccent;
+
   const _ControlButton({
     required this.icon,
     required this.onPressed,
     this.size = 30,
+    this.onAccent,
   });
 
   @override
@@ -353,7 +378,7 @@ class _ControlButton extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return IconButton(
       iconSize: size,
-      color: cs.onSurface,
+      color: onAccent ?? cs.onSurface,
       onPressed: onPressed,
       icon: Icon(icon),
     );
@@ -387,7 +412,9 @@ class _PlayPauseButton extends StatelessWidget {
       ),
       child: IconButton(
         iconSize: 40,
-        color: Color.lerp(accent, Colors.black, 0.4) ?? Colors.black,
+        color: accent.computeLuminance() > 0.5
+            ? Colors.black
+            : Colors.white,
         onPressed: onPressed,
         icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
       ),
@@ -410,10 +437,9 @@ class _ModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return IconButton(
       iconSize: 22,
-      color: active ? accent : cs.onSurfaceVariant,
+      color: active ? accent : accent.withValues(alpha: 0.45),
       onPressed: onPressed,
       icon: Icon(icon),
     );

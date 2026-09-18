@@ -462,24 +462,34 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                       vertical: 12,
                     ),
                     decoration: BoxDecoration(
-                      color:
-                          widget.accentColor ??
-                          Theme.of(context).colorScheme.primary,
+                      // Desktop (fondo = acento): pill en color de contraste
+                      // opuesto. Embebido (Android, fondo oscuro): pill de
+                      // acento con texto blanco, como siempre.
+                      color: widget.embedded
+                          ? (widget.accentColor ??
+                                Theme.of(context).colorScheme.primary)
+                          : (widget.accentColor?.computeLuminance() ?? 0) > 0.5
+                          ? Colors.black
+                          : Colors.white,
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.sync_rounded,
-                          color: Colors.white,
+                          color: widget.embedded
+                              ? Colors.white
+                              : widget.accentColor,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
                         Text(
                           l10n.syncLyrics,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: widget.embedded
+                                ? Colors.white
+                                : widget.accentColor,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),

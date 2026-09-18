@@ -453,6 +453,10 @@ class _LyricsViewState extends State<LyricsView>
     LyricsView.activeActions['share'] = _lyrics == null ? null : _showShareDialog;
 
     final embedded = widget.embedded;
+    // Desktop: fondo PLANO de acento (mismo lenguaje que el player) con
+    // crossfade al cambiar de pista. Embebido (Android) conserva su fondo:
+    // el overlay del player ya pinta el suyo.
+    final bgColor = accent ?? theme.colorScheme.surfaceContainer;
     final Widget page = Container(
       margin: embedded
           ? EdgeInsets.zero
@@ -470,14 +474,34 @@ class _LyricsViewState extends State<LyricsView>
               ],
             ),
       child: embedded
-          ? _body(theme, l10n, accent, embedded)
+          ? _body(theme, l10n, accent, embedded, null, null)
           : ClipRRect(
               borderRadius: BorderRadius.circular(18),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainer,
+              child: TweenAnimationBuilder<Color?>(
+                tween: ColorTween(end: bgColor),
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
+                builder: (context, color, child) => DecoratedBox(
+                  decoration: BoxDecoration(color: color ?? bgColor),
+                  child: child,
                 ),
-                child: _body(theme, l10n, accent, embedded),
+                child: _body(
+                  theme,
+                  l10n,
+                  accent,
+                  embedded,
+                  accent != null
+                      ? (accent.computeLuminance() > 0.5
+                            ? Colors.black
+                            : Colors.white)
+                      : null,
+                  accent != null
+                      ? (accent.computeLuminance() > 0.5
+                            ? Colors.black
+                            : Colors.white)
+                          .withValues(alpha: 0.65)
+                      : null,
+                ),
               ),
             ),
     );
@@ -493,7 +517,15 @@ class _LyricsViewState extends State<LyricsView>
     AppLocalizations l10n,
     Color? accent,
     bool embedded,
+    Color? onAccent,
+    Color? mutedAccent,
   ) {
+    // Contraste sobre el fondo de acento (solo desktop; embedded conserva
+    // el esquema del tema). Misma validación que el player.
+    final Color contentColor =
+        onAccent ?? theme.colorScheme.onSurface;
+    final Color softColor =
+        mutedAccent ?? theme.colorScheme.onSurfaceVariant;
     final header = Padding(
       padding: embedded
           ? const EdgeInsets.fromLTRB(4, 6, 4, 0)
@@ -512,7 +544,7 @@ class _LyricsViewState extends State<LyricsView>
                   fallback: Icon(
                     Icons.music_note_rounded,
                     size: 22,
-                    color: theme.colorScheme.onSurfaceVariant,
+                    color: softColor,
                   ),
                 ),
               ),
@@ -530,6 +562,7 @@ class _LyricsViewState extends State<LyricsView>
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w700,
+                      color: contentColor,
                     ),
                   ),
                   if (_track != null)
@@ -540,7 +573,7 @@ class _LyricsViewState extends State<LyricsView>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                          color: softColor,
                         ),
                       ),
                     ),
@@ -570,9 +603,7 @@ class _LyricsViewState extends State<LyricsView>
                     IconButton(
                       icon: Icon(
                         Icons.graphic_eq_rounded,
-                        color: _sweepEnabled
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurfaceVariant,
+                        color: _sweepEnabled ? contentColor : softColor,
                       ),
                       tooltip: _sweepEnabled
                           ? l10n.karaokeSweepOn
@@ -586,17 +617,17 @@ class _LyricsViewState extends State<LyricsView>
                       },
                     ),
                     IconButton(
-                      icon: const Icon(Icons.timer_rounded),
+                      icon: Icon(Icons.timer_rounded, color: contentColor),
                       tooltip: l10n.syncLyricsTitle,
                       onPressed: _lyrics == null ? null : _showSyncDialog,
                     ),
                     IconButton(
-                      icon: const Icon(Icons.search_rounded),
+                      icon: Icon(Icons.search_rounded, color: contentColor),
                       tooltip: l10n.searchLyrics,
                       onPressed: _track == null ? null : _showSearchDialog,
                     ),
                     IconButton(
-                      icon: const Icon(Icons.share_rounded),
+                      icon: Icon(Icons.share_rounded, color: contentColor),
                       tooltip: l10n.shareLyrics,
                       onPressed: _lyrics == null ? null : _showShareDialog,
                     ),
@@ -616,7 +647,15 @@ class _LyricsViewState extends State<LyricsView>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!embedded) header,
-        Expanded(child: _buildBody(theme, l10n, accent, embedded)),
+        Expanded(
+          child: _buildBody(
+            theme,
+            l10n,
+            accent,
+            embedded,
+            onAccent: onAccent,
+          ),
+        ),
       ],
     );
     if (!embedded) return content;
@@ -632,8 +671,9 @@ class _LyricsViewState extends State<LyricsView>
     ThemeData theme,
     AppLocalizations l10n,
     Color? accent,
-    bool embedded,
-  ) {
+    bool embedded, {
+    Color? onAccent,
+  }) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -644,7 +684,8 @@ class _LyricsViewState extends State<LyricsView>
         child: Text(
           l10n.lyricsNoTrack,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+            color: onAccent?.withValues(alpha: 0.65) ??
+                theme.colorScheme.onSurfaceVariant,
           ),
         ),
       );
@@ -699,7 +740,10 @@ class _LyricsViewState extends State<LyricsView>
           audioPath: snapshot.data,
           lyricsOffset: _lyricsOffset,
           onTap: _onLineTap,
-          accentColor: accent,
+          // Desktop: las líneas se pintan en color de CONTRASTE (blanco/
+          // negro según el acento) para que sean legibles sobre el fondo de
+          // acento. Embebido conserva el acento (fondo oscuro del player).
+          accentColor: onAccent ?? accent,
           sweepEnabled: _sweepEnabled,
           embedded: embedded,
         );
