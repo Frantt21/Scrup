@@ -230,7 +230,7 @@ class _SettingsViewState extends State<SettingsView> {
         ),
         Offset.zero & overlay.size,
       ),
-      constraints: const BoxConstraints(minWidth: 160, maxHeight: 380),
+      constraints: const BoxConstraints(minWidth: 240, maxHeight: 380),
       clipBehavior: Clip.antiAlias,
       items: [
         for (final mb in _cacheLimitOptions)
@@ -942,52 +942,14 @@ class _SettingsViewState extends State<SettingsView> {
         },
       ),
       const SizedBox(height: 14),
+      // Desktop: mismo campo fijo de 240px que los otros dropdowns (idioma,
+      // límite de caché). Móvil: llena el ancho junto al botón de recálculo.
       Row(
         children: [
-          Expanded(
-            child: Builder(
-              builder: (fieldContext) => InkWell(
-                borderRadius: BorderRadius.circular(14),
-                mouseCursor: SystemMouseCursors.click,
-                focusColor: Colors.transparent,
-                hoverColor: Colors.white.withValues(alpha: 0.04),
-                onTap: _recalculating
-                    ? null
-                    : () => _openPlaylistMenu(fieldContext),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(
-                      alpha: 0.35,
-                    ),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.06),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _selectedPlaylist?.name ?? '—',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                      ),
-                      const Icon(Icons.expand_more_rounded, size: 20),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          if (Binaries.isMobile)
+            Expanded(child: _paletteSelectorField(theme))
+          else
+            _paletteSelectorField(theme),
           const SizedBox(width: 10),
           FilledButton.icon(
             onPressed: (_recalculating || _selectedPlaylist == null)
@@ -1021,6 +983,49 @@ class _SettingsViewState extends State<SettingsView> {
         ),
       ],
     ];
+  }
+
+  /// Campo del selector de playlist: mismo estilo y ancho (240px en desktop,
+  /// full width en móvil) que los dropdowns de idioma y límite de caché.
+  Widget _paletteSelectorField(ThemeData theme) {
+    return Builder(
+      builder: (fieldContext) => InkWell(
+        borderRadius: BorderRadius.circular(14),
+        mouseCursor: SystemMouseCursors.click,
+        focusColor: Colors.transparent,
+        hoverColor: Colors.white.withValues(alpha: 0.04),
+        onTap: _recalculating ? null : () => _openPlaylistMenu(fieldContext),
+        child: Container(
+          width: Binaries.isMobile ? double.infinity : 240,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.35,
+            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _selectedPlaylist?.name ?? '—',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: theme.colorScheme.primary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Menú del selector de playlist (mismo patrón que el de idioma).
