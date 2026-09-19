@@ -442,6 +442,23 @@ class AppLocalizationsKo extends AppLocalizations {
   String get cacheLimitHint => '다운로드한 곡의 최대 디스크 사용량';
 
   @override
+  String get downloadsDialogTitle => '다운로드';
+
+  @override
+  String get downloadsByPlaylist => '재생목록별';
+
+  @override
+  String get downloadsAll => '전체';
+
+  @override
+  String get downloadsEmpty => '다운로드한 곡이 없습니다';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return '캐시에서 \"$name\"을(를) 삭제할까요? 오프라인 재생을 위해서는 다시 다운로드해야 합니다.';
+  }
+
+  @override
   String get about => '정보';
 
   @override

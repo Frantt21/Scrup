@@ -19,6 +19,7 @@ import '../../services/search_service.dart';
 import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
 import '../locale_controller.dart';
+import '../widgets/downloads_dialog.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/screen_header.dart';
 import '../widgets/scrup_toasts.dart';
@@ -870,6 +871,17 @@ class _SettingsViewState extends State<SettingsView> {
                   icon: const Icon(Icons.folder_open_rounded, size: 18),
                   label: Text(l10n.openFolder),
                 ),
+              // Inspección y limpieza fina: descargas por playlist (tabs).
+              FilledButton.icon(
+                onPressed: _openDownloadsDialog,
+                style: FilledButton.styleFrom().copyWith(
+                  mouseCursor: WidgetStateProperty.all(
+                    SystemMouseCursors.click,
+                  ),
+                ),
+                icon: const Icon(Icons.library_music_rounded, size: 18),
+                label: Text(l10n.downloadsDialogTitle),
+              ),
               FilledButton.icon(
                 onPressed: _clearing ? null : _clearCache,
                 style:
@@ -983,6 +995,22 @@ class _SettingsViewState extends State<SettingsView> {
         ),
       ],
     ];
+  }
+
+  /// Diálogo de descargas: tabs por playlist (pills) con el espacio usado
+  /// por las canciones descargadas de cada una, y pestaña "Todas" con el
+  /// total. Cada fila se puede eliminar individualmente (confirma antes).
+  Future<void> _openDownloadsDialog() async {
+    if (!mounted) return;
+    final cache = context.read<AudioCacheService>();
+    final db = context.read<AppDatabase>();
+    await showDialog<void>(
+      context: context,
+      builder: (_) => DownloadsDialog(db: db, cache: cache),
+    );
+    if (!mounted) return;
+    // Al cerrar: refresca el tamaño total de la sección por si se borró algo.
+    unawaited(_refreshStats());
   }
 
   /// Campo del selector de playlist: mismo estilo y ancho (240px en desktop,

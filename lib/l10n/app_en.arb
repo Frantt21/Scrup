@@ -245,6 +245,18 @@
   "openFolder": "Open folder",
   "cacheLimit": "Cache limit",
   "cacheLimitHint": "Maximum disk space for downloaded songs",
+  "downloadsDialogTitle": "Downloads",
+  "downloadsByPlaylist": "By playlist",
+  "downloadsAll": "All",
+  "downloadsEmpty": "No downloaded songs",
+  "deleteDownloadConfirm": "Delete \"{name}\" from the cache? You'll need to download it again to play it offline.",
+  "@deleteDownloadConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "about": "About",
   "version": "Version",
   "discordPresence": "Discord Presence",

@@ -442,6 +442,23 @@ class AppLocalizationsJa extends AppLocalizations {
   String get cacheLimitHint => 'ダウンロード曲の最大ディスク使用量';
 
   @override
+  String get downloadsDialogTitle => 'ダウンロード';
+
+  @override
+  String get downloadsByPlaylist => 'プレイリスト別';
+
+  @override
+  String get downloadsAll => 'すべて';
+
+  @override
+  String get downloadsEmpty => 'ダウンロードした曲はありません';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return '「$name」をキャッシュから削除しますか？オフラインで再生するには再ダウンロードが必要です。';
+  }
+
+  @override
   String get about => '情報';
 
   @override

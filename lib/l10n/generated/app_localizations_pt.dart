@@ -447,6 +447,23 @@ class AppLocalizationsPt extends AppLocalizations {
   String get cacheLimitHint => 'Espaço máximo em disco para músicas baixadas';
 
   @override
+  String get downloadsDialogTitle => 'Downloads';
+
+  @override
+  String get downloadsByPlaylist => 'Por playlist';
+
+  @override
+  String get downloadsAll => 'Tudo';
+
+  @override
+  String get downloadsEmpty => 'Nenhuma música baixada';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return 'Excluir \"$name\" do cache? Você precisará baixá-la novamente para ouvir offline.';
+  }
+
+  @override
   String get about => 'Sobre';
 
   @override
@@ -1194,6 +1211,23 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get cacheLimitHint => 'Espaço máximo em disco para músicas baixadas';
+
+  @override
+  String get downloadsDialogTitle => 'Downloads';
+
+  @override
+  String get downloadsByPlaylist => 'Por playlist';
+
+  @override
+  String get downloadsAll => 'Tudo';
+
+  @override
+  String get downloadsEmpty => 'Nenhuma música baixada';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return 'Excluir \"$name\" do cache? Você precisará baixá-la novamente para ouvir offline.';
+  }
 
   @override
   String get about => 'Sobre';

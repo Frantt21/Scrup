@@ -255,8 +255,12 @@ class ScrupApp extends StatelessWidget {
         Provider<AppDatabase>(create: (_) => database),
         Provider<YtDlpService>(create: (_) => YtDlpService()),
         Provider<AudioCacheService>(
-          create: (context) =>
-              AudioCacheService(ytdlp: context.read<YtDlpService>()),
+          create: (context) => AudioCacheService(
+            ytdlp: context.read<YtDlpService>(),
+            // Downloads metadata table (settings dialog): the service is
+            // built after the DB provider above, so read() resolves.
+            db: context.read<AppDatabase>(),
+          ),
         ),
         // App-lifetime playlist batch downloader: survives playlist screen
         // close, UI rows just subscribe for progress.

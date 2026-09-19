@@ -245,6 +245,18 @@
   "openFolder": "Abrir carpeta",
   "cacheLimit": "Límite del caché",
   "cacheLimitHint": "Espacio máximo en disco para las canciones descargadas",
+  "downloadsDialogTitle": "Descargas",
+  "downloadsByPlaylist": "Por playlist",
+  "downloadsAll": "Todas",
+  "downloadsEmpty": "No hay canciones descargadas",
+  "deleteDownloadConfirm": "¿Eliminar \"{name}\" de la caché? Tendrás que volver a descargarla para reproducirla sin conexión.",
+  "@deleteDownloadConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "about": "Acerca de",
   "version": "Versión",
   "discordPresence": "Presencia de Discord",

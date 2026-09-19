@@ -2531,6 +2531,470 @@ class ArtistVisitsCompanion extends UpdateCompanion<VisitedArtist> {
   }
 }
 
+class $CachedTracksTable extends CachedTracks
+    with TableInfo<$CachedTracksTable, CachedTrackRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CachedTracksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _artistMeta = const VerificationMeta('artist');
+  @override
+  late final GeneratedColumn<String> artist = GeneratedColumn<String>(
+    'artist',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _thumbnailUrlMeta = const VerificationMeta(
+    'thumbnailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> thumbnailUrl = GeneratedColumn<String>(
+    'thumbnail_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sizeBytesMeta = const VerificationMeta(
+    'sizeBytes',
+  );
+  @override
+  late final GeneratedColumn<int> sizeBytes = GeneratedColumn<int>(
+    'size_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _downloadedAtMeta = const VerificationMeta(
+    'downloadedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> downloadedAt = GeneratedColumn<DateTime>(
+    'downloaded_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    title,
+    artist,
+    thumbnailUrl,
+    sizeBytes,
+    downloadedAt,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cached_tracks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CachedTrackRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    }
+    if (data.containsKey('artist')) {
+      context.handle(
+        _artistMeta,
+        artist.isAcceptableOrUnknown(data['artist']!, _artistMeta),
+      );
+    }
+    if (data.containsKey('thumbnail_url')) {
+      context.handle(
+        _thumbnailUrlMeta,
+        thumbnailUrl.isAcceptableOrUnknown(
+          data['thumbnail_url']!,
+          _thumbnailUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('size_bytes')) {
+      context.handle(
+        _sizeBytesMeta,
+        sizeBytes.isAcceptableOrUnknown(data['size_bytes']!, _sizeBytesMeta),
+      );
+    }
+    if (data.containsKey('downloaded_at')) {
+      context.handle(
+        _downloadedAtMeta,
+        downloadedAt.isAcceptableOrUnknown(
+          data['downloaded_at']!,
+          _downloadedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CachedTrackRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CachedTrackRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      artist: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}artist'],
+      )!,
+      thumbnailUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}thumbnail_url'],
+      ),
+      sizeBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size_bytes'],
+      )!,
+      downloadedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}downloaded_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $CachedTracksTable createAlias(String alias) {
+    return $CachedTracksTable(attachedDatabase, alias);
+  }
+}
+
+class CachedTrackRow extends DataClass implements Insertable<CachedTrackRow> {
+  final String id;
+  final String title;
+  final String artist;
+  final String? thumbnailUrl;
+  final int sizeBytes;
+  final DateTime downloadedAt;
+  final DateTime? deletedAt;
+  const CachedTrackRow({
+    required this.id,
+    required this.title,
+    required this.artist,
+    this.thumbnailUrl,
+    required this.sizeBytes,
+    required this.downloadedAt,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['title'] = Variable<String>(title);
+    map['artist'] = Variable<String>(artist);
+    if (!nullToAbsent || thumbnailUrl != null) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl);
+    }
+    map['size_bytes'] = Variable<int>(sizeBytes);
+    map['downloaded_at'] = Variable<DateTime>(downloadedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    return map;
+  }
+
+  CachedTracksCompanion toCompanion(bool nullToAbsent) {
+    return CachedTracksCompanion(
+      id: Value(id),
+      title: Value(title),
+      artist: Value(artist),
+      thumbnailUrl: thumbnailUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(thumbnailUrl),
+      sizeBytes: Value(sizeBytes),
+      downloadedAt: Value(downloadedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory CachedTrackRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CachedTrackRow(
+      id: serializer.fromJson<String>(json['id']),
+      title: serializer.fromJson<String>(json['title']),
+      artist: serializer.fromJson<String>(json['artist']),
+      thumbnailUrl: serializer.fromJson<String?>(json['thumbnailUrl']),
+      sizeBytes: serializer.fromJson<int>(json['sizeBytes']),
+      downloadedAt: serializer.fromJson<DateTime>(json['downloadedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'title': serializer.toJson<String>(title),
+      'artist': serializer.toJson<String>(artist),
+      'thumbnailUrl': serializer.toJson<String?>(thumbnailUrl),
+      'sizeBytes': serializer.toJson<int>(sizeBytes),
+      'downloadedAt': serializer.toJson<DateTime>(downloadedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+    };
+  }
+
+  CachedTrackRow copyWith({
+    String? id,
+    String? title,
+    String? artist,
+    Value<String?> thumbnailUrl = const Value.absent(),
+    int? sizeBytes,
+    DateTime? downloadedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+  }) => CachedTrackRow(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    artist: artist ?? this.artist,
+    thumbnailUrl: thumbnailUrl.present ? thumbnailUrl.value : this.thumbnailUrl,
+    sizeBytes: sizeBytes ?? this.sizeBytes,
+    downloadedAt: downloadedAt ?? this.downloadedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  CachedTrackRow copyWithCompanion(CachedTracksCompanion data) {
+    return CachedTrackRow(
+      id: data.id.present ? data.id.value : this.id,
+      title: data.title.present ? data.title.value : this.title,
+      artist: data.artist.present ? data.artist.value : this.artist,
+      thumbnailUrl: data.thumbnailUrl.present
+          ? data.thumbnailUrl.value
+          : this.thumbnailUrl,
+      sizeBytes: data.sizeBytes.present ? data.sizeBytes.value : this.sizeBytes,
+      downloadedAt: data.downloadedAt.present
+          ? data.downloadedAt.value
+          : this.downloadedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedTrackRow(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('artist: $artist, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('downloadedAt: $downloadedAt, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    title,
+    artist,
+    thumbnailUrl,
+    sizeBytes,
+    downloadedAt,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CachedTrackRow &&
+          other.id == this.id &&
+          other.title == this.title &&
+          other.artist == this.artist &&
+          other.thumbnailUrl == this.thumbnailUrl &&
+          other.sizeBytes == this.sizeBytes &&
+          other.downloadedAt == this.downloadedAt &&
+          other.deletedAt == this.deletedAt);
+}
+
+class CachedTracksCompanion extends UpdateCompanion<CachedTrackRow> {
+  final Value<String> id;
+  final Value<String> title;
+  final Value<String> artist;
+  final Value<String?> thumbnailUrl;
+  final Value<int> sizeBytes;
+  final Value<DateTime> downloadedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
+  const CachedTracksCompanion({
+    this.id = const Value.absent(),
+    this.title = const Value.absent(),
+    this.artist = const Value.absent(),
+    this.thumbnailUrl = const Value.absent(),
+    this.sizeBytes = const Value.absent(),
+    this.downloadedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CachedTracksCompanion.insert({
+    required String id,
+    this.title = const Value.absent(),
+    this.artist = const Value.absent(),
+    this.thumbnailUrl = const Value.absent(),
+    this.sizeBytes = const Value.absent(),
+    this.downloadedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id);
+  static Insertable<CachedTrackRow> custom({
+    Expression<String>? id,
+    Expression<String>? title,
+    Expression<String>? artist,
+    Expression<String>? thumbnailUrl,
+    Expression<int>? sizeBytes,
+    Expression<DateTime>? downloadedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (title != null) 'title': title,
+      if (artist != null) 'artist': artist,
+      if (thumbnailUrl != null) 'thumbnail_url': thumbnailUrl,
+      if (sizeBytes != null) 'size_bytes': sizeBytes,
+      if (downloadedAt != null) 'downloaded_at': downloadedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CachedTracksCompanion copyWith({
+    Value<String>? id,
+    Value<String>? title,
+    Value<String>? artist,
+    Value<String?>? thumbnailUrl,
+    Value<int>? sizeBytes,
+    Value<DateTime>? downloadedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return CachedTracksCompanion(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      sizeBytes: sizeBytes ?? this.sizeBytes,
+      downloadedAt: downloadedAt ?? this.downloadedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (artist.present) {
+      map['artist'] = Variable<String>(artist.value);
+    }
+    if (thumbnailUrl.present) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl.value);
+    }
+    if (sizeBytes.present) {
+      map['size_bytes'] = Variable<int>(sizeBytes.value);
+    }
+    if (downloadedAt.present) {
+      map['downloaded_at'] = Variable<DateTime>(downloadedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedTracksCompanion(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('artist: $artist, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('downloadedAt: $downloadedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2541,6 +3005,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LyricsTable lyrics = $LyricsTable(this);
   late final $PaletteCacheTable paletteCache = $PaletteCacheTable(this);
   late final $ArtistVisitsTable artistVisits = $ArtistVisitsTable(this);
+  late final $CachedTracksTable cachedTracks = $CachedTracksTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2553,6 +3018,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     lyrics,
     paletteCache,
     artistVisits,
+    cachedTracks,
   ];
 }
 
@@ -4577,6 +5043,248 @@ typedef $$ArtistVisitsTableProcessedTableManager =
       VisitedArtist,
       PrefetchHooks Function()
     >;
+typedef $$CachedTracksTableCreateCompanionBuilder =
+    CachedTracksCompanion Function({
+      required String id,
+      Value<String> title,
+      Value<String> artist,
+      Value<String?> thumbnailUrl,
+      Value<int> sizeBytes,
+      Value<DateTime> downloadedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$CachedTracksTableUpdateCompanionBuilder =
+    CachedTracksCompanion Function({
+      Value<String> id,
+      Value<String> title,
+      Value<String> artist,
+      Value<String?> thumbnailUrl,
+      Value<int> sizeBytes,
+      Value<DateTime> downloadedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+
+class $$CachedTracksTableFilterComposer
+    extends Composer<_$AppDatabase, $CachedTracksTable> {
+  $$CachedTracksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get artist => $composableBuilder(
+    column: $table.artist,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get downloadedAt => $composableBuilder(
+    column: $table.downloadedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CachedTracksTableOrderingComposer
+    extends Composer<_$AppDatabase, $CachedTracksTable> {
+  $$CachedTracksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get artist => $composableBuilder(
+    column: $table.artist,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get downloadedAt => $composableBuilder(
+    column: $table.downloadedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CachedTracksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CachedTracksTable> {
+  $$CachedTracksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get artist =>
+      $composableBuilder(column: $table.artist, builder: (column) => column);
+
+  GeneratedColumn<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sizeBytes =>
+      $composableBuilder(column: $table.sizeBytes, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get downloadedAt => $composableBuilder(
+    column: $table.downloadedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+}
+
+class $$CachedTracksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CachedTracksTable,
+          CachedTrackRow,
+          $$CachedTracksTableFilterComposer,
+          $$CachedTracksTableOrderingComposer,
+          $$CachedTracksTableAnnotationComposer,
+          $$CachedTracksTableCreateCompanionBuilder,
+          $$CachedTracksTableUpdateCompanionBuilder,
+          (
+            CachedTrackRow,
+            BaseReferences<_$AppDatabase, $CachedTracksTable, CachedTrackRow>,
+          ),
+          CachedTrackRow,
+          PrefetchHooks Function()
+        > {
+  $$CachedTracksTableTableManager(_$AppDatabase db, $CachedTracksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CachedTracksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CachedTracksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CachedTracksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> artist = const Value.absent(),
+                Value<String?> thumbnailUrl = const Value.absent(),
+                Value<int> sizeBytes = const Value.absent(),
+                Value<DateTime> downloadedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CachedTracksCompanion(
+                id: id,
+                title: title,
+                artist: artist,
+                thumbnailUrl: thumbnailUrl,
+                sizeBytes: sizeBytes,
+                downloadedAt: downloadedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String> title = const Value.absent(),
+                Value<String> artist = const Value.absent(),
+                Value<String?> thumbnailUrl = const Value.absent(),
+                Value<int> sizeBytes = const Value.absent(),
+                Value<DateTime> downloadedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CachedTracksCompanion.insert(
+                id: id,
+                title: title,
+                artist: artist,
+                thumbnailUrl: thumbnailUrl,
+                sizeBytes: sizeBytes,
+                downloadedAt: downloadedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CachedTracksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CachedTracksTable,
+      CachedTrackRow,
+      $$CachedTracksTableFilterComposer,
+      $$CachedTracksTableOrderingComposer,
+      $$CachedTracksTableAnnotationComposer,
+      $$CachedTracksTableCreateCompanionBuilder,
+      $$CachedTracksTableUpdateCompanionBuilder,
+      (
+        CachedTrackRow,
+        BaseReferences<_$AppDatabase, $CachedTracksTable, CachedTrackRow>,
+      ),
+      CachedTrackRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4595,4 +5303,6 @@ class $AppDatabaseManager {
       $$PaletteCacheTableTableManager(_db, _db.paletteCache);
   $$ArtistVisitsTableTableManager get artistVisits =>
       $$ArtistVisitsTableTableManager(_db, _db.artistVisits);
+  $$CachedTracksTableTableManager get cachedTracks =>
+      $$CachedTracksTableTableManager(_db, _db.cachedTracks);
 }

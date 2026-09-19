@@ -449,6 +449,23 @@ class AppLocalizationsEs extends AppLocalizations {
       'Espacio máximo en disco para las canciones descargadas';
 
   @override
+  String get downloadsDialogTitle => 'Descargas';
+
+  @override
+  String get downloadsByPlaylist => 'Por playlist';
+
+  @override
+  String get downloadsAll => 'Todas';
+
+  @override
+  String get downloadsEmpty => 'No hay canciones descargadas';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return '¿Eliminar \"$name\" de la caché? Tendrás que volver a descargarla para reproducirla sin conexión.';
+  }
+
+  @override
   String get about => 'Acerca de';
 
   @override

@@ -100,3 +100,21 @@ class ArtistVisits extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
+
+/// Metadatos de las canciones descargadas a la caché de audio: alimenta el
+/// diálogo de descargas de settings (título/artista/artwork/tamaño) sin leer
+/// el disco. `deletedAt` mantiene el id tras borrar el archivo para no
+/// volver a enriquecer una futura descarga del mismo video.
+@DataClassName('CachedTrackRow')
+class CachedTracks extends Table {
+  TextColumn get id => text()(); // YouTube video id
+  TextColumn get title => text().withDefault(const Constant(''))();
+  TextColumn get artist => text().withDefault(const Constant(''))();
+  TextColumn get thumbnailUrl => text().nullable()();
+  IntColumn get sizeBytes => integer().withDefault(const Constant(0))();
+  DateTimeColumn get downloadedAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}

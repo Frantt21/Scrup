@@ -440,6 +440,23 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cacheLimitHint => '已下载歌曲的最大磁盘使用量';
 
   @override
+  String get downloadsDialogTitle => '下载';
+
+  @override
+  String get downloadsByPlaylist => '按播放列表';
+
+  @override
+  String get downloadsAll => '全部';
+
+  @override
+  String get downloadsEmpty => '没有已下载的歌曲';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return '从缓存中删除“$name”？离线播放需要重新下载。';
+  }
+
+  @override
   String get about => '关于';
 
   @override

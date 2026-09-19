@@ -1557,8 +1557,13 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
       final ImageProvider provider = CoverImage.isLocalPath(src)
           ? FileImage(File(src))
           : NetworkImage(src);
-      precacheImage(provider, context).then((_) {
-        if (mounted) setState(() {});
+      // postFrame: precacheImage lee MediaQuery (dependencia heredada) y
+      // fallaría si se llama antes de que termine initState.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        precacheImage(provider, context).then((_) {
+          if (mounted) setState(() {});
+        });
       });
     }
   }

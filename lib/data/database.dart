@@ -36,8 +36,16 @@ class Playlist {
   });
 }
 
-@DriftDatabase(
-  tables: [Tracks, History, Playlists, PlaylistTracks, Lyrics, PaletteCache, ArtistVisits],
+@DriftDatabase(      tables: [
+        Tracks,
+        History,
+        Playlists,
+        PlaylistTracks,
+        Lyrics,
+        PaletteCache,
+        ArtistVisits,
+        CachedTracks,
+      ],
 )
 class AppDatabase extends _$AppDatabase {
   /// [executor] lets tests inject an in-memory database.
@@ -45,7 +53,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -92,6 +100,11 @@ class AppDatabase extends _$AppDatabase {
       if (from < 10) {
         // Visited artists (home "visited artists" row).
         await m.createTable(artistVisits);
+      }
+      if (from < 11) {
+        // Downloads metadata for the settings dialog (title/artist/size per
+        // cached file). Backfilled from the tracks table on demand.
+        await m.createTable(cachedTracks);
       }
     },
   );
@@ -258,6 +271,48 @@ class AppDatabase extends _$AppDatabase {
 
   /// Update a cached track's metadata (e.g. when Deezer enrichment arrives) without touching history. Since recent tracks JOIN `tracks`, the enriched artwork/album appear instantly on the home screen.
   Future<void> updateTrackMetadata(Track track) => cacheTrack(track);
+
+  // --------------------------------------------------- cached (downloads)
+  /// Metadata snapshot of a completed download (audio cache). Never
+  /// deletes the row: `deletedAt` keeps the id so a future re-download of
+  /// the same video skips Deezer enrichment.
+  Future<void> upsertCachedTrack({
+    required String id,
+    String? title,
+    String? artist,
+    String? thumbnailUrl,
+    required int sizeBytes,
+  }) async {
+    await into(cachedTracks).insertOnConflictUpdate(
+      CachedTracksCompanion.insert(
+        id: id,
+        title: Value(title ?? ''),
+        artist: Value(artist ?? ''),
+        thumbnailUrl: Value(thumbnailUrl),
+        sizeBytes: Value(sizeBytes),
+        downloadedAt: Value(DateTime.now()),
+        deletedAt: const Value(null),
+      ),
+    );
+  }
+
+  /// Mark a download entry as removed from disk (the row stays for future
+  /// re-downloads). No-op if the id is unknown.
+  Future<void> markCachedTrackDeleted(String id) async {
+    await (update(
+      cachedTracks,
+    )..where((ct) => ct.id.equals(id))).write(
+      CachedTracksCompanion(deletedAt: Value(DateTime.now())),
+    );
+  }
+
+  /// All download entries with metadata (deleted ones included, flagged by
+  /// `deletedAt`), most recent first.
+  Future<List<CachedTrackRow>> allCachedTracks() {
+    final query = select(cachedTracks)
+      ..orderBy([(ct) => OrderingTerm.desc(ct.downloadedAt)]);
+    return query.get();
+  }
 
   /// Return a track's cached metadata, if any exist.
   Future<Track?> getCachedTrack(String id) async {
@@ -479,6 +534,23 @@ class AppDatabase extends _$AppDatabase {
       playlistTracks,
     )..where((pt) => pt.trackId.equals(trackId))).get();
     return rows.map((r) => r.playlistId).toSet();
+  }
+
+  /// Track ids of a playlist (plain list, for grouping the downloads dialog).
+  Future<List<String>> playlistTrackIds(int playlistId) async {
+    final rows = await (select(
+      playlistTracks,
+    )..where((pt) => pt.playlistId.equals(playlistId))).get();
+    return rows.map((r) => r.trackId).toList();
+  }
+
+  /// Tracks by id in ONE query (backfill of the downloads metadata table).
+  Future<Map<String, TrackRow>> tracksByIds(List<String> ids) async {
+    if (ids.isEmpty) return const {};
+    final rows = await (select(
+      tracks,
+    )..where((t) => t.id.isIn(ids))).get();
+    return {for (final r in rows) r.id: r};
   }
 
   /// `true` while the track is in the playlist (reactive stream).

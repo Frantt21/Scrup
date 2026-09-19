@@ -895,6 +895,36 @@ abstract class AppLocalizations {
   /// **'Espacio máximo en disco para las canciones descargadas'**
   String get cacheLimitHint;
 
+  /// No description provided for @downloadsDialogTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Descargas'**
+  String get downloadsDialogTitle;
+
+  /// No description provided for @downloadsByPlaylist.
+  ///
+  /// In es, this message translates to:
+  /// **'Por playlist'**
+  String get downloadsByPlaylist;
+
+  /// No description provided for @downloadsAll.
+  ///
+  /// In es, this message translates to:
+  /// **'Todas'**
+  String get downloadsAll;
+
+  /// No description provided for @downloadsEmpty.
+  ///
+  /// In es, this message translates to:
+  /// **'No hay canciones descargadas'**
+  String get downloadsEmpty;
+
+  /// No description provided for @deleteDownloadConfirm.
+  ///
+  /// In es, this message translates to:
+  /// **'¿Eliminar \"{name}\" de la caché? Tendrás que volver a descargarla para reproducirla sin conexión.'**
+  String deleteDownloadConfirm(String name);
+
   /// No description provided for @about.
   ///
   /// In es, this message translates to:

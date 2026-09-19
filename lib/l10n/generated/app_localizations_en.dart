@@ -447,6 +447,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cacheLimitHint => 'Maximum disk space for downloaded songs';
 
   @override
+  String get downloadsDialogTitle => 'Downloads';
+
+  @override
+  String get downloadsByPlaylist => 'By playlist';
+
+  @override
+  String get downloadsAll => 'All';
+
+  @override
+  String get downloadsEmpty => 'No downloaded songs';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return 'Delete \"$name\" from the cache? You\'ll need to download it again to play it offline.';
+  }
+
+  @override
   String get about => 'About';
 
   @override

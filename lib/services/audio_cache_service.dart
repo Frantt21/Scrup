@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../core/app_log.dart';
+import '../data/database.dart';
 import 'ytdlp_service.dart';
 
 /// Local audio source: cached file or partial download for progressive playback.
@@ -24,6 +25,14 @@ class CacheStats {
   bool get isEmpty => fileCount == 0 && bytes == 0;
 }
 
+/// One cached audio file: videoId plus its size on disk (for the settings
+/// downloads dialog, which maps ids to playlist tracks).
+class CachedTrackFile {
+  const CachedTrackFile(this.videoId, this.sizeBytes);
+  final String videoId;
+  final int sizeBytes;
+}
+
 /// Local audio cache with LRU eviction. First play downloads to disk,
 /// subsequent plays serve from cache instantly.
 class AudioCacheService {
@@ -31,7 +40,20 @@ class AudioCacheService {
     required this.ytdlp,
     int? maxSizeBytes,
     this.directoryOverride,
-  }) : maxSizeBytes = maxSizeBytes ?? _maxFromEnv();
+    AppDatabase? db,
+  }) : maxSizeBytes = maxSizeBytes ?? _maxFromEnv() {
+    _db = db;
+  }
+
+  /// Optional DB handle for the downloads metadata table (assigned at
+  /// bootstrap via [attachDb]).
+  AppDatabase? _db;
+
+  /// Wire the downloads metadata table once the DB exists (main.dart creates
+  /// both; the service may be constructed before them).
+  void attachDb(AppDatabase db) {
+    _db = db;
+  }
 
   static const int defaultMaxSize = 40 * 1024 * 1024 * 1024;
 
@@ -304,9 +326,21 @@ class AudioCacheService {
         return;
       }
       try {
-        await download.finalPath;
+        final finalPath = await download.finalPath;
         debugPrint('[audio] download COMPLETE id=$videoId');
         await _enforceLimit(dir);
+        // Metadata snapshot for the settings downloads dialog (title,
+        // artist, artwork, size). Best-effort: never breaks the download.
+        try {
+          final meta = await _db?.getCachedTrack(videoId);
+          await _db?.upsertCachedTrack(
+            id: videoId,
+            title: meta?.title,
+            artist: meta?.artist,
+            thumbnailUrl: meta?.thumbnailUrl,
+            sizeBytes: File(finalPath).lengthSync(),
+          );
+        } catch (_) {}
       } catch (_) {
         debugPrint('[audio] download cleanup id=$videoId (final no generado)');
         _setBackgroundProgress(videoId, null);
@@ -383,6 +417,95 @@ class AudioCacheService {
           .map((f) => p.basenameWithoutExtension(f.path))
           .toSet();
     });
+  }
+
+  /// Cached audio files with their size on disk (isolate: stats I/O stays
+  /// off the UI thread). Also backfills the `cached_tracks` metadata table
+  /// so downloads made before the table existed (or enriched later) still
+  /// show their title/artist in the settings downloads dialog.
+  Future<List<CachedTrackFile>> cachedTracks() async {
+    final dir = await cacheDir();
+    final dirPath = dir.path;
+    final files = await Isolate.run(() {
+      final d = Directory(dirPath);
+      if (!d.existsSync()) return const <CachedTrackFile>[];
+      return [
+        for (final e in d.listSync())
+          if (e is File && !p.basename(e.path).endsWith('.part'))
+            CachedTrackFile(p.basenameWithoutExtension(e.path), e.statSync().size),
+      ];
+    });
+    // Backfill en 2 queries (batch): entradas sin metadata heredan título,
+    // artista y artwork de la tabla `tracks`; las que solo cambiaron de
+    // tamaño se actualizan. Nunca lanza: si falla, el diálogo muestra los
+    // videoIds pelados.
+    final db = _db;
+    if (db != null && files.isNotEmpty) {
+      try {
+        final known = {
+          for (final row in await db.allCachedTracks()) row.id: row,
+        };
+        final missing = [
+          for (final f in files)
+            if (known[f.videoId] == null ||
+                known[f.videoId]!.title.isEmpty ||
+                known[f.videoId]!.deletedAt != null)
+              f,
+        ];
+        final staleSizes = [
+          for (final f in files)
+            if (known[f.videoId] != null &&
+                known[f.videoId]!.title.isNotEmpty &&
+                known[f.videoId]!.deletedAt == null &&
+                known[f.videoId]!.sizeBytes != f.sizeBytes)
+              f,
+        ];
+        if (missing.isNotEmpty) {
+          final meta = await db.tracksByIds([
+            for (final f in missing) f.videoId,
+          ]);
+          for (final f in missing) {
+            final t = meta[f.videoId];
+            await db.upsertCachedTrack(
+              id: f.videoId,
+              title: t?.title,
+              artist: t?.artist,
+              thumbnailUrl: t?.thumbnailUrl,
+              sizeBytes: f.sizeBytes,
+            );
+          }
+        }
+        for (final f in staleSizes) {
+          final row = known[f.videoId]!;
+          await db.upsertCachedTrack(
+            id: f.videoId,
+            title: row.title,
+            artist: row.artist,
+            thumbnailUrl: row.thumbnailUrl,
+            sizeBytes: f.sizeBytes,
+          );
+        }
+      } catch (_) {}
+    }
+    return files;
+  }
+
+  /// Delete a cached file (LRU-independent) and flag its metadata entry.
+  Future<void> deleteCachedTrack(String videoId) async {
+    final dir = await cacheDir();
+    final dirPath = dir.path;
+    await Isolate.run(() {
+      final d = Directory(dirPath);
+      if (!d.existsSync()) return;
+      for (final e in d.listSync()) {
+        if (e is File && p.basenameWithoutExtension(e.path) == videoId) {
+          try {
+            e.deleteSync();
+          } catch (_) {}
+        }
+      }
+    });
+    await _db?.markCachedTrackDeleted(videoId);
   }
 
   Future<void> clear() async {

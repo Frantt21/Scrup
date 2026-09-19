@@ -453,6 +453,23 @@ class AppLocalizationsRu extends AppLocalizations {
       'Максимальное место на диске для скачанных песен';
 
   @override
+  String get downloadsDialogTitle => 'Загрузки';
+
+  @override
+  String get downloadsByPlaylist => 'По плейлистам';
+
+  @override
+  String get downloadsAll => 'Все';
+
+  @override
+  String get downloadsEmpty => 'Нет скачанных песен';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return 'Удалить «$name» из кэша? Чтобы слушать офлайн, придётся скачать снова.';
+  }
+
+  @override
   String get about => 'О программе';
 
   @override
