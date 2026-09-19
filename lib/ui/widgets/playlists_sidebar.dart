@@ -9,6 +9,8 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../services/playlist_cover_store.dart';
 import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
+import '../../services/artwork_palette_service.dart';
+import '../../services/palette_cache_store.dart';
 import '../playlist_actions.dart';
 import 'context_menu_item.dart';
 import 'cover_image.dart';
@@ -18,6 +20,17 @@ import 'scrup_toasts.dart';
 import 'spotify_import_dialog.dart';
 
 const double kSidebarWidth = 250;
+
+/// Acento de la playlist: extraído de su propia portada (fallback primary).
+Color playlistAccent(BuildContext context, Playlist playlist, ThemeData theme) {
+  final url = playlist.coverUrl;
+  if (url != null && url.isNotEmpty) {
+    final trio = context.read<PaletteCacheStore>().getTrio(url);
+    final accent = trio == null ? null : ArtworkPaletteService.accentFromTrio(trio);
+    if (accent != null) return accent;
+  }
+  return theme.colorScheme.primary;
+}
 
 /// Floating glass sidebar showing all playlists with a list/grid toggle.
 class PlaylistsSidebar extends StatefulWidget {
@@ -589,7 +602,11 @@ class _PlaylistRowState extends State<_PlaylistRow> {
                           ),
                           if (widget.nowPlaying) ...[
                             const SizedBox(width: 6),
-                            NowPlayingBars(active: widget.isPlaying, size: 11),
+                            NowPlayingBars(
+                              active: widget.isPlaying,
+                              size: 11,
+                              color: playlistAccent(context, playlist, theme),
+                            ),
                           ],
                         ],
                       ),
@@ -790,9 +807,11 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: widget.selected ? 0.9 : 0.5,
-                            ),
+                            color: playlistAccent(
+                              context,
+                              playlist,
+                              theme,
+                            ).withValues(alpha: widget.selected ? 0.9 : 0.5),
                             width: 2,
                           ),
                         ),
@@ -824,7 +843,11 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
                     Positioned(
                       left: 6,
                       bottom: 6,
-                      child: NowPlayingBars(active: widget.isPlaying, size: 10),
+                      child: NowPlayingBars(
+                        active: widget.isPlaying,
+                        size: 10,
+                        color: playlistAccent(context, playlist, theme),
+                      ),
                     ),
                 ],
               ),

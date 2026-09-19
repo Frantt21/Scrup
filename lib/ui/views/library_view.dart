@@ -7,7 +7,10 @@ import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/playlist_cover_store.dart';
+import '../../services/player_service.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/now_playing_bars.dart';
+import '../widgets/playlists_sidebar.dart' show playlistAccent;
 import '../widgets/create_playlist_dialog.dart';
 import '../widgets/screen_header.dart';
 import '../widgets/scrup_toasts.dart';
@@ -28,8 +31,13 @@ class _LibraryViewState extends State<LibraryView> {
   late final Stream<Map<int, int>> _countsStream;
   StreamSubscription<List<Playlist>>? _playlistsSub;
   StreamSubscription<Map<int, int>>? _countsSub;
+  StreamSubscription<bool>? _playingSub;
   List<Playlist> _playlists = const [];
   Map<int, int> _counts = const {};
+
+  // Para el indicador "now playing" en las cards.
+  int? _activePlaylistId;
+  bool _playing = false;
 
   bool _searchOpen = false;
   final TextEditingController _searchCtrl = TextEditingController();
@@ -89,12 +97,32 @@ class _LibraryViewState extends State<LibraryView> {
       if (!mounted) return;
       setState(() => _counts = counts);
     });
+    final player = context.read<PlayerService>();
+    _activePlaylistId = player.activePlaylistId.value;
+    player.activePlaylistId.addListener(_onActiveChanged);
+    _playingSub = player.playing.listen((p) {
+      if (mounted) setState(() => _playing = p);
+    });
+  }
+
+  void _onActiveChanged() {
+    if (mounted) {
+      setState(
+        () => _activePlaylistId = context.read<PlayerService>().activePlaylistId.value,
+      );
+    }
   }
 
   @override
   void dispose() {
     _playlistsSub?.cancel();
     _countsSub?.cancel();
+    _playingSub?.cancel();
+    if (mounted) {
+      context.read<PlayerService>().activePlaylistId.removeListener(
+        _onActiveChanged,
+      );
+    }
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -317,6 +345,8 @@ class _LibraryViewState extends State<LibraryView> {
                 (context, i) => _PlaylistGridCard(
                   playlist: filtered[i],
                   trackCount: _counts[filtered[i].id] ?? 0,
+                  isCurrent: filtered[i].id == _activePlaylistId,
+                  isPlaying: _playing,
                   onTap: () => widget.onSelectPlaylist(filtered[i]),
                 ),
                 childCount: filtered.length,
@@ -332,11 +362,17 @@ class _LibraryViewState extends State<LibraryView> {
 class _PlaylistGridCard extends StatelessWidget {
   final Playlist playlist;
   final int trackCount;
+
+  /// La playlist está en reproducción: muestra el indicador con su acento.
+  final bool isCurrent;
+  final bool isPlaying;
   final VoidCallback onTap;
 
   const _PlaylistGridCard({
     required this.playlist,
     required this.trackCount,
+    required this.isCurrent,
+    required this.isPlaying,
     required this.onTap,
   });
 
@@ -355,32 +391,48 @@ class _PlaylistGridCard extends StatelessWidget {
           // Portada siempre 1:1, ancho de la celda.
           AspectRatio(
             aspectRatio: 1,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: CoverImage(
-                source: playlist.coverUrl,
-                cacheWidth: 200,
-                fallback: favorites
-                    ? _favoritesFallback(cs)
-                    : Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              cs.surfaceContainerHigh,
-                              cs.surfaceContainer,
-                            ],
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: CoverImage(
+                    source: playlist.coverUrl,
+                    cacheWidth: 200,
+                    fallback: favorites
+                        ? _favoritesFallback(cs)
+                        : Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  cs.surfaceContainerHigh,
+                                  cs.surfaceContainer,
+                                ],
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.queue_music_rounded,
+                              size: 28,
+                              color: cs.primary.withValues(alpha: 0.45),
+                            ),
                           ),
-                        ),
-                        child: Icon(
-                          Icons.queue_music_rounded,
-                          size: 28,
-                          color: cs.primary.withValues(alpha: 0.45),
-                        ),
-                      ),
-              ),
+                  ),
+                ),
+                // Indicador "now playing" en el acento de la playlist.
+                if (isCurrent)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: NowPlayingBars(
+                      active: isPlaying,
+                      size: 12,
+                      color: playlistAccent(context, playlist, theme),
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 6),

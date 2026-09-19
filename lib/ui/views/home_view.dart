@@ -22,6 +22,7 @@ import '../widgets/scrup_toasts.dart';
 import '../widgets/context_menu_item.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/now_playing_bars.dart';
+import '../widgets/playlists_sidebar.dart' show playlistAccent;
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 
 /// Home screen: search bar on top and recent plays in a 1:1 grid of ONLY TWO ROWS (columns adjust to the window width; other recent tracks are not shown). Playlists live in the side container.
@@ -1301,6 +1302,9 @@ class _RecentPlaylistsGrid extends StatelessWidget {
                   child: _RecentPlaylistCard(
                     playlist: playlist,
                     accent: accent,
+                    // El borde y el indicador de reproducción usan el acento
+                    // de la propia playlist, no el de la canción actual.
+                    playingAccent: playlistAccent(context, playlist, theme),
                     isCurrent: playlist.id == activePlaylistId,
                     isPlaying: isPlaying,
                     onTap: () => onOpen(playlist),
@@ -1368,6 +1372,7 @@ class _RecentPlaylistsRow extends StatelessWidget {
                 child: _RecentPlaylistCard(
                   playlist: playlist,
                   accent: accent,
+                  playingAccent: playlistAccent(context, playlist, theme),
                   isCurrent: isCurrent,
                   isPlaying: isPlaying,
                   onTap: () => onOpen(playlist),
@@ -1384,7 +1389,12 @@ class _RecentPlaylistsRow extends StatelessWidget {
 /// Large recent playlist card: 1:1 cover with the title INSIDE the card (over the artwork, like the recent tracks) and the "now playing" indicator when the playlist is playing.
 class _RecentPlaylistCard extends StatelessWidget {
   final Playlist playlist;
+
+  /// Color del gradiente cuando la playlist no tiene portada.
   final Color accent;
+
+  /// Acento de la playlist para el borde e indicador "now playing".
+  final Color playingAccent;
   final bool isCurrent;
   final bool isPlaying;
   final VoidCallback onTap;
@@ -1392,6 +1402,7 @@ class _RecentPlaylistCard extends StatelessWidget {
   const _RecentPlaylistCard({
     required this.playlist,
     required this.accent,
+    required this.playingAccent,
     required this.isCurrent,
     required this.isPlaying,
     required this.onTap,
@@ -1479,12 +1490,16 @@ class _RecentPlaylistCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // "Now playing" indicator (same as desktop)
+                  // "Now playing" indicator, en el acento de la playlist.
                   if (isCurrent)
                     Positioned(
                       top: 10,
                       left: 10,
-                      child: NowPlayingBars(active: isPlaying, size: 13),
+                      child: NowPlayingBars(
+                        active: isPlaying,
+                        size: 13,
+                        color: playingAccent,
+                      ),
                     ),
                 ],
               ),
