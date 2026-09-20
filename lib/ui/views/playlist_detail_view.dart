@@ -28,9 +28,14 @@ import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/scrup_toasts.dart';
 import '../widgets/track_tile.dart';
 
-/// Readable text over a background of the given color (black/white by luminance).
+/// Readable text over a background of the given color. Same rule as the
+/// theme's `onPrimary` (estimateBrightnessForColor) so ALL hero buttons
+/// (play/shuffle/download) flip black/white together — a stricter threshold
+/// left shuffle/download white while play turned black.
 Color _onAccent(Color bg) =>
-    bg.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+    ThemeData.estimateBrightnessForColor(bg) == Brightness.dark
+    ? Colors.white
+    : Colors.black;
 
 /// Floating glass container showing playlist detail with hero, tracks, drag reorder, context menus and ambient color from cover art.
 class PlaylistDetailView extends StatefulWidget {

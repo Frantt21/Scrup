@@ -25,7 +25,9 @@ import '../widgets/track_tile.dart';
 
 /// Readable text over a background of the given color (black/white by luminance).
 Color _onColor(Color bg) =>
-    bg.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+    ThemeData.estimateBrightnessForColor(bg) == Brightness.dark
+    ? Colors.white
+    : Colors.black;
 
 /// Menú contextual de pista COMPARTIDO por canal y álbum/single: favorito
 /// + añadir a playlist. Vive a nivel de archivo porque los dos estados
