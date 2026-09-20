@@ -651,6 +651,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get keyboardShortcuts => '键盘快捷键';
 
   @override
+  String get interfaceSection => '界面';
+
+  @override
+  String get resetPanelSizes => '重置面板大小';
+
+  @override
+  String get resetPanelSizesHint => '将侧边栏和队列的宽度恢复为默认值。';
+
+  @override
   String get shortcutPlayPause => '播放 / 暂停';
 
   @override

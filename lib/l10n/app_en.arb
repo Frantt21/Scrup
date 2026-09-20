@@ -356,6 +356,9 @@
     "description": "Tooltip for the audio output device selector"
   },
   "keyboardShortcuts": "Keyboard Shortcuts",
+  "interfaceSection": "Interface",
+  "resetPanelSizes": "Reset panel sizes",
+  "resetPanelSizesHint": "Restore sidebar and queue widths to their default values.",
   "shortcutPlayPause": "Play / Pause",
   "shortcutNext": "Next track",
   "shortcutPrevious": "Previous track",

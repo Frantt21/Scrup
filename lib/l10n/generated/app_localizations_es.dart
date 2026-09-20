@@ -667,6 +667,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get keyboardShortcuts => 'Atajos de teclado';
 
   @override
+  String get interfaceSection => 'Interfaz';
+
+  @override
+  String get resetPanelSizes => 'Restablecer tamaño de los paneles';
+
+  @override
+  String get resetPanelSizesHint =>
+      'Devuelve el ancho de la barra lateral y de la cola a sus valores predeterminados.';
+
+  @override
   String get shortcutPlayPause => 'Reproducir / Pausar';
 
   @override

@@ -653,6 +653,15 @@ class AppLocalizationsKo extends AppLocalizations {
   String get keyboardShortcuts => '키보드 단축키';
 
   @override
+  String get interfaceSection => '인터페이스';
+
+  @override
+  String get resetPanelSizes => '패널 크기 초기화';
+
+  @override
+  String get resetPanelSizesHint => '사이드바와 대기열 너비를 기본값으로 되돌립니다.';
+
+  @override
   String get shortcutPlayPause => '재생 / 일시정지';
 
   @override

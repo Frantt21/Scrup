@@ -671,6 +671,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get keyboardShortcuts => 'Горячие клавиши';
 
   @override
+  String get interfaceSection => 'Интерфейс';
+
+  @override
+  String get resetPanelSizes => 'Сбросить размеры панелей';
+
+  @override
+  String get resetPanelSizesHint =>
+      'Возвращает ширину боковой панели и очереди к значениям по умолчанию.';
+
+  @override
   String get shortcutPlayPause => 'Воспроизведение / Пауза';
 
   @override

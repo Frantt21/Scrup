@@ -665,6 +665,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get keyboardShortcuts => 'Atalhos de teclado';
 
   @override
+  String get interfaceSection => 'Interface';
+
+  @override
+  String get resetPanelSizes => 'Restaurar tamanho dos painéis';
+
+  @override
+  String get resetPanelSizesHint =>
+      'Devolve a largura da barra lateral e da fila aos valores padrão.';
+
+  @override
   String get shortcutPlayPause => 'Reproduzir / Pausar';
 
   @override
@@ -1449,6 +1459,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get keyboardShortcuts => 'Atalhos de teclado';
+
+  @override
+  String get interfaceSection => 'Interface';
+
+  @override
+  String get resetPanelSizes => 'Restaurar tamanho dos painéis';
+
+  @override
+  String get resetPanelSizesHint =>
+      'Devolve a largura da barra lateral e da fila aos valores padrão.';
 
   @override
   String get shortcutPlayPause => 'Reproduzir / Pausar';

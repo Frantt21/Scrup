@@ -21,7 +21,9 @@ class SettingsStore {
   static const _activePlaylistIdKey = 'player.active_playlist_id';
   static const _flatPlaylistHeaderKey = 'ui.flat_playlist_header';
   static const _crossfadeKey = 'player.crossfade_seconds';
-  static const _resumeKey = 'player.resume';  static const _cacheMaxSizeKey = 'cache.max_size_mb';  static const lyricsSweepKey = 'lyrics_sweep_enabled';  final ValueNotifier<bool> playerAnimationEnabled = ValueNotifier(true);  final ValueNotifier<bool> lyricsSweepEnabled = ValueNotifier(false);
+  static const _resumeKey = 'player.resume';  static const _cacheMaxSizeKey = 'cache.max_size_mb';  static const lyricsSweepKey = 'lyrics_sweep_enabled';
+  static const _sidebarWidthKey = 'ui.sidebar_width';
+  static const _queueWidthKey = 'ui.queue_width';  final ValueNotifier<bool> playerAnimationEnabled = ValueNotifier(true);  final ValueNotifier<bool> lyricsSweepEnabled = ValueNotifier(false);
 
   /// Segundos de crossfade persistidos (0 = off). El slider de ajustes
   /// lee/escribe a través de este valor; el PlayerService lo consume.
@@ -67,6 +69,28 @@ class SettingsStore {
   Future<bool?> loadSidebarGridMode() async {
     final prefs = await _instance;
     return prefs.getBool(_sidebarGridKey);
+  }
+
+  /// Persisted sidebar width (desktop resize handle). `null` = default.
+  Future<void> saveSidebarWidth(double width) async {
+    final prefs = await _instance;
+    await prefs.setDouble(_sidebarWidthKey, width);
+  }
+
+  Future<double?> loadSidebarWidth() async {
+    final prefs = await _instance;
+    return prefs.getDouble(_sidebarWidthKey);
+  }
+
+  /// Persisted queue panel width (desktop resize handle). `null` = default.
+  Future<void> saveQueueWidth(double width) async {
+    final prefs = await _instance;
+    await prefs.setDouble(_queueWidthKey, width);
+  }
+
+  Future<double?> loadQueueWidth() async {
+    final prefs = await _instance;
+    return prefs.getDouble(_queueWidthKey);
   }
 
   Future<void> saveLastTrackId(String id) async {
@@ -271,6 +295,6 @@ class SettingsStore {
         seconds: map['seconds'] as int,
       );    } catch (_) {
       return null;
-    }
+    }
   }
 }

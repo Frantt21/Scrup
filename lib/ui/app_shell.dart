@@ -65,6 +65,9 @@ class _AppShellState extends State<AppShell> {
   final ValueNotifier<bool> _lyricsPanelLock = ValueNotifier<bool>(false);
   bool _queueOpen = false;
   bool _queueUserToggled = false;
+  // Desktop panel widths (resizable via drag handles, persisted).
+  double? _sidebarWidth;
+  double? _queueWidth;
   bool _showLyrics = false;
 
   // Navigation history (browser-like back): every transition that DISPLACES
@@ -149,6 +152,7 @@ class _AppShellState extends State<AppShell> {
       }
     });
     unawaited(_loadQueuePref());
+    unawaited(_loadPanelWidths());
     HardwareKeyboard.instance.addHandler(_handleKey);
   }
 
@@ -326,6 +330,42 @@ class _AppShellState extends State<AppShell> {
 
   /// Restaura el panel de la cola al estado en que qued� la �ltima sesi�n
   /// (best-effort: si falla, arranca cerrado).
+  /// Restores the persisted sidebar/queue widths (best-effort: defaults on
+  /// failure). Values are clamped to the same limits as the drag handles.
+  Future<void> _loadPanelWidths() async {
+    if (Binaries.isMobile) return;
+    try {
+      final settings = context.read<SettingsStore>();
+      final sw = await settings.loadSidebarWidth();
+      final qw = await settings.loadQueueWidth();
+      if (!mounted) return;
+      setState(() {
+        _sidebarWidth = sw
+            ?.clamp(kSidebarMinWidth, kSidebarMaxWidth);
+        _queueWidth = qw?.clamp(kQueueMinWidth, kQueueMaxWidth);
+      });
+    } catch (_) {
+      // Preferences must never block startup.
+    }
+  }
+
+  /// Settings → "Reset panel sizes": clears the persisted widths and
+  /// restores the defaults live (null = the widgets fall back to their
+  /// default constants).
+  Future<void> _resetPanelSizes() async {
+    if (Binaries.isMobile) return;
+    try {
+      final settings = context.read<SettingsStore>();
+      await settings.saveSidebarWidth(kSidebarWidth);
+      await settings.saveQueueWidth(kQueuePanelWidth);
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _sidebarWidth = null;
+      _queueWidth = null;
+    });
+  }
+
   Future<void> _loadQueuePref() async {
     try {
       final saved = await context.read<SettingsStore>().loadQueueOpen();
@@ -635,9 +675,25 @@ class _AppShellState extends State<AppShell> {
                           PlaylistsSidebar(
                             openPlaylistId: openPlaylist?.id,
                             onSelectPlaylist: _selectPlaylist,
+                            width: _sidebarWidth,
+                            onWidthDrag: (w) => setState(() => _sidebarWidth = w),
+                            onWidthDragEnd: () => unawaited(
+                              context.read<SettingsStore>().saveSidebarWidth(
+                                _sidebarWidth ?? kSidebarWidth,
+                              ),
+                            ),
                           ),
                           Expanded(child: _buildMainStack(barTitle)),
-                          QueuePanel(open: _queueOpen),
+                          QueuePanel(
+                            open: _queueOpen,
+                            width: _queueWidth,
+                            onWidthDrag: (w) => setState(() => _queueWidth = w),
+                            onWidthDragEnd: () => unawaited(
+                              context.read<SettingsStore>().saveQueueWidth(
+                                _queueWidth ?? kQueuePanelWidth,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
               ),
@@ -766,7 +822,10 @@ class _AppShellState extends State<AppShell> {
               )
             else
               const SizedBox.shrink(),
-            SettingsView(key: ValueKey(_settingsOpenCount)),
+            SettingsView(
+              key: ValueKey(_settingsOpenCount),
+              onResetPanelSizes: _resetPanelSizes,
+            ),
             _showFsOverlay
                 ? const SizedBox.shrink()
                 : TickerMode(
@@ -878,7 +937,10 @@ class _AppShellState extends State<AppShell> {
             SafeArea(
               top: true,
               bottom: false,
-              child: SettingsView(key: ValueKey(_settingsOpenCount)),
+              child: SettingsView(
+                key: ValueKey(_settingsOpenCount),
+                onResetPanelSizes: _resetPanelSizes,
+              ),
             ),
             // La página de letras del IndexedStack SOLO se monta cuando se
             // muestra: en móvil, colapsado/reposo, este LyricsView vivía

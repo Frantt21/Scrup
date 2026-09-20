@@ -1297,6 +1297,24 @@ abstract class AppLocalizations {
   /// **'Atajos de teclado'**
   String get keyboardShortcuts;
 
+  /// No description provided for @interfaceSection.
+  ///
+  /// In es, this message translates to:
+  /// **'Interfaz'**
+  String get interfaceSection;
+
+  /// No description provided for @resetPanelSizes.
+  ///
+  /// In es, this message translates to:
+  /// **'Restablecer tamaño de los paneles'**
+  String get resetPanelSizes;
+
+  /// No description provided for @resetPanelSizesHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Devuelve el ancho de la barra lateral y de la cola a sus valores predeterminados.'**
+  String get resetPanelSizesHint;
+
   /// No description provided for @shortcutPlayPause.
   ///
   /// In es, this message translates to:

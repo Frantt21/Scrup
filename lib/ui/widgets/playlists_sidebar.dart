@@ -19,7 +19,11 @@ import 'now_playing_bars.dart';
 import 'scrup_toasts.dart';
 import 'spotify_import_dialog.dart';
 
-const double kSidebarWidth = 250;
+const double kSidebarWidth = 300;
+
+/// Sidebar resize limits (desktop drag on the inner edge).
+const double kSidebarMinWidth = 200;
+const double kSidebarMaxWidth = 460;
 
 /// Acento de la playlist: extraído de su propia portada (fallback primary).
 Color playlistAccent(BuildContext context, Playlist playlist, ThemeData theme) {
@@ -37,10 +41,23 @@ class PlaylistsSidebar extends StatefulWidget {
   final int? openPlaylistId;
   final ValueChanged<Playlist?> onSelectPlaylist;
 
+  /// Current width (owned by AppShell so it persists); `null` = default.
+  final double? width;
+
+  /// Dragging the inner edge reports the new width live (AppShell updates
+  /// state → the center container absorbs the difference automatically).
+  final ValueChanged<double>? onWidthDrag;
+
+  /// Drag finished → persist the width once.
+  final VoidCallback? onWidthDragEnd;
+
   const PlaylistsSidebar({
     super.key,
     required this.openPlaylistId,
     required this.onSelectPlaylist,
+    this.width,
+    this.onWidthDrag,
+    this.onWidthDragEnd,
   });
 
   @override
@@ -280,8 +297,12 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
 
-    return Container(
-      width: kSidebarWidth,
+    return _SidebarResizeHandle(
+      width: widget.width ?? kSidebarWidth,
+      onWidthDrag: widget.onWidthDrag,
+      onWidthDragEnd: widget.onWidthDragEnd,
+      child: Container(
+      width: widget.width ?? kSidebarWidth,
       margin: const EdgeInsets.fromLTRB(12, 12, 0, 12),
       // Sombra exterior (fuera del clip para que no se recorte)
       decoration: BoxDecoration(
@@ -348,6 +369,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -883,3 +905,68 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
 }
 
 /// Button to create or import a new playlist (list view).
+
+/// Inner-edge resize handle for the sidebar: a 6px drag strip on the right
+/// edge. Dragging reports the new width live (clamped); hover shows a thin
+/// accent hint line. Lives OUTSIDE the clipped glass so the hit area spans
+/// the full height.
+class _SidebarResizeHandle extends StatelessWidget {
+  final double width;
+  final ValueChanged<double>? onWidthDrag;
+  final VoidCallback? onWidthDragEnd;
+  final Widget child;
+
+  const _SidebarResizeHandle({
+    required this.width,
+    required this.child,
+    this.onWidthDrag,
+    this.onWidthDragEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          top: 12,
+          bottom: 12,
+          right: 0,
+          width: 8,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.resizeLeftRight,
+            onHover: (_) {},
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: (d) {
+                final next = (width + d.delta.dx)
+                    .clamp(kSidebarMinWidth, kSidebarMaxWidth);
+                onWidthDrag?.call(next);
+              },
+              onHorizontalDragEnd: (_) => onWidthDragEnd?.call(),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox(
+                  width: 2,
+                  child: Center(
+                    child: Container(
+                      width: 2,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.0),
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}

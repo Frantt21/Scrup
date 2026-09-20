@@ -653,6 +653,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get keyboardShortcuts => 'キーボードショートカット';
 
   @override
+  String get interfaceSection => 'インターフェース';
+
+  @override
+  String get resetPanelSizes => 'パネルサイズをリセット';
+
+  @override
+  String get resetPanelSizesHint => 'サイドバーとキューの幅をデフォルト値に戻します。';
+
+  @override
   String get shortcutPlayPause => '再生 / 一時停止';
 
   @override

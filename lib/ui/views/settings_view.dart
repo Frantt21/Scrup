@@ -26,7 +26,11 @@ import '../widgets/scrup_toasts.dart';
 
 /// Settings screen: a floating glass container (like the playlist detail) with three sections: language (i18n, persisted between sessions), cache (used size / clear), and about.
 class SettingsView extends StatefulWidget {
-  const SettingsView({super.key});
+  /// Resets the desktop panel widths (sidebar + queue) to their defaults.
+  /// Wired from AppShell, which owns the live state.
+  final Future<void> Function()? onResetPanelSizes;
+
+  const SettingsView({super.key, this.onResetPanelSizes});
 
   @override
   State<SettingsView> createState() => _SettingsViewState();
@@ -377,6 +381,8 @@ class _SettingsViewState extends State<SettingsView> {
                 SizedBox(height: mobile ? 20 : 16),
                 _buildPlayerSection(theme),
                 SizedBox(height: mobile ? 20 : 16),
+                if (!mobile) _buildInterfaceSection(theme),
+                if (!mobile) const SizedBox(height: 16),
                 _buildCacheSection(theme),
                 SizedBox(height: mobile ? 20 : 16),
                 // Los atajos de teclado no existen en Android: se ocultan.
@@ -995,6 +1001,37 @@ class _SettingsViewState extends State<SettingsView> {
         ),
       ],
     ];
+  }
+
+  /// Interface (desktop): resizable panel widths. The reset button asks the
+  /// shell to restore sidebar + queue to their defaults and clears the
+  /// persisted values so the next session starts clean too.
+  Widget _buildInterfaceSection(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return _SectionCard(
+      icon: Icons.space_dashboard_rounded,
+      title: l10n.interfaceSection,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              l10n.resetPanelSizesHint,
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: widget.onResetPanelSizes,
+            style: OutlinedButton.styleFrom().copyWith(
+              mouseCursor: WidgetStateProperty.all(SystemMouseCursors.click),
+            ),
+            icon: const Icon(Icons.restart_alt_rounded, size: 18),
+            label: Text(l10n.resetPanelSizes),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Diálogo de descargas: tabs por playlist (pills) con el espacio usado

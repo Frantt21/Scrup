@@ -356,6 +356,9 @@
     "description": "Tooltip for the audio output device selector"
   },
   "keyboardShortcuts": "Atajos de teclado",
+  "interfaceSection": "Interfaz",
+  "resetPanelSizes": "Restablecer tamaño de los paneles",
+  "resetPanelSizesHint": "Devuelve el ancho de la barra lateral y de la cola a sus valores predeterminados.",
   "shortcutPlayPause": "Reproducir / Pausar",
   "shortcutNext": "Siguiente canción",
   "shortcutPrevious": "Canción anterior",

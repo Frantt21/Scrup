@@ -14,6 +14,10 @@ import 'track_tile.dart';
 /// Fixed width of the open queue panel (same philosophy as the sidebar).
 const double kQueuePanelWidth = 300;
 
+/// Queue panel resize limits (desktop drag on the inner edge).
+const double kQueueMinWidth = 240;
+const double kQueueMaxWidth = 520;
+
 /// Vertical margin of the panel (the same 12 used by sidebar and player).
 const double _kQueueMargin = 12;
 
@@ -22,24 +26,70 @@ class QueuePanel extends StatelessWidget {
   /// `true` = cola visible (el panel ocupa su ancho); `false` = colapsado.
   final bool open;
 
-  const QueuePanel({super.key, required this.open});
+  /// Current width (owned by AppShell so it persists); `null` = default.
+  final double? width;
+
+  /// Dragging the inner (left) edge reports the new width live.
+  final ValueChanged<double>? onWidthDrag;
+
+  /// Drag finished → persist the width once.
+  final VoidCallback? onWidthDragEnd;
+
+  const QueuePanel({
+    super.key,
+    required this.open,
+    this.width,
+    this.onWidthDrag,
+    this.onWidthDragEnd,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final player = context.read<PlayerService>();
+    final maxW = width ?? kQueuePanelWidth;
 
     return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: open ? kQueuePanelWidth : 0),
+      // Animates the OPEN FRACTION (0→1), not the width: width changes from
+      // the resize drag apply instantly while open/close keeps its tween.
+      tween: Tween(begin: 0, end: open ? 1.0 : 0.0),
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutCubic,
-      builder: (context, width, child) {
-        final right = width / kQueuePanelWidth * _kQueueMargin;
-        return Container(
-          width: width,
-          margin: EdgeInsets.fromLTRB(0, _kQueueMargin, right, _kQueueMargin),
-          child: ClipRect(child: child),
+      builder: (context, t, child) {
+        final w = t * maxW;
+        final right = t * (maxW / kQueuePanelWidth * _kQueueMargin);
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: w,
+              margin: EdgeInsets.fromLTRB(0, _kQueueMargin, right, _kQueueMargin),
+              child: ClipRect(child: child),
+            ),
+            // Inner-edge resize handle: sits just left of the open panel,
+            // full height of the glass area.
+            if (open)
+              Positioned(
+                top: _kQueueMargin,
+                bottom: _kQueueMargin,
+                left: 0,
+                width: 8,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeLeftRight,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onHorizontalDragUpdate: (d) {
+                      final next = (maxW - d.delta.dx)
+                          .clamp(kQueueMinWidth, kQueueMaxWidth);
+                      onWidthDrag?.call(next);
+                    },
+                    onHorizontalDragEnd: (_) => onWidthDragEnd?.call(),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+          ],
         );
       },
       child: _QueueGlass(player: player, theme: theme, l10n: l10n),
