@@ -14,7 +14,7 @@ import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/player_service.dart';
-import '../../services/search_service.dart' show YtmArtist;
+import '../../services/search_service.dart' show SearchService, YtmAlbum, YtmArtist;
 import '../playback.dart';
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
@@ -44,12 +44,16 @@ class HomeView extends StatefulWidget {
   /// Called when tapping a visited artist (AppShell opens the artist screen).
   final ValueChanged<YtmArtist>? onOpenArtist;
 
+  /// Called when tapping a recommended album (AppShell opens the album screen).
+  final ValueChanged<YtmAlbum>? onOpenAlbum;
+
   const HomeView({
     super.key,
     this.onSearch,
     this.onOpenSearch,
     this.onOpenPlaylist,
     this.onOpenArtist,
+    this.onOpenAlbum,
   });
 
   @override
@@ -63,6 +67,16 @@ class _HomeViewState extends State<HomeView> {
   StreamSubscription<bool>? _playingSub;
   List<Track> _recent = const [];
   bool _loaded = false;
+
+  // Albums recomendados desde la librería (fila horizontal bajo las
+  // playlists recientes). Se calcula UNA vez por sesión (los seeds apenas
+  // cambian) y se recalcula con debounce cuando el usuario añade/quita
+  // canciones de playlists.
+  List<YtmAlbum> _libraryAlbums = const [];
+  bool _libraryAlbumsLoaded = false;
+  bool _loadingLibraryAlbums = false;
+  Timer? _albumRecDebounce;
+  int _albumRecToken = 0;
 
   // Banner "Tus me gusta": últimas 3 canciones añadidas a favoritos
   // (portadas sobrepuestas). Stream reactivo: al dar like aparece al instante.
@@ -132,6 +146,16 @@ class _HomeViewState extends State<HomeView> {
         if (!mounted) return;
         setState(() => _visitedArtists = artists);
       });
+      // Albums recomendados: primera carga tras el primer frame (no compite
+      // con el arranque de home) y recarga con debounce cuando cambian las
+      // playlists (añadir/quitar canciones cambia los seeds).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadLibraryAlbums();
+      });
+      _recentPlaylistsSub2 = context
+          .read<AppDatabase>()
+          .watchPlaylists()
+          .listen((_) => _scheduleLibraryAlbumsReload());
       // Banner de favoritos (no bloquea _loaded: es optativo).
       unawaited(
         context.read<AppDatabase>().ensureFavoritesPlaylist().then((id) {
@@ -183,6 +207,8 @@ class _HomeViewState extends State<HomeView> {
     _playingSub?.cancel();
     _likesSub?.cancel();
     _recentPlaylistsSub?.cancel();
+    _recentPlaylistsSub2?.cancel();
+    _albumRecDebounce?.cancel();
     _visitedArtistsSub?.cancel();
     _nullTrackTimer?.cancel();
     if (_onActivePlaylistChanged != null) {
@@ -196,6 +222,54 @@ class _HomeViewState extends State<HomeView> {
   /// Abre el detalle de una playlist (lo gestiona el AppShell).
   void _openPlaylist(Playlist playlist) {
     widget.onOpenPlaylist?.call(playlist);
+  }
+
+  StreamSubscription<List<Playlist>>? _recentPlaylistsSub2;
+
+  /// Debounce de la recarga de albums recomendados: las emisiones de
+  /// watchPlaylists llegan en ráfaga (cada addToPlaylist toca la tabla);
+  /// 2.5s agrupa y recalcula una sola vez al asentarse.
+  void _scheduleLibraryAlbumsReload() {
+    if (!_libraryAlbumsLoaded) return;
+    _albumRecDebounce?.cancel();
+    _albumRecDebounce = Timer(const Duration(milliseconds: 2500), () {
+      if (mounted) _loadLibraryAlbums(force: true);
+    });
+  }
+
+  /// Consulta los seeds (album, artista) de la librería y resuelve el
+  /// álbum REAL en YT Music de cada uno (máx. 8). Silencioso: si no hay
+  /// seeds o la red falla la fila simplemente no aparece.
+  Future<void> _loadLibraryAlbums({bool force = false}) async {
+    if (_loadingLibraryAlbums) return;
+    if (_libraryAlbumsLoaded && !force) return;
+    _loadingLibraryAlbums = true;
+    final token = ++_albumRecToken;
+    try {
+      final seeds = await context.read<AppDatabase>().libraryAlbumSeeds();
+      if (!mounted || token != _albumRecToken) return;
+      if (seeds.isEmpty) {
+        setState(() {
+          _libraryAlbums = const [];
+          _libraryAlbumsLoaded = true;
+        });
+        return;
+      }
+      final albums = await context
+          .read<SearchService>()
+          .recommendedAlbumsFromLibrary(seeds, limit: 8);
+      if (!mounted || token != _albumRecToken) return;
+      setState(() {
+        _libraryAlbums = albums;
+        _libraryAlbumsLoaded = true;
+      });
+    } catch (_) {
+      if (mounted && token == _albumRecToken) {
+        setState(() => _libraryAlbumsLoaded = true);
+      }
+    } finally {
+      _loadingLibraryAlbums = false;
+    }
   }
 
   void _submitSearch(String query) {
@@ -434,6 +508,19 @@ class _HomeViewState extends State<HomeView> {
                               isPlaying: _playing,
                               onOpen: _openPlaylist,
                             ),
+                      ),
+                    ),
+                  // Albums recomendados (DESPUÉS de las playlists
+                  // recientes): extraídos de los (album, artista) guardados
+                  // en playlists/favoritos y resueltos en YT Music. Máx. 8,
+                  // fila horizontal scrolleable (mismo estilo que la fila de
+                  // playlists recientes). Ambas plataformas.
+                  if (_libraryAlbums.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _LibraryAlbumsRow(
+                        albums: _libraryAlbums,
+                        cardSize: mobile ? null : playlistExtent,
+                        onOpen: widget.onOpenAlbum,
                       ),
                     ),
                   // Artistas visitados (DESPUÉS de las playlists recientes,
@@ -1084,6 +1171,211 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
 /// recientes (cards cuadradas con título dentro). La miniatura viene de la
 /// visita; si el canal cambió su avatar, el screen del artista lo trae
 /// fresco al abrir (la visita se repuebla con la nueva URL).
+/// Fila de albums recomendados desde la librería: mismo estilo de fila
+/// horizontal que las playlists recientes (título + cards 1:1 con scroll).
+/// El tap abre el screen del álbum ([HomeView.onOpenAlbum]).
+class _LibraryAlbumsRow extends StatelessWidget {
+  final List<YtmAlbum> albums;
+
+  /// Lado de la card (desktop: tamaño de las playlists recientes;
+  /// null = 140 en móvil).
+  final double? cardSize;
+  final ValueChanged<YtmAlbum>? onOpen;
+
+  const _LibraryAlbumsRow({
+    required this.albums,
+    this.cardSize,
+    this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    if (albums.isEmpty) return const SizedBox.shrink();
+
+    final size = cardSize ?? 140.0;
+    final double sidePad = Binaries.isMobile ? 16 : 24;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(sidePad, 8, sidePad, 8),
+          child: Text(
+            l10n.libraryAlbumsTitle,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: size + 40,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: sidePad),
+            itemCount: albums.length,
+            itemBuilder: (context, i) {
+              final album = albums[i];
+              return Padding(
+                padding: EdgeInsets.only(
+                  right: cardSize == null ? 12 : 10,
+                ),
+                child: _LibraryAlbumCard(
+                  album: album,
+                  size: size,
+                  onTap: () => onOpen?.call(album),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Card de álbum recomendado: portada 1:1 + título dentro (como playlists
+/// recientes) + hover con borde de acento (mismo patrón).
+class _LibraryAlbumCard extends StatefulWidget {
+  final YtmAlbum album;
+  final double size;
+  final VoidCallback? onTap;
+
+  const _LibraryAlbumCard({
+    required this.album,
+    required this.size,
+    this.onTap,
+  });
+
+  @override
+  State<_LibraryAlbumCard> createState() => _LibraryAlbumCardState();
+}
+
+class _LibraryAlbumCardState extends State<_LibraryAlbumCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final album = widget.album;
+    final hasCover = album.thumbnailUrl != null &&
+        album.thumbnailUrl!.isNotEmpty;
+    final accent = context.watch<ThemeController>().accentColor ??
+        theme.colorScheme.primary;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Center(
+          child: SizedBox(
+            width: widget.size,
+            height: widget.size + 40,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: widget.size,
+                  height: widget.size,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (hasCover)
+                              CoverImage(
+                                source: album.thumbnailUrl,
+                                fit: BoxFit.cover,
+                                cacheWidth: 300,
+                                fallback: Container(
+                                  color:
+                                      theme.colorScheme.surfaceContainerHigh,
+                                  child: Icon(
+                                    Icons.album_rounded,
+                                    size: 40,
+                                    color:
+                                        theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              )
+                            else
+                              Container(
+                                color: theme.colorScheme.surfaceContainerHigh,
+                                child: Icon(
+                                  Icons.album_rounded,
+                                  size: 44,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            // Gradiente inferior para legibilidad.
+                            const DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [Colors.transparent, Colors.black54],
+                                  stops: [0.5, 1.0],
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 10,
+                              right: 10,
+                              bottom: 10,
+                              child: Text(
+                                album.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Hover: border in the app accent (sidebar pattern).
+                      if (_hovered)
+                        IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: accent.withValues(alpha: 0.5),
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // Subtítulo bajo la card: artista · año (estilo artist
+                // screen albums), a 6px de la portada.
+                const SizedBox(height: 6),
+                Text(
+                  album.year ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _VisitedArtistsRow extends StatelessWidget {
   final List<VisitedArtist> artists;
   final ValueChanged<YtmArtist>? onOpen;

@@ -393,6 +393,7 @@
   "retry": "Retry",
   "playAll": "Play all",
   "visitedArtistsTitle": "Recently visited artists",
+  "libraryAlbumsTitle": "Albums from your library",
   "crossfade": "Crossfade",
   "crossfadeHint": "Fade between songs: the next track starts before the current one ends",
   "back": "Back",

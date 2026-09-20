@@ -135,6 +135,7 @@ class ArtistDetailView extends StatefulWidget {
     this.onBack,
     this.onAlbumOpenChanged,
     this.albumOpen = false,
+    this.pendingAlbum,
   });
 
   /// Mirror of the shell's open-album flag: when the shell flips it to
@@ -151,6 +152,11 @@ class ArtistDetailView extends StatefulWidget {
   /// Notifies the shell when an album/single opens/closes inside this
   /// screen, so the Android back gesture returns to the CHANNEL first.
   final ValueChanged<bool>? onAlbumOpenChanged;
+
+  /// Album requested EXTERNALLY (home "albums from your library" row):
+  /// mounted with it already open. Clearing the pending request closes it
+  /// via didUpdateWidget (same channel as the shell's albumOpen flag).
+  final YtmAlbum? pendingAlbum;
 
   @override
   State<ArtistDetailView> createState() => _ArtistDetailViewState();
@@ -181,6 +187,11 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     if (!widget.albumOpen && oldWidget.albumOpen && _openedAlbum != null) {
       setState(() => _openedAlbum = null);
     }
+    // Shell cleared the pending external album request (back from the
+    // album): close the embedded album view.
+    if (oldWidget.pendingAlbum != null && widget.pendingAlbum == null) {
+      setState(() => _openedAlbum = null);
+    }
   }
 
   @override
@@ -204,6 +215,11 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
           _accent = stored;
         }
       }
+    }
+    // External album request (home row): open the embedded album view
+    // directly, skipping the channel (the album screen is self-contained).
+    if (widget.pendingAlbum != null) {
+      _openedAlbum = widget.pendingAlbum;
     }
     unawaited(_load());
   }

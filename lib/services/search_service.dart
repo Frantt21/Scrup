@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/app_log.dart';
 import '../core/track.dart';
+import 'album_rec_cache_store.dart';
 import 'artist_avatar_cache_store.dart';
 import 'artist_cache_store.dart';
 import 'search_cache_store.dart';
@@ -19,11 +20,13 @@ class SearchService {
     SearchCacheStore? cache,
     ArtistCacheStore? artistCache,
     ArtistAvatarCacheStore? avatarCache,
+    AlbumRecCacheStore? albumRecCache,
   }) : _ytMusic = ytMusic ?? YtMusicService(),
        _ytDlp = ytDlp ?? YtDlpService(),
        _cache = cache,
        _artistCache = artistCache,
-       _avatarCache = avatarCache;
+       _avatarCache = avatarCache,
+       _albumRecCache = albumRecCache;
 
   final YtMusicService _ytMusic;
   final YtDlpService _ytDlp;
@@ -42,6 +45,10 @@ class SearchService {
   /// Caché PERSISTENTE de avatares de canal (disco). `null` = desactivada
   /// (tests): los avatares van siempre a red.
   final ArtistAvatarCacheStore? _avatarCache;
+
+  /// Persistent cache of home library-album recommendations (disk). `null` =
+  /// disabled (tests): the recommendation row always goes to network.
+  final AlbumRecCacheStore? _albumRecCache;
 
   // Dedup concurrent searches by key (multiple views / rapid resubmits).
   final Map<String, Future<List<Track>>> _inflight = {};
@@ -267,6 +274,71 @@ class SearchService {
     }
     return const [];
   }
+
+  /// Home "albums from your library" section: for each (album, artist) pair
+  /// found in the user's saved tracks (playlists + favorites, deduped, most
+  /// repeated first), find the REAL YT Music album via the InnerTube albums
+  /// filter. Returns up to [limit] unique albums, preserving seed order.
+  /// Cached per source key with the standard 6h TTL. Fault-tolerant: any
+  /// error / empty seeds -> empty list (the section just hides).
+  Future<List<YtmAlbum>> recommendedAlbumsFromLibrary(
+    List<(String, String)> seeds, {
+    int limit = 8,
+  }) async {
+    if (seeds.isEmpty) return const [];
+    final key = seeds
+        .take(6)
+        .map((s) => '${s.$1}|${s.$2}')
+        .join(';;');
+    // Persistent cache: the seed set changes rarely and each miss costs one
+    // InnerTube request per seed. Disk serves previous sessions instantly.
+    final store = _albumRecCache;
+    final cached = await store?.get(key);
+    if (cached != null) return _albumsFromCacheRows(cached);
+    try {
+      final albums = <YtmAlbum>[];
+      final seenTitles = <String>{};
+      for (final (album, artist) in seeds) {
+        if (albums.length >= limit) break;
+        final found = await _ytMusic.searchAlbums('$album $artist', limit: 1);
+        for (final a in found) {
+          final k = a.title.toLowerCase();
+          if (seenTitles.add(k)) albums.add(a);
+        }
+      }
+      final out = albums.take(limit).toList();
+      if (out.isNotEmpty) {
+        unawaited(
+          store?.put(
+            key,
+            [
+              for (final a in out)
+                {
+                  'id': a.playlistId,
+                  'title': a.title,
+                  'thumb': a.thumbnailUrl ?? '',
+                  'year': a.year ?? '',
+                },
+            ],
+          ),
+        );
+      }
+      return out;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Rebuilds [YtmAlbum]s from the cached raw rows.
+  List<YtmAlbum> _albumsFromCacheRows(List<Map<String, String>> rows) => [
+    for (final r in rows)
+      YtmAlbum(
+        playlistId: r['id'] ?? '',
+        title: r['title'] ?? '',
+        thumbnailUrl: (r['thumb'] ?? '').isEmpty ? null : r['thumb'],
+        year: (r['year'] ?? '').isEmpty ? null : r['year'],
+      ),
+  ];
 
   /// Reload the tracklist by FORCING a re-read of InnerTube (clears the cache entry first). Used by "Reload artworks" in the album screen: it fetches the current header cover and refreshes the thumbnails.
   Future<List<Track>> reloadAlbumTracks(String playlistId) async {

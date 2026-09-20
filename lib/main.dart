@@ -18,6 +18,7 @@ import 'services/artwork_cache_service.dart';
 import 'services/crossfade_backend.dart';
 import 'services/just_audio_backend.dart';
 import 'services/media_kit_backend.dart';
+import 'services/album_rec_cache_store.dart';
 import 'services/artist_avatar_cache_store.dart';
 import 'services/artist_cache_store.dart';
 import 'services/search_cache_store.dart';
@@ -278,6 +279,8 @@ class ScrupApp extends StatelessWidget {
             artistCache: ArtistCacheStore(),
             // Channel avatars: a shared JSON; disk serves the avatar instantly and background revalidation updates it if the channel changed it.
             avatarCache: ArtistAvatarCacheStore(),
+            // Home "albums from your library" row: one shared JSON, no TTL — the seed set is the cache key, so playlist changes get a fresh key automatically.
+            albumRecCache: AlbumRecCacheStore(),
           ),
         ),
         Provider<LyricsService>(

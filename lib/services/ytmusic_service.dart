@@ -173,6 +173,9 @@ class YtMusicService {
   static const _clientVersion = '1.20260707.12.00';
 
   static const _songsFilterParam = 'EgWKAQIIAWoKEAkQBRAKEAMQBA==';
+  // Albums filter (YT Music search scope "Albums"): rows are albums, the
+  // first column run carries the title + its browse navigation (MPREb_...).
+  static const _albumsFilterParam = 'EgWKAQIoAWoKEAkQBRAKEAMQBA==';
   static final _clockRe = RegExp(r'^\d{1,2}:\d{2}(?::\d{2})?$');
   static final _ytListParamRe = RegExp(r'[?&]list=([A-Za-z0-9_-]+)');
   static final _ytBareIdRe = RegExp(r'^(PL|UU|OL|FL|RD|LL)[A-Za-z0-9_-]{10,}$');
@@ -1203,6 +1206,115 @@ class YtMusicService {
 
     walk(node);
     return (items, continuation, name);
+  }
+
+  /// Album search (YT Music "Albums" scope): returns the first [limit]
+  /// albums matching [query]. The row's thumbnail IS the album cover and its
+  /// artist-column navigation carries the MPREb_ browse id. Fault-tolerant:
+  /// any error -> empty list (the home section just hides).
+  Future<List<YtmAlbum>> searchAlbums(String query, {int limit = 8}) async {
+    if (query.trim().isEmpty) return const [];
+    final body = jsonEncode({
+      'context': _context(),
+      'query': query.trim(),
+      'params': _albumsFilterParam,
+    });
+    http.Response res;
+    try {
+      res = await _client
+          .post(
+            Uri.parse('$_endpoint?prettyPrint=false'),
+            headers: const {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0',
+              'X-YouTube-Client-Name': '67',
+              'X-YouTube-Client-Version': _clientVersion,
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      return const [];
+    }
+    if (res.statusCode != 200) return const [];
+    Object? data;
+    try {
+      data = jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (_) {
+      return const [];
+    }
+    final albums = <YtmAlbum>[];
+    final seen = <String>{};
+    void walk(Object? n) {
+      if (albums.length >= limit) return;
+      if (n is Map) {
+        final renderer = n['musicResponsiveListItemRenderer'];
+        if (renderer is Map) {
+          final album = _albumFromListItem(renderer);
+          if (album != null && seen.add(album.playlistId)) albums.add(album);
+        }
+        n.values.forEach(walk);
+      } else if (n is List) {
+        for (final v in n) {
+          walk(v);
+        }
+      }
+    }
+
+    walk(data);
+    if (albums.length > limit) return albums.sublist(0, limit);
+    return albums;
+  }
+
+  /// Album row from an albums-scope search item: the title navigation points
+  /// to the album page (MPREb_...), the thumbnail is the cover and the
+  /// second column is "Artist • Year" (or "Single • Year").
+  static YtmAlbum? _albumFromListItem(Map item) {
+    final columns = (item['flexColumns'] as List?) ?? const [];
+    String? title;
+    var subtitle = '';
+    String? browseId;
+    final thumbUrl = _bestThumb(
+      (((item['thumbnail'] as Map?)?['musicThumbnailRenderer'] as Map?)?['thumbnail']
+              as Map?)?['thumbnails'] as List?,
+    );
+    for (var i = 0; i < columns.length; i++) {
+      final runs = _runsOf(columns[i] as Map);
+      if (runs.isEmpty) continue;
+      if (i == 0) {
+        final nav =
+            (runs.first['navigationEndpoint'] as Map?)?['browseEndpoint']
+                as Map?;
+        browseId = nav?['browseId'] as String?;
+        final texts = [
+          for (final r in runs)
+            if (r['text'] is String) r['text'] as String,
+        ];
+        title = texts.isNotEmpty ? texts.first : null;
+        continue;
+      }
+      if (subtitle.isEmpty) {
+        final texts = [
+          for (final r in runs)
+            if (r['text'] is String) r['text'] as String,
+        ];
+        subtitle = texts.join(' ').trim();
+      }
+    }
+    if (browseId == null ||
+        !browseId.startsWith('MPREb_') ||
+        title == null ||
+        title.trim().isEmpty) {
+      return null;
+    }
+    final lower = subtitle.toLowerCase();
+    return YtmAlbum(
+      playlistId: browseId,
+      title: title.trim(),
+      thumbnailUrl: thumbUrl,
+      year: subtitle.isEmpty ? null : subtitle,
+      isSingle: lower.contains('single') || lower.contains('ep'),
+    );
   }
 
   static int _parseClock(String s) {

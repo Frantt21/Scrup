@@ -780,6 +780,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get visitedArtistsTitle => 'Artistas visitados';
 
   @override
+  String get libraryAlbumsTitle => 'Albums con canciones de tu libreria';
+
+  @override
   String get crossfade => 'Crossfade';
 
   @override

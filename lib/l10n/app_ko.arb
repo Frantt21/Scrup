@@ -249,6 +249,7 @@
   "playAll": "전체 재생",
   "createPlaylistFromAlbum": "이 앨범으로 플레이리스트 만들기",
   "visitedArtistsTitle": "최근 방문한 아티스트",
+  "libraryAlbumsTitle": "라이브러리의 앨범",
   "crossfade": "크로스페이드",
   "crossfadeHint": "노래 간 페이드: 현재 곡이 끝나기 전에 다음 곡이 재생됩니다",
   "back": "뒤로",

@@ -764,6 +764,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get visitedArtistsTitle => '最近浏览的艺术家';
 
   @override
+  String get libraryAlbumsTitle => '你资料库中的专辑';
+
+  @override
   String get crossfade => '淡入淡出';
 
   @override

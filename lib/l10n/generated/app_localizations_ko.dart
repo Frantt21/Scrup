@@ -766,6 +766,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get visitedArtistsTitle => '최근 방문한 아티스트';
 
   @override
+  String get libraryAlbumsTitle => '라이브러리의 앨범';
+
+  @override
   String get crossfade => '크로스페이드';
 
   @override

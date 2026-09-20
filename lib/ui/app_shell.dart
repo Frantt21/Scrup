@@ -11,7 +11,7 @@ import '../core/binaries.dart';
 import '../data/database.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
-import '../services/search_service.dart' show YtmArtist;
+import '../services/search_service.dart' show YtmAlbum, YtmArtist;
 import '../services/settings_store.dart';
 import 'views/artist_detail_view.dart';
 import 'views/home_view.dart';
@@ -45,6 +45,12 @@ class _AppShellState extends State<AppShell> {
   /// Artista abierto desde la búsqueda (móvil): se monta DENTRO del shell
   /// (IndexedStack) como los demás screens — nav + miniplayer siguen ahí.
   YtmArtist? _openArtist;
+
+  /// Álbum pedido externamente (fila "albums de tu librería" de home): se
+  /// monta el screen del artista con este álbum embebido. Non-null abre;
+  /// null (limpiado por back) cierra — el didUpdateWidget del detalle
+  /// reacciona al cambio.
+  YtmAlbum? _pendingAlbum;
 
   bool _showSettings = false;
   int _settingsOpenCount = 0;
@@ -443,6 +449,28 @@ class _AppShellState extends State<AppShell> {
   /// el back de Android debe volver al CANAL, no a la búsqueda.
   bool _artistAlbumOpenFlag = false;
 
+  /// Abre un álbum desde la fila "albums de tu librería" de home: monta
+  /// el screen del artista con el álbum embebido (mismo estilo que abrirlo
+  /// desde el canal). Registra la visita del artista en background para la
+  /// fila de "artistas visitados" (best-effort, sin esperar).
+  void _openExternalAlbum(YtmAlbum album) {
+    _artistAlbumOpenFlag = false;
+    setState(() => _pendingAlbum = album);
+    _pushHistory(() => setState(() => _pendingAlbum = null));
+    // NOTA: la visita del artista NO se registra aquí (no conocemos su
+    // canal); el detalle del canal la registra si el usuario navega a él.
+  }
+
+  /// YtmArtist mínimo para montar el screen cuando SOLO hay álbum pendiente
+  /// (apertura desde home): el detalle del canal no se carga (el álbum es
+  /// self-contained) — el nombre se usa solo como fallback.
+  YtmArtist get _pendingAlbumArtist =>
+      _openArtist ??
+      YtmArtist(
+        browseId: 'album-${_pendingAlbum?.playlistId ?? ''}',
+        name: _pendingAlbum?.title ?? '',
+      );
+
   void _openSettings() {
     if (_showSettings) {
       setState(() => _settingsOpenCount++);
@@ -718,6 +746,7 @@ class _AppShellState extends State<AppShell> {
               onOpenSearch: _openSearch,
               onOpenPlaylist: _selectPlaylist,
               onOpenArtist: _openArtistDetail,
+              onOpenAlbum: _openExternalAlbum,
             ),
             SearchView(
               searchRequest: _searchRequest,
@@ -744,14 +773,18 @@ class _AppShellState extends State<AppShell> {
                     enabled: _showLyrics,
                     child: LyricsView(key: _fsLyricsKey),
                   ),
-            if (openArtist != null)
+            if (openArtist != null || _pendingAlbum != null)
               ArtistDetailView(
-                key: ValueKey('desktop-${openArtist.browseId}'),
-                artist: openArtist,
+                key: ValueKey(
+                  'desktop-${(openArtist ?? _pendingAlbumArtist).browseId}',
+                ),
+                artist: openArtist ?? _pendingAlbumArtist,
                 albumOpen: _artistAlbumOpenFlag,
+                pendingAlbum: _pendingAlbum,
                 onBack: () => setState(() {
                   _openArtist = null;
                   _artistAlbumOpenFlag = false;
+                  _pendingAlbum = null;
                 }),
                 onAlbumOpenChanged: (open) => setState(
                   () => _artistAlbumOpenFlag = open,
@@ -807,6 +840,7 @@ class _AppShellState extends State<AppShell> {
               onOpenSearch: _openSearch,
               onOpenPlaylist: _selectPlaylist,
               onOpenArtist: _openArtistDetail,
+              onOpenAlbum: _openExternalAlbum,
             ),
             // bottom: FALSE: el inset inferior del sistema ya lo absorbe la
             // NavigationBar del shell (64+inset). Con el SafeArea completo
@@ -864,15 +898,20 @@ class _AppShellState extends State<AppShell> {
                     ),
                   ),
             // Detalle de artista (móvil): screen del shell, SIN push de
-            // ruta — nav + miniplayer siguen visibles debajo.
-            if (openArtist != null)
+            // ruta — nav + miniplayer siguen visibles debajo. También se
+            // monta con SOLO el álbum pendiente (apertura desde home).
+            if (openArtist != null || _pendingAlbum != null)
               ArtistDetailView(
-                key: ValueKey(openArtist.browseId),
-                artist: openArtist,
+                key: ValueKey(
+                  'mobile-${(openArtist ?? _pendingAlbumArtist).browseId}',
+                ),
+                artist: openArtist ?? _pendingAlbumArtist,
                 albumOpen: _artistAlbumOpenFlag,
+                pendingAlbum: _pendingAlbum,
                 onBack: () => setState(() {
                   _openArtist = null;
                   _artistAlbumOpenFlag = false;
+                  _pendingAlbum = null;
                 }),
                 onAlbumOpenChanged: (open) =>
                     setState(() => _artistAlbumOpenFlag = open),

@@ -784,6 +784,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get visitedArtistsTitle => 'Недавно просмотренные исполнители';
 
   @override
+  String get libraryAlbumsTitle => 'Альбомы из вашей библиотеки';
+
+  @override
   String get crossfade => 'Кроссфейд';
 
   @override

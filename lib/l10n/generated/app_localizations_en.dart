@@ -777,6 +777,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get visitedArtistsTitle => 'Recently visited artists';
 
   @override
+  String get libraryAlbumsTitle => 'Albums from your library';
+
+  @override
   String get crossfade => 'Crossfade';
 
   @override

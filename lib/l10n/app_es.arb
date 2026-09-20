@@ -401,6 +401,7 @@
   "retry": "Reintentar",
   "playAll": "Reproducir todo",
   "visitedArtistsTitle": "Artistas visitados",
+  "libraryAlbumsTitle": "Albums con canciones de tu libreria",
   "crossfade": "Crossfade",
   "crossfadeHint": "Fundido entre canciones: la siguiente pista empieza antes de que termine la actual",
   "back": "Atrás",

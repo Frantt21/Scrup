@@ -766,6 +766,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get visitedArtistsTitle => '最近閲覧したアーティスト';
 
   @override
+  String get libraryAlbumsTitle => 'ライブラリのアルバム';
+
+  @override
   String get crossfade => 'クロスフェード';
 
   @override

@@ -778,6 +778,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get visitedArtistsTitle => 'Artistas visitados';
 
   @override
+  String get libraryAlbumsTitle => 'Álbuns da sua biblioteca';
+
+  @override
   String get crossfade => 'Crossfade';
 
   @override
@@ -1547,6 +1550,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get visitedArtistsTitle => 'Artistas visitados';
+
+  @override
+  String get libraryAlbumsTitle => 'Álbuns da sua biblioteca';
 
   @override
   String get crossfade => 'Crossfade';

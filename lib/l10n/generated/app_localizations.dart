@@ -1519,6 +1519,12 @@ abstract class AppLocalizations {
   /// **'Artistas visitados'**
   String get visitedArtistsTitle;
 
+  /// No description provided for @libraryAlbumsTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Albums con canciones de tu libreria'**
+  String get libraryAlbumsTitle;
+
   /// No description provided for @crossfade.
   ///
   /// In es, this message translates to:

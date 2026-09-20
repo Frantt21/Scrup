@@ -621,6 +621,34 @@ class AppDatabase extends _$AppDatabase {
         .go();
   }
 
+  /// Distinct (album, artist) pairs from the user's saved tracks — every
+  /// playlist (favorites included), ONE SQL query. Ordered by how many
+  /// different songs share the album (strongest signal first): the home
+  /// "albums from your library" row is seeded from these. Null albums are
+  /// excluded (no seed without an album name).
+  Future<List<(String, String)>> libraryAlbumSeeds({int limit = 12}) async {
+    final countExp = tracks.id.count();
+    final query = selectOnly(tracks).join([
+      innerJoin(playlistTracks, playlistTracks.trackId.equalsExp(tracks.id)),
+    ])
+      ..addColumns([tracks.album, tracks.artist, countExp])
+      ..where(tracks.album.isNull().not() & tracks.album.equals('').not())
+      ..groupBy([tracks.album, tracks.artist])
+      ..orderBy([
+        OrderingTerm.desc(countExp),
+        OrderingTerm.desc(tracks.album),
+      ])
+      ..limit(limit);
+    final rows = await query.get();
+    return [
+      for (final row in rows)
+        (
+          row.read(tracks.album)!,
+          row.read(tracks.artist) ?? '',
+        ),
+    ];
+  }
+
   /// Most recently added tracks to [playlistId] (for the home "Your likes" banner: the 3 most recent covers, overlaid). It uses the playlist order (position DESC) as a proxy for "most recently added".
   Stream<List<Track>> watchLatestPlaylistTracks(
     int playlistId, {
