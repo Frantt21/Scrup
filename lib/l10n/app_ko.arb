@@ -196,6 +196,19 @@
   "copyText": "복사",
   "imageCopied": "이미지가 클립보드에 복사되었습니다",
   "imageSaved": "이미지가 저장되었습니다",
+  "shareRoundedCorners": "모서릴 모서릴",
+  "selectedLinesCount": "{count} / {max}개 라인 선택됨",
+  "@selectedLinesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "shareBorder": "테두리 있음",
   "shareOnSite": "{site}에서 공유",
   "lineOfTotal": "총 {total}줄 중 {index}",
   "audioOutput": "오디오 출력",

@@ -317,6 +317,19 @@
   "copyText": "Copy",
   "imageCopied": "Image copied to clipboard",
   "imageSaved": "Image saved",
+  "shareRoundedCorners": "Rounded corners",
+  "selectedLinesCount": "{count} of {max} lines selected",
+  "@selectedLinesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "shareBorder": "With border",
   "shareOnSite": "Share on {site}",
   "lineOfTotal": "{index} of {total}",
   "@shareOnSite": {

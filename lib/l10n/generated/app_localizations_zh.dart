@@ -618,6 +618,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get imageSaved => '图片已保存';
 
   @override
+  String get shareRoundedCorners => '圆角';
+
+  @override
+  String selectedLinesCount(int count, int max) {
+    return '已选择 $count / $max 行';
+  }
+
+  @override
+  String get shareBorder => '带边框';
+
+  @override
   String shareOnSite(String site) {
     return '分享到 $site';
   }

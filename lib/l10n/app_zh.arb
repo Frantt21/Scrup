@@ -196,6 +196,19 @@
   "copyText": "复制",
   "imageCopied": "图片已复制到剪贴板",
   "imageSaved": "图片已保存",
+  "shareRoundedCorners": "圆角",
+  "selectedLinesCount": "已选择 {count} / {max} 行",
+  "@selectedLinesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "shareBorder": "带边框",
   "shareOnSite": "分享到 {site}",
   "lineOfTotal": "第 {index}/{total} 句",
   "audioOutput": "音频输出",

@@ -631,6 +631,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get imageSaved => 'Image saved';
 
   @override
+  String get shareRoundedCorners => 'Rounded corners';
+
+  @override
+  String selectedLinesCount(int count, int max) {
+    return '$count of $max lines selected';
+  }
+
+  @override
+  String get shareBorder => 'With border';
+
+  @override
   String shareOnSite(String site) {
     return 'Share on $site';
   }

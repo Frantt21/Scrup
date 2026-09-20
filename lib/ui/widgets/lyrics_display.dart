@@ -19,8 +19,23 @@ class LyricsDisplay extends StatefulWidget {
   final String? audioPath;
   final Duration lyricsOffset;
   final void Function(Duration)? onTap;
+
+  /// Share mode: indices of SELECTED ORIGINAL lines (from
+  /// `lyrics.lines`; inserted gap lines are never selected).
+  final Set<int> selectedLines;
+
+  /// Share mode: tap on a visible line reports its ORIGINAL index (null
+  /// for inserted gap lines, which are not selectable).
+  final ValueChanged<int>? onLineSelected;
+
+  /// Extra opacity for non-selected lines while share mode is active.
+  final double unselectedOpacity;
+  final Color? selectionAccent;
   final Color? accentColor;
   final bool? sweepEnabled;
+
+  /// Floating "sync to current line" pill after manual scrolling.
+  final bool showSyncButton;
 
   final bool embedded;
 
@@ -32,8 +47,13 @@ class LyricsDisplay extends StatefulWidget {
     this.audioPath,
     this.lyricsOffset = Duration.zero,
     this.onTap,
+    this.selectedLines = const <int>{},
+    this.onLineSelected,
+    this.unselectedOpacity = 1.0,
+    this.selectionAccent,
     this.accentColor,
     this.sweepEnabled,
+    this.showSyncButton = true,
     this.embedded = false,
   });
 
@@ -56,6 +76,9 @@ class _LyricsDisplayState extends State<LyricsDisplay>
   SyncedLyrics? _lastLyrics;
   bool _isSweepEnabled = false;
 
+  /// Display → original line index (null for inserted gap lines).
+  List<int?> _displayToOriginal = const [];
+
   final ValueNotifier<int> _activeIndex = ValueNotifier<int>(-1);
 
   @override
@@ -73,13 +96,19 @@ class _LyricsDisplayState extends State<LyricsDisplay>
       widget.durationNotifier?.value ?? const Duration(seconds: 5);
 
   List<LyricLine> _computeLinesWithGaps(List<LyricLine> original) {
-    if (original.isEmpty) return [];
+    if (original.isEmpty) {
+      _displayToOriginal = const [];
+      return [];
+    }
     final result = <LyricLine>[];
+    final mapping = <int?>[];
     if (original.first.timestamp.inSeconds > 10) {
       result.add(LyricLine(timestamp: Duration.zero, text: kGapMarker));
+      mapping.add(null);
     }
     for (var i = 0; i < original.length; i++) {
       result.add(original[i]);
+      mapping.add(i);
       if (i < original.length - 1) {
         final next = original[i + 1];
         final chars = original[i].text.length;
@@ -89,9 +118,11 @@ class _LyricsDisplayState extends State<LyricsDisplay>
         final approx = original[i].timestamp + Duration(milliseconds: est);
         if (next.timestamp - approx > const Duration(seconds: 8)) {
           result.add(LyricLine(timestamp: approx, text: kGapMarker));
+          mapping.add(null);
         }
       }
     }
+    _displayToOriginal = mapping;
     return result;
   }
 
@@ -383,6 +414,13 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                       final isCurrent = index == activeIndex;
                       final line = _lines[index];
                       final isGap = line.text == kGapMarker;
+                      final orig = index < _displayToOriginal.length
+                          ? _displayToOriginal[index]
+                          : null;
+                      final isSelected =
+                          orig != null && widget.selectedLines.contains(orig);
+                      final dimmed =
+                          widget.unselectedOpacity < 1.0 && !isSelected;
                       final Duration endTime;
                       if (isGap || !isCurrent) {
                         endTime = index < _lines.length - 1
@@ -409,6 +447,70 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                           lastStart + 800,
                         );
                       }
+                      Widget lineWidget = _KaraokeLine(
+                            line: line,
+                            isCurrent: isCurrent,
+                            isGap: isGap,
+                            startTime: line.timestamp,
+                            endTime: endTime,
+                            positionNotifier: widget.positionNotifier,
+                            offset: widget.lyricsOffset,
+                            // Selected lines always paint their text WHITE
+                            // (share mode), regardless of the accent.
+                            accentColor: isSelected
+                                ? Colors.white
+                                : widget.accentColor,
+                            isSweepEnabled: _isSweepEnabled,
+                            sweepUntilMs: sweepUntilMs,
+                          );
+                      if (dimmed) {
+                        lineWidget = Opacity(
+                          opacity: widget.unselectedOpacity,
+                          child: lineWidget,
+                        );
+                      }
+                      // Share mode: a line tap SELECTS (original index)
+                      // instead of seeking; gap lines are not selectable.
+                      if (widget.onLineSelected != null) {
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap:
+                              orig == null
+                                  ? null
+                                  : () => widget.onLineSelected!(orig),
+                          child: Container(
+                            key: _itemKeys[index],
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? (widget.selectionAccent ??
+                                            Theme.of(context)
+                                                .colorScheme
+                                                .primary)
+                                        .withValues(alpha: 0.16)
+                                      : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? (widget.selectionAccent ??
+                                              Theme.of(context)
+                                                  .colorScheme
+                                                  .primary)
+                                        .withValues(alpha: 0.5)
+                                        : Colors.transparent,
+                              ),
+                            ),
+                            child: lineWidget,
+                          ),
+                        );
+                      }
                       return GestureDetector(
                         onTap: widget.onTap != null
                             ? () => widget.onTap!(line.timestamp)
@@ -420,18 +522,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                             horizontal: 24,
                             vertical: 12,
                           ),
-                          child: _KaraokeLine(
-                            line: line,
-                            isCurrent: isCurrent,
-                            isGap: isGap,
-                            startTime: line.timestamp,
-                            endTime: endTime,
-                            positionNotifier: widget.positionNotifier,
-                            offset: widget.lyricsOffset,
-                            accentColor: widget.accentColor,
-                            isSweepEnabled: _isSweepEnabled,
-                            sweepUntilMs: sweepUntilMs,
-                          ),
+                          child: lineWidget,
                         ),
                       );
                     },
@@ -442,7 +533,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
           ),
         ),
         ),
-        if (_showSyncButton)
+        if (_showSyncButton && widget.showSyncButton)
           Positioned(
             bottom: 40,
             left: 0,

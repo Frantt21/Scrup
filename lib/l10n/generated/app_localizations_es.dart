@@ -634,6 +634,17 @@ class AppLocalizationsEs extends AppLocalizations {
   String get imageSaved => 'Imagen guardada';
 
   @override
+  String get shareRoundedCorners => 'Esquinas redondeadas';
+
+  @override
+  String selectedLinesCount(int count, int max) {
+    return '$count de $max lineas seleccionadas';
+  }
+
+  @override
+  String get shareBorder => 'Con borde';
+
+  @override
   String shareOnSite(String site) {
     return 'Compartir en $site';
   }

@@ -620,6 +620,17 @@ class AppLocalizationsJa extends AppLocalizations {
   String get imageSaved => '画像を保存しました';
 
   @override
+  String get shareRoundedCorners => '角丸';
+
+  @override
+  String selectedLinesCount(int count, int max) {
+    return '$count / $max 行を選択中';
+  }
+
+  @override
+  String get shareBorder => '枠あり';
+
+  @override
   String shareOnSite(String site) {
     return '$siteでシェア';
   }

@@ -620,6 +620,17 @@ class AppLocalizationsKo extends AppLocalizations {
   String get imageSaved => '이미지가 저장되었습니다';
 
   @override
+  String get shareRoundedCorners => '모서릴 모서릴';
+
+  @override
+  String selectedLinesCount(int count, int max) {
+    return '$count / $max개 라인 선택됨';
+  }
+
+  @override
+  String get shareBorder => '테두리 있음';
+
+  @override
   String shareOnSite(String site) {
     return '$site에서 공유';
   }

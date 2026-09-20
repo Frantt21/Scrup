@@ -1243,6 +1243,24 @@ abstract class AppLocalizations {
   /// **'Imagen guardada'**
   String get imageSaved;
 
+  /// No description provided for @shareRoundedCorners.
+  ///
+  /// In es, this message translates to:
+  /// **'Esquinas redondeadas'**
+  String get shareRoundedCorners;
+
+  /// No description provided for @selectedLinesCount.
+  ///
+  /// In es, this message translates to:
+  /// **'{count} de {max} lineas seleccionadas'**
+  String selectedLinesCount(int count, int max);
+
+  /// No description provided for @shareBorder.
+  ///
+  /// In es, this message translates to:
+  /// **'Con borde'**
+  String get shareBorder;
+
   /// No description provided for @shareOnSite.
   ///
   /// In es, this message translates to:

@@ -632,6 +632,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String get imageSaved => 'Imagem guardada';
 
   @override
+  String get shareRoundedCorners => 'Cantos arredondados';
+
+  @override
+  String selectedLinesCount(int count, int max) {
+    return '$count de $max linhas selecionadas';
+  }
+
+  @override
+  String get shareBorder => 'Com moldura';
+
+  @override
   String shareOnSite(String site) {
     return 'Partilhar no $site';
   }
@@ -1396,6 +1407,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get imageSaved => 'Imagem salva';
+
+  @override
+  String get shareRoundedCorners => 'Cantos arredondados';
+
+  @override
+  String selectedLinesCount(int count, int max) {
+    return '$count de $max linhas selecionadas';
+  }
+
+  @override
+  String get shareBorder => 'Com moldura';
 
   @override
   String shareOnSite(String site) {

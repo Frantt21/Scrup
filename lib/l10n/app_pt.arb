@@ -196,6 +196,19 @@
   "copyText": "Copiar",
   "imageCopied": "Imagem copiada para a área de transferência",
   "imageSaved": "Imagem guardada",
+  "shareRoundedCorners": "Cantos arredondados",
+  "selectedLinesCount": "{count} de {max} linhas selecionadas",
+  "@selectedLinesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "shareBorder": "Com moldura",
   "shareOnSite": "Partilhar no {site}",
   "lineOfTotal": "{index} de {total}",
   "audioOutput": "Saída de áudio",

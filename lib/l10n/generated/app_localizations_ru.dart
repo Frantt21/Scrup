@@ -638,6 +638,17 @@ class AppLocalizationsRu extends AppLocalizations {
   String get imageSaved => 'Изображение сохранено';
 
   @override
+  String get shareRoundedCorners => 'Скруглённые углы';
+
+  @override
+  String selectedLinesCount(int count, int max) {
+    return 'Выбрано строк: $count из $max';
+  }
+
+  @override
+  String get shareBorder => 'С рамкой';
+
+  @override
   String shareOnSite(String site) {
     return 'Поделиться в $site';
   }

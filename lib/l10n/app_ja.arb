@@ -196,6 +196,19 @@
   "copyText": "コピー",
   "imageCopied": "画像をクリップボードにコピーしました",
   "imageSaved": "画像を保存しました",
+  "shareRoundedCorners": "角丸",
+  "selectedLinesCount": "{count} / {max} 行を選択中",
+  "@selectedLinesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "shareBorder": "枠あり",
   "shareOnSite": "{site}でシェア",
   "lineOfTotal": "{total}件中{index}件目",
   "audioOutput": "音声出力",

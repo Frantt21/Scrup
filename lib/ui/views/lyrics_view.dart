@@ -45,7 +45,6 @@ class _LyricsViewState extends State<LyricsView>
     with SingleTickerProviderStateMixin {
   Track? _track;
   SyncedLyrics? _lyrics;
-
   bool _loading = false;
 
   final ValueNotifier<Duration> _position = ValueNotifier(Duration.zero);
@@ -411,17 +410,21 @@ class _LyricsViewState extends State<LyricsView>
     }
   }
 
+  // Share dialog: selection lives INSIDE the dialog (up to 3 contiguous
+  // original lines); the export card (what gets saved) renders above the
+  // selectable lyrics list.
   void _showShareDialog() {
     final lyrics = _lyrics;
     final track = _track;
     if (lyrics == null || track == null) return;
-    final idx = lyrics.getCurrentLineIndex(_position.value - _lyricsOffset);
+    final idx =
+        lyrics.getCurrentLineIndex(_position.value - _lyricsOffset) ?? 0;
     setState(() => _openDialogs++);
     showDialog<void>(
       context: context,
       builder: (ctx) => _LyricsShareDialog(
         lyrics: lyrics,
-        initialIndex: idx ?? 0,
+        initialIndex: idx,
         trackTitle: track.title,
         artist: track.artist,
         artworkUrl: track.thumbnailUrl,
@@ -733,7 +736,7 @@ class _LyricsViewState extends State<LyricsView>
     return FutureBuilder<String?>(
       future: _audioPathFutureFor(track),
       builder: (context, snapshot) {
-        return LyricsDisplay(
+        final lyricsDisplay = LyricsDisplay(
           lyrics: lyrics,
           positionNotifier: _position,
           durationNotifier: _duration,
@@ -746,7 +749,13 @@ class _LyricsViewState extends State<LyricsView>
           accentColor: onAccent ?? accent,
           sweepEnabled: _sweepEnabled,
           embedded: embedded,
+          // Share selection is inside the dialog; the view stays normal.
+          selectedLines: const <int>{},
+          onLineSelected: null,
+          unselectedOpacity: 1.0,
+          selectionAccent: null,
         );
+        return lyricsDisplay;
       },
     );
   }
@@ -1501,12 +1510,14 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
   }
 }
 
-/// Diálogo de compartir letra: tarjeta prevista (la MISMA que se exporta:
-/// PNG vía RepaintBoundary o portapapeles), navegación de la ventana de
-/// tres líneas (anterior / actual / siguiente) con el MISMO estilo de las
-/// letras en pantalla, y salidas: copiar imagen, guardar PNG o abrir una
-/// web (X, WhatsApp, Telegram, email) con la imagen ya en el portapapeles
-/// para pegarla ahí mismo.
+// Font presets for the share export card.
+const double _kShareFontS = 28;
+const double _kShareFontM = 38;
+const double _kShareFontL = 48;
+
+/// Share dialog: export card (what gets saved) above; selectable lyrics
+/// (original lines, max 3 contiguous) below; S/M/L font pills + radius
+/// toggle (rounded vs sharp corners) for the exported image.
 class _LyricsShareDialog extends StatefulWidget {
   final SyncedLyrics lyrics;
   final int initialIndex;
@@ -1529,36 +1540,32 @@ class _LyricsShareDialog extends StatefulWidget {
 }
 
 class _LyricsShareDialogState extends State<_LyricsShareDialog> {
-  late int _center;
+  int _selStart = 0;
+  int _selEnd = 0;
+  double _fontSize = _kShareFontM;
+  bool _rounded = true;
   final GlobalKey _captureKey = GlobalKey();
-
-  /// Mismo tratamiento que la pantalla: acento «legible» para la línea
-  /// activa y el mismo color al 30% para las inactivas.
-  static Color _readableAccent(Color c) =>
-      c.computeLuminance() < 0.35 ? Color.lerp(c, Colors.white, 0.5)! : c;
-
-  int get _lineCount => widget.lyrics.lines.length;
-
-  LyricLine? _lineAt(int i) =>
-      (i >= 0 && i < _lineCount) ? widget.lyrics.lines[i] : null;
-
-  LyricLine get _current {
-    final i = _center.clamp(0, _lineCount - 1);
-    return widget.lyrics.lines[i];
-  }
+  // Static position parked at the initial line: the selection list does
+  // not follow playback, but the auto-scroll centers the selection.
+  late final ValueNotifier<Duration> _pos;
 
   @override
   void initState() {
     super.initState();
-    _center = widget.initialIndex.clamp(0, _lineCount - 1);
-    // Precargar el artwork para que el PNG no salga con el fallback.
+    final idx = widget.initialIndex.clamp(
+      0,
+      widget.lyrics.lines.length - 1,
+    );
+    _selStart = _selEnd = idx;
+    _pos = ValueNotifier(
+      widget.lyrics.lines[idx].timestamp + const Duration(milliseconds: 50),
+    );
+    // Precache the artwork (postFrame: reads inherited MediaQuery).
     final src = widget.artworkUrl;
     if (src != null && src.isNotEmpty) {
       final ImageProvider provider = CoverImage.isLocalPath(src)
           ? FileImage(File(src))
           : NetworkImage(src);
-      // postFrame: precacheImage lee MediaQuery (dependencia heredada) y
-      // fallaría si se llama antes de que termine initState.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         precacheImage(provider, context).then((_) {
@@ -1568,10 +1575,35 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     }
   }
 
-  void _move(int delta) {
-    final next = (_center + delta).clamp(0, _lineCount - 1);
-    if (next == _center) return;
-    setState(() => _center = next);
+  @override
+  void dispose() {
+    _pos.dispose();
+    super.dispose();
+  }
+
+  // Tap: shrink from the tapped end, expand when adjacent (max 3), or
+  // restart the selection on a far line.
+  void _onLineTap(int i) {
+    if (i >= _selStart && i <= _selEnd) {
+      if (_selStart == _selEnd) return;
+      setState(() {
+        if (i == _selStart) {
+          _selStart++;
+        } else if (i == _selEnd) {
+          _selEnd--;
+        }
+      });
+      return;
+    }
+    // Hard cap of 3 contiguous lines: expand only while under the cap.
+    final canGrow = _selEnd - _selStart < 2;
+    if (i == _selStart - 1 && canGrow) {
+      setState(() => _selStart = i);
+    } else if (i == _selEnd + 1 && canGrow) {
+      setState(() => _selEnd = i);
+    } else {
+      setState(() => _selStart = _selEnd = i);
+    }
   }
 
   Future<Uint8List?> _captureBytes() async {
@@ -1609,12 +1641,12 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
       if (res.exitCode != 0) {
         res = await Process.run('sh', [
           '-c',
-          'xclip -selection clipboard -t image/png -i \'$escaped\'',
+          "xclip -selection clipboard -t image/png -i '$escaped'",
         ]);
       }
       return res.exitCode == 0;
     } catch (e) {
-      debugPrint('[Scrup] Share: portapapeles falló: $e');
+      debugPrint('[Scrup] Share: clipboard failed: $e');
       return false;
     } finally {
       unawaited(file.delete().catchError((_) => file));
@@ -1637,7 +1669,9 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     try {
       final bytes = await _captureBytes();
       if (bytes == null) return;
-      final safe = widget.trackTitle.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
+      final safe = widget.trackTitle
+          .replaceAll(RegExp(r'[^\w\s-]'), '')
+          .trim();
       final suggested = '${safe.isEmpty ? 'lyrics' : safe} - scrup.png';
       final location = await getSaveLocation(
         suggestedName: suggested,
@@ -1656,7 +1690,7 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
         context,
       ).showSnackBar(SnackBar(content: Text(l10n.imageSaved)));
     } catch (e) {
-      debugPrint('[Scrup] Share: error guardando imagen: $e');
+      debugPrint('[Scrup] Share: error saving image: $e');
     }
   }
 
@@ -1674,11 +1708,11 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e) {
-      debugPrint('[Scrup] Share: no se pudo abrir $site: $e');
+      debugPrint('[Scrup] Share: could not open $site: $e');
     }
   }
 
-  List<Widget> _webActions(AppLocalizations l10n, ThemeData theme) {
+  List<Widget> _webActions(ThemeData theme, AppLocalizations l10n) {
     final targets = <(String, IconData, Uri)>[
       (
         'X',
@@ -1709,134 +1743,179 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final accent = widget.accentColor ?? theme.colorScheme.primary;
-    final prev = _lineAt(_center - 1);
-    final next = _lineAt(_center + 1);
-
+    // Wide layout: selectable lyrics LEFT, export card RIGHT — uses the
+    // space better with large fonts. Narrow (mobile): stacked fallback.
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final controls = Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        for (final (label, size) in [
+          ('S', _kShareFontS),
+          ('M', _kShareFontM),
+          ('L', _kShareFontL),
+        ])
+          ChoiceChip(
+            label: Text(label),
+            selected: _fontSize == size,
+            showCheckmark: false,
+            visualDensity: VisualDensity.compact,
+            labelStyle: theme.textTheme.labelSmall,
+            onSelected: (_) => setState(() => _fontSize = size),
+          ),
+        ChoiceChip(
+          label: Text(l10n.shareRoundedCorners),
+          selected: _rounded,
+          showCheckmark: false,
+          visualDensity: VisualDensity.compact,
+          labelStyle: theme.textTheme.labelSmall,
+          onSelected: (_) => setState(() => _rounded = !_rounded),
+        ),
+        IconButton(
+          icon: const Icon(Icons.copy_rounded, size: 20),
+          tooltip: l10n.copyText,
+          onPressed: _copyImage,
+        ),
+        IconButton(
+          icon: const Icon(Icons.save_alt_rounded, size: 20),
+          tooltip: l10n.saveAsImage,
+          onPressed: _saveImage,
+        ),
+        ..._webActions(theme, l10n),
+      ],
+    );
+    final counter = Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        l10n.selectedLinesCount(_selEnd - _selStart + 1, 3),
+        textAlign: TextAlign.center,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+    final selector = ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: LyricsDisplay(
+          lyrics: widget.lyrics,
+          positionNotifier: _pos,
+          selectedLines: {
+            for (var i = _selStart; i <= _selEnd; i++) i,
+          },
+          onLineSelected: _onLineTap,
+          // White base: selected lines pure WHITE, unselected render as
+          // GRAY (white at 30% on the dark surface). No accent tint here.
+          accentColor: Colors.white,
+          unselectedOpacity: 1.0,
+          selectionAccent: accent,
+          embedded: true,
+          // No sync pill: the dialog has no live playback position.
+          showSyncButton: false,
+        ),
+      ),
+    );
     return Dialog(
       backgroundColor: theme.colorScheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 680),
+        // Taller + wider: the export card fits even at L (48px text).
+        constraints: const BoxConstraints(maxWidth: 1060, maxHeight: 860),
         child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  l10n.shareLyrics,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.shareLyrics,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(height: 16),
-                Center(child: _buildCard(theme, accent, prev, next)),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.keyboard_arrow_up_rounded),
-                      onPressed: _center <= 0 ? null : () => _move(-1),
-                    ),
-                    Text(
-                      l10n.lineOfTotal(_center + 1, _lineCount),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: wide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: selector),
+                          const SizedBox(width: 14),
+                          // Right: export card, scrollable if oversized.
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: Center(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: _buildCard(theme, accent),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          Flexible(child: selector),
+                          const SizedBox(height: 10),
+                          Flexible(
+                            child: SingleChildScrollView(
+                              child: Center(child: _buildCard(theme, accent)),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                      onPressed: _center >= _lineCount - 1
-                          ? null
-                          : () => _move(1),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.icon(
-                      icon: const Icon(Icons.image_rounded, size: 18),
-                      label: Text(l10n.saveAsImage),
-                      onPressed: _saveImage,
-                    ),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.copy_rounded, size: 18),
-                      label: Text(l10n.copyText),
-                      onPressed: _copyImage,
-                    ),
-                    ..._webActions(l10n, theme),
-                  ],
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 10),
+              controls,
+              counter,
+            ],
           ),
         ),
       ),
     );
   }
 
-  TextStyle _lyricStyle(Color color) => const TextStyle(
-    fontSize: 38,
-    fontWeight: FontWeight.bold,
-    height: 1.3,
-    fontFamily: 'Roboto',
-  ).copyWith(color: color);
-
-  Widget _buildCard(
-    ThemeData theme,
-    Color accent,
-    LyricLine? prev,
-    LyricLine? next,
-  ) {
-    const bg = Color(0xFF15151C);
-    final readable = _readableAccent(accent);
-    final activeColor = readable;
-    final inactiveColor = readable.withValues(alpha: 0.3);
+  Widget _buildCard(ThemeData theme, Color accent) {
+    // FLAT accent background (same color as the miniplayer), no readable
+    // lightening; text/ink in pure black or white by luminance contrast.
+    final onAccent = accent.computeLuminance() > 0.5
+        ? Colors.black
+        : Colors.white;
+    TextStyle lyricStyle(Color color) => TextStyle(
+      fontSize: _fontSize,
+      fontWeight: FontWeight.bold,
+      height: 1.3,
+      fontFamily: 'Roboto',
+    ).copyWith(color: onAccent);
     return RepaintBoundary(
       key: _captureKey,
       child: Container(
         width: 520,
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: Color.alphaBlend(readable.withValues(alpha: .14), bg),
+          color: accent,
+          // Radius toggle: rounded (20) vs sharp (0) corners.
+          borderRadius: BorderRadius.circular(_rounded ? 20 : 0),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (prev != null) ...[
-              Text(
-                prev.text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: _lyricStyle(inactiveColor),
-              ),
-              const SizedBox(height: 16),
-            ],
-            Text(_current.text, style: _lyricStyle(activeColor)),
-            if (next != null) ...[
-              const SizedBox(height: 16),
-              Text(
-                next.text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: _lyricStyle(inactiveColor),
-              ),
+            for (var i = _selStart; i <= _selEnd; i++) ...[
+              if (i > _selStart) const SizedBox(height: 16),
+              Text(widget.lyrics.lines[i].text, style: lyricStyle(onAccent)),
             ],
             const SizedBox(height: 26),
             Row(
               children: [
-                // Mismo patrón que el header de letras: artwork 1:1 a la
-                // izquierda y columna título/artista al lado (en miniatura).
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: SizedBox(
@@ -1865,8 +1944,8 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                         widget.trackTitle.toUpperCase(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: onAccent,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 1,
@@ -1878,7 +1957,7 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: .7),
+                          color: onAccent.withValues(alpha: .7),
                           fontSize: 11,
                         ),
                       ),
@@ -1886,7 +1965,6 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
                   ),
                 ),
                 const SizedBox(width: 14),
-                // Logo de la app donde antes decía «Scrup».
                 Opacity(
                   opacity: 0.55,
                   child: Image.asset(
