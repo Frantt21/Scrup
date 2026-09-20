@@ -30,7 +30,6 @@ class LyricsDisplay extends StatefulWidget {
 
   /// Extra opacity for non-selected lines while share mode is active.
   final double unselectedOpacity;
-  final Color? selectionAccent;
   final Color? accentColor;
   final bool? sweepEnabled;
 
@@ -50,7 +49,6 @@ class LyricsDisplay extends StatefulWidget {
     this.selectedLines = const <int>{},
     this.onLineSelected,
     this.unselectedOpacity = 1.0,
-    this.selectionAccent,
     this.accentColor,
     this.sweepEnabled,
     this.showSyncButton = true,
@@ -489,22 +487,16 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                               vertical: 10,
                             ),
                             decoration: BoxDecoration(
+                              // Translucent white highlight (share mode):
+                              // keeps selection readable on any accent.
                               color: isSelected
-                                  ? (widget.selectionAccent ??
-                                            Theme.of(context)
-                                                .colorScheme
-                                                .primary)
-                                        .withValues(alpha: 0.16)
-                                      : Colors.transparent,
+                                  ? Colors.white.withValues(alpha: 0.14)
+                                  : Colors.transparent,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: isSelected
-                                    ? (widget.selectionAccent ??
-                                              Theme.of(context)
-                                                  .colorScheme
-                                                  .primary)
-                                        .withValues(alpha: 0.5)
-                                        : Colors.transparent,
+                                    ? Colors.white.withValues(alpha: 0.45)
+                                    : Colors.transparent,
                               ),
                             ),
                             child: lineWidget,
