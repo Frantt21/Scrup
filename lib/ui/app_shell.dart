@@ -60,6 +60,25 @@ class _AppShellState extends State<AppShell> {
   bool _queueOpen = false;
   bool _queueUserToggled = false;
   bool _showLyrics = false;
+
+  // Navigation history (browser-like back): every transition that DISPLACES
+  // a screen (opening a playlist over the artist/settings, opening settings
+  // over a playlist...) records a closure that restores what was closed.
+  // `_navigateBack` pops one entry per press; explicit jumps (home/search
+  // buttons, mobile nav) clear the stack. Hard resets never leave stale
+  // entries behind.
+  final List<VoidCallback> _history = [];
+
+  /// True while a history restore is running: restores must not push new
+  /// entries (otherwise back could loop A→B→A).
+  bool _restoring = false;
+
+  void _pushHistory(VoidCallback restore) {
+    if (_restoring) return;
+    if (_history.length >= 50) _history.removeAt(0);
+    _history.add(restore);
+  }
+
   bool _fullscreen = false;
   bool _showFsOverlay = false;
   final GlobalKey _fsLyricsKey = GlobalKey();
@@ -343,6 +362,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _openLyrics() {
+    if (!_showLyrics) _pushHistory(_closeLyrics);
     setState(() => _showLyrics = true);
   }
 
@@ -351,17 +371,63 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _selectPlaylist(Playlist? playlist) {
+    // Opening a playlist DISPLACES whatever was visible: snapshot the FULL
+    // previous navigation state so history back restores it atomically. (A
+    // lazy closure reading _openPlaylist would capture null by call time.)
+    final displaced = playlist != null &&
+        (playlist.id != _openPlaylist?.id ||
+            _showSettings ||
+            _showLyrics ||
+            _openArtist != null);
+    if (displaced) {
+      final prevPlaylist = _openPlaylist;
+      final prevArtist = _openArtist;
+      final prevAlbum = _artistAlbumOpenFlag;
+      final prevLyrics = _showLyrics;
+      final prevSettings = _showSettings;
+      _pushHistory(
+        () => setState(() {
+          _openPlaylist = prevPlaylist;
+          _openArtist = prevArtist;
+          _artistAlbumOpenFlag = prevAlbum;
+          _showLyrics = prevLyrics;
+          _showSettings = prevSettings;
+        }),
+      );
+    }
     setState(() {
       _openPlaylist = playlist;
       _showSettings = false;
       _showLyrics = false;
       _openArtist = null;
+      _artistAlbumOpenFlag = false;
     });
   }
 
   /// Abre el detalle de artista (AMBAS plataformas): screen dentro del shell.
   /// La visita queda registrada (home: fila "Artistas visitados").
   void _openArtistDetail(YtmArtist artist) {
+    // Displaces playlist / settings: snapshot the full previous state.
+    final displaced = artist.browseId != _openArtist?.browseId ||
+        _openPlaylist != null ||
+        _showSettings ||
+        _showLyrics;
+    if (displaced) {
+      final prevPlaylist = _openPlaylist;
+      final prevArtist = _openArtist;
+      final prevAlbum = _artistAlbumOpenFlag;
+      final prevLyrics = _showLyrics;
+      final prevSettings = _showSettings;
+      _pushHistory(
+        () => setState(() {
+          _openPlaylist = prevPlaylist;
+          _openArtist = prevArtist;
+          _artistAlbumOpenFlag = prevAlbum;
+          _showLyrics = prevLyrics;
+          _showSettings = prevSettings;
+        }),
+      );
+    }
     _artistAlbumOpenFlag = false;
     setState(() => _openArtist = artist);
     unawaited(
@@ -378,10 +444,31 @@ class _AppShellState extends State<AppShell> {
   bool _artistAlbumOpenFlag = false;
 
   void _openSettings() {
+    if (_showSettings) {
+      setState(() => _settingsOpenCount++);
+      return;
+    }
+    // Settings displaces playlist / artist / lyrics: snapshot the full
+    // previous state (restore reopens what was closed AND closes settings).
+    final prevPlaylist = _openPlaylist;
+    final prevArtist = _openArtist;
+    final prevAlbum = _artistAlbumOpenFlag;
+    final prevLyrics = _showLyrics;
+    _pushHistory(
+      () => setState(() {
+        _showSettings = false;
+        _openPlaylist = prevPlaylist;
+        _openArtist = prevArtist;
+        _artistAlbumOpenFlag = prevAlbum;
+        _showLyrics = prevLyrics;
+      }),
+    );
     setState(() {
       _showSettings = true;
       _openPlaylist = null;
       _showLyrics = false;
+      _openArtist = null;
+      _artistAlbumOpenFlag = false;
       _settingsOpenCount++;
     });
   }
@@ -415,6 +502,7 @@ class _AppShellState extends State<AppShell> {
           padding: EdgeInsets.zero,
           tooltip: l10n.backToHome,
           onPressed: () => setState(() {
+            _history.clear();
             _showSettings = false;
             _openPlaylist = null;
             _showLyrics = false;
@@ -442,6 +530,7 @@ class _AppShellState extends State<AppShell> {
           padding: EdgeInsets.zero,
           tooltip: l10n.searchTitle,
           onPressed: () => setState(() {
+            _history.clear();
             _showSettings = false;
             _openPlaylist = null;
             _showLyrics = false;
@@ -890,12 +979,22 @@ class _AppShellState extends State<AppShell> {
     _navigateBack();
   }
 
-  /// Retrocede UNA pantalla (compartido por el back de Android y el botón
-  /// de la titlebar de desktop): álbum/single → canal del artista;
-  /// playlist → donde estuviera (el shell recuerda el origen); canal →
-  /// cierra el screen. Solo en el inicio sale del app (móvil).
+  /// Retrocede UNA pantalla según el HISTORIAL de navegación (no por
+  /// prioridad fija): canal → playlist → ajustes se deshacen en el orden
+  /// en que se abrieron. Sin historial, cierra lo superficial en orden
+  /// inverso (fallback para estados sin transición registrada).
   void _navigateBack() {
-    // Orden de cierre (de lo más superficial a lo más profundo).
+    if (_history.isNotEmpty) {
+      final restore = _history.removeLast();
+      _restoring = true;
+      try {
+        restore();
+      } finally {
+        _restoring = false;
+      }
+      return;
+    }
+    // Fallback (no history entries): close overlays in reverse-depth order.
     if (_showLyrics) {
       setState(() => _showLyrics = false);
       return;
@@ -933,6 +1032,7 @@ class _AppShellState extends State<AppShell> {
 
   void _selectMobileNav(int i) {
     setState(() {
+      _history.clear();
       _openPlaylist = null;
       _showLyrics = false;
       _openArtist = null;
