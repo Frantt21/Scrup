@@ -1161,7 +1161,7 @@ class _VisitedArtistsRow extends StatelessWidget {
 /// Card de artista visitado (cuadrada: la portada 1:1 completa con el
 /// título dentro). [cardSize] = lado (desktop: el tamaño de las recientes;
 /// null = 140 en móvil).
-class _VisitedArtistCard extends StatelessWidget {
+class _VisitedArtistCard extends StatefulWidget {
   final VisitedArtist artist;
   final VoidCallback onTap;
   final double? cardSize;
@@ -1173,77 +1173,112 @@ class _VisitedArtistCard extends StatelessWidget {
   });
 
   @override
+  State<_VisitedArtistCard> createState() => _VisitedArtistCardState();
+}
+
+class _VisitedArtistCardState extends State<_VisitedArtistCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final size = cardSize ?? 140.0;
+    final size = widget.cardSize ?? 140.0;
+    final artist = widget.artist;
     final hasCover = artist.thumbnailUrl != null &&
         artist.thumbnailUrl!.isNotEmpty;
+    // Hover border uses the app accent (same treatment as the sidebar).
+    final accent = context.watch<ThemeController>().accentColor ??
+        theme.colorScheme.primary;
 
-    return GestureDetector(
-      onTap: onTap,
-      // 1:1 REAL en el alto de la fila (antes la card estiraba al alto de
-      // la fila → 140×158, sin relación 1:1).
-      child: Center(
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        // 1:1 REAL en el alto de la fila (antes la card estiraba al alto de
+        // la fila -> 140x158, sin relacion 1:1).
+        child: Center(
+          child: SizedBox(
+            width: size,
+            height: size,
             child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (hasCover)
-                CoverImage(
-                  source: artist.thumbnailUrl,
-                  fit: BoxFit.cover,
-                  // Decode acorde al tamaño en pantalla (desktop más grande).
-                  cacheWidth: cardSize == null ? 300 : 500,
-                  fallback: Container(
-                    color: theme.colorScheme.surfaceContainerHigh,
-                    child: Icon(
-                      Icons.person_rounded,
-                      size: 40,
-                      color: theme.colorScheme.onSurfaceVariant,
+              fit: StackFit.expand,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (hasCover)
+                        CoverImage(
+                          source: artist.thumbnailUrl,
+                          fit: BoxFit.cover,
+                          // Decode acorde al tamano en pantalla (desktop).
+                          cacheWidth: widget.cardSize == null ? 300 : 500,
+                          fallback: Container(
+                            color: theme.colorScheme.surfaceContainerHigh,
+                            child: Icon(
+                              Icons.person_rounded,
+                              size: 40,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          color: theme.colorScheme.surfaceContainerHigh,
+                          child: Icon(
+                            Icons.person_rounded,
+                            size: 44,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Colors.black54],
+                            stops: [0.5, 1.0],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 10,
+                        right: 10,
+                        bottom: 10,
+                        child: Text(
+                          artist.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Hover: border over the artwork (unclipped, like the
+                // playlists sidebar).
+                if (_hovered)
+                  IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: accent.withValues(alpha: 0.5),
+                          width: 2,
+                        ),
+                      ),
                     ),
                   ),
-                )
-              else
-                Container(
-                  color: theme.colorScheme.surfaceContainerHigh,
-                  child: Icon(
-                    Icons.person_rounded,
-                    size: 44,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black54],
-                    stops: [0.5, 1.0],
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 10,
-                right: 10,
-                bottom: 10,
-                child: Text(
-                  artist.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -1387,7 +1422,7 @@ class _RecentPlaylistsRow extends StatelessWidget {
 }
 
 /// Large recent playlist card: 1:1 cover with the title INSIDE the card (over the artwork, like the recent tracks) and the "now playing" indicator when the playlist is playing.
-class _RecentPlaylistCard extends StatelessWidget {
+class _RecentPlaylistCard extends StatefulWidget {
   final Playlist playlist;
 
   /// Color del gradiente cuando la playlist no tiene portada.
@@ -1409,104 +1444,140 @@ class _RecentPlaylistCard extends StatelessWidget {
   });
 
   @override
+  State<_RecentPlaylistCard> createState() => _RecentPlaylistCardState();
+}
+
+class _RecentPlaylistCardState extends State<_RecentPlaylistCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final playlist = widget.playlist;
     final hasCover = playlist.coverUrl != null && playlist.coverUrl!.isNotEmpty;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // Desktop: la celda llega ACOTADA desde el Wrap (SizedBox del
-          // padre) → el artwork ESCALA con la card. Móvil: el ListView
-          // horizontal da ancho ILIMITADO → solo ahí caemos al tamaño fijo
-          // 140×140 (antes SIEMPRE era 140 → el contenedor crecía pero el
-          // arte quedaba pequeño).
-          final bool bounded = constraints.maxWidth.isFinite;
-          final double size = bounded ? constraints.maxWidth : 140.0;
-          return Center(
-            child: SizedBox(
-              width: size,
-              height: size,
-              child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Portada completa 1:1
-                  if (hasCover)
-                    CoverImage(
-                      source: playlist.coverUrl!,
-                      fit: BoxFit.cover,
-                      // Decode acorde al tamaño en pantalla (desktop grande).
-                      cacheWidth: bounded ? 500 : 300,
-                      fallback: Container(
-                        color: theme.colorScheme.surfaceContainerHigh,
-                        child: Icon(
-                          Icons.queue_music_rounded,
-                          size: 40,
-                          color: theme.colorScheme.onSurfaceVariant,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Desktop: la celda llega ACOTADA desde el Wrap (SizedBox del
+            // padre) -> el artwork ESCALA con la card. Movil: el ListView
+            // horizontal da ancho ILIMITADO -> solo ahi caemos al tamano fijo
+            // 140x140.
+            final bool bounded = constraints.maxWidth.isFinite;
+            final double size = bounded ? constraints.maxWidth : 140.0;
+            return Center(
+              child: SizedBox(
+                width: size,
+                height: size,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // Portada completa 1:1
+                          if (hasCover)
+                            CoverImage(
+                              source: playlist.coverUrl!,
+                              fit: BoxFit.cover,
+                              // Decode acorde al tamano en pantalla.
+                              cacheWidth: bounded ? 500 : 300,
+                              fallback: Container(
+                                color: theme.colorScheme.surfaceContainerHigh,
+                                child: Icon(
+                                  Icons.queue_music_rounded,
+                                  size: 40,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            )
+                          else
+                            Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    widget.accent,
+                                    widget.accent.withValues(alpha: 0.6),
+                                  ],
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.queue_music_rounded,
+                                size: 44,
+                                color: Colors.white.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          // Gradiente inferior para legibilidad del texto
+                          const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Colors.transparent, Colors.black54],
+                                stops: [0.5, 1.0],
+                              ),
+                            ),
+                          ),
+                          // Title inside the card (bottom corner)
+                          Positioned(
+                            left: 10,
+                            right: 10,
+                            bottom: 10,
+                            child: Text(
+                              playlist.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          // "Now playing" indicator, en el acento de la playlist.
+                          if (widget.isCurrent)
+                            Positioned(
+                              top: 10,
+                              left: 10,
+                              child: NowPlayingBars(
+                                active: widget.isPlaying,
+                                size: 13,
+                                color: widget.playingAccent,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    // Hover: border in the playlist's own accent (same
+                    // treatment as the playlists sidebar).
+                    if (_hovered)
+                      IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: widget.playingAccent.withValues(
+                                alpha: 0.5,
+                              ),
+                              width: 2,
+                            ),
+                          ),
                         ),
                       ),
-                    )
-                  else
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [accent, accent.withValues(alpha: 0.6)],
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.queue_music_rounded,
-                        size: 44,
-                        color: Colors.white.withValues(alpha: 0.9),
-                      ),
-                    ),
-                  // Gradiente inferior para legibilidad del texto
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black54],
-                        stops: [0.5, 1.0],
-                      ),
-                    ),
-                  ),
-                  // Title inside the card (bottom corner)
-                  Positioned(
-                    left: 10,
-                    right: 10,
-                    bottom: 10,
-                    child: Text(
-                      playlist.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  // "Now playing" indicator, en el acento de la playlist.
-                  if (isCurrent)
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: NowPlayingBars(
-                        active: isPlaying,
-                        size: 13,
-                        color: playingAccent,
-                      ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
