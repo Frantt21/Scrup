@@ -614,6 +614,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get copyText => 'コピー';
 
   @override
+  String get copyLink => 'YouTubeのリンクをコピー';
+
+  @override
+  String get linkCopied => 'リンクをコピーしました';
+
+  @override
   String get imageCopied => '画像をクリップボードにコピーしました';
 
   @override

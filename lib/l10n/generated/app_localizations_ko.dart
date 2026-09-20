@@ -614,6 +614,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get copyText => '복사';
 
   @override
+  String get copyLink => 'YouTube 링크 복사';
+
+  @override
+  String get linkCopied => '링크가 복사되었습니다';
+
+  @override
   String get imageCopied => '이미지가 클립보드에 복사되었습니다';
 
   @override

@@ -626,6 +626,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get copyText => 'Copiar';
 
   @override
+  String get copyLink => 'Copiar link do YouTube';
+
+  @override
+  String get linkCopied => 'Link copiado';
+
+  @override
   String get imageCopied => 'Imagem copiada para a área de transferência';
 
   @override
@@ -1401,6 +1407,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get copyText => 'Copiar';
+
+  @override
+  String get copyLink => 'Copiar link do YouTube';
+
+  @override
+  String get linkCopied => 'Link copiado';
 
   @override
   String get imageCopied => 'Imagem copiada para a área de transferência';

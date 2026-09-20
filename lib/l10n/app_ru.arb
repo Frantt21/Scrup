@@ -194,6 +194,8 @@
   "shareLyrics": "Поделиться текстом",
   "saveAsImage": "Сохранить изображение",
   "copyText": "Копировать",
+  "copyLink": "Скопировать ссылку на YouTube",
+  "linkCopied": "Ссылка скопирована",
   "imageCopied": "Изображение скопировано в буфер обмена",
   "imageSaved": "Изображение сохранено",
   "shareRoundedCorners": "Скруглённые углы",

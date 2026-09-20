@@ -628,6 +628,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get copyText => 'Copiar';
 
   @override
+  String get copyLink => 'Copiar enlace de YouTube';
+
+  @override
+  String get linkCopied => 'Enlace copiado';
+
+  @override
   String get imageCopied => 'Imagen copiada al portapapeles';
 
   @override

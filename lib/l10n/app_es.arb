@@ -315,6 +315,8 @@
   "shareLyrics": "Compartir letra",
   "saveAsImage": "Guardar imagen",
   "copyText": "Copiar",
+  "copyLink": "Copiar enlace de YouTube",
+  "linkCopied": "Enlace copiado",
   "imageCopied": "Imagen copiada al portapapeles",
   "imageSaved": "Imagen guardada",
   "shareRoundedCorners": "Esquinas redondeadas",

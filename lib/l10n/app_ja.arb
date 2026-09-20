@@ -194,6 +194,8 @@
   "shareLyrics": "歌詞をシェア",
   "saveAsImage": "画像として保存",
   "copyText": "コピー",
+  "copyLink": "YouTubeのリンクをコピー",
+  "linkCopied": "リンクをコピーしました",
   "imageCopied": "画像をクリップボードにコピーしました",
   "imageSaved": "画像を保存しました",
   "shareRoundedCorners": "角丸",

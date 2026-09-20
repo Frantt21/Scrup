@@ -194,6 +194,8 @@
   "shareLyrics": "分享歌词",
   "saveAsImage": "保存为图片",
   "copyText": "复制",
+  "copyLink": "复制 YouTube 链接",
+  "linkCopied": "链接已复制",
   "imageCopied": "图片已复制到剪贴板",
   "imageSaved": "图片已保存",
   "shareRoundedCorners": "圆角",

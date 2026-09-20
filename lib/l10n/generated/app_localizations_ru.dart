@@ -632,6 +632,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get copyText => 'Копировать';
 
   @override
+  String get copyLink => 'Скопировать ссылку на YouTube';
+
+  @override
+  String get linkCopied => 'Ссылка скопирована';
+
+  @override
   String get imageCopied => 'Изображение скопировано в буфер обмена';
 
   @override

@@ -1231,6 +1231,18 @@ abstract class AppLocalizations {
   /// **'Copiar'**
   String get copyText;
 
+  /// No description provided for @copyLink.
+  ///
+  /// In es, this message translates to:
+  /// **'Copiar enlace de YouTube'**
+  String get copyLink;
+
+  /// No description provided for @linkCopied.
+  ///
+  /// In es, this message translates to:
+  /// **'Enlace copiado'**
+  String get linkCopied;
+
   /// No description provided for @imageCopied.
   ///
   /// In es, this message translates to:

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:media_kit/media_kit.dart' hide Track;
 import 'package:provider/provider.dart';
 
@@ -182,6 +183,11 @@ class _PlayerBarState extends State<PlayerBar>
           label: l10n.addToPlaylist,
         ),
         ContextMenuItem(
+          value: 'link',
+          icon: Icons.link_rounded,
+          label: l10n.copyLink,
+        ),
+        ContextMenuItem(
           value: 'recalc',
           icon: Icons.palette_rounded,
           label: l10n.recalcColors,
@@ -195,6 +201,10 @@ class _PlayerBarState extends State<PlayerBar>
       await _showEditMetadataDialog(track);
     } else if (action == 'add') {
       await showAddToPlaylistDialog(context, track);
+    } else if (action == 'link') {
+      await Clipboard.setData(ClipboardData(text: track.youtubeUrl));
+      if (!mounted) return;
+      showScrupToast(l10n.copyLink, kind: ScrupToastKind.success);
     } else if (action == 'recalc') {
       await _recalcTrackColors(track);
     }

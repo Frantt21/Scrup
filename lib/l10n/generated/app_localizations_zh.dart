@@ -612,6 +612,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get copyText => '复制';
 
   @override
+  String get copyLink => '复制 YouTube 链接';
+
+  @override
+  String get linkCopied => '链接已复制';
+
+  @override
   String get imageCopied => '图片已复制到剪贴板';
 
   @override

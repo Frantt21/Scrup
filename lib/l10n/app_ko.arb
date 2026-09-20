@@ -194,6 +194,8 @@
   "shareLyrics": "가사 공유",
   "saveAsImage": "이미지로 저장",
   "copyText": "복사",
+  "copyLink": "YouTube 링크 복사",
+  "linkCopied": "링크가 복사되었습니다",
   "imageCopied": "이미지가 클립보드에 복사되었습니다",
   "imageSaved": "이미지가 저장되었습니다",
   "shareRoundedCorners": "모서릴 모서릴",
