@@ -476,6 +476,10 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                       ),
                     )
                   : SingleChildScrollView(
+                      // 12 (+ 8 internos del TrackTile) = 20: los thumbnails
+                      // quedan alineados con la portada del hero, igual que
+                      // la playlist detail.
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -506,7 +510,10 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                           // Discografía: MISMAS filas horizontales que la
                           // vista móvil (los ListViews horizontales
                           // internos mantienen SU propio scroll lateral).
-                          ..._albumSections(detail),
+                          // sidePad 8 RELATIVO al scroll (que ya lleva 12):
+                          // 12 + 8 = 20, alineado con la portada del hero
+                          // (igual que playlist detail).
+                          ..._albumSections(detail, sidePad: 8),
                           const SizedBox(height: 16),
                         ],
                       ),
@@ -728,7 +735,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   /// (el subtítulo de la card del canal marca el tipo de lanzamiento).
   /// Devuelve WIDGETS normales (servibles en Column de desktop); el llamado
   /// móvil los envuelve en [SliverToBoxAdapter].
-  List<Widget> _albumSections(YtmArtistDetail detail) {
+  List<Widget> _albumSections(YtmArtistDetail detail, {double sidePad = 16}) {
     final albums = [
       for (final a in detail.albums)
         if (!a.isSingle) a,
@@ -744,7 +751,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+              padding: EdgeInsets.fromLTRB(sidePad, 20, sidePad, 8),
               child: Text(
                 title,
                 style: theme.textTheme.titleMedium?.copyWith(
@@ -754,8 +761,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
             ),
             SizedBox(
               // Portada 140 + título (1 línea) + año.
-              height: 186,
-              // _DragScroll: en desktop el ratón NO tiene gesto de arrastre
+              height: 186,              // _DragScroll: en desktop el ratón NO tiene gesto de arrastre
               // sobre un ListView (solo rueda); aquí la rueda se convierte
               // en scroll horizontal y el arrastre con botón presionado
               // desliza la fila (en móvil queda igual). El controller lo
@@ -764,7 +770,9 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                 builder: (controller) => ListView.builder(
                   controller: controller,
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  // Match the section title inset so the first card's
+                  // artwork aligns with the hero avatar.
+                  padding: EdgeInsets.symmetric(horizontal: sidePad),
                   itemCount: items.length,
                   itemBuilder: (context, i) {
                     final album = items[i];
