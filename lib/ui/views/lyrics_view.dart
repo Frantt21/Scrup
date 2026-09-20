@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show File, Platform, Process;
+import 'dart:io' show File;
 import 'dart:typed_data' show Uint8List;
 import 'dart:ui' as ui;
 
@@ -9,9 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/lyrics_search_result.dart';
 import '../../core/track.dart';
@@ -753,7 +751,6 @@ class _LyricsViewState extends State<LyricsView>
           selectedLines: const <int>{},
           onLineSelected: null,
           unselectedOpacity: 1.0,
-          selectionAccent: null,
         );
         return lyricsDisplay;
       },
@@ -1616,54 +1613,6 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     return Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
   }
 
-  // Copies PNG to system clipboard via wl-copy/xclip/PowerShell.
-  Future<bool> _pngToClipboard(Uint8List bytes) async {
-    final dir = await getTemporaryDirectory();
-    final file = File(
-      '${dir.path}/scrup-share-${DateTime.now().millisecondsSinceEpoch}.png',
-    );
-    await file.writeAsBytes(bytes);
-    try {
-      if (Platform.isWindows) {
-        final quoted = file.path.replaceAll("'", "''");
-        final res = await Process.run('powershell', [
-          '-NoProfile',
-          '-Command',
-          "Set-Clipboard -Path '$quoted'",
-        ]);
-        return res.exitCode == 0;
-      }
-      final escaped = file.path.replaceAll("'", r"'\''");
-      var res = await Process.run('sh', [
-        '-c',
-        "wl-copy -t image/png < '$escaped'",
-      ]);
-      if (res.exitCode != 0) {
-        res = await Process.run('sh', [
-          '-c',
-          "xclip -selection clipboard -t image/png -i '$escaped'",
-        ]);
-      }
-      return res.exitCode == 0;
-    } catch (e) {
-      debugPrint('[Scrup] Share: clipboard failed: $e');
-      return false;
-    } finally {
-      unawaited(file.delete().catchError((_) => file));
-    }
-  }
-
-  Future<void> _copyImage() async {
-    final l10n = AppLocalizations.of(context);
-    final bytes = await _captureBytes();
-    if (bytes == null) return;
-    final ok = await _pngToClipboard(bytes);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? l10n.imageCopied : l10n.copyText)),
-    );
-  }
-
   Future<void> _saveImage() async {
     final l10n = AppLocalizations.of(context);
     try {
@@ -1692,50 +1641,6 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     } catch (e) {
       debugPrint('[Scrup] Share: error saving image: $e');
     }
-  }
-
-  Future<void> _openShareTarget(String site, Uri uri) async {
-    final l10n = AppLocalizations.of(context);
-    final bytes = await _captureBytes();
-    var copied = false;
-    if (bytes != null) copied = await _pngToClipboard(bytes);
-    if (!mounted) return;
-    if (copied) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.imageCopied)));
-    }
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      debugPrint('[Scrup] Share: could not open $site: $e');
-    }
-  }
-
-  List<Widget> _webActions(ThemeData theme, AppLocalizations l10n) {
-    final targets = <(String, IconData, Uri)>[
-      (
-        'X',
-        Icons.alternate_email_rounded,
-        Uri.https('twitter.com', '/intent/tweet'),
-      ),
-      ('WhatsApp', Icons.chat_bubble_rounded, Uri.https('wa.me', '/')),
-      ('Telegram', Icons.send_rounded, Uri.https('t.me', '/share/url')),
-      (
-        'Email',
-        Icons.mail_rounded,
-        Uri(scheme: 'mailto', queryParameters: {'subject': widget.trackTitle}),
-      ),
-    ];
-    return [
-      for (final (site, icon, uri) in targets)
-        IconButton(
-          icon: Icon(icon),
-          tooltip: l10n.shareOnSite(site),
-          color: theme.colorScheme.onSurfaceVariant,
-          onPressed: () => _openShareTarget(site, uri),
-        ),
-    ];
   }
 
   @override
@@ -1774,16 +1679,10 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
           onSelected: (_) => setState(() => _rounded = !_rounded),
         ),
         IconButton(
-          icon: const Icon(Icons.copy_rounded, size: 20),
-          tooltip: l10n.copyText,
-          onPressed: _copyImage,
-        ),
-        IconButton(
           icon: const Icon(Icons.save_alt_rounded, size: 20),
           tooltip: l10n.saveAsImage,
           onPressed: _saveImage,
         ),
-        ..._webActions(theme, l10n),
       ],
     );
     final counter = Padding(
@@ -1814,7 +1713,6 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
           // GRAY (white at 30% on the dark surface). No accent tint here.
           accentColor: Colors.white,
           unselectedOpacity: 1.0,
-          selectionAccent: accent,
           embedded: true,
           // No sync pill: the dialog has no live playback position.
           showSyncButton: false,
