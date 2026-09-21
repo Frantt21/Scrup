@@ -475,7 +475,14 @@ class _AppShellState extends State<AppShell> {
       );
     }
     _artistAlbumOpenFlag = false;
-    setState(() => _openArtist = artist);
+    // El canal pasa a ser el screen VISIBLE: cierra lo que desplaza (letras,
+    // playlist, ajustes). El snapshot de arriba ya los conserva para el back.
+    setState(() {
+      _openArtist = artist;
+      _openPlaylist = null;
+      _showLyrics = false;
+      _showSettings = false;
+    });
     unawaited(
       context.read<AppDatabase>().recordArtistVisit(
         id: artist.browseId,
@@ -494,9 +501,31 @@ class _AppShellState extends State<AppShell> {
   /// desde el canal). Registra la visita del artista en background para la
   /// fila de "artistas visitados" (best-effort, sin esperar).
   void _openExternalAlbum(YtmAlbum album) {
+    // Mismo criterio de desplazamiento que los demás openers: snapshot del
+    // estado previo COMPLETO (letras/playlist/ajustes) para que el back lo
+    // restaure atómicamente, y cierre de lo desplazado.
+    final prevPlaylist = _openPlaylist;
+    final prevArtist = _openArtist;
+    final prevAlbum = _artistAlbumOpenFlag;
+    final prevLyrics = _showLyrics;
+    final prevSettings = _showSettings;
+    _pushHistory(
+      () => setState(() {
+        _pendingAlbum = null;
+        _openPlaylist = prevPlaylist;
+        _openArtist = prevArtist;
+        _artistAlbumOpenFlag = prevAlbum;
+        _showLyrics = prevLyrics;
+        _showSettings = prevSettings;
+      }),
+    );
     _artistAlbumOpenFlag = false;
-    setState(() => _pendingAlbum = album);
-    _pushHistory(() => setState(() => _pendingAlbum = null));
+    setState(() {
+      _pendingAlbum = album;
+      _showLyrics = false;
+      _showSettings = false;
+      _openPlaylist = null;
+    });
     // NOTA: la visita del artista NO se registra aquí (no conocemos su
     // canal); el detalle del canal la registra si el usuario navega a él.
   }
