@@ -308,6 +308,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get nowPlayingLabel => 'Reproduciendo ahora';
 
   @override
+  String get creditsLabel => 'Créditos';
+
+  @override
   String get aboutArtist => 'Sobre el artista';
 
   @override

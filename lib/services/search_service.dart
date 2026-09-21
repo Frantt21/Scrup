@@ -11,7 +11,8 @@ import 'search_cache_store.dart';
 import 'ytdlp_service.dart';
 import 'ytmusic_service.dart';
 
-export 'ytmusic_service.dart' show YtmAlbum, YtmArtist, YtmArtistDetail;
+export 'ytmusic_service.dart'
+    show YtmAlbum, YtmArtist, YtmArtistDetail, YtmTrackCredits, YtmSocialLink;
 
 class SearchService {
   SearchService({
@@ -164,6 +165,41 @@ class SearchService {
   /// the same source the YT Music player uses). (browseId, channelName).
   Future<(String, String)?> fetchTrackChannel(String videoId) =>
       _ytMusic.fetchTrackChannel(videoId);
+
+  /// Track credits (WEB `next` description panel); null when the track has
+  /// no auto-generated credits or the request fails.
+  Future<YtmTrackCredits?> fetchTrackCredits(
+    String videoId, {
+    String? trackTitle,
+  }) =>
+      _ytMusic.fetchTrackCredits(videoId, trackTitle: trackTitle);
+
+  /// Credits with the SAME resolution mechanism as the artist channel:
+  /// 1) direct WEB `next` for the cached track's videoId; 2) if the cached
+  /// id carries no credits (re-upload / topic channel), InnerTube Songs
+  /// search for "artist title" and the first hit whose videoId DOES have
+  /// credits (results are relevance-ordered, so the first with credits is
+  /// the official release). Null when neither path yields anything.
+  Future<YtmTrackCredits?> resolveTrackCredits(
+    String videoId,
+    String title,
+    String artist,
+  ) async {
+    final direct = await fetchTrackCredits(videoId, trackTitle: title)
+        .catchError((_) => null);
+    if (direct != null) return direct;
+    final query = '${artist.trim()} ${title.trim()}'.trim();
+    if (query.isEmpty) return null;
+    try {
+      final hits = await _ytMusic.search(query, limit: 5);
+      for (final hit in hits) {
+        final credits = await fetchTrackCredits(hit.videoId,
+            trackTitle: hit.title);
+        if (credits != null) return credits;
+      }
+    } catch (_) {}
+    return null;
+  }
 
   /// Derive artists from a search using ONLY the search results, with no extra request: each InnerTube row carries the artist channel in its navigation. Group by channel, count matches, and sort by 1st number of songs by that artist in the results (relevance), 2nd subscribers (the most popular result of the same channel). This avoids the general InnerTube search (which was an extra request per search and made searches slower).
   static List<YtmArtist> deriveArtists(List<Track> results, {int limit = 8}) {

@@ -307,6 +307,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get nowPlayingLabel => '재생 중';
 
   @override
+  String get creditsLabel => '제작 정보';
+
+  @override
   String get aboutArtist => '아티스트 정보';
 
   @override

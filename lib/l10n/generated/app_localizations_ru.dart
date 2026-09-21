@@ -311,6 +311,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get nowPlayingLabel => 'Сейчас играет';
 
   @override
+  String get creditsLabel => 'Сведения об участниках';
+
+  @override
   String get aboutArtist => 'Об исполнителе';
 
   @override

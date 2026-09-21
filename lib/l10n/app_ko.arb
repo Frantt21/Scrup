@@ -88,6 +88,7 @@
   "queue": "대기열",
   "queueTitle": "재생 대기열",
   "nowPlayingLabel": "재생 중",
+  "creditsLabel": "제작 정보",
   "aboutArtist": "아티스트 정보",
   "queueEmpty": "대기열이 비어 있습니다",
   "queueEmptyHint": "플레이리스트나 노래를 재생하면 여기에 표시됩니다",

@@ -308,6 +308,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nowPlayingLabel => 'Tocando agora';
 
   @override
+  String get creditsLabel => 'Créditos';
+
+  @override
   String get aboutArtist => 'Sobre o artista';
 
   @override

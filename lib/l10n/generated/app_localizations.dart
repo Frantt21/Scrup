@@ -655,6 +655,12 @@ abstract class AppLocalizations {
   /// **'Reproduciendo ahora'**
   String get nowPlayingLabel;
 
+  /// No description provided for @creditsLabel.
+  ///
+  /// In es, this message translates to:
+  /// **'Créditos'**
+  String get creditsLabel;
+
   /// No description provided for @aboutArtist.
   ///
   /// In es, this message translates to:

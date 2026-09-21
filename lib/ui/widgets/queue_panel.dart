@@ -9,7 +9,7 @@ import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import '../../services/search_service.dart'
-    show SearchService, YtmArtist, YtmArtistDetail;
+    show SearchService, YtmArtist, YtmArtistDetail, YtmTrackCredits;
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
 import 'cover_image.dart';
@@ -605,6 +605,10 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
   /// when the track has no channelId).
   bool _artistLoading = false;
 
+  /// Track credits (WEB `next` description panel). Null while loading or
+  /// when the track has none.
+  YtmTrackCredits? _credits;
+
   @override
   void initState() {
     super.initState();
@@ -615,12 +619,15 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
         _track = t;
         _artistDetail = null;
         _artistLoading = false;
+        _credits = null;
       });
       unawaited(_refreshFavorite());
       unawaited(_loadArtistDetail());
+      unawaited(_loadCredits());
     });
     unawaited(_refreshFavorite());
     unawaited(_loadArtistDetail());
+    unawaited(_loadCredits());
   }
 
   @override
@@ -710,23 +717,50 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
 
   String? _fallbackChannelId;
 
+  /// Loads the credits for the CURRENT track via the resolver (direct
+  /// WEB `next`, then InnerTube search fallback for cached tracks without
+  /// credits). Late responses from a previous track are discarded (guard
+  /// by videoId). Silent failure: without credits nothing renders.
+  Future<void> _loadCredits() async {
+    final t = _track;
+    final videoId = t?.id.trim() ?? '';
+    if (t == null || videoId.isEmpty || !mounted) return;
+    try {
+      final credits = await context
+          .read<SearchService>()
+          .resolveTrackCredits(videoId, t.title, t.artist);
+      if (!mounted || _track?.id.trim() != videoId) return;
+      setState(() => _credits = credits);
+    } catch (_) {
+      if (mounted && _track?.id.trim() == videoId) {
+        setState(() => _credits = null);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
     final l10n = widget.l10n;
     final track = _track;
 
-    // Header row: label + panel switch button (now playing <-> queue).
+    // Header row: label + panel switch button. Same style as the queue
+    // header (titleMedium w700, icon in primary, same paddings).
     final header = Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 0, 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 10, 8),
       child: Row(
         children: [
+          Icon(
+            Icons.album_rounded,
+            size: 18,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               l10n.nowPlayingLabel,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -842,33 +876,45 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
                     ),
                   ),
           ),
+          if (_credits != null) ...[
+            const SizedBox(height: 14),
+            _CreditsCard(
+              credits: _credits!,
+              theme: theme,
+              l10n: l10n,
+              artworkUrl: track.thumbnailUrl,
+            ),
+          ],
         ],
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          child: ConstrainedBox(
-            // Fill the panel height even when the content is shorter, so
-            // the background glass reaches the bottom edge.
-            constraints: BoxConstraints(
-              minHeight: constraints.maxHeight,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                header,
-                AnimatedSwitcher(
+    // Header with the EXACT same insets as the queue header: the outer
+    // padding applies to the BODY only, so icon/title/switch sit at the
+    // same distance from the glass edge as in the queue panel.
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          // Fill the panel height even when the content is shorter, so
+          // the background glass reaches the bottom edge.
+          constraints: BoxConstraints(
+            minHeight: constraints.maxHeight,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              header,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
                   child: KeyedSubtree(
                     key: ValueKey(track?.id ?? 'empty'),
                     child: body,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -933,6 +979,127 @@ class _NowPlayingSkeleton extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+/// Credits card below the artist card: SAME recipe as `_ArtistInfoCard`
+/// (accent tint from the track artwork over the panel surface, radius 16,
+/// same paddings). Header + one pill per credit row, 2 per line.
+class _CreditsCard extends StatelessWidget {
+  final YtmTrackCredits credits;
+  final ThemeData theme;
+  final AppLocalizations l10n;
+
+  /// Current track artwork: source of the card's accent tint.
+  final String? artworkUrl;
+
+  const _CreditsCard({
+    required this.credits,
+    required this.theme,
+    required this.l10n,
+    this.artworkUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _resolveAccent(context);
+    final bg = accent == null
+        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35)
+        : Color.alphaBlend(
+            accent.withValues(alpha: 0.16),
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+          );
+
+    // One bullet row: 4px dot + text (wraps inside the row).
+    Widget bullet(String text, {IconData? icon}) => Padding(
+          padding: const EdgeInsets.only(bottom: 5),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: icon != null
+                    ? Icon(
+                        icon,
+                        size: 14,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      )
+                    : Container(
+                        width: 4,
+                        height: 4,
+                        margin: const EdgeInsets.only(top: 6, right: 5),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.8),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+              ),
+              if (icon != null) const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  text,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    height: 1.35,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.92),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.creditsLabel,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (credits.writers.isNotEmpty)
+            bullet('Writers: ${credits.writers.join(', ')}'),
+          if (credits.producers.isNotEmpty)
+            bullet('Producers: ${credits.producers.join(', ')}'),
+          for (final c in credits.contributors) bullet(c),
+          for (final s in credits.socials)
+            bullet(
+              s.handle,
+              icon: switch (s.platform) {
+                'instagram' => Icons.photo_camera_rounded,
+                'x' => Icons.alternate_email_rounded,
+                'facebook' => Icons.facebook_rounded,
+                'tiktok' => Icons.music_note_rounded,
+                'threads' => Icons.tag_rounded,
+                _ => Icons.play_circle_rounded,
+              },
+            ),
+          if (credits.album != null)
+            bullet(credits.album!, icon: Icons.album_rounded),
+          if (credits.distributor != null)
+            bullet(credits.distributor!, icon: Icons.local_shipping_rounded),
+        ],
+      ),
+    );
+  }
+
+  /// Accent from the track artwork (palette cache, sync read).
+  Color? _resolveAccent(BuildContext context) {
+    final url = artworkUrl;
+    if (url == null || url.isEmpty) return null;
+    final trio = context.read<PaletteCacheStore>().getTrio(url);
+    if (trio == null) return null;
+    return ArtworkPaletteService.accentFromTrio(trio);
   }
 }
 

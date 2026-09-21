@@ -88,6 +88,7 @@
   "queue": "キュー",
   "queueTitle": "再生キュー",
   "nowPlayingLabel": "再生中",
+  "creditsLabel": "クレジット",
   "aboutArtist": "アーティストについて",
   "queueEmpty": "キューは空です",
   "queueEmptyHint": "プレイリストや曲を再生するとここに表示されます",

@@ -307,6 +307,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nowPlayingLabel => '再生中';
 
   @override
+  String get creditsLabel => 'クレジット';
+
+  @override
   String get aboutArtist => 'アーティストについて';
 
   @override

@@ -174,6 +174,7 @@
   "queue": "Queue",
   "queueTitle": "Play queue",
   "nowPlayingLabel": "Now playing",
+  "creditsLabel": "Credits",
   "aboutArtist": "About the artist",
   "queueEmpty": "The queue is empty",
   "queueEmptyHint": "Play a playlist or a song to see it here",

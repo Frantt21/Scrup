@@ -308,6 +308,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nowPlayingLabel => 'Now playing';
 
   @override
+  String get creditsLabel => 'Credits';
+
+  @override
   String get aboutArtist => 'About the artist';
 
   @override

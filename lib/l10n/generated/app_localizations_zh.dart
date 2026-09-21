@@ -307,6 +307,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get nowPlayingLabel => '正在播放';
 
   @override
+  String get creditsLabel => '制作人员';
+
+  @override
   String get aboutArtist => '关于艺人';
 
   @override

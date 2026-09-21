@@ -88,6 +88,7 @@
   "queue": "播放队列",
   "queueTitle": "播放队列",
   "nowPlayingLabel": "正在播放",
+  "creditsLabel": "制作人员",
   "aboutArtist": "关于艺人",
   "queueEmpty": "队列为空",
   "queueEmptyHint": "播放播放列表或歌曲后会显示在这里",
