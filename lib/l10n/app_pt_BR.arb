@@ -87,6 +87,8 @@
   "unknownArtist": "Artista desconhecido",
   "queue": "Fila",
   "queueTitle": "Fila de reprodução",
+  "nowPlayingLabel": "Tocando agora",
+  "aboutArtist": "Sobre o artista",
   "queueEmpty": "A fila está vazia",
   "queueEmptyHint": "Reproduza uma playlist ou música para vê-la aqui",
   "minimize": "Minimizar",

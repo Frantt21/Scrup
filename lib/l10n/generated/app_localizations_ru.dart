@@ -308,6 +308,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get queueTitle => 'Очередь воспроизведения';
 
   @override
+  String get nowPlayingLabel => 'Сейчас играет';
+
+  @override
+  String get aboutArtist => 'Об исполнителе';
+
+  @override
   String get queueEmpty => 'Очередь пуста';
 
   @override

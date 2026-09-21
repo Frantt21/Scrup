@@ -87,6 +87,8 @@
   "unknownArtist": "不明なアーティスト",
   "queue": "キュー",
   "queueTitle": "再生キュー",
+  "nowPlayingLabel": "再生中",
+  "aboutArtist": "アーティストについて",
   "queueEmpty": "キューは空です",
   "queueEmptyHint": "プレイリストや曲を再生するとここに表示されます",
   "minimize": "最小化",

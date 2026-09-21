@@ -8,7 +8,11 @@ import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
+import '../../services/search_service.dart'
+    show SearchService, YtmArtist, YtmArtistDetail;
+import '../playlist_actions.dart';
 import '../theme_controller.dart';
+import 'cover_image.dart';
 import 'track_tile.dart';
 
 /// Fixed width of the open queue panel (same philosophy as the sidebar).
@@ -35,12 +39,16 @@ class QueuePanel extends StatelessWidget {
   /// Drag finished → persist the width once.
   final VoidCallback? onWidthDragEnd;
 
+  /// Opens the artist channel from the now-playing summary.
+  final ValueChanged<YtmArtist>? onOpenArtist;
+
   const QueuePanel({
     super.key,
     required this.open,
     this.width,
     this.onWidthDrag,
     this.onWidthDragEnd,
+    this.onOpenArtist,
   });
 
   @override
@@ -92,7 +100,12 @@ class QueuePanel extends StatelessWidget {
           ],
         );
       },
-      child: _QueueGlass(player: player, theme: theme, l10n: l10n),
+      child: _QueueGlass(
+        player: player,
+        theme: theme,
+        l10n: l10n,
+        onOpenArtist: onOpenArtist,
+      ),
     );
   }
 }
@@ -167,10 +180,14 @@ class _QueueGlass extends StatelessWidget {
   final ThemeData theme;
   final AppLocalizations l10n;
 
+  /// Opens the artist channel from the now-playing summary.
+  final ValueChanged<YtmArtist>? onOpenArtist;
+
   const _QueueGlass({
     required this.player,
     required this.theme,
     required this.l10n,
+    this.onOpenArtist,
   });
 
   @override
@@ -195,7 +212,12 @@ class _QueueGlass extends StatelessWidget {
               alpha: 0.72,
             ),
           ),
-          child: _QueueBody(player: player, theme: theme, l10n: l10n),
+          child: _QueuePanelTabs(
+            player: player,
+            theme: theme,
+            l10n: l10n,
+            onOpenArtist: onOpenArtist,
+          ),
         ),
       ),
     );
@@ -209,10 +231,14 @@ class _QueueBody extends StatelessWidget {
   final ThemeData theme;
   final AppLocalizations l10n;
 
+  /// Switches the container to the now-playing panel.
+  final VoidCallback? onToggleNowPlaying;
+
   const _QueueBody({
     required this.player,
     required this.theme,
     required this.l10n,
+    this.onToggleNowPlaying,
   });
 
   @override
@@ -238,9 +264,9 @@ class _QueueBody extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Cabecera: título + nº de canciones
+                  // Cabecera: título + nº de canciones + toggle.
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 10, 8),
                     child: Row(
                       children: [
                               Icon(
@@ -263,6 +289,24 @@ class _QueueBody extends StatelessWidget {
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               ),
+                              if (onToggleNowPlaying != null) ...[
+                                const SizedBox(width: 4),
+                                SizedBox(
+                                  height: 28,
+                                  width: 28,
+                                  child: IconButton(
+                                    padding: EdgeInsets.zero,
+                                    iconSize: 18,
+                                    tooltip: l10n.nowPlayingLabel,
+                                    onPressed: onToggleNowPlaying,
+                                    icon: const Icon(
+                                      Icons.album_rounded,
+                                    ),
+                                    color: theme
+                                        .colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -467,5 +511,558 @@ class _QueueTrackRowState extends State<_QueueTrackRow> {
         ),
       ),
     );
+  }
+}
+
+
+/// Host for the two right-edge containers: the now-playing panel and the
+/// queue list. Only ONE is visible at a time; the header button toggles
+/// between them. Both stay mounted (space reserved, no layout jumps).
+class _QueuePanelTabs extends StatefulWidget {
+  final PlayerService player;
+  final ThemeData theme;
+  final AppLocalizations l10n;
+  final ValueChanged<YtmArtist>? onOpenArtist;
+
+  const _QueuePanelTabs({
+    required this.player,
+    required this.theme,
+    required this.l10n,
+    this.onOpenArtist,
+  });
+
+  @override
+  State<_QueuePanelTabs> createState() => _QueuePanelTabsState();
+}
+
+class _QueuePanelTabsState extends State<_QueuePanelTabs> {
+  bool _showNowPlaying = true;
+
+  @override
+  Widget build(BuildContext context) {
+    // Each panel fills the WHOLE glass: only the active one is laid out
+    // (offstage keeps the queue's scroll state alive without taking space).
+    return Stack(
+      children: [
+        Offstage(
+          offstage: _showNowPlaying,
+          child: _QueueBody(
+            player: widget.player,
+            theme: widget.theme,
+            l10n: widget.l10n,
+            onToggleNowPlaying: () => setState(() => _showNowPlaying = true),
+          ),
+        ),
+        Offstage(
+          offstage: !_showNowPlaying,
+          child: _NowPlayingPanel(
+            player: widget.player,
+            theme: widget.theme,
+            l10n: widget.l10n,
+            onOpenArtist: widget.onOpenArtist,
+            onToggleQueue: () => setState(() => _showNowPlaying = false),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Now-playing summary at the top of the desktop queue panel: source title,
+/// artwork (1:1), track name, artist row with a favorite toggle, and a
+/// clickable artist card (accent, avatar, name, monthly listeners).
+class _NowPlayingPanel extends StatefulWidget {
+  final PlayerService player;
+  final ThemeData theme;
+  final AppLocalizations l10n;
+  final ValueChanged<YtmArtist>? onOpenArtist;
+
+  /// Switches the shell container back to the queue panel.
+  final VoidCallback? onToggleQueue;
+
+  const _NowPlayingPanel({
+    required this.player,
+    required this.theme,
+    required this.l10n,
+    this.onOpenArtist,
+    this.onToggleQueue,
+  });
+
+  @override
+  State<_NowPlayingPanel> createState() => _NowPlayingPanelState();
+}
+
+class _NowPlayingPanelState extends State<_NowPlayingPanel> {
+  StreamSubscription<Track?>? _trackSub;
+  Track? _track;
+  bool _isFavorite = false;
+
+  /// Artist card detail (listeners text). Resolved in background from the
+  /// artist cache; `null` while loading or when the channel is unknown.
+  YtmArtistDetail? _artistDetail;
+
+  /// True while the channel is being resolved (background search fallback
+  /// when the track has no channelId).
+  bool _artistLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _track = widget.player.currentTrackValue;
+    _trackSub = widget.player.currentTrack.listen((t) {
+      if (!mounted) return;
+      setState(() {
+        _track = t;
+        _artistDetail = null;
+        _artistLoading = false;
+      });
+      unawaited(_refreshFavorite());
+      unawaited(_loadArtistDetail());
+    });
+    unawaited(_refreshFavorite());
+    unawaited(_loadArtistDetail());
+  }
+
+  @override
+  void dispose() {
+    _trackSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshFavorite() async {
+    final t = _track;
+    if (t == null || !mounted) return;
+    try {
+      final fav = await isTrackFavorite(context, t);
+      if (mounted && t.id == _track?.id) {
+        setState(() => _isFavorite = fav);
+      }
+    } catch (_) {}
+  }
+
+  /// Resolves the artist detail in background with a STRICT 100% rule:
+  /// 1) the track's own channelId when present; 2) otherwise the InnerTube
+  /// `next` page for the track's videoId (the authoritative owner YouTube
+  /// itself shows for that track — fresh data, no name guessing). Nothing
+  /// else is accepted: without an exact source the card stays a skeleton.
+  /// Late responses from a previous track never overwrite the current one.
+  Future<void> _loadArtistDetail() async {
+    final t = _track;
+    if (t == null || !mounted) return;
+    var channelId = t.artistChannelId;
+    String? channelName;
+    if (channelId == null || channelId.isEmpty) {
+      final videoId = t.id.trim();
+      if (videoId.isEmpty) return;
+      if (mounted) setState(() => _artistLoading = true);
+      try {
+        final owner = await context
+            .read<SearchService>()
+            .fetchTrackChannel(videoId);
+        if (!mounted) return;
+        if (owner == null) {
+          setState(() => _artistLoading = false);
+          return;
+        }
+        channelId = owner.$1;
+        channelName = owner.$2;
+        setState(() {
+          _fallbackChannelId = channelId;
+          _artistDetail = YtmArtistDetail(
+            browseId: channelId!,
+            name: channelName?.isNotEmpty == true ? channelName! : t.artist,
+            tracks: const [],
+            albums: const [],
+          );
+        });
+      } catch (_) {
+        if (mounted) setState(() => _artistLoading = false);
+        return;
+      }
+    }
+    if (channelId.isEmpty || !mounted) {
+      if (mounted) setState(() => _artistLoading = false);
+      return;
+    }
+    try {
+      final detail = await context.read<SearchService>().fetchArtistDetail(
+        channelId,
+        name: channelName?.isNotEmpty == true ? channelName : t.artist,
+      );
+      if (mounted && channelId == _resolvedChannelId) {
+        setState(() {
+          _artistDetail = detail ?? _artistDetail;
+          _artistLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _artistLoading = false);
+    }
+  }
+
+  /// Channel id the current resolution pass started for (guards late
+  /// responses from overwriting a newer track's card).
+  String? get _resolvedChannelId {
+    final id = _track?.artistChannelId;
+    if (id != null && id.isNotEmpty) return id;
+    return _fallbackChannelId;
+  }
+
+  String? _fallbackChannelId;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    final l10n = widget.l10n;
+    final track = _track;
+
+    // Header row: label + panel switch button (now playing <-> queue).
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 0, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              l10n.nowPlayingLabel,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          SizedBox(
+            height: 28,
+            width: 28,
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              iconSize: 18,
+              tooltip: l10n.queueTitle,
+              onPressed: widget.onToggleQueue,
+              icon: const Icon(Icons.queue_music_rounded),
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    Widget body;
+    if (track == null) {
+      body = _NowPlayingSkeleton(theme: theme, message: l10n.queueEmpty);
+    } else {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Artwork 1:1 with the same rounded corners (space always
+          // reserved: the aspect-ratio box never collapses).
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: CoverImage(
+                source: track.thumbnailUrl,
+                fallback: ColoredBox(
+                  color: theme.colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.5),
+                  child: Icon(
+                    Icons.music_note_rounded,
+                    size: 48,
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.4,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            track.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  track.artist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              SizedBox(
+                height: 30,
+                width: 30,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  iconSize: 18,
+                  onPressed: () async {
+                    await toggleTrackFavorite(
+                      context,
+                      track,
+                      current: _isFavorite,
+                    );
+                    if (mounted) unawaited(_refreshFavorite());
+                  },
+                  icon: Icon(
+                    _isFavorite
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: _isFavorite
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _ArtistInfoCard(
+            track: track,
+            detail: _artistDetail,
+            loading: _artistLoading,
+            theme: theme,
+            l10n: l10n,
+            onOpen: _artistDetail == null
+                ? null
+                : () => widget.onOpenArtist?.call(
+                    YtmArtist(
+                      browseId: _artistDetail!.browseId,
+                      name: _artistDetail!.name,
+                      thumbnailUrl: _artistDetail!.thumbnailUrl,
+                      subscriberCount: _artistDetail!.subscriberCount,
+                    ),
+                  ),
+          ),
+        ],
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          child: ConstrainedBox(
+            // Fill the panel height even when the content is shorter, so
+            // the background glass reaches the bottom edge.
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                header,
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: KeyedSubtree(
+                    key: ValueKey(track?.id ?? 'empty'),
+                    child: body,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Default skeletons for the now-playing panel: fixed-size placeholders so
+/// the panel never jumps while the track / artist card resolve.
+class _NowPlayingSkeleton extends StatelessWidget {
+  final ThemeData theme;
+  final String? message;
+
+  const _NowPlayingSkeleton({required this.theme, this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final base = theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.12);
+    Widget block(double w, double h, {double r = 8}) => Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(
+            color: base,
+            borderRadius: BorderRadius.circular(r),
+          ),
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Artwork placeholder (full width, square): reserves the space.
+        AspectRatio(
+          aspectRatio: 1,
+          child: Container(
+            decoration: BoxDecoration(
+              color: base,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        block(double.infinity, 18),
+        const SizedBox(height: 6),
+        block(120, 12),
+        const SizedBox(height: 10),
+        // Artist card placeholder.
+        Container(
+          height: 60,
+          decoration: BoxDecoration(
+            color: base,
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        if (message != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            message!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Clickable artist card: accent tint from the artist avatar, avatar, name,
+/// monthly listeners ("218M monthly audience") when already resolved.
+class _ArtistInfoCard extends StatelessWidget {
+  final Track track;
+  final YtmArtistDetail? detail;
+
+  /// True while the channel is being resolved in background.
+  final bool loading;
+  final ThemeData theme;
+  final AppLocalizations l10n;
+  final VoidCallback? onOpen;
+
+  const _ArtistInfoCard({
+    required this.track,
+    required this.detail,
+    this.loading = false,
+    required this.theme,
+    required this.l10n,
+    this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _resolveAccent(context);
+    final bg = accent == null
+        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35)
+        : Color.alphaBlend(accent.withValues(alpha: 0.16),
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35));
+    final avatarSide = 72.0;
+    final skeleton = detail == null;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: skeleton ? null : onOpen,
+        borderRadius: BorderRadius.circular(16),
+        mouseCursor: SystemMouseCursors.click,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: bg,
+          ),
+          child: Column(
+            children: [
+              // Big avatar on top.
+              ClipOval(
+                child: SizedBox(
+                  width: avatarSide,
+                  height: avatarSide,
+                  child: skeleton
+                      ? ColoredBox(
+                          color: theme.colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.12),
+                        )
+                      : CoverImage(
+                          source: detail?.thumbnailUrl,
+                          fallback: ColoredBox(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: Icon(
+                              Icons.person_rounded,
+                              size: 34,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Name below the avatar.
+              if (skeleton)
+                Container(
+                  width: 120,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                )
+              else
+                Text(
+                  detail!.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              const SizedBox(height: 3),
+              // Monthly listeners below the name.
+              if (skeleton)
+                Container(
+                  width: 84,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                )
+              else
+                Text(
+                  detail!.audienceText ?? l10n.aboutArtist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Accent from the artist avatar (palette cache, sync read only: no
+  /// extraction here to keep the card cheap).
+  Color? _resolveAccent(BuildContext context) {
+    final url = detail?.thumbnailUrl;
+    if (url == null || url.isEmpty) return null;
+    final trio = context.read<PaletteCacheStore>().getTrio(url);
+    if (trio == null) return null;
+    return ArtworkPaletteService.accentFromTrio(trio);
   }
 }

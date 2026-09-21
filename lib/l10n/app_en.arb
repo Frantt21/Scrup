@@ -173,6 +173,8 @@
   "unknownArtist": "Unknown artist",
   "queue": "Queue",
   "queueTitle": "Play queue",
+  "nowPlayingLabel": "Now playing",
+  "aboutArtist": "About the artist",
   "queueEmpty": "The queue is empty",
   "queueEmptyHint": "Play a playlist or a song to see it here",
   "minimize": "Minimize",

@@ -173,6 +173,8 @@
   "unknownArtist": "Artista desconocido",
   "queue": "Cola",
   "queueTitle": "Cola de reproducción",
+  "nowPlayingLabel": "Reproduciendo ahora",
+  "aboutArtist": "Sobre el artista",
   "queueEmpty": "La cola está vacía",
   "queueEmptyHint": "Reproduce una playlist o una canción para verla aquí",
   "minimize": "Minimizar",

@@ -304,6 +304,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get queueTitle => '再生キュー';
 
   @override
+  String get nowPlayingLabel => '再生中';
+
+  @override
+  String get aboutArtist => 'アーティストについて';
+
+  @override
   String get queueEmpty => 'キューは空です';
 
   @override

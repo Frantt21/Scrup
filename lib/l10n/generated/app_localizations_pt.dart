@@ -305,6 +305,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get queueTitle => 'Fila de reprodução';
 
   @override
+  String get nowPlayingLabel => 'Tocando agora';
+
+  @override
+  String get aboutArtist => 'Sobre o artista';
+
+  @override
   String get queueEmpty => 'A fila está vazia';
 
   @override
@@ -1108,6 +1114,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get queueTitle => 'Fila de reprodução';
+
+  @override
+  String get nowPlayingLabel => 'Tocando agora';
+
+  @override
+  String get aboutArtist => 'Sobre o artista';
 
   @override
   String get queueEmpty => 'A fila está vazia';

@@ -649,6 +649,18 @@ abstract class AppLocalizations {
   /// **'Cola de reproducción'**
   String get queueTitle;
 
+  /// No description provided for @nowPlayingLabel.
+  ///
+  /// In es, this message translates to:
+  /// **'Reproduciendo ahora'**
+  String get nowPlayingLabel;
+
+  /// No description provided for @aboutArtist.
+  ///
+  /// In es, this message translates to:
+  /// **'Sobre el artista'**
+  String get aboutArtist;
+
   /// No description provided for @queueEmpty.
   ///
   /// In es, this message translates to:

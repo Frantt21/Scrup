@@ -155,6 +155,16 @@ class SearchService {
     }
   }
 
+  /// Artist-only InnerTube search (delegates to YtMusicService): used by
+  /// the queue panel to resolve a channel id from the track's artist name.
+  Future<List<YtmArtist>> searchArtists(String query, {int limit = 8}) =>
+      _ytMusic.searchArtists(query, limit: limit);
+
+  /// AUTHORITATIVE channel for a track videoId (InnerTube `next` page —
+  /// the same source the YT Music player uses). (browseId, channelName).
+  Future<(String, String)?> fetchTrackChannel(String videoId) =>
+      _ytMusic.fetchTrackChannel(videoId);
+
   /// Derive artists from a search using ONLY the search results, with no extra request: each InnerTube row carries the artist channel in its navigation. Group by channel, count matches, and sort by 1st number of songs by that artist in the results (relevance), 2nd subscribers (the most popular result of the same channel). This avoids the general InnerTube search (which was an extra request per search and made searches slower).
   static List<YtmArtist> deriveArtists(List<Track> results, {int limit = 8}) {
     if (results.isEmpty) return const [];

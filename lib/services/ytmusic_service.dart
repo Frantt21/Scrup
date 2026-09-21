@@ -167,6 +167,7 @@ class YtMusicService {
 
   static const _endpoint = 'https://music.youtube.com/youtubei/v1/search';
   static const _browseEndpoint = 'https://music.youtube.com/youtubei/v1/browse';
+  static const _nextEndpoint = 'https://music.youtube.com/youtubei/v1/next';
   static const _clientName = 'WEB_REMIX';
   // Tracks the current yt-dlp web_music version: stale versions get softer
   // results or outright rejection as the API evolves.
@@ -616,6 +617,199 @@ class YtMusicService {
   /// "Songs" → browse con filtro de canciones. Devuelve filas con duración
   /// Y REPRODUCCIONES ("1.2M plays") — portadas de álbum limpias y el
   /// número de vistas real por canción.
+  /// AUTHORITATIVE channel for a track: the ANDROID player page for the
+  /// videoId — the same source the app's OWN streaming uses — carries
+  /// `videoDetails` with the uploader (`channelId` UC… + `author`). Exact:
+  /// the track's owner is never guessed. The `next` page is kept only as a
+  /// legacy fallback (current WEB_REMIX versions answer with an empty
+  /// "Up next/Your Queue" and no channel). Returns (browseId, channelName)
+  /// or null when the page has no channel.
+  Future<(String, String)?> fetchTrackChannel(String videoId) async {
+    if (videoId.trim().isEmpty) return null;
+    Object? player;
+    try {
+      player = await _androidPlayerPage(videoId);
+    } catch (_) {}
+    final fromPlayer = parsePlayerChannel(player);
+    if (fromPlayer != null) return fromPlayer;
+    return _fetchNextChannel(videoId);
+  }
+
+  /// Single POST to the www.youtube.com player endpoint with the ANDROID
+  /// client (same request as [getAndroidMuxedStreamUrl]): serves ANY video,
+  /// not just the music catalog. Returns the decoded JSON or null.
+  Future<Object?> _androidPlayerPage(String videoId) async {
+    final body = jsonEncode({
+      'videoId': videoId,
+      'context': {
+        'client': {
+          'clientName': 'ANDROID',
+          'clientVersion': _androidClientVersion,
+          'androidSdkVersion': 30,
+          'osName': 'Android',
+          'osVersion': '11',
+          'hl': 'en',
+          'gl': 'US',
+        },
+      },
+      'contentCheckOk': true,
+      'racyCheckOk': true,
+    });
+    try {
+      final res = await _client
+          .post(
+            Uri.parse(
+              '$_wwwPlayerEndpoint?key=$_wwwPlayerApiKey&prettyPrint=false',
+            ),
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent':
+                  'com.google.android.youtube/$_androidClientVersion '
+                      '(Linux; U; Android 11) gzip',
+              'X-YouTube-Client-Name': '3',
+              'X-YouTube-Client-Version': _androidClientVersion,
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return null;
+      return jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Uploader of a track extracted from a player response:
+  /// `videoDetails.channelId` (UC…) + `videoDetails.author`. Auto-generated
+  /// topic channels append " - Topic": stripped so the panel shows the real
+  /// artist name.
+  static (String, String)? parsePlayerChannel(Object? node) {
+    if (node is! Map) return null;
+    final vd = node['videoDetails'];
+    if (vd is! Map) return null;
+    final id = vd['channelId'];
+    if (id is! String || !id.startsWith('UC')) return null;
+    String? name = vd['author'];
+    if (name != null) {
+      const suffix = ' - Topic';
+      if (name.endsWith(suffix)) {
+        name = name.substring(0, name.length - suffix.length).trim();
+      }
+    }
+    return (id, name ?? '');
+  }
+
+  /// Legacy fallback for the `next` page. Current WEB_REMIX versions return
+  /// an empty "Up next/Your Queue" WITHOUT any channel; kept for the older
+  /// responses that included `videoOwnerRenderer`.
+  Future<(String, String)?> _fetchNextChannel(String videoId) async {
+    if (videoId.trim().isEmpty) return null;
+    final body = jsonEncode({
+      'context': _context(),
+      'videoId': videoId.trim(),
+    });
+    http.Response res;
+    try {
+      res = await _client
+          .post(
+            Uri.parse('$_nextEndpoint?prettyPrint=false'),
+            headers: const {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0',
+              'X-YouTube-Client-Name': '67',
+              'X-YouTube-Client-Version': _clientVersion,
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      return null;
+    }
+    if (res.statusCode != 200) return null;
+    Object? data;
+    try {
+      data = jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (_) {
+      return null;
+    }
+    return parseNextChannel(data);
+  }
+
+  /// Legacy `next`-page channel extraction: `videoOwnerRenderer` (WEB
+  /// client) or a `musicResponsiveHeaderRenderer` second subtitle entry
+  /// navigating to a UC… channel. Not present in current WEB_REMIX `next`
+  /// responses; kept for older ones.
+  static (String, String)? parseNextChannel(Object? node) {
+    String? channelId;
+    String? channelName;
+
+    void walk(Object? n) {
+      if (channelId != null) return;
+      if (n is Map) {
+        // playerOverlayRenderer.videoDetails (older watch pages): exact
+        // uploader without navigation lookups.
+        final vd = n['videoDetails'];
+        if (vd is Map) {
+          final vdId = vd['channelId'];
+          if (vdId is String && vdId.startsWith('UC')) {
+            final auth = vd['author'];
+            channelId = vdId;
+            channelName = auth is String && auth.trim().isNotEmpty
+                ? auth.replaceFirst(' - Topic', '').trim()
+                : null;
+            return;
+          }
+        }
+        // The watch-next primary row: its owner navigation is exact.
+        final owner = n['videoOwnerRenderer'] as Map?;
+        if (owner != null) {
+          final nav = owner['navigationEndpoint'] as Map?;
+          final browse = nav?['browseEndpoint'] as Map?;
+          final id = browse?['browseId'];
+          if (id is String && id.startsWith('UC')) {
+            final title = owner['title'] as Map?;
+            final runs = title?['runs'];
+            channelId = id;
+            if (runs is List && runs.isNotEmpty && runs.first is Map) {
+              channelName = (runs.first as Map)['text'] as String?;
+            }
+            return;
+          }
+        }
+        // Fallback inside queue rows: menu "go to artist/channel".
+        final flex = n['musicResponsiveHeaderRenderer'] as Map?;
+        if (flex != null) {
+          final sub = flex['secondSubtitle'] as Map?;
+          final runs = sub?['runs'];
+          if (runs is List) {
+            for (final r in runs.whereType<Map>()) {
+              final nav = r['navigationEndpoint'] as Map?;
+              final browse = nav?['browseEndpoint'] as Map?;
+              final id = browse?['browseId'];
+              if (id is String && id.startsWith('UC')) {
+                final text = r['text'];
+                channelId = id;
+                channelName = text is String ? text : null;
+                return;
+              }
+            }
+          }
+        }
+        n.values.forEach(walk);
+      } else if (n is List) {
+        for (final item in n) {
+          walk(item);
+          if (channelId != null) return;
+        }
+      }
+    }
+
+    walk(node);
+    final id = channelId;
+    if (id == null) return null;
+    return (id, channelName ?? '');
+  }
+
   Future<List<YtMusicResult>> fetchArtistSongs(
     String browseId,
     String songsParams, {

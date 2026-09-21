@@ -305,6 +305,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get queueTitle => 'Cola de reproducción';
 
   @override
+  String get nowPlayingLabel => 'Reproduciendo ahora';
+
+  @override
+  String get aboutArtist => 'Sobre el artista';
+
+  @override
   String get queueEmpty => 'La cola está vacía';
 
   @override

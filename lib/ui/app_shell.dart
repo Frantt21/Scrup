@@ -693,6 +693,7 @@ class _AppShellState extends State<AppShell> {
                                 _queueWidth ?? kQueuePanelWidth,
                               ),
                             ),
+                            onOpenArtist: _openArtistDetail,
                           ),
                         ],
                       ),

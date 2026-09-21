@@ -305,6 +305,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get queueTitle => 'Play queue';
 
   @override
+  String get nowPlayingLabel => 'Now playing';
+
+  @override
+  String get aboutArtist => 'About the artist';
+
+  @override
   String get queueEmpty => 'The queue is empty';
 
   @override

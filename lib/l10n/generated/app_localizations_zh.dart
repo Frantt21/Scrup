@@ -304,6 +304,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get queueTitle => '播放队列';
 
   @override
+  String get nowPlayingLabel => '正在播放';
+
+  @override
+  String get aboutArtist => '关于艺人';
+
+  @override
   String get queueEmpty => '队列为空';
 
   @override

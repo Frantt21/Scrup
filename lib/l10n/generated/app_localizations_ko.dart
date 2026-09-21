@@ -304,6 +304,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get queueTitle => '재생 대기열';
 
   @override
+  String get nowPlayingLabel => '재생 중';
+
+  @override
+  String get aboutArtist => '아티스트 정보';
+
+  @override
   String get queueEmpty => '대기열이 비어 있습니다';
 
   @override
