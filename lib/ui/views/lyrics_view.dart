@@ -735,6 +735,16 @@ class _LyricsViewState extends State<LyricsView>
     return FutureBuilder<String?>(
       future: _audioPathFutureFor(track),
       builder: (context, snapshot) {
+        // B/N ink on BOTH platforms: desktop derives it from the flat accent
+        // background; embedded (Android) derives it from the player overlay's
+        // accent (the lyrics sit on that same accent surface). Same
+        // validation everywhere — letters are never painted accent-colored.
+        final bwnAccent = onAccent ??
+            (accent == null
+                ? null
+                : ArtworkPaletteService.prefersBlackInk(accent)
+                    ? Colors.black
+                    : Colors.white);
         final lyricsDisplay = LyricsDisplay(
           lyrics: lyrics,
           positionNotifier: _position,
@@ -742,10 +752,7 @@ class _LyricsViewState extends State<LyricsView>
           audioPath: snapshot.data,
           lyricsOffset: _lyricsOffset,
           onTap: _onLineTap,
-          // Desktop: las líneas se pintan en color de CONTRASTE (blanco/
-          // negro según el acento) para que sean legibles sobre el fondo de
-          // acento. Embebido conserva el acento (fondo oscuro del player).
-          accentColor: onAccent ?? accent,
+          accentColor: bwnAccent ?? accent,
           sweepEnabled: _sweepEnabled,
           embedded: embedded,
           // Share selection is inside the dialog; the view stays normal.

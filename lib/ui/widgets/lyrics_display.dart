@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/synced_lyrics.dart';
 import '../../core/app_log.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/artwork_palette_service.dart';
 
 const String kGapMarker = '•••';
 
@@ -545,15 +546,17 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                       vertical: 12,
                     ),
                     decoration: BoxDecoration(
-                      // Desktop (fondo = acento): pill en color de contraste
-                      // opuesto. Embebido (Android, fondo oscuro): pill de
-                      // acento con texto blanco, como siempre.
+                      // The pill inverts the ink: accent letters on the
+                      // opposite B/N color (same contrast rule everywhere).
                       color: widget.embedded
                           ? (widget.accentColor ??
                                 Theme.of(context).colorScheme.primary)
-                          : (widget.accentColor?.computeLuminance() ?? 0) > 0.5
-                          ? Colors.black
-                          : Colors.white,
+                          : ArtworkPaletteService.prefersBlackInk(
+                              widget.accentColor ??
+                                  Theme.of(context).colorScheme.primary,
+                            )
+                          ? Colors.white
+                          : Colors.black,
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(
@@ -577,6 +580,7 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                        // (ink colors unchanged: they ride on the pill bg)
                       ],
                     ),
                   ),
