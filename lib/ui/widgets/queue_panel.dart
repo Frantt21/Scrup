@@ -717,10 +717,11 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
 
   String? _fallbackChannelId;
 
-  /// Loads the credits for the CURRENT track via the resolver (direct
-  /// WEB `next`, then InnerTube search fallback for cached tracks without
-  /// credits). Late responses from a previous track are discarded (guard
-  /// by videoId). Silent failure: without credits nothing renders.
+  /// Loads the credits for the CURRENT track via the resolver (official
+  /// "Song credits" dialog, then auto-generated description, then InnerTube
+  /// search fallback for cached tracks without credits). Late responses from
+  /// a previous track are discarded (guard by videoId). Silent failure:
+  /// without credits nothing renders.
   Future<void> _loadCredits() async {
     final t = _track;
     final videoId = t?.id.trim() ?? '';
@@ -1061,29 +1062,24 @@ class _CreditsCard extends StatelessWidget {
         children: [
           Text(
             l10n.creditsLabel,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 10),
-          if (credits.writers.isNotEmpty)
-            bullet('Writers: ${credits.writers.join(', ')}'),
-          if (credits.producers.isNotEmpty)
-            bullet('Producers: ${credits.producers.join(', ')}'),
-          for (final c in credits.contributors) bullet(c),
-          for (final s in credits.socials)
-            bullet(
-              s.handle,
-              icon: switch (s.platform) {
-                'instagram' => Icons.photo_camera_rounded,
-                'x' => Icons.alternate_email_rounded,
-                'facebook' => Icons.facebook_rounded,
-                'tiktok' => Icons.music_note_rounded,
-                'threads' => Icons.tag_rounded,
-                _ => Icons.play_circle_rounded,
-              },
+          for (final s in credits.sections) ...[
+            // Section header: the credit role ("Performed by").
+            Text(
+              s.role,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
             ),
+            const SizedBox(height: 4),
+            for (final name in s.names) bullet(name),
+            const SizedBox(height: 8),
+          ],
           if (credits.album != null)
             bullet(credits.album!, icon: Icons.album_rounded),
           if (credits.distributor != null)

@@ -12,7 +12,7 @@ import 'ytdlp_service.dart';
 import 'ytmusic_service.dart';
 
 export 'ytmusic_service.dart'
-    show YtmAlbum, YtmArtist, YtmArtistDetail, YtmTrackCredits, YtmSocialLink;
+    show YtmAlbum, YtmArtist, YtmArtistDetail, YtmTrackCredits;
 
 class SearchService {
   SearchService({
@@ -166,35 +166,30 @@ class SearchService {
   Future<(String, String)?> fetchTrackChannel(String videoId) =>
       _ytMusic.fetchTrackChannel(videoId);
 
-  /// Track credits (WEB `next` description panel); null when the track has
-  /// no auto-generated credits or the request fails.
-  Future<YtmTrackCredits?> fetchTrackCredits(
-    String videoId, {
-    String? trackTitle,
-  }) =>
-      _ytMusic.fetchTrackCredits(videoId, trackTitle: trackTitle);
+  /// Official credits (YT Music "Song credits" dialog, or auto-generated
+  /// description); null when the track has neither or the request fails.
+  Future<YtmTrackCredits?> fetchTrackCredits(String videoId) =>
+      _ytMusic.fetchTrackCredits(videoId);
 
   /// Credits with the SAME resolution mechanism as the artist channel:
-  /// 1) direct WEB `next` for the cached track's videoId; 2) if the cached
-  /// id carries no credits (re-upload / topic channel), InnerTube Songs
-  /// search for "artist title" and the first hit whose videoId DOES have
-  /// credits (results are relevance-ordered, so the first with credits is
-  /// the official release). Null when neither path yields anything.
+  /// 1) direct lookup for the cached track's videoId; 2) if the cached id
+  /// carries no credits, InnerTube Songs search for "artist title" and the
+  /// first hit whose videoId DOES have credits (results are
+  /// relevance-ordered, so the first with credits is the official release).
+  /// Null when neither path yields anything.
   Future<YtmTrackCredits?> resolveTrackCredits(
     String videoId,
     String title,
     String artist,
   ) async {
-    final direct = await fetchTrackCredits(videoId, trackTitle: title)
-        .catchError((_) => null);
+    final direct = await fetchTrackCredits(videoId).catchError((_) => null);
     if (direct != null) return direct;
     final query = '${artist.trim()} ${title.trim()}'.trim();
     if (query.isEmpty) return null;
     try {
       final hits = await _ytMusic.search(query, limit: 5);
       for (final hit in hits) {
-        final credits = await fetchTrackCredits(hit.videoId,
-            trackTitle: hit.title);
+        final credits = await fetchTrackCredits(hit.videoId);
         if (credits != null) return credits;
       }
     } catch (_) {}
