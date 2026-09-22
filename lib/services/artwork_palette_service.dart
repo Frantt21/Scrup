@@ -307,4 +307,14 @@ class ArtworkPaletteService {
     }
     return hsl.withSaturation(0).withLightness(0.72).toColor();
   }
+
+  /// True when BLACK ink is readable on [background]. Uses the WCAG
+  /// relative-luminance threshold (0.179), NOT 0.5: the luminance scale is
+  /// gamma-encoded, so perceptual light greys (e.g. #B5B5B5 ≈ 0.46) fall
+  /// well below 0.5 and were wrongly rendered with white ink.
+  static bool prefersBlackInk(Color background) {
+    final hsl = HSLColor.fromColor(background);
+    if (hsl.lightness >= 0.73) return true;
+    return background.computeLuminance() >= 0.179;
+  }
 }

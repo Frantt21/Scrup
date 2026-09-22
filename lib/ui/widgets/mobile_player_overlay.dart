@@ -191,13 +191,11 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
   bool _artCommitted = false;
 
   // ── Contraste adaptativo ────────────────────────────────────────────
-  // Los controles del player son BLANCOS fijos; sobre acentos claros
-  // (artworks blancos/plata) pierden contraste → con acento claro, los
+  // Los controles del player son BLANCOS fijos; sobre acentos claros  // (artworks blancos/plata) pierden contraste → con acento claro, los
   // elementos estáticos pasan a NEGRO. El círculo del play invierte:
   // blanco→negro con icono claro.
-  bool get _darkContent =>
-      _theme.accentColor != null &&
-      _theme.accentColor!.computeLuminance() > 0.55;
+  bool get _darkContent => _theme.accentColor != null &&
+      ArtworkPaletteService.prefersBlackInk(_theme.accentColor!);
 
   Color get _staticWhite =>
       _darkContent ? Colors.black : Colors.white;
@@ -1788,12 +1786,12 @@ class _SeekBar extends StatefulWidget {
 
 class _SeekBarState extends State<_SeekBar> {
   bool _dragging = false;
-  double _dragValue = 0;
-
-  /// Color de la barra/tiempos: blanco estándar, NEGRO sobre acentos
+  double _dragValue = 0;  /// Color de la barra/tiempos: blanco estándar, NEGRO sobre acentos
   /// claros (el player entero cambia de polaridad juntos).
   bool get _dark => context.read<ThemeController>().accentColor != null &&
-      context.read<ThemeController>().accentColor!.computeLuminance() > 0.55;
+      ArtworkPaletteService.prefersBlackInk(
+        context.read<ThemeController>().accentColor!,
+      );
 
   Color get _barColor => _dark ? Colors.black : Colors.white;
 
@@ -1987,13 +1985,11 @@ class _LyricsPeekState extends State<_LyricsPeek> {
   /// botones del player).
   Color _accent = _kIdleSurface;
 
-  // Mismo esquema que los botones del player: blanco estático (o negro con
-  // acento claro) — así el sheet comparte el fondo de los controles.
-  bool get _darkContent =>
-      _theme.accentColor != null &&
-      _theme.accentColor!.computeLuminance() > 0.55;
+  // Mismo esquema que los botones del player: blanco estático (o negro con  // acento claro) — así el sheet comparte el fondo de los controles.
+  bool get _darkContent => _theme.accentColor != null &&
+      ArtworkPaletteService.prefersBlackInk(_theme.accentColor!);
 
-  Color get _staticWhite => _darkContent ? Colors.black : Colors.white;
+  Color get _staticWhite => _darkContent ? Colors.black : Colors.white;
 
   Color _staticWhiteA(double a) => _darkContent
       ? Colors.black.withValues(alpha: a)

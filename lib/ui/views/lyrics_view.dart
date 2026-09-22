@@ -17,6 +17,7 @@ import '../../core/app_log.dart';
 import '../../core/synced_lyrics.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/audio_cache_service.dart';
+import '../../services/artwork_palette_service.dart';
 import '../../services/lyrics_service.dart';
 import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
@@ -492,12 +493,12 @@ class _LyricsViewState extends State<LyricsView>
                   accent,
                   embedded,
                   accent != null
-                      ? (accent.computeLuminance() > 0.5
+                      ? (ArtworkPaletteService.prefersBlackInk(accent)
                             ? Colors.black
                             : Colors.white)
                       : null,
                   accent != null
-                      ? (accent.computeLuminance() > 0.5
+                      ? (ArtworkPaletteService.prefersBlackInk(accent)
                             ? Colors.black
                             : Colors.white)
                           .withValues(alpha: 0.65)
@@ -1783,8 +1784,8 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
 
   Widget _buildCard(ThemeData theme, Color accent) {
     // FLAT accent background (same color as the miniplayer), no readable
-    // lightening; text/ink in pure black or white by luminance contrast.
-    final onAccent = accent.computeLuminance() > 0.5
+    // lightening; text/ink in pure black or white by perceptual contrast.
+    final onAccent = ArtworkPaletteService.prefersBlackInk(accent)
         ? Colors.black
         : Colors.white;
     TextStyle lyricStyle(Color color) => TextStyle(

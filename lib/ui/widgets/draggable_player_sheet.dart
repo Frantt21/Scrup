@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
+import '../../services/artwork_palette_service.dart';
 import '../../services/player_service.dart';
 import '../theme_controller.dart';
 import 'cover_image.dart';
@@ -163,8 +164,9 @@ class _PlayerContentState extends State<_PlayerContent> {
         context.watch<ThemeController>().accentColor ?? cs.primary;
     // Contraste automático (misma validación que Android): negro sobre
     // acentos claros, blanco sobre oscuros.
-    final onAccent =
-        accent.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+    final onAccent = ArtworkPaletteService.prefersBlackInk(accent)
+        ? Colors.black
+        : Colors.white;
     final mutedAccent = onAccent.withValues(alpha: 0.65);
 
     final track = _track;
@@ -412,7 +414,7 @@ class _PlayPauseButton extends StatelessWidget {
       ),
       child: IconButton(
         iconSize: 40,
-        color: accent.computeLuminance() > 0.5
+        color: ArtworkPaletteService.prefersBlackInk(accent)
             ? Colors.black
             : Colors.white,
         onPressed: onPressed,

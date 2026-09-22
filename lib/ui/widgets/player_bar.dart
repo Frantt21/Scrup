@@ -292,7 +292,7 @@ class _PlayerBarState extends State<PlayerBar>
     // claros, blanco sobre oscuros).
     final accent =
         themeController.accentColor ?? theme.colorScheme.primary;
-    final onAccent = accent.computeLuminance() > 0.5
+    final onAccent = ArtworkPaletteService.prefersBlackInk(accent)
         ? Colors.black
         : Colors.white;
     final mutedAccent = onAccent.withValues(alpha: 0.65);
