@@ -723,6 +723,7 @@ class _AppShellState extends State<AppShell> {
                               ),
                             ),
                             onOpenArtist: _openArtistDetail,
+                            onOpenLyrics: _openLyrics,
                           ),
                         ],
                       ),

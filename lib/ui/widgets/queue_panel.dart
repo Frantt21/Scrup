@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/track.dart';
+import '../../core/synced_lyrics.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
+import '../../services/lyrics_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import '../../services/search_service.dart'
@@ -42,6 +44,9 @@ class QueuePanel extends StatelessWidget {
   /// Opens the artist channel from the now-playing summary.
   final ValueChanged<YtmArtist>? onOpenArtist;
 
+  /// Opens the lyrics container from the lyrics preview card.
+  final VoidCallback? onOpenLyrics;
+
   const QueuePanel({
     super.key,
     required this.open,
@@ -49,6 +54,7 @@ class QueuePanel extends StatelessWidget {
     this.onWidthDrag,
     this.onWidthDragEnd,
     this.onOpenArtist,
+    this.onOpenLyrics,
   });
 
   @override
@@ -105,6 +111,7 @@ class QueuePanel extends StatelessWidget {
         theme: theme,
         l10n: l10n,
         onOpenArtist: onOpenArtist,
+        onOpenLyrics: onOpenLyrics,
       ),
     );
   }
@@ -125,7 +132,8 @@ class QueueSheet extends StatelessWidget {
     // overlay blanco/negro al 10% compuesto sobre el color real del player
     // (acento del artwork, o surfaceContainerHigh en idle).
     final accent = context.read<ThemeController>().accentColor;
-    final darkContent = accent != null && accent.computeLuminance() > 0.55;
+    final darkContent = accent != null &&
+        ArtworkPaletteService.prefersBlackInk(accent);
     final overlayBase = darkContent ? Colors.black : Colors.white;
     final playerBase =
         accent ?? theme.colorScheme.surfaceContainerHigh;
@@ -183,11 +191,15 @@ class _QueueGlass extends StatelessWidget {
   /// Opens the artist channel from the now-playing summary.
   final ValueChanged<YtmArtist>? onOpenArtist;
 
+  /// Opens the lyrics container from the lyrics preview card.
+  final VoidCallback? onOpenLyrics;
+
   const _QueueGlass({
     required this.player,
     required this.theme,
     required this.l10n,
     this.onOpenArtist,
+    this.onOpenLyrics,
   });
 
   @override
@@ -217,6 +229,7 @@ class _QueueGlass extends StatelessWidget {
             theme: theme,
             l10n: l10n,
             onOpenArtist: onOpenArtist,
+            onOpenLyrics: onOpenLyrics,
           ),
         ),
       ),
@@ -523,12 +536,14 @@ class _QueuePanelTabs extends StatefulWidget {
   final ThemeData theme;
   final AppLocalizations l10n;
   final ValueChanged<YtmArtist>? onOpenArtist;
+  final VoidCallback? onOpenLyrics;
 
   const _QueuePanelTabs({
     required this.player,
     required this.theme,
     required this.l10n,
     this.onOpenArtist,
+    this.onOpenLyrics,
   });
 
   @override
@@ -560,6 +575,7 @@ class _QueuePanelTabsState extends State<_QueuePanelTabs> {
             theme: widget.theme,
             l10n: widget.l10n,
             onOpenArtist: widget.onOpenArtist,
+            onOpenLyrics: widget.onOpenLyrics,
             onToggleQueue: () => setState(() => _showNowPlaying = false),
           ),
         ),
@@ -577,6 +593,9 @@ class _NowPlayingPanel extends StatefulWidget {
   final AppLocalizations l10n;
   final ValueChanged<YtmArtist>? onOpenArtist;
 
+  /// Opens the full lyrics container from the preview card.
+  final VoidCallback? onOpenLyrics;
+
   /// Switches the shell container back to the queue panel.
   final VoidCallback? onToggleQueue;
 
@@ -585,6 +604,7 @@ class _NowPlayingPanel extends StatefulWidget {
     required this.theme,
     required this.l10n,
     this.onOpenArtist,
+    this.onOpenLyrics,
     this.onToggleQueue,
   });
 
@@ -594,8 +614,16 @@ class _NowPlayingPanel extends StatefulWidget {
 
 class _NowPlayingPanelState extends State<_NowPlayingPanel> {
   StreamSubscription<Track?>? _trackSub;
+  StreamSubscription<Duration>? _positionSub;
   Track? _track;
   bool _isFavorite = false;
+
+  /// Synced lyrics of the current track (LyricsService cache makes this
+  /// instant when the lyrics view already fetched them).
+  SyncedLyrics? _lyrics;
+
+  /// Current lyric line index, updated from the throttled position stream.
+  int? _lyricIndex;
 
   /// Artist card detail (listeners text). Resolved in background from the
   /// artist cache; `null` while loading or when the channel is unknown.
@@ -620,20 +648,52 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
         _artistDetail = null;
         _artistLoading = false;
         _credits = null;
+        _lyrics = null;
+        _lyricIndex = null;
       });
       unawaited(_refreshFavorite());
       unawaited(_loadArtistDetail());
       unawaited(_loadCredits());
+      unawaited(_loadLyrics());
+    });
+    _positionSub = widget.player.position.listen((_) {
+      if (!mounted) return;
+      final lyrics = _lyrics;
+      if (lyrics == null) return;
+      final idx = lyrics.getCurrentLineIndex(widget.player.positionValue);
+      if (idx != _lyricIndex) setState(() => _lyricIndex = idx);
     });
     unawaited(_refreshFavorite());
     unawaited(_loadArtistDetail());
     unawaited(_loadCredits());
+    unawaited(_loadLyrics());
   }
 
   @override
   void dispose() {
     _trackSub?.cancel();
+    _positionSub?.cancel();
     super.dispose();
+  }
+
+  /// Fetches the current track's lyrics in background (cached after the
+  /// first fetch — shares the SAME LyricsService singleton as the lyrics
+  /// view, so no duplicated requests).
+  Future<void> _loadLyrics() async {
+    final t = _track;
+    if (t == null || !mounted) return;
+    try {
+      final lyrics = await context
+          .read<LyricsService>()
+          .fetchLyrics(t.title, t.artist);
+      if (!mounted || _track?.id != t.id) return;
+      setState(() {
+        _lyrics = lyrics;
+        _lyricIndex = lyrics?.getCurrentLineIndex(widget.player.positionValue);
+      });
+    } catch (_) {
+      if (mounted && _track?.id == t.id) setState(() => _lyrics = null);
+    }
   }
 
   Future<void> _refreshFavorite() async {
@@ -877,6 +937,16 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
                     ),
                   ),
           ),
+          if (_lyrics != null) ...[
+            const SizedBox(height: 14),
+            _LyricsPreviewCard(
+              lyrics: _lyrics!,
+              focusIndex: _lyricIndex,
+              artworkUrl: track.thumbnailUrl,
+              theme: theme,
+              onTap: widget.onOpenLyrics,
+            ),
+          ],
           if (_credits != null) ...[
             const SizedBox(height: 14),
             _CreditsCard(
@@ -980,6 +1050,97 @@ class _NowPlayingSkeleton extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+/// Lyrics preview: previous / focus / next lines on the SAME flat accent
+/// background as the lyrics container (artwork accent + pure B/W ink by
+/// luminance). Tapping opens the full lyrics view.
+class _LyricsPreviewCard extends StatelessWidget {
+  final SyncedLyrics lyrics;
+
+  /// Current line index (null = nothing active yet → show line 0 as focus).
+  final int? focusIndex;
+  final String? artworkUrl;
+  final ThemeData theme;
+  final VoidCallback? onTap;
+
+  const _LyricsPreviewCard({
+    required this.lyrics,
+    required this.focusIndex,
+    required this.theme,
+    this.artworkUrl,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _resolveAccent(context);
+    final bg = accent ?? theme.colorScheme.surfaceContainer;
+    final on = accent == null
+        ? theme.colorScheme.onSurface
+        : (ArtworkPaletteService.prefersBlackInk(accent)
+              ? Colors.black
+              : Colors.white);
+
+    final lines = lyrics.lines;
+    final focus = focusIndex ?? 0;
+    String? lineAt(int i) => (i >= 0 && i < lines.length) ? lines[i].text : null;
+    final prev = lineAt(focus - 1);
+    final current = lineAt(focus);
+    final next = lineAt(focus + 1);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        mouseCursor: SystemMouseCursors.click,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (prev != null) _line(prev, on.withValues(alpha: 0.55), false),
+              if (current != null)
+                _line(current, on, true, emphasized: true),
+              if (next != null) _line(next, on.withValues(alpha: 0.55), false),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _line(String text, Color color, bool active, {bool emphasized = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Text(
+        text,
+        maxLines: active ? 2 : 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          height: 1.3,
+          color: color,
+          fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          fontSize: emphasized ? 15 : 13,
+        ),
+      ),
+    );
+  }
+
+  /// Accent from the track artwork (palette cache, sync read).
+  Color? _resolveAccent(BuildContext context) {
+    final url = artworkUrl;
+    if (url == null || url.isEmpty) return null;
+    final trio = context.read<PaletteCacheStore>().getTrio(url);
+    if (trio == null) return null;
+    return ArtworkPaletteService.accentFromTrio(trio);
   }
 }
 
