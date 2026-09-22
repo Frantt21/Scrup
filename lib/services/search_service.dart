@@ -8,6 +8,7 @@ import 'album_rec_cache_store.dart';
 import 'artist_avatar_cache_store.dart';
 import 'artist_cache_store.dart';
 import 'search_cache_store.dart';
+import 'track_info_cache_store.dart';
 import 'ytdlp_service.dart';
 import 'ytmusic_service.dart';
 
@@ -22,12 +23,14 @@ class SearchService {
     ArtistCacheStore? artistCache,
     ArtistAvatarCacheStore? avatarCache,
     AlbumRecCacheStore? albumRecCache,
+    TrackInfoCacheStore? trackInfoCache,
   }) : _ytMusic = ytMusic ?? YtMusicService(),
        _ytDlp = ytDlp ?? YtDlpService(),
        _cache = cache,
        _artistCache = artistCache,
        _avatarCache = avatarCache,
-       _albumRecCache = albumRecCache;
+       _albumRecCache = albumRecCache,
+       _trackInfoCache = trackInfoCache;
 
   final YtMusicService _ytMusic;
   final YtDlpService _ytDlp;
@@ -50,6 +53,10 @@ class SearchService {
   /// Persistent cache of home library-album recommendations (disk). `null` =
   /// disabled (tests): the recommendation row always goes to network.
   final AlbumRecCacheStore? _albumRecCache;
+
+  /// Persistent per-track cache (resolved channel + credits, disk). `null` =
+  /// disabled (tests): every lookup goes to network.
+  final TrackInfoCacheStore? _trackInfoCache;
 
   // Dedup concurrent searches by key (multiple views / rapid resubmits).
   final Map<String, Future<List<Track>>> _inflight = {};
@@ -163,8 +170,18 @@ class SearchService {
 
   /// AUTHORITATIVE channel for a track videoId (InnerTube `next` page —
   /// the same source the YT Music player uses). (browseId, channelName).
-  Future<(String, String)?> fetchTrackChannel(String videoId) =>
-      _ytMusic.fetchTrackChannel(videoId);
+  /// A track's owner NEVER changes → cached on disk per videoId, forever.
+  Future<(String, String)?> fetchTrackChannel(String videoId) async {
+    final id = videoId.trim();
+    if (id.isEmpty) return null;
+    final cached = await _trackInfoCache?.readChannel(id);
+    if (cached != null) return cached;
+    final owner = await _ytMusic.fetchTrackChannel(id);
+    if (owner != null) {
+      _trackInfoCache?.writeChannel(id, owner.$1, owner.$2);
+    }
+    return owner;
+  }
 
   /// Official credits (YT Music "Song credits" dialog, or auto-generated
   /// description); null when the track has neither or the request fails.
@@ -176,8 +193,25 @@ class SearchService {
   /// carries no credits, InnerTube Songs search for "artist title" and the
   /// first hit whose videoId DOES have credits (results are
   /// relevance-ordered, so the first with credits is the official release).
-  /// Null when neither path yields anything.
+  /// Credits are FIXED at release → cached on disk per videoId (keyed by
+  /// the track that was resolved, so repeated plays are instant). Null when
+  /// neither path yields anything.
   Future<YtmTrackCredits?> resolveTrackCredits(
+    String videoId,
+    String title,
+    String artist,
+  ) async {
+    final id = videoId.trim();
+    final cached = await _trackInfoCache?.readCredits(id);
+    if (cached != null) return cached;
+    final resolved = await _resolveTrackCreditsUncached(id, title, artist);
+    if (resolved != null) {
+      _trackInfoCache?.writeCredits(id, resolved);
+    }
+    return resolved;
+  }
+
+  Future<YtmTrackCredits?> _resolveTrackCreditsUncached(
     String videoId,
     String title,
     String artist,

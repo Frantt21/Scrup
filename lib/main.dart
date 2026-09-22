@@ -24,6 +24,7 @@ import 'services/artist_cache_store.dart';
 import 'services/search_cache_store.dart';
 import 'services/search_history_store.dart';
 import 'services/search_service.dart';
+import 'services/track_info_cache_store.dart';
 import 'services/discord/discord_presence_service.dart';
 import 'services/lyrics_service.dart';
 import 'services/palette_cache_store.dart';
@@ -281,6 +282,8 @@ class ScrupApp extends StatelessWidget {
             avatarCache: ArtistAvatarCacheStore(),
             // Home "albums from your library" row: one shared JSON, no TTL — the seed set is the cache key, so playlist changes get a fresh key automatically.
             albumRecCache: AlbumRecCacheStore(),
+            // Per-track now-playing data (resolved channel + credits): one JSON per videoId, no TTL — a track's owner and its credits never change.
+            trackInfoCache: TrackInfoCacheStore(),
           ),
         ),
         Provider<LyricsService>(

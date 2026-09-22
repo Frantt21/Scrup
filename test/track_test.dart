@@ -98,18 +98,21 @@ void main() {
       );
     });
 
-    test('googleusercontent (YT Music) → variante a 1200px', () {
+    test('googleusercontent (YT Music) → variante a 1200px conservando crop', () {
+      // ONLY the size numbers change: preserving the server's own params
+      // (-l90-rj / crop flags) keeps the SAME framing — dropping them makes
+      // Google serve a different image (different palette).
       expect(
         Track.hiResThumbnail(
           'https://lh3.googleusercontent.com/XyZ=w544-h544-l90-rj',
         ),
-        'https://lh3.googleusercontent.com/XyZ=w1200-h1200',
+        'https://lh3.googleusercontent.com/XyZ=w1200-h1200-l90-rj',
       );
       expect(
         Track.hiResThumbnail(
           'https://lh5.googleusercontent.com/AbC=s60-fcrop64=1',
         ),
-        'https://lh5.googleusercontent.com/AbC=w1200-h1200',
+        'https://lh5.googleusercontent.com/AbC=w1200-h1200-p-l90-rj',
       );
     });
 

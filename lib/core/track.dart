@@ -93,9 +93,55 @@ class Track {
       return 'https://i.ytimg.com/vi/${m.group(1)!}/maxresdefault.jpg';
     }
     if (url.contains('googleusercontent.com')) {
-      return url.replaceFirst(RegExp(r'=(w|s)\d+.*$'), '=w1200-h1200');
+      return _resizedGoogleUrl(url);
     }
     return url;
+  }
+
+  /// Rewrites a googleusercontent cover to its 1200px variant WITHOUT
+  /// touching the other params: only the w/h numbers change, so the
+  /// server's own crop/quality flags (-p-l90-rj…) are preserved. Dropping
+  /// the params ("=w1200-h1200" bare) makes Google serve a DIFFERENT image
+  /// (e.g. 800x1200 with another framing) → different palette.
+  static String _resizedGoogleUrl(String url) {
+    final resized = url.replaceFirst(RegExp(r'=w\d+-h\d+'), '=w1200-h1200');
+    if (resized != url) return resized;
+    // Unusual size-only form ("=s120"): full-suffix rewrite as fallback.
+    return url.replaceFirst(RegExp(r'=(w|s)\d+.*$'), '=w1200-h1200-p-l90-rj');
+  }
+
+  /// Hi-res URL that PRESERVES Google's own crop params (only the size
+  /// numbers change). Null for non-google hosts — ytimg maxres has its own
+  /// (square) framing.
+  static String? squareHiResThumbnail(String? url) {
+    if (url == null || url.isEmpty) return null;
+    if (url.contains('googleusercontent.com') ||
+        url.contains('yt3.gstatic.com')) {
+      return _resizedGoogleUrl(url);
+    }
+    return null;
+  }
+
+  /// One cache key per distinct artwork, independent of the variant the
+  /// search row happened to carry (w60/w120/w544…): strips the size params
+  /// from googleusercontent URLs and normalizes ytimg URLs to the video id.
+  /// Without this, the palette store keeps TWO entries (tiny + hi-res) for
+  /// the same cover and different screens could disagree on the accent.
+  static String? canonicalArtworkKey(String? url) {
+    if (url == null || url.isEmpty) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      final m = RegExp(r'i\.ytimg\.com/vi/([\w-]+)').firstMatch(url);
+      if (m != null) return 'ytimg:${m.group(1)}';
+      final g = RegExp(
+        r'https?://[^/]*googleusercontent\.com/([A-Za-z0-9_-]+)',
+      ).firstMatch(url);
+      if (g != null) return 'guser:${g.group(1)}';
+      final h = RegExp(r'https?://[^/]*yt3\.gstatic\.com/([A-Za-z0-9_-]+)')
+          .firstMatch(url);
+      if (h != null) return 'guser:${h.group(1)}';
+      return url;
+    }
+    return url; // local file path
   }
 
   Track copyWith({

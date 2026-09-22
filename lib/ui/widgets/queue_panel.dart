@@ -637,6 +637,9 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
   /// when the track has none.
   YtmTrackCredits? _credits;
 
+  /// True while the credits request is in flight (drives the skeleton).
+  bool _creditsLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -786,15 +789,22 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
     final t = _track;
     final videoId = t?.id.trim() ?? '';
     if (t == null || videoId.isEmpty || !mounted) return;
+    if (mounted) setState(() => _creditsLoading = true);
     try {
       final credits = await context
           .read<SearchService>()
           .resolveTrackCredits(videoId, t.title, t.artist);
       if (!mounted || _track?.id.trim() != videoId) return;
-      setState(() => _credits = credits);
+      setState(() {
+        _credits = credits;
+        _creditsLoading = false;
+      });
     } catch (_) {
       if (mounted && _track?.id.trim() == videoId) {
-        setState(() => _credits = null);
+        setState(() {
+          _credits = null;
+          _creditsLoading = false;
+        });
       }
     }
   }
@@ -841,6 +851,17 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
       ),
     );
 
+    // Skeleton block helper shared by the credits/lyrics placeholders.
+    final skBase = theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.12);
+    Widget block(double w, double h, {double r = 8}) => Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(
+            color: skBase,
+            borderRadius: BorderRadius.circular(r),
+          ),
+        );
+
     Widget body;
     if (track == null) {
       body = _NowPlayingSkeleton(theme: theme, message: l10n.queueEmpty);
@@ -872,24 +893,18 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
             ),
           ),
           const SizedBox(height: 10),
-          Text(
-            track.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 2),
+          // Title with the favorite toggle INLINE at the far right (no
+          // extra row); the artist takes its own full-width line below.
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Text(
-                  track.artist,
-                  maxLines: 1,
+                  track.title,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -919,6 +934,14 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
               ),
             ],
           ),
+          Text(
+            track.artist,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
           const SizedBox(height: 8),
           _ArtistInfoCard(
             track: track,
@@ -937,25 +960,57 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
                     ),
                   ),
           ),
-          if (_lyrics != null) ...[
-            const SizedBox(height: 14),
+          const SizedBox(height: 14),
+          if (_lyrics != null)
             _LyricsPreviewCard(
               lyrics: _lyrics!,
               focusIndex: _lyricIndex,
               artworkUrl: track.thumbnailUrl,
               theme: theme,
               onTap: widget.onOpenLyrics,
+            )
+          else
+            // Lyrics loading skeleton: EXACTLY the real card's height.
+            Container(
+              width: double.infinity,
+              height: _LyricsPreviewCard.previewHeight,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
-          ],
-          if (_credits != null) ...[
-            const SizedBox(height: 14),
+          const SizedBox(height: 14),
+          if (_credits != null)
             _CreditsCard(
               credits: _credits!,
               theme: theme,
               l10n: l10n,
               artworkUrl: track.thumbnailUrl,
+            )
+          else if (_creditsLoading)
+            // Credits loading skeleton: header + one section + 3 bullets.
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  block(70, 14, r: 6),
+                  const SizedBox(height: 10),
+                  block(90, 10, r: 5),
+                  const SizedBox(height: 4),
+                  block(double.infinity, 10, r: 5),
+                  const SizedBox(height: 5),
+                  block(160, 10, r: 5),
+                ],
+              ),
             ),
-          ],
         ],
       );
     }
@@ -1031,12 +1086,30 @@ class _NowPlayingSkeleton extends StatelessWidget {
         const SizedBox(height: 6),
         block(120, 12),
         const SizedBox(height: 10),
-        // Artist card placeholder.
+        // Artist card placeholder: SAME shape as the real card (avatar +
+        // name + listeners rows over the tinted container).
         Container(
-          height: 60,
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
           decoration: BoxDecoration(
             color: base,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                  color: Color(0x1F000000),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(height: 10),
+              block(120, 12, r: 6),
+              const SizedBox(height: 3),
+              block(84, 10, r: 5),
+            ],
           ),
         ),
         if (message != null) ...[
@@ -1057,6 +1130,13 @@ class _NowPlayingSkeleton extends StatelessWidget {
 /// background as the lyrics container (artwork accent + pure B/W ink by
 /// luminance). Tapping opens the full lyrics view.
 class _LyricsPreviewCard extends StatelessWidget {
+  /// Fixed card height, sized from the START to fit the worst case
+  /// (focus line wrapped to 3 lines) with room to breathe: 16×2 padding +
+  /// two 1-line slots + one 3-line focus slot + two 10px gaps. Shared with
+  /// the loading skeleton so the panel never shifts when lyrics arrive.
+  static const double previewHeight =
+      16 * 2 + (15 * 1.35) * 2 + (18 * 1.35 * 3) + 10 * 2;
+
   final SyncedLyrics lyrics;
 
   /// Current line index (null = nothing active yet → show line 0 as focus).
@@ -1090,6 +1170,16 @@ class _LyricsPreviewCard extends StatelessWidget {
     final current = lineAt(focus);
     final next = lineAt(focus + 1);
 
+    // FIXED height with GENEROUS slots: every row is a fixed-height box
+    // (the focus row reserves TWO lines) with the text vertically centered
+    // inside. The card is always the same height — a wrapping line fills
+    // its reserved space instead of expanding the card — and the gaps
+    // between rows keep the preview airy.
+    const rowGap = 10.0;
+    const padV = 16.0;
+    final slotH = 15 * 1.35;          // inactive line slot (1 line)
+    final focusSlotH = 18 * 1.35 * 3; // focus slot (up to 3 lines, wraps)
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1098,7 +1188,8 @@ class _LyricsPreviewCard extends StatelessWidget {
         mouseCursor: SystemMouseCursors.click,
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          height: previewHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: padV),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(16),
@@ -1106,10 +1197,14 @@ class _LyricsPreviewCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (prev != null) _line(prev, on.withValues(alpha: 0.55), false),
-              if (current != null)
-                _line(current, on, true, emphasized: true),
-              if (next != null) _line(next, on.withValues(alpha: 0.55), false),
+              // Fixed-height slots, text centered: absent lines (start/end
+              // of song) keep their reserved row, a 1-line focus centers in
+              // its 2-line slot, and nothing ever resizes the card.
+              _line(prev, on.withValues(alpha: 0.55), slotH),
+              SizedBox(height: rowGap),
+              _line(current, on, focusSlotH, emphasized: true),
+              SizedBox(height: rowGap),
+              _line(next, on.withValues(alpha: 0.55), slotH),
             ],
           ),
         ),
@@ -1117,28 +1212,37 @@ class _LyricsPreviewCard extends StatelessWidget {
     );
   }
 
-  Widget _line(String text, Color color, bool active, {bool emphasized = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Text(
-        text,
-        maxLines: active ? 2 : 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          height: 1.3,
-          color: color,
-          fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-          fontSize: emphasized ? 15 : 13,
-        ),
+  Widget _line(String? text, Color color, double slotH, {bool emphasized = false}) {
+    return SizedBox(
+      height: slotH,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: text == null || text.isEmpty
+            ? null
+            : Text(
+                text,
+                maxLines: emphasized ? 3 : 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  height: 1.35,
+                  color: color,
+                  fontWeight: emphasized ? FontWeight.w700 : FontWeight.w500,
+                  fontSize: emphasized ? 18 : 15,
+                ),
+              ),
       ),
     );
   }
 
-  /// Accent from the track artwork (palette cache, sync read).
+  /// Accent from the track artwork — canonical entry first (same as the
+  /// player/lyrics), trio-derived as legacy fallback.
   Color? _resolveAccent(BuildContext context) {
     final url = artworkUrl;
     if (url == null || url.isEmpty) return null;
-    final trio = context.read<PaletteCacheStore>().getTrio(url);
+    final store = context.read<PaletteCacheStore>();
+    final canonical = store.get(url);
+    if (canonical != null) return canonical;
+    final trio = store.getTrio(url);
     if (trio == null) return null;
     return ArtworkPaletteService.accentFromTrio(trio);
   }
@@ -1250,11 +1354,16 @@ class _CreditsCard extends StatelessWidget {
     );
   }
 
-  /// Accent from the track artwork (palette cache, sync read).
+  /// Canonical track accent — the SAME cached entry the player and the
+  /// lyrics view paint with (NOT a re-derivation from the trio, which could
+  /// disagree at the margins). Trio-derived value only as legacy fallback.
   Color? _resolveAccent(BuildContext context) {
     final url = artworkUrl;
     if (url == null || url.isEmpty) return null;
-    final trio = context.read<PaletteCacheStore>().getTrio(url);
+    final store = context.read<PaletteCacheStore>();
+    final canonical = store.get(url);
+    if (canonical != null) return canonical;
+    final trio = store.getTrio(url);
     if (trio == null) return null;
     return ArtworkPaletteService.accentFromTrio(trio);
   }

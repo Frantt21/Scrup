@@ -47,6 +47,9 @@ class ArtworkPaletteService {
   }
 
   // Extracts trio from already-downloaded bytes. Heavy work runs off UI.
+  // The ACCENT is shared with the cheap path: BOTH paths derive it with
+  // accentFromSwatches over the same swatches, so the player and any trio
+  // consumer always agree for the same artwork.
   static Future<List<Color>> trioFromBytes(
     String url,
     Uint8List bytes,
@@ -57,7 +60,7 @@ class ArtworkPaletteService {
       final trio = pickTrio(swatches);
       if (trio.isNotEmpty) {
         store.putTrio(url, trio);
-        final accent = accentFromTrio(trio) ?? trio.first;
+        final accent = accentFromSwatches(swatches) ?? trio.first;
         store.put(url, accent);
       }
       return trio;
@@ -107,23 +110,48 @@ class ArtworkPaletteService {
     }
   }
 
-  /// Un solo color: el primer swatch (por población) con saturación REAL;
-  /// si el artwork es monocromo (B/N, JPEG con ruido de croma), una plata
-  /// neutra derivada del dominante.
+  /// Chroma of a color: saturation weighted by "distance from mid-grey".
+  /// A near-white cube (#faf1f2, S≈0.45) or a near-black one (#0a1716,
+  /// S≈0.39) BOTH carry almost no visible color — pure HSL saturation lies
+  /// for accents; chroma does not.
+  static double chromaOf(Color c) {
+    final hsl = HSLColor.fromColor(c);
+    return hsl.saturation * (1 - (2 * hsl.lightness - 1).abs());
+  }
+
+  /// Un solo color: el cubo con MAYOR CROMA visible (no el primero con
+  /// saturación — eso elegía blancos rotos o negros teñidos), con desempate
+  /// por población y umbrales mínimos de saturación y croma. Si ningún
+  /// cubo es realmente colorido (artwork B/N), plata neutra del dominante.
   static Color? accentFromSwatches(List<Color?> swatches) {
     final candidates = swatches.whereType<Color>().toList();
     if (candidates.isEmpty) return null;
+    Color? best;
+    var bestChroma = 0.0;
+    var bestPop = -1;
     for (final c in candidates) {
-      if (HSLColor.fromColor(c).saturation >= kMonoSaturationThreshold) {
-        return c;
+      final hsl = HSLColor.fromColor(c);
+      if (hsl.saturation < kMonoSaturationThreshold) continue;
+      final chroma = chromaOf(c);
+      if (chroma < kMinVisibleChroma) continue;
+      if (chroma > bestChroma ||
+          (chroma == bestChroma && bestPop < 0)) {
+        best = c;
+        bestChroma = chroma;
+        bestPop = candidates.indexOf(c);
       }
     }
+    if (best != null) return best;
     return neutralSilver(
       candidates.first,
       minLightness: 0.60,
       maxLightness: 0.82,
     );
   }
+
+  /// Minimum visible chroma for a cube to count as a color (near-white and
+  /// near-black tinted cubes fall below this).
+  static const double kMinVisibleChroma = 0.10;
 
   static const double kMonoSaturationThreshold = 0.22;
 
@@ -212,8 +240,16 @@ class ArtworkPaletteService {
       } catch (_) {}
     }
 
-    // Network: hi-res fallback → original URL.
-    for (final candidate in [Track.hiResThumbnail(url) ?? url, url]) {
+    // Network: canonical square crop first (SAME framing as the small
+    // variants — dropping the "-p" crop yields a DIFFERENT image), then
+    // plain hi-res, then the original URL.
+    final square = Track.squareHiResThumbnail(url);
+    final candidates = <String>[
+      if (square != null && square != url) square,
+      Track.hiResThumbnail(url) ?? url,
+      url,
+    ];
+    for (final candidate in candidates) {
       try {
         final resp = await http
             .get(Uri.parse(candidate), headers: {'User-Agent': _userAgent})
@@ -234,12 +270,9 @@ class ArtworkPaletteService {
     return null;
   }
 
-  // Picks top-3 by saturation×contrast with min hue separation.
+  // Picks top-3 by visible chroma with min hue separation.
   static List<Color> pickTrio(List<Color> candidates) {
-    double score(Color c) {
-      final hsl = HSLColor.fromColor(c);
-      return hsl.saturation * (1 - (hsl.lightness - 0.5).abs() * 2);
-    }
+    double score(Color c) => chromaOf(c);
 
     final swatches = [...candidates]
       ..sort((a, b) => score(b).compareTo(score(a)));
@@ -297,14 +330,20 @@ class ArtworkPaletteService {
     return picked;
   }
 
-  // Derives accent (controls/lyrics) from trio.
+  // Derives accent (controls/lyrics) from trio. Tries EVERY member with the
+  // same chroma rule as accentFromSwatches (not just trio.first): the top
+  // chroma cube may sit in any slot after hue separation. Silver fallback
+  // keeps parity with the canonical accent for borderline covers.
   static Color? accentFromTrio(List<Color> trio) {
     if (trio.isEmpty) return null;
-    final hsl = HSLColor.fromColor(trio.first);
-    if (hsl.saturation >= kMinSaturation &&
-        hsl.lightness >= kDarknessThreshold) {
-      return trio.first;
+    for (final c in trio) {
+      final hsl = HSLColor.fromColor(c);
+      if (hsl.saturation >= kMonoSaturationThreshold &&
+          chromaOf(c) >= kMinVisibleChroma) {
+        return c;
+      }
     }
+    final hsl = HSLColor.fromColor(trio.first);
     return hsl.withSaturation(0).withLightness(0.72).toColor();
   }
 
