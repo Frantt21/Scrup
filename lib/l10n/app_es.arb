@@ -407,7 +407,32 @@
   "retry": "Reintentar",
   "playAll": "Reproducir todo",
   "visitedArtistsTitle": "Artistas visitados",
+  "recapTitle": "Tu Recap",
+  "recapBannerSubtitle": "Tiempo de escucha, canciones, artistas y playlists top",
+  "recapRangeAll": "Todo",
+  "recapRangeMonth": "30 días",
+  "recapRangeWeek": "7 días",
+  "recapTotalTime": "Tiempo total de escucha",
+  "recapHoursMinutes": "{h} h {m} min",
+      "@recapHoursMinutes": {
+        "placeholders": {
+        "h": {"type": "int"},
+        "m": {"type": "int"}
+        }
+      },
+  "recapMinutes": "{m} min",
+      "@recapMinutes": {
+        "placeholders": {
+        "m": {"type": "int"}
+        }
+      },
+  "recapTopTracks": "Canciones más escuchadas",
+  "recapTopArtists": "Artistas más escuchados",
+  "recapTopPlaylists": "Playlists más escuchadas",
+  "recapDeletedPlaylist": "Playlist eliminada",
+  "recapEmpty": "Reproduce música para construir tu recap",
   "libraryAlbumsTitle": "Albums con canciones de tu libreria",
+  "trendingTitle": "Tendencias de la semana",
   "crossfade": "Crossfade",
   "crossfadeHint": "Fundido entre canciones: la siguiente pista empieza antes de que termine la actual",
   "back": "Atrás",

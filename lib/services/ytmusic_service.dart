@@ -1658,6 +1658,74 @@ class YtMusicService {
     return (items, continuation, name);
   }
 
+  /// Weekly trending songs (YT Music "Charts" page, browseId `FEmusic_charts`):
+  /// reads the "Trending 20 <country>" chart playlist and returns its tracks.
+  /// Two InnerTube requests (charts → VL playlist). Fault-tolerant: any error
+  /// or empty chart -> empty list (the home section just hides).
+  Future<List<Track>> fetchWeeklyTrending({int limit = 14}) async {
+    try {
+      final res = await _client
+          .post(
+            Uri.parse('$_browseEndpoint?prettyPrint=false'),
+            headers: const {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0',
+              'X-YouTube-Client-Name': '67',
+              'X-YouTube-Client-Version': _clientVersion,
+            },
+            body: jsonEncode({
+              'context': _context(),
+              'browseId': 'FEmusic_charts',
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return const [];
+      final Object? data;
+      try {
+        data = jsonDecode(utf8.decode(res.bodyBytes));
+      } catch (_) {
+        return const [];
+      }
+      // Trending playlist id: navigation of the "Video charts" carousel rows
+      // (browseId VLOLAK5uy_…, pageType MUSIC_PAGE_TYPE_PLAYLIST).
+      String? playlistId;
+      void findTrendingPlaylist(Object? n) {
+        if (playlistId != null) return;
+        if (n is Map) {
+          final renderer = n['musicTwoRowItemRenderer'];
+          if (renderer is Map) {
+            final title = _runsOf({
+              'musicResponsiveListItemFlexColumnRenderer': {
+                'text': renderer['title'],
+              },
+            }).fold('', (acc, r) => '$acc${r['text'] ?? ''}');
+            final nav =
+                (renderer['navigationEndpoint'] as Map?)?['browseEndpoint']
+                    as Map?;
+            final id = nav?['browseId'] as String?;
+            if (id != null &&
+                id.startsWith('VL') &&
+                title.toLowerCase().contains('trending')) {
+              playlistId = id.substring(2);
+            }
+          }
+          n.values.forEach(findTrendingPlaylist);
+        } else if (n is List) {
+          for (final v in n) {
+            findTrendingPlaylist(v);
+          }
+        }
+      }
+
+      findTrendingPlaylist(data);
+      if (playlistId == null) return const [];
+      final pl = await fetchPlaylist(playlistId!, maxTracks: limit);
+      return pl.tracks.take(limit).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Album search (YT Music "Albums" scope): returns the first [limit]
   /// albums matching [query]. The row's thumbnail IS the album cover and its
   /// artist-column navigation carries the MPREb_ browse id. Fault-tolerant:

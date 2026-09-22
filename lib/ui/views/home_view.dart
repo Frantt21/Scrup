@@ -41,6 +41,9 @@ class HomeView extends StatefulWidget {
   /// Called when tapping a recent playlist on home (AppShell opens its detail).
   final ValueChanged<Playlist>? onOpenPlaylist;
 
+  /// Called when tapping the recap banner (AppShell opens the recap screen).
+  final VoidCallback? onOpenRecap;
+
   /// Called when tapping a visited artist (AppShell opens the artist screen).
   final ValueChanged<YtmArtist>? onOpenArtist;
 
@@ -54,6 +57,7 @@ class HomeView extends StatefulWidget {
     this.onOpenPlaylist,
     this.onOpenArtist,
     this.onOpenAlbum,
+    this.onOpenRecap,
   });
 
   @override
@@ -77,6 +81,11 @@ class _HomeViewState extends State<HomeView> {
   bool _loadingLibraryAlbums = false;
   Timer? _albumRecDebounce;
   int _albumRecToken = 0;
+
+  /// Tendencias semanales (YT Music charts) para la fila de home.
+  List<Track> _trending = const [];
+  bool _trendingLoaded = false;
+  int _trendingToken = 0;
 
   // Banner "Tus me gusta": últimas 3 canciones añadidas a favoritos
   // (portadas sobrepuestas). Stream reactivo: al dar like aparece al instante.
@@ -151,6 +160,7 @@ class _HomeViewState extends State<HomeView> {
       // playlists (añadir/quitar canciones cambia los seeds).
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _loadLibraryAlbums();
+        if (mounted) _loadTrending();
       });
       _recentPlaylistsSub2 = context
           .read<AppDatabase>()
@@ -277,6 +287,27 @@ class _HomeViewState extends State<HomeView> {
     if (q.isEmpty) return;
     FocusScope.of(context).unfocus();
     widget.onSearch?.call(q);
+  }
+
+  /// Carga la fila de tendencias semanales (cacheada en SearchService,
+  /// TTL estándar). Silenciosa: si falla o viene vacía la fila no aparece.
+  Future<void> _loadTrending() async {
+    if (_trendingLoaded) return;
+    final token = ++_trendingToken;
+    try {
+      final tracks = await context
+          .read<SearchService>()
+          .fetchWeeklyTrending(limit: 14);
+      if (!mounted || token != _trendingToken) return;
+      setState(() {
+        _trending = tracks;
+        _trendingLoaded = true;
+      });
+    } catch (_) {
+      if (mounted && token == _trendingToken) {
+        setState(() => _trendingLoaded = true);
+      }
+    }
   }
 
   @override
@@ -441,6 +472,25 @@ class _HomeViewState extends State<HomeView> {
                         ),
                       ),
                     ),
+                  // ── Banner "Recap" ──────────────────────────────────
+                  // Entrada al recap de escucha: tiempo total, top
+                  // canciones/artistas/playlists. Siempre visible.
+                  if (_loaded)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          mobile ? 16 : 24,
+                          _likes.isNotEmpty ? 12 : 8,
+                          mobile ? 16 : 24,
+                          12,
+                        ),
+                        child: _RecapBanner(
+                          title: l10n.recapTitle,
+                          subtitle: l10n.recapBannerSubtitle,
+                          onOpen: widget.onOpenRecap,
+                        ),
+                      ),
+                    ),
                   if (_loaded)
                     SliverToBoxAdapter(
                       child: Padding(
@@ -521,6 +571,17 @@ class _HomeViewState extends State<HomeView> {
                         albums: _libraryAlbums,
                         cardSize: mobile ? null : playlistExtent,
                         onOpen: widget.onOpenAlbum,
+                      ),
+                    ),
+                  // Tendencias semanales (DESPUÉS de los álbumes
+                  // recomendados, antes de artistas visitados): charts de
+                  // YT Music. Mismas cards 1:1 que las recientes.
+                  if (_trending.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _TrendingRow(
+                        tracks: _trending,
+                        cardSize: mobile ? null : playlistExtent,
+                        currentTrackId: _currentTrack?.id,
                       ),
                     ),
                   // Artistas visitados (DESPUÉS de las playlists recientes,
@@ -1056,6 +1117,72 @@ class _YourLikesBanner extends StatelessWidget {
   }
 }
 
+/// Banner de entrada al recap: fila plana con icono de gráfico + título y
+/// subtítulo. Mismo lenguaje visual que el banner de favoritos.
+class _RecapBanner extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final VoidCallback? onOpen;
+
+  const _RecapBanner({
+    required this.title,
+    required this.subtitle,
+    this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = context.watch<ThemeController>().accentColor ??
+        theme.colorScheme.primary;
+    return Material(
+      color: accent.withValues(alpha: 0.16),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.bar_chart_rounded, color: accent, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _EmptyHint extends StatelessWidget {
   final ThemeData theme;
 
@@ -1174,6 +1301,71 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
 /// Fila de albums recomendados desde la librería: mismo estilo de fila
 /// horizontal que las playlists recientes (título + cards 1:1 con scroll).
 /// El tap abre el screen del álbum ([HomeView.onOpenAlbum]).
+/// Fila de tendencias semanales: las MISMAS cards 1:1 que las recientes
+/// (_RecentCard, con título/artista sobre la portada y menú contextual)
+/// alimentadas con el chart de YT Music. Tap reproduce la pista.
+class _TrendingRow extends StatelessWidget {
+  final List<Track> tracks;
+
+  /// Lado de la card (desktop: tamaño de las playlists recientes;
+  /// null = 140 en móvil).
+  final double? cardSize;
+  final String? currentTrackId;
+
+  const _TrendingRow({
+    required this.tracks,
+    this.cardSize,
+    this.currentTrackId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    if (tracks.isEmpty) return const SizedBox.shrink();
+
+    final size = cardSize ?? 140.0;
+    final double sidePad = Binaries.isMobile ? 16 : 24;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(sidePad, 8, sidePad, 8),
+          child: Text(
+            l10n.trendingTitle,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: size + 2,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: sidePad),
+            itemCount: tracks.length,
+            itemBuilder: (context, i) {
+              final track = tracks[i];
+              return Padding(
+                padding: EdgeInsets.only(right: cardSize == null ? 12 : 10),
+                child: SizedBox(
+                  width: size,
+                  height: size,
+                  child: _RecentCard(
+                    track: track,
+                    onPlay: () => playTrack(context, track),
+                    isCurrent: track.id == currentTrackId,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _LibraryAlbumsRow extends StatelessWidget {
   final List<YtmAlbum> albums;
 

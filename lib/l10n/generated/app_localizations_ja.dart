@@ -784,7 +784,53 @@ class AppLocalizationsJa extends AppLocalizations {
   String get visitedArtistsTitle => '最近閲覧したアーティスト';
 
   @override
+  String get recapTitle => 'あなたのレキャップ';
+
+  @override
+  String get recapBannerSubtitle => '再生時間、上位の曲・アーティスト・プレイリスト';
+
+  @override
+  String get recapRangeAll => '全期間';
+
+  @override
+  String get recapRangeMonth => '30日';
+
+  @override
+  String get recapRangeWeek => '7日';
+
+  @override
+  String get recapTotalTime => '合計再生時間';
+
+  @override
+  String recapHoursMinutes(int h, int m) {
+    return '$h 時間 $m 分';
+  }
+
+  @override
+  String recapMinutes(int m) {
+    return '$m 分';
+  }
+
+  @override
+  String get recapTopTracks => 'よく聴く曲';
+
+  @override
+  String get recapTopArtists => 'よく聴くアーティスト';
+
+  @override
+  String get recapTopPlaylists => 'よく聴くプレイリスト';
+
+  @override
+  String get recapDeletedPlaylist => '削除されたプレイリスト';
+
+  @override
+  String get recapEmpty => '音楽を再生するとレキャップが作られます';
+
+  @override
   String get libraryAlbumsTitle => 'ライブラリのアルバム';
+
+  @override
+  String get trendingTitle => '今週のトレンド';
 
   @override
   String get crossfade => 'クロスフェード';

@@ -36,7 +36,25 @@ class Playlist {
   });
 }
 
-@DriftDatabase(      tables: [
+/// Fila del recap "playlists más escuchadas": agregado de segundos por
+/// playlist. `playlistId` null = escuchas sin playlist (cola suelta).
+/// `name` vacío = la playlist fue borrada después de escuchar.
+class RecapPlaylistEntry {
+  final int? playlistId;
+  final String name;
+  final String? coverUrl;
+  final int seconds;
+
+  const RecapPlaylistEntry({
+    required this.playlistId,
+    required this.name,
+    required this.coverUrl,
+    required this.seconds,
+  });
+}
+
+@DriftDatabase(
+      tables: [
         Tracks,
         History,
         Playlists,
@@ -45,6 +63,7 @@ class Playlist {
         PaletteCache,
         ArtistVisits,
         CachedTracks,
+        ListenSessions,
       ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -53,7 +72,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -105,6 +124,10 @@ class AppDatabase extends _$AppDatabase {
         // Downloads metadata for the settings dialog (title/artist/size per
         // cached file). Backfilled from the tracks table on demand.
         await m.createTable(cachedTracks);
+      }
+      if (from < 12) {
+        // Listening time (recap: total, top tracks/artists/playlists).
+        await m.createTable(listenSessions);
       }
     },
   );
@@ -717,6 +740,146 @@ class AppDatabase extends _$AppDatabase {
           ..orderBy([(a) => OrderingTerm.desc(a.visitedAt)])
           ..limit(limit))
         .watch();
+  }
+
+  // ------------------------------------------------------------- recap
+
+  /// Persist a listening chunk (accumulated seconds for the current track).
+  /// Best-effort from the player tracker; a missing track row (deleted cache)
+  /// is ignored via the FK with cascade-off (plain insert failure is caught
+  /// by the caller).
+  Future<void> recordListenChunk(
+    String trackId,
+    int seconds, {
+    int? playlistId,
+  }) async {
+    if (seconds <= 0) return;
+    // Ensure the track exists (chunks may arrive for tracks not yet cached).
+    final exists = await (select(tracks)
+          ..where((t) => t.id.equals(trackId)))
+        .getSingleOrNull();
+    if (exists == null) return;
+    await into(listenSessions).insert(
+      ListenSessionsCompanion.insert(
+        trackId: trackId,
+        seconds: seconds,
+        playlistId: Value(playlistId),
+        listenedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  /// Total listening seconds since [since] (null = all time).
+  Future<int> totalListenSeconds({DateTime? since}) async {
+    final total = listenSessions.seconds.sum();
+    final query = selectOnly(listenSessions)
+      ..addColumns([total])
+      ..where(
+        since == null
+            ? const Constant(true)
+            : listenSessions.listenedAt.isBiggerThanValue(since),
+      );
+    final row = await query.getSingle();
+    return row.read(total) ?? 0;
+  }
+
+  /// Listening seconds grouped by track, top [limit] first. Only rows whose
+  /// track still exists (inner join).
+  Future<List<(Track, int)>> topListenedTracks({
+    DateTime? since,
+    int limit = 10,
+  }) async {
+    final total = listenSessions.seconds.sum();
+    final query = selectOnly(listenSessions).join(
+      [
+        innerJoin(tracks, tracks.id.equalsExp(listenSessions.trackId)),
+      ],
+    );
+    query.addColumns([tracks.id, tracks.title, tracks.artist,
+      tracks.durationSeconds, tracks.thumbnailUrl, tracks.album, total]);
+    query.groupBy([tracks.id]);
+    query.orderBy([OrderingTerm.desc(total)]);
+    query.limit(limit);
+    if (since != null) {
+      query.where(
+        listenSessions.listenedAt.isBiggerThanValue(since),
+      );
+    }
+    final rows = await query.get();
+    return [
+      for (final row in rows)
+        (
+          Track(
+            id: row.read(tracks.id)!,
+            title: row.read(tracks.title) ?? '',
+            artist: row.read(tracks.artist) ?? '',
+            duration: row.read(tracks.durationSeconds) == null
+                ? null
+                : Duration(seconds: row.read(tracks.durationSeconds)!),
+            thumbnailUrl: row.read(tracks.thumbnailUrl),
+            album: row.read(tracks.album),
+          ),
+          row.read(total) ?? 0,
+        ),
+    ];
+  }
+
+  /// Listening seconds grouped by artist name, top [limit] first.
+  Future<List<(String, int)>> topListenedArtists({
+    DateTime? since,
+    int limit = 10,
+  }) async {
+    final total = listenSessions.seconds.sum();
+    final query = selectOnly(listenSessions).join(
+      [innerJoin(tracks, tracks.id.equalsExp(listenSessions.trackId))],
+    );
+    query.addColumns([tracks.artist, total]);
+    query.groupBy([tracks.artist]);
+    query.orderBy([OrderingTerm.desc(total)]);
+    query.limit(limit);
+    if (since != null) {
+      query.where(listenSessions.listenedAt.isBiggerThanValue(since));
+    }
+    final rows = await query.get();
+    return [
+      for (final row in rows)
+        (row.read(tracks.artist) ?? '', row.read(total) ?? 0),
+    ];
+  }
+
+  /// Listening seconds grouped by playlist, top [limit] first (playlists
+  /// deleted afterwards drop out of the join; unknown playlist rows are
+  /// counted under the "queue/no playlist" bucket with id -1).
+  Future<List<RecapPlaylistEntry>> topListenedPlaylists({
+    DateTime? since,
+    int limit = 10,
+  }) async {
+    final total = listenSessions.seconds.sum();
+    final query = selectOnly(listenSessions).join(
+      [
+        leftOuterJoin(
+          playlists,
+          playlists.id.equalsExp(listenSessions.playlistId),
+        ),
+      ],
+    );
+    query.addColumns([listenSessions.playlistId, playlists.name, playlists.coverUrl, total]);
+    query.groupBy([listenSessions.playlistId, playlists.name, playlists.coverUrl]);
+    query.orderBy([OrderingTerm.desc(total)]);
+    query.limit(limit);
+    if (since != null) {
+      query.where(listenSessions.listenedAt.isBiggerThanValue(since));
+    }
+    final rows = await query.get();
+    return [
+      for (final row in rows)
+        RecapPlaylistEntry(
+          playlistId: row.read(listenSessions.playlistId),
+          name: row.read(playlists.name) ?? '',
+          coverUrl: row.read(playlists.coverUrl),
+          seconds: row.read(total) ?? 0,
+        ),
+    ];
   }
 
   // ------------------------------------------------------------- helpers

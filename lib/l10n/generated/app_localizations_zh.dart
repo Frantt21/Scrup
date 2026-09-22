@@ -782,7 +782,53 @@ class AppLocalizationsZh extends AppLocalizations {
   String get visitedArtistsTitle => '最近浏览的艺术家';
 
   @override
+  String get recapTitle => '你的年度回顾';
+
+  @override
+  String get recapBannerSubtitle => '收听时长、热门歌曲、艺人和播放列表';
+
+  @override
+  String get recapRangeAll => '全部';
+
+  @override
+  String get recapRangeMonth => '30 天';
+
+  @override
+  String get recapRangeWeek => '7 天';
+
+  @override
+  String get recapTotalTime => '总收听时长';
+
+  @override
+  String recapHoursMinutes(int h, int m) {
+    return '$h 小时 $m 分钟';
+  }
+
+  @override
+  String recapMinutes(int m) {
+    return '$m 分钟';
+  }
+
+  @override
+  String get recapTopTracks => '最常听的歌曲';
+
+  @override
+  String get recapTopArtists => '最常听的艺人';
+
+  @override
+  String get recapTopPlaylists => '最常听的播放列表';
+
+  @override
+  String get recapDeletedPlaylist => '已删除的播放列表';
+
+  @override
+  String get recapEmpty => '播放一些音乐来生成你的回顾';
+
+  @override
   String get libraryAlbumsTitle => '你资料库中的专辑';
+
+  @override
+  String get trendingTitle => '本周热门';
 
   @override
   String get crossfade => '淡入淡出';

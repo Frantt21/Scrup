@@ -255,7 +255,32 @@
   "playAll": "Слушать всё",
   "createPlaylistFromAlbum": "Создать плейлист из этого альбома",
   "visitedArtistsTitle": "Недавно просмотренные исполнители",
+  "recapTitle": "Ваш рекап",
+  "recapBannerSubtitle": "Время прослушивания, топ треков, исполнителей и плейлистов",
+  "recapRangeAll": "Всё время",
+  "recapRangeMonth": "30 дней",
+  "recapRangeWeek": "7 дней",
+  "recapTotalTime": "Общее время прослушивания",
+  "recapHoursMinutes": "{h} ч {m} мин",
+      "@recapHoursMinutes": {
+        "placeholders": {
+        "h": {"type": "int"},
+        "m": {"type": "int"}
+        }
+      },
+  "recapMinutes": "{m} мин",
+      "@recapMinutes": {
+        "placeholders": {
+        "m": {"type": "int"}
+        }
+      },
+  "recapTopTracks": "Топ треков",
+  "recapTopArtists": "Топ исполнителей",
+  "recapTopPlaylists": "Топ плейлистов",
+  "recapDeletedPlaylist": "Удалённый плейлист",
+  "recapEmpty": "Включите музыку, чтобы создать рекап",
   "libraryAlbumsTitle": "Альбомы из вашей библиотеки",
+  "trendingTitle": "В тренде на этой неделе",
   "crossfade": "Кроссфейд",
   "crossfadeHint": "Плавный переход между песнями: следующая дорожка начинается до окончания текущей",
   "back": "Назад",

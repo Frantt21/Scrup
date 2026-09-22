@@ -254,7 +254,32 @@
   "playAll": "Reproduzir tudo",
   "createPlaylistFromAlbum": "Criar playlist com este álbum",
   "visitedArtistsTitle": "Artistas visitados",
+  "recapTitle": "Seu Recap",
+  "recapBannerSubtitle": "Tempo de escuta, top músicas, artistas e playlists",
+  "recapRangeAll": "Sempre",
+  "recapRangeMonth": "30 dias",
+  "recapRangeWeek": "7 dias",
+  "recapTotalTime": "Tempo total de escuta",
+  "recapHoursMinutes": "{h} h {m} min",
+      "@recapHoursMinutes": {
+        "placeholders": {
+        "h": {"type": "int"},
+        "m": {"type": "int"}
+        }
+      },
+  "recapMinutes": "{m} min",
+      "@recapMinutes": {
+        "placeholders": {
+        "m": {"type": "int"}
+        }
+      },
+  "recapTopTracks": "Músicas mais ouvidas",
+  "recapTopArtists": "Artistas mais ouvidos",
+  "recapTopPlaylists": "Playlists mais ouvidas",
+  "recapDeletedPlaylist": "Playlist excluída",
+  "recapEmpty": "Reproduza música para criar o seu recap",
   "libraryAlbumsTitle": "Álbuns da sua biblioteca",
+  "trendingTitle": "Tendências da semana",
   "crossfade": "Crossfade",
   "crossfadeHint": "Transição suave entre músicas: a próxima faixa começa antes de a atual terminar",
   "back": "Voltar",

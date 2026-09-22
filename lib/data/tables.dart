@@ -118,3 +118,15 @@ class CachedTracks extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
+
+/// Tiempo de escucha real (chunks de ~15s mientras suena la pista): alimenta
+/// el recap (total, top canciones, top artistas, top playlists).
+/// `playlistId` es nullable y SIN FK: la playlist puede borrarse después.
+@DataClassName('ListenSessionRow')
+class ListenSessions extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get trackId => text().references(Tracks, #id)();
+  IntColumn get playlistId => integer().nullable()();
+  IntColumn get seconds => integer()();
+  DateTimeColumn get listenedAt => dateTime()();
+}

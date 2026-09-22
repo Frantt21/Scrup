@@ -348,6 +348,9 @@ class ScrupApp extends StatelessWidget {
                   : null,
               onEnriched: (track) async => db.updateTrackMetadata(track),
               onPlayed: (track) async => db.recordPlay(track),
+              // Recap: chunks de tiempo de escucha real (~15s) a ListenSessions.
+              onListenChunk: (trackId, seconds, playlistId) async =>
+                  db.recordListenChunk(trackId, seconds, playlistId: playlistId),
               onShuffleChanged: (enabled) =>
                   settings.saveShuffleEnabled(enabled),
               onCrossfadeChanged: (seconds) =>

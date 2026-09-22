@@ -784,7 +784,53 @@ class AppLocalizationsKo extends AppLocalizations {
   String get visitedArtistsTitle => '최근 방문한 아티스트';
 
   @override
+  String get recapTitle => '나의 리캡';
+
+  @override
+  String get recapBannerSubtitle => '청취 시간, 상위 곡, 아티스트, 재생목록';
+
+  @override
+  String get recapRangeAll => '전체';
+
+  @override
+  String get recapRangeMonth => '30일';
+
+  @override
+  String get recapRangeWeek => '7일';
+
+  @override
+  String get recapTotalTime => '총 청취 시간';
+
+  @override
+  String recapHoursMinutes(int h, int m) {
+    return '$h시간 $m분';
+  }
+
+  @override
+  String recapMinutes(int m) {
+    return '$m분';
+  }
+
+  @override
+  String get recapTopTracks => '가장 많이 들은 곡';
+
+  @override
+  String get recapTopArtists => '가장 많이 들은 아티스트';
+
+  @override
+  String get recapTopPlaylists => '가장 많이 들은 재생목록';
+
+  @override
+  String get recapDeletedPlaylist => '삭제된 재생목록';
+
+  @override
+  String get recapEmpty => '음악을 재생하면 리캡이 만들어집니다';
+
+  @override
   String get libraryAlbumsTitle => '라이브러리의 앨범';
+
+  @override
+  String get trendingTitle => '이번 주 인기';
 
   @override
   String get crossfade => '크로스페이드';

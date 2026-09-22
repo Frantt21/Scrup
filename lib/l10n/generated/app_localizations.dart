@@ -1555,11 +1555,95 @@ abstract class AppLocalizations {
   /// **'Artistas visitados'**
   String get visitedArtistsTitle;
 
+  /// No description provided for @recapTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Tu Recap'**
+  String get recapTitle;
+
+  /// No description provided for @recapBannerSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Tiempo de escucha, canciones, artistas y playlists top'**
+  String get recapBannerSubtitle;
+
+  /// No description provided for @recapRangeAll.
+  ///
+  /// In es, this message translates to:
+  /// **'Todo'**
+  String get recapRangeAll;
+
+  /// No description provided for @recapRangeMonth.
+  ///
+  /// In es, this message translates to:
+  /// **'30 días'**
+  String get recapRangeMonth;
+
+  /// No description provided for @recapRangeWeek.
+  ///
+  /// In es, this message translates to:
+  /// **'7 días'**
+  String get recapRangeWeek;
+
+  /// No description provided for @recapTotalTime.
+  ///
+  /// In es, this message translates to:
+  /// **'Tiempo total de escucha'**
+  String get recapTotalTime;
+
+  /// No description provided for @recapHoursMinutes.
+  ///
+  /// In es, this message translates to:
+  /// **'{h} h {m} min'**
+  String recapHoursMinutes(int h, int m);
+
+  /// No description provided for @recapMinutes.
+  ///
+  /// In es, this message translates to:
+  /// **'{m} min'**
+  String recapMinutes(int m);
+
+  /// No description provided for @recapTopTracks.
+  ///
+  /// In es, this message translates to:
+  /// **'Canciones más escuchadas'**
+  String get recapTopTracks;
+
+  /// No description provided for @recapTopArtists.
+  ///
+  /// In es, this message translates to:
+  /// **'Artistas más escuchados'**
+  String get recapTopArtists;
+
+  /// No description provided for @recapTopPlaylists.
+  ///
+  /// In es, this message translates to:
+  /// **'Playlists más escuchadas'**
+  String get recapTopPlaylists;
+
+  /// No description provided for @recapDeletedPlaylist.
+  ///
+  /// In es, this message translates to:
+  /// **'Playlist eliminada'**
+  String get recapDeletedPlaylist;
+
+  /// No description provided for @recapEmpty.
+  ///
+  /// In es, this message translates to:
+  /// **'Reproduce música para construir tu recap'**
+  String get recapEmpty;
+
   /// No description provided for @libraryAlbumsTitle.
   ///
   /// In es, this message translates to:
   /// **'Albums con canciones de tu libreria'**
   String get libraryAlbumsTitle;
+
+  /// No description provided for @trendingTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Tendencias de la semana'**
+  String get trendingTitle;
 
   /// No description provided for @crossfade.
   ///

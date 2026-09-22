@@ -797,7 +797,54 @@ class AppLocalizationsPt extends AppLocalizations {
   String get visitedArtistsTitle => 'Artistas visitados';
 
   @override
+  String get recapTitle => 'Seu Recap';
+
+  @override
+  String get recapBannerSubtitle =>
+      'Tempo de escuta, top músicas, artistas e playlists';
+
+  @override
+  String get recapRangeAll => 'Sempre';
+
+  @override
+  String get recapRangeMonth => '30 dias';
+
+  @override
+  String get recapRangeWeek => '7 dias';
+
+  @override
+  String get recapTotalTime => 'Tempo total de escuta';
+
+  @override
+  String recapHoursMinutes(int h, int m) {
+    return '$h h $m min';
+  }
+
+  @override
+  String recapMinutes(int m) {
+    return '$m min';
+  }
+
+  @override
+  String get recapTopTracks => 'Músicas mais ouvidas';
+
+  @override
+  String get recapTopArtists => 'Artistas mais ouvidos';
+
+  @override
+  String get recapTopPlaylists => 'Playlists mais ouvidas';
+
+  @override
+  String get recapDeletedPlaylist => 'Playlist excluída';
+
+  @override
+  String get recapEmpty => 'Reproduza música para criar o seu recap';
+
+  @override
   String get libraryAlbumsTitle => 'Álbuns da sua biblioteca';
+
+  @override
+  String get trendingTitle => 'Tendências da semana';
 
   @override
   String get crossfade => 'Crossfade';
@@ -1587,7 +1634,54 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get visitedArtistsTitle => 'Artistas visitados';
 
   @override
+  String get recapTitle => 'Seu Recap';
+
+  @override
+  String get recapBannerSubtitle =>
+      'Tempo de escuta, top músicas, artistas e playlists';
+
+  @override
+  String get recapRangeAll => 'Sempre';
+
+  @override
+  String get recapRangeMonth => '30 dias';
+
+  @override
+  String get recapRangeWeek => '7 dias';
+
+  @override
+  String get recapTotalTime => 'Tempo total de escuta';
+
+  @override
+  String recapHoursMinutes(int h, int m) {
+    return '$h h $m min';
+  }
+
+  @override
+  String recapMinutes(int m) {
+    return '$m min';
+  }
+
+  @override
+  String get recapTopTracks => 'Músicas mais ouvidas';
+
+  @override
+  String get recapTopArtists => 'Artistas mais ouvidos';
+
+  @override
+  String get recapTopPlaylists => 'Playlists mais ouvidas';
+
+  @override
+  String get recapDeletedPlaylist => 'Playlist excluída';
+
+  @override
+  String get recapEmpty => 'Reproduza música para criar o seu recap';
+
+  @override
   String get libraryAlbumsTitle => 'Álbuns da sua biblioteca';
+
+  @override
+  String get trendingTitle => 'Tendências da semana';
 
   @override
   String get crossfade => 'Crossfade';

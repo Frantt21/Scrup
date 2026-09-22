@@ -255,7 +255,32 @@
   "playAll": "すべて再生",
   "createPlaylistFromAlbum": "このアルバムでプレイリストを作成",
   "visitedArtistsTitle": "最近閲覧したアーティスト",
+  "recapTitle": "あなたのレキャップ",
+  "recapBannerSubtitle": "再生時間、上位の曲・アーティスト・プレイリスト",
+  "recapRangeAll": "全期間",
+  "recapRangeMonth": "30日",
+  "recapRangeWeek": "7日",
+  "recapTotalTime": "合計再生時間",
+  "recapHoursMinutes": "{h} 時間 {m} 分",
+      "@recapHoursMinutes": {
+        "placeholders": {
+        "h": {"type": "int"},
+        "m": {"type": "int"}
+        }
+      },
+  "recapMinutes": "{m} 分",
+      "@recapMinutes": {
+        "placeholders": {
+        "m": {"type": "int"}
+        }
+      },
+  "recapTopTracks": "よく聴く曲",
+  "recapTopArtists": "よく聴くアーティスト",
+  "recapTopPlaylists": "よく聴くプレイリスト",
+  "recapDeletedPlaylist": "削除されたプレイリスト",
+  "recapEmpty": "音楽を再生するとレキャップが作られます",
   "libraryAlbumsTitle": "ライブラリのアルバム",
+  "trendingTitle": "今週のトレンド",
   "crossfade": "クロスフェード",
   "crossfadeHint": "曲のフェード: 現在の曲が終わる前に次の曲を再生開始します",
   "back": "戻る",

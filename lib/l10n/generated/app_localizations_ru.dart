@@ -803,7 +803,54 @@ class AppLocalizationsRu extends AppLocalizations {
   String get visitedArtistsTitle => 'Недавно просмотренные исполнители';
 
   @override
+  String get recapTitle => 'Ваш рекап';
+
+  @override
+  String get recapBannerSubtitle =>
+      'Время прослушивания, топ треков, исполнителей и плейлистов';
+
+  @override
+  String get recapRangeAll => 'Всё время';
+
+  @override
+  String get recapRangeMonth => '30 дней';
+
+  @override
+  String get recapRangeWeek => '7 дней';
+
+  @override
+  String get recapTotalTime => 'Общее время прослушивания';
+
+  @override
+  String recapHoursMinutes(int h, int m) {
+    return '$h ч $m мин';
+  }
+
+  @override
+  String recapMinutes(int m) {
+    return '$m мин';
+  }
+
+  @override
+  String get recapTopTracks => 'Топ треков';
+
+  @override
+  String get recapTopArtists => 'Топ исполнителей';
+
+  @override
+  String get recapTopPlaylists => 'Топ плейлистов';
+
+  @override
+  String get recapDeletedPlaylist => 'Удалённый плейлист';
+
+  @override
+  String get recapEmpty => 'Включите музыку, чтобы создать рекап';
+
+  @override
   String get libraryAlbumsTitle => 'Альбомы из вашей библиотеки';
+
+  @override
+  String get trendingTitle => 'В тренде на этой неделе';
 
   @override
   String get crossfade => 'Кроссфейд';

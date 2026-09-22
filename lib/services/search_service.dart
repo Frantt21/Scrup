@@ -423,6 +423,21 @@ class SearchService {
     return _fetchAlbumTracksUncached(id);
   }
 
+  /// Weekly trending songs (YT Music charts) for the home row. Cached with
+  /// the standard TTL: the chart refreshes daily, so a few hours of reuse
+  /// costs nothing in freshness. Fault-tolerant: any error -> empty list
+  /// (the section just hides).
+  Future<List<Track>> fetchWeeklyTrending({int limit = 14}) async {
+    const key = 'weekly-trending';
+    final cached = await _cache?.getForSource('trending', key, limit);
+    if (cached != null) return cached;
+    final tracks = await _ytMusic.fetchWeeklyTrending(limit: limit);
+    if (tracks.isNotEmpty) {
+      unawaited(_cache?.put(key, limit, tracks, source: 'trending'));
+    }
+    return tracks;
+  }
+
   /// Avatares REALES de los canales derivados (una request por ARTISTA, no
   /// por canción): la fila de búsqueda solo trae la portada de la canción,
   /// nunca la cara del canal. Se consulta la página del canal (WEB_REMIX

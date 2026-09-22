@@ -18,6 +18,7 @@ import 'views/home_view.dart';
 import 'views/library_view.dart';
 import 'views/lyrics_view.dart';
 import 'views/playlist_detail_view.dart';
+import 'views/recap_view.dart';
 import 'views/search_view.dart';
 import 'views/settings_view.dart';
 import 'widgets/custom_title_bar.dart';
@@ -53,6 +54,9 @@ class _AppShellState extends State<AppShell> {
   YtmAlbum? _pendingAlbum;
 
   bool _showSettings = false;
+
+  /// Recap de escucha (screen del shell, desplaza como settings).
+  bool _showRecap = false;
   int _settingsOpenCount = 0;
   final ValueNotifier<String?> _searchRequest = ValueNotifier<String?>(null);
   final ValueNotifier<int> _searchFocusRequest = ValueNotifier<int>(0);
@@ -183,6 +187,10 @@ class _AppShellState extends State<AppShell> {
       }
       if (_showSettings) {
         _closeSettings();
+        return true;
+      }
+      if (_showRecap) {
+        setState(() => _showRecap = false);
         return true;
       }
       if (_showLyrics) {
@@ -574,6 +582,35 @@ class _AppShellState extends State<AppShell> {
     setState(() => _showSettings = false);
   }
 
+  /// Abre el recap de escucha (mismo patrón de desplazamiento que settings:
+  /// snapshot completo del estado previo para el back atómico).
+  void _openRecap() {
+    if (_showRecap) return;
+    final prevPlaylist = _openPlaylist;
+    final prevArtist = _openArtist;
+    final prevAlbum = _artistAlbumOpenFlag;
+    final prevLyrics = _showLyrics;
+    final prevSettings = _showSettings;
+    _pushHistory(
+      () => setState(() {
+        _showRecap = false;
+        _openPlaylist = prevPlaylist;
+        _openArtist = prevArtist;
+        _artistAlbumOpenFlag = prevAlbum;
+        _showLyrics = prevLyrics;
+        _showSettings = prevSettings;
+      }),
+    );
+    setState(() {
+      _showRecap = true;
+      _openPlaylist = null;
+      _showLyrics = false;
+      _showSettings = false;
+      _openArtist = null;
+      _artistAlbumOpenFlag = false;
+    });
+  }
+
   void _onPlaylistUpdated(Playlist playlist) {
     if (_openPlaylist?.id != playlist.id) return;
     setState(() => _openPlaylist = playlist);
@@ -817,16 +854,20 @@ class _AppShellState extends State<AppShell> {
       children: [
         IndexedStack(
           // Slots: 0 home, 1 búsqueda, 2 playlist, 3 ajustes, 4 letras,
-          // 5 ARTISTA. El canal del artista se monta DENTRO del shell en
-          // ambas plataformas (antes solo móvil: en desktop caía en un push
-          // de ruta a pantalla completa sin nav/miniplayer).
+          // 5 ARTISTA, 6 RECAP. El canal del artista se monta DENTRO del
+          // shell en ambas plataformas (antes solo móvil: en desktop caía en
+          // un push de ruta a pantalla completa sin nav/miniplayer).
           index: _showLyrics
               ? 4
               : (openPlaylist != null
                     ? 2
                     : (_showSettings
                           ? 3
-                          : (openArtist != null ? 5 : _selectedIndex))),
+                          : (_showRecap
+                                ? 6
+                                : (openArtist != null
+                                      ? 5
+                                      : _selectedIndex)))),
           children: [
             HomeView(
               onSearch: _submitSearch,
@@ -834,6 +875,7 @@ class _AppShellState extends State<AppShell> {
               onOpenPlaylist: _selectPlaylist,
               onOpenArtist: _openArtistDetail,
               onOpenAlbum: _openExternalAlbum,
+              onOpenRecap: _openRecap,
             ),
             SearchView(
               searchRequest: _searchRequest,
@@ -857,6 +899,7 @@ class _AppShellState extends State<AppShell> {
               key: ValueKey(_settingsOpenCount),
               onResetPanelSizes: _resetPanelSizes,
             ),
+            RecapView(onBack: () => setState(() => _showRecap = false)),
             _showFsOverlay
                 ? const SizedBox.shrink()
                 : TickerMode(
@@ -1151,6 +1194,10 @@ class _AppShellState extends State<AppShell> {
     }
     if (_showSettings) {
       _closeSettings();
+      return;
+    }
+    if (_showRecap) {
+      setState(() => _showRecap = false);
       return;
     }
     if (_selectedIndex != 0) {

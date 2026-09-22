@@ -799,7 +799,54 @@ class AppLocalizationsEs extends AppLocalizations {
   String get visitedArtistsTitle => 'Artistas visitados';
 
   @override
+  String get recapTitle => 'Tu Recap';
+
+  @override
+  String get recapBannerSubtitle =>
+      'Tiempo de escucha, canciones, artistas y playlists top';
+
+  @override
+  String get recapRangeAll => 'Todo';
+
+  @override
+  String get recapRangeMonth => '30 días';
+
+  @override
+  String get recapRangeWeek => '7 días';
+
+  @override
+  String get recapTotalTime => 'Tiempo total de escucha';
+
+  @override
+  String recapHoursMinutes(int h, int m) {
+    return '$h h $m min';
+  }
+
+  @override
+  String recapMinutes(int m) {
+    return '$m min';
+  }
+
+  @override
+  String get recapTopTracks => 'Canciones más escuchadas';
+
+  @override
+  String get recapTopArtists => 'Artistas más escuchados';
+
+  @override
+  String get recapTopPlaylists => 'Playlists más escuchadas';
+
+  @override
+  String get recapDeletedPlaylist => 'Playlist eliminada';
+
+  @override
+  String get recapEmpty => 'Reproduce música para construir tu recap';
+
+  @override
   String get libraryAlbumsTitle => 'Albums con canciones de tu libreria';
+
+  @override
+  String get trendingTitle => 'Tendencias de la semana';
 
   @override
   String get crossfade => 'Crossfade';

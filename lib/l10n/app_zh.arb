@@ -255,7 +255,32 @@
   "playAll": "播放全部",
   "createPlaylistFromAlbum": "用此专辑创建播放列表",
   "visitedArtistsTitle": "最近浏览的艺术家",
+  "recapTitle": "你的年度回顾",
+  "recapBannerSubtitle": "收听时长、热门歌曲、艺人和播放列表",
+  "recapRangeAll": "全部",
+  "recapRangeMonth": "30 天",
+  "recapRangeWeek": "7 天",
+  "recapTotalTime": "总收听时长",
+  "recapHoursMinutes": "{h} 小时 {m} 分钟",
+      "@recapHoursMinutes": {
+        "placeholders": {
+        "h": {"type": "int"},
+        "m": {"type": "int"}
+        }
+      },
+  "recapMinutes": "{m} 分钟",
+      "@recapMinutes": {
+        "placeholders": {
+        "m": {"type": "int"}
+        }
+      },
+  "recapTopTracks": "最常听的歌曲",
+  "recapTopArtists": "最常听的艺人",
+  "recapTopPlaylists": "最常听的播放列表",
+  "recapDeletedPlaylist": "已删除的播放列表",
+  "recapEmpty": "播放一些音乐来生成你的回顾",
   "libraryAlbumsTitle": "你资料库中的专辑",
+  "trendingTitle": "本周热门",
   "crossfade": "淡入淡出",
   "crossfadeHint": "歌曲之间的淡入淡出：当前歌曲结束前开始播放下一首",
   "back": "返回",

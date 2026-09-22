@@ -36,6 +36,77 @@ class QueuePersistenceSnapshot {
 }
 
 /// Audio player with queue, shuffle, repeat, radio and local caching.
+/// Acumulador de tiempo de escucha por pista: suma solo mientras suena
+/// (posición avanzando) y vuelca chunks de ~15s vía [flush]. El chunk
+/// abierto al cambiar/pausar se vuelca también (best-effort, sin bloquear).
+/// Min-filtro 3s: skips casi instantáneos no cuentan como escucha.
+final class _ListenTracker {
+  String? _trackId;
+  int? _playlistId;
+  Duration _lastPos = Duration.zero;
+  int _accumMs = 0;
+  bool _playing = false;
+
+  static const int _chunkSeconds = 15;
+  static const int _minSegmentMs = 3000;
+  static const Duration _maxGap = Duration(seconds: 5);
+
+  /// Vuelca un chunk: (trackId, seconds, playlistId).
+  void Function(String, int, int?)? flush;
+
+  void onPosition(Duration pos) {
+    final prev = _lastPos;
+    _lastPos = pos;
+    if (!_playing) return;
+    final delta = pos - prev;
+    // Solo avance natural (sin seeks hacia atrás/adelante): deltas
+    // positivos y plausibles entre emits (~250ms throttled, tolerancia 5s).
+    if (delta <= Duration.zero || delta > _maxGap) return;
+    _accumMs += delta.inMilliseconds;
+    if (_accumMs >= _chunkSeconds * 1000) {
+      _emit();
+    }
+  }
+
+  void onTrackStarted(String trackId, int? playlistId) {
+    _flushPending();
+    _trackId = trackId;
+    _playlistId = playlistId;
+    _accumMs = 0;
+    _lastPos = Duration.zero;
+  }
+
+  void onStart() {
+    if (_playing) return;
+    _playing = true;
+  }
+
+  void onPause() {
+    _playing = false;
+    _flushPending();
+  }
+
+  void _flushPending() {
+    if (_accumMs >= _minSegmentMs) _emit();
+  }
+
+  void _emit() {
+    final id = _trackId;
+    final seconds = _accumMs ~/ 1000;
+    if (id == null || seconds <= 0) {
+      _accumMs = 0;
+      return;
+    }
+    _accumMs = 0;
+    flush?.call(id, seconds, _playlistId);
+  }
+
+  /// Vuelca lo pendiente al destruir el servicio.
+  void dispose() {
+    onPause();
+  }
+}
+
 class PlayerService {
   final AudioBackend _player;
   final math.Random _random = math.Random();
@@ -53,6 +124,10 @@ class PlayerService {
   final Future<List<Track>> Function(Track track)? recommend;
   final Future<Track?> Function(Track track)? enrich;
   final Future<void> Function(Track track)? onPlayed;
+
+  /// Vuelca tiempo de escucha (recap): (trackId, seconds, playlistId).
+  final Future<void> Function(String trackId, int seconds, int? playlistId)?
+  onListenChunk;
   final Future<void> Function(Track track)? onEnriched;
 
   /// Callback de persistencia del crossfade: llega al SettingsStore desde
@@ -104,6 +179,10 @@ class PlayerService {
   Duration _lastPosition = Duration.zero;
   Track? _currentTrack;
   Duration? _lastDuration;
+
+  /// Tracker de tiempo de escucha (recap): acumula el tiempo REAL suenado
+  /// por pista y vuelca chunks a [onListenChunk] (DB) periódicamente.
+  final _ListenTracker _listenTracker = _ListenTracker();
 
   // Throttle position stream to ~4fps; zero emits instantly.
   static const _positionEmitInterval = Duration(milliseconds: 250);
@@ -171,6 +250,7 @@ class PlayerService {
     this.enrich,
     this.preload,
     this.onPlayed,
+    this.onListenChunk,
     this.onEnriched,
     this.onCrossfadeChanged,
     this.onShuffleChanged,
@@ -178,8 +258,16 @@ class PlayerService {
     this.onRepeatChanged,
     this.onQueueChanged,
   }) : _player = audioBackend {
+    _listenTracker.flush = (trackId, seconds, playlistId) {
+      final cb = onListenChunk;
+      if (cb == null) return;
+      unawaited(
+        cb(trackId, seconds, playlistId).catchError((_) {}),
+      );
+    };
     _player.positionStream.listen((p) {
       _lastPosition = p;
+      _listenTracker.onPosition(p);
       final now = DateTime.now();
       if (p == Duration.zero ||
           _lastPositionEmit == null ||
@@ -196,6 +284,9 @@ class PlayerService {
     _player.playingStream.listen((p) {
       _playing = p;
       _playingController.add(p);
+      // Sincroniza el tracker con el estado REAL del backend (play/pause
+      // externos: notificación del OS, audio_service, teclado).
+      p ? _listenTracker.onStart() : _listenTracker.onPause();
     });
     // Estado actual del backend: los streams solo emiten cambios y si la reproducción arrancó antes de suscribirnos (audio_service restaurando estado en init), `_playing` quedaría desincronizado y el toggle rompería (siempre llamaría play(), no-op cuando ya suena).
     _playing = _player.isPlaying;
@@ -458,6 +549,7 @@ class PlayerService {
       _startFakePlayback(_currentTrack);
       return Future.value();
     }
+    _listenTracker.onStart();
     return _player.play();
   }
 
@@ -466,6 +558,7 @@ class PlayerService {
       _stopFakePlayback();
       return Future.value();
     }
+    _listenTracker.onPause();
     return _player.pause();
   }
 
@@ -1041,6 +1134,7 @@ class PlayerService {
   void _publishTrack(Track track) {
     _currentTrack = track;
     _trackController.add(track);
+    _listenTracker.onTrackStarted(track.id, activePlaylistId.value);
   }
 
   /// Actualiza metadatos tras edición manual, sin tocar la reproducción.
@@ -1101,6 +1195,7 @@ class PlayerService {
   }
 
   Future<void> dispose() async {
+    _listenTracker.dispose();
     _fakeTimer?.cancel();
     _fakeTimer = null;
     _crossfadeStartTimer?.cancel();

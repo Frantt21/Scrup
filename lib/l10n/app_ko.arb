@@ -255,7 +255,32 @@
   "playAll": "전체 재생",
   "createPlaylistFromAlbum": "이 앨범으로 플레이리스트 만들기",
   "visitedArtistsTitle": "최근 방문한 아티스트",
+  "recapTitle": "나의 리캡",
+  "recapBannerSubtitle": "청취 시간, 상위 곡, 아티스트, 재생목록",
+  "recapRangeAll": "전체",
+  "recapRangeMonth": "30일",
+  "recapRangeWeek": "7일",
+  "recapTotalTime": "총 청취 시간",
+  "recapHoursMinutes": "{h}시간 {m}분",
+      "@recapHoursMinutes": {
+        "placeholders": {
+        "h": {"type": "int"},
+        "m": {"type": "int"}
+        }
+      },
+  "recapMinutes": "{m}분",
+      "@recapMinutes": {
+        "placeholders": {
+        "m": {"type": "int"}
+        }
+      },
+  "recapTopTracks": "가장 많이 들은 곡",
+  "recapTopArtists": "가장 많이 들은 아티스트",
+  "recapTopPlaylists": "가장 많이 들은 재생목록",
+  "recapDeletedPlaylist": "삭제된 재생목록",
+  "recapEmpty": "음악을 재생하면 리캡이 만들어집니다",
   "libraryAlbumsTitle": "라이브러리의 앨범",
+  "trendingTitle": "이번 주 인기",
   "crossfade": "크로스페이드",
   "crossfadeHint": "노래 간 페이드: 현재 곡이 끝나기 전에 다음 곡이 재생됩니다",
   "back": "뒤로",
