@@ -37,14 +37,16 @@ class QueuePersistenceSnapshot {
 
 /// Audio player with queue, shuffle, repeat, radio and local caching.
 /// Acumulador de tiempo de escucha por pista: suma solo mientras suena
-/// (posición avanzando) y vuelca chunks de ~15s vía [flush]. El chunk
-/// abierto al cambiar/pausar se vuelca también (best-effort, sin bloquear).
-/// Min-filtro 3s: skips casi instantáneos no cuentan como escucha.
+/// (posición avanzando). Una pista SOLO cuenta en el recap si se escuchó
+/// ≥60% de su duración — el tiempo acumulado se evalúa al cambiar/pausar
+/// (pause NO descarta: reanudar sigue sumando). Sin duración conocida
+/// cae al comportamiento viejo (chunks ≥3s). Skips cortos no cuentan.
 final class _ListenTracker {
   String? _trackId;
   int? _playlistId;
   Duration _lastPos = Duration.zero;
   int _accumMs = 0;
+  int _trackDurationMs = 0;
   bool _playing = false;
 
   static const int _chunkSeconds = 15;
@@ -63,17 +65,33 @@ final class _ListenTracker {
     // positivos y plausibles entre emits (~250ms throttled, tolerancia 5s).
     if (delta <= Duration.zero || delta > _maxGap) return;
     _accumMs += delta.inMilliseconds;
-    if (_accumMs >= _chunkSeconds * 1000) {
+    // Sin duración conocida no hay umbral 60%: flush periódico como antes.
+    if (_trackDurationMs <= 0 && _accumMs >= _chunkSeconds * 1000) {
       _emit();
     }
   }
 
-  void onTrackStarted(String trackId, int? playlistId) {
-    _flushPending();
+  void onTrackStarted(
+    String trackId,
+    int? playlistId, {
+    Duration? duration,
+    bool keepAccumulated = false,
+  }) {
+    if (!keepAccumulated || trackId != _trackId) _evaluate();
     _trackId = trackId;
     _playlistId = playlistId;
-    _accumMs = 0;
-    _lastPos = Duration.zero;
+    if (duration != null && duration.inMilliseconds > 0) {
+      _trackDurationMs = duration.inMilliseconds;
+    }
+    if (!keepAccumulated) {
+      _accumMs = 0;
+      _lastPos = Duration.zero;
+    }
+  }
+
+  /// Duración real del backend (llega async tras montar la pista).
+  void updateDuration(Duration d) {
+    if (_trackDurationMs <= 0) _trackDurationMs = d.inMilliseconds;
   }
 
   void onStart() {
@@ -83,11 +101,20 @@ final class _ListenTracker {
 
   void onPause() {
     _playing = false;
-    _flushPending();
+    // Al pausar NO se descarta el acumulado: si no llega al umbral sigue
+    // sumando al reanudar; solo se vuelca si ya alcanzó el 60%.
+    _evaluate();
   }
 
-  void _flushPending() {
-    if (_accumMs >= _minSegmentMs) _emit();
+  /// Vuelca el acumulado SOLO si la pista se escuchó ≥60% (o ≥3s cuando la
+  /// duración es desconocida). Si no llega, el acumulado se conserva.
+  void _evaluate() {
+    final durMs = _trackDurationMs;
+    if (durMs > 0) {
+      if (_accumMs >= durMs * 0.6) _emit();
+    } else if (_accumMs >= _minSegmentMs) {
+      _emit();
+    }
   }
 
   void _emit() {
@@ -280,6 +307,11 @@ class PlayerService {
     _player.durationStream.listen((d) {
       _lastDuration = d;
       _durationController.add(d);
+      // La duración real a veces llega después de montar la pista (desde el
+      // backend): mantener al tracker al día para el umbral del 60%.
+      if (d != null && d > Duration.zero) {
+        _listenTracker.updateDuration(d);
+      }
     });
     _player.playingStream.listen((p) {
       _playing = p;
@@ -1131,10 +1163,17 @@ class PlayerService {
     _bufferingController.add(false);
   }
 
-  void _publishTrack(Track track) {
+  void _publishTrack(Track track, {bool metadataOnly = false}) {
     _currentTrack = track;
     _trackController.add(track);
-    _listenTracker.onTrackStarted(track.id, activePlaylistId.value);
+    _listenTracker.onTrackStarted(
+      track.id,
+      activePlaylistId.value,
+      duration: track.duration,
+      // Re-publicación por enriquecimiento: NO reinicia el acumulado de
+      // escucha (es la misma reproducción en curso).
+      keepAccumulated: metadataOnly,
+    );
   }
 
   /// Actualiza metadatos tras edición manual, sin tocar la reproducción.
@@ -1147,7 +1186,7 @@ class PlayerService {
       _notifyQueueChanged();
     }
     if (isCurrent) {
-      _publishTrack(updated);
+      _publishTrack(updated, metadataOnly: true);
     }
     final cb = onEnriched;
     if (cb != null) {

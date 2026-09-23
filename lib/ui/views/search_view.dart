@@ -12,8 +12,7 @@ import '../../services/search_service.dart';
 import 'artist_detail_view.dart';
 import '../playback.dart';
 import '../playlist_actions.dart';
-import '../widgets/cover_image.dart';
-import '../widgets/screen_header.dart';
+import '../widgets/artist_avatar.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 import '../widgets/track_tile.dart';
 
@@ -458,40 +457,10 @@ class _ArtistTile extends StatelessWidget {
             // CUADRADA redondeada (14dp), no círculo: mismo estilo que las
             // portadas de playlists/canciones, pero MÁS GRANDE que una fila
             // de canción (64dp) para destacar la sección de artistas.
-            // Hi-res: el avatar base llega a ~176px; pedirlo a w1200 lo
-            // deja nítido en cualquier DPR.
             ClipRRect(
               borderRadius: BorderRadius.circular(14),
-              child: SizedBox(
-                width: 64,
-                height: 64,
-                child: thumb != null && thumb.isNotEmpty
-                    ? CoverImage(
-                        source: Track.hiResThumbnail(thumb) ?? thumb,
-                        width: 64,
-                        height: 64,
-                        cacheWidth: 260,
-                        fit: BoxFit.cover,
-                        fallback: ColoredBox(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          child: Icon(
-                            Icons.person_rounded,
-                            size: 24,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      )
-                    : ColoredBox(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        child: Icon(
-                          Icons.person_rounded,
-                          size: 24,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-              ),
+              child: ArtistAvatarImage(url: thumb, side: 64),
             ),
-            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -14,6 +14,10 @@ class Tracks extends Table {
   DateTimeColumn get lastPlayed => dateTime().nullable()();
   IntColumn get playCount => integer().withDefault(const Constant(0))();
 
+  /// YouTube channel id (UC…) of the artist, learned from InnerTube search
+  /// rows or the track-owner lookup; powers recap artist avatars.
+  TextColumn get artistChannelId => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

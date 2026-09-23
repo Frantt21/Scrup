@@ -20,7 +20,9 @@ import '../playlist_actions.dart';
 import '../theme_controller.dart';
 import '../widgets/scrup_toasts.dart';
 import '../widgets/context_menu_item.dart';
+import '../widgets/artist_avatar.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/drag_scroll.dart';
 import '../widgets/now_playing_bars.dart';
 import '../widgets/playlists_sidebar.dart' show playlistAccent;
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
@@ -575,15 +577,51 @@ class _HomeViewState extends State<HomeView> {
                     ),
                   // Tendencias semanales (DESPUÉS de los álbumes
                   // recomendados, antes de artistas visitados): charts de
-                  // YT Music. Mismas cards 1:1 que las recientes.
-                  if (_trending.isNotEmpty)
+                  // YT Music. MISMO GRID que las recientes (cards 1:1,
+                  // mismas columnas y espaciados).
+                  if (_trending.isNotEmpty) ...[
                     SliverToBoxAdapter(
-                      child: _TrendingRow(
-                        tracks: _trending,
-                        cardSize: mobile ? null : playlistExtent,
-                        currentTrackId: _currentTrack?.id,
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          mobile ? 16 : 24,
+                          4,
+                          mobile ? 16 : 24,
+                          8,
+                        ),
+                        child: Text(
+                          l10n.trendingTitle,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ),
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        mobile ? 16 : 24,
+                        0,
+                        mobile ? 16 : 24,
+                        mobile ? 12 : 8,
+                      ),
+                      sliver: SliverGrid(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: cols,
+                          mainAxisSpacing: mobile ? 6 : 10,
+                          crossAxisSpacing: mobile ? 6 : 10,
+                          childAspectRatio: 1,
+                        ),
+                        delegate: SliverChildBuilderDelegate((context, i) {
+                          final track = _trending[i];
+                          return _RecentCard(
+                            track: track,
+                            onPlay: () => playTrack(context, track),
+                            isCurrent: track.id == _currentTrack?.id,
+                            isPlaying: _playing,
+                          );
+                        }, childCount: _trending.length),
+                      ),
+                    ),
+                  ],
                   // Artistas visitados (DESPUÉS de las playlists recientes,
                   // mismo estilo de fila horizontal)
                   if (_visitedArtists.isNotEmpty)
@@ -1294,78 +1332,6 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
       oldDelegate.topInset != topInset || oldDelegate.child != child;
 }
 
-/// Fila horizontal de ARTISTAS visitados: mismo estilo que las playlists
-/// recientes (cards cuadradas con título dentro). La miniatura viene de la
-/// visita; si el canal cambió su avatar, el screen del artista lo trae
-/// fresco al abrir (la visita se repuebla con la nueva URL).
-/// Fila de albums recomendados desde la librería: mismo estilo de fila
-/// horizontal que las playlists recientes (título + cards 1:1 con scroll).
-/// El tap abre el screen del álbum ([HomeView.onOpenAlbum]).
-/// Fila de tendencias semanales: las MISMAS cards 1:1 que las recientes
-/// (_RecentCard, con título/artista sobre la portada y menú contextual)
-/// alimentadas con el chart de YT Music. Tap reproduce la pista.
-class _TrendingRow extends StatelessWidget {
-  final List<Track> tracks;
-
-  /// Lado de la card (desktop: tamaño de las playlists recientes;
-  /// null = 140 en móvil).
-  final double? cardSize;
-  final String? currentTrackId;
-
-  const _TrendingRow({
-    required this.tracks,
-    this.cardSize,
-    this.currentTrackId,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context);
-    if (tracks.isEmpty) return const SizedBox.shrink();
-
-    final size = cardSize ?? 140.0;
-    final double sidePad = Binaries.isMobile ? 16 : 24;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(sidePad, 8, sidePad, 8),
-          child: Text(
-            l10n.trendingTitle,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        SizedBox(
-          height: size + 2,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: sidePad),
-            itemCount: tracks.length,
-            itemBuilder: (context, i) {
-              final track = tracks[i];
-              return Padding(
-                padding: EdgeInsets.only(right: cardSize == null ? 12 : 10),
-                child: SizedBox(
-                  width: size,
-                  height: size,
-                  child: _RecentCard(
-                    track: track,
-                    onPlay: () => playTrack(context, track),
-                    isCurrent: track.id == currentTrackId,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _LibraryAlbumsRow extends StatelessWidget {
   final List<YtmAlbum> albums;
 
@@ -1402,23 +1368,27 @@ class _LibraryAlbumsRow extends StatelessWidget {
         ),
         SizedBox(
           height: size + 40,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: sidePad),
-            itemCount: albums.length,
-            itemBuilder: (context, i) {
-              final album = albums[i];
-              return Padding(
-                padding: EdgeInsets.only(
-                  right: cardSize == null ? 12 : 10,
-                ),
-                child: _LibraryAlbumCard(
-                  album: album,
-                  size: size,
-                  onTap: () => onOpen?.call(album),
-                ),
-              );
-            },
+          // Desktop: rueda vertical → scroll horizontal + arrastre.
+          child: DragScroll(
+            builder: (controller) => ListView.builder(
+              controller: controller,
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.symmetric(horizontal: sidePad),
+              itemCount: albums.length,
+              itemBuilder: (context, i) {
+                final album = albums[i];
+                return Padding(
+                  padding: EdgeInsets.only(
+                    right: cardSize == null ? 12 : 10,
+                  ),
+                  child: _LibraryAlbumCard(
+                    album: album,
+                    size: size,
+                    onTap: () => onOpen?.call(album),
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -1609,32 +1579,36 @@ class _VisitedArtistsRow extends StatelessWidget {
           // Alto de la fila = card + 18 (deja el margen vertical del
           // centrado, igual que 158 = 140 + 18) en ambas plataformas.
           height: size + 18,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: sidePad),
-            itemCount: artists.length,
-            itemBuilder: (context, i) {
-              final a = artists[i];
-              return Padding(
-                // MISMO gap que el grid de recientes (10) en desktop.
-                padding: EdgeInsets.only(
-                  right: cardSize == null ? 12 : 10,
-                ),
-                child: _VisitedArtistCard(
-                  artist: a,
-                  cardSize: cardSize,
-                  onTap: () => onOpen?.call(
-                    YtmArtist(
-                      browseId: a.id,
-                      name: a.name,
-                      // Avatar REAL guardado con la visita: la card pinta
-                      // la cara del canal, nunca un placeholder vacío.
-                      thumbnailUrl: a.thumbnailUrl,
+          // Desktop: rueda vertical → scroll horizontal + arrastre.
+          child: DragScroll(
+            builder: (controller) => ListView.builder(
+              controller: controller,
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.symmetric(horizontal: sidePad),
+              itemCount: artists.length,
+              itemBuilder: (context, i) {
+                final a = artists[i];
+                return Padding(
+                  // MISMO gap que el grid de recientes (10) en desktop.
+                  padding: EdgeInsets.only(
+                    right: cardSize == null ? 12 : 10,
+                  ),
+                  child: _VisitedArtistCard(
+                    artist: a,
+                    cardSize: cardSize,
+                    onTap: () => onOpen?.call(
+                      YtmArtist(
+                        browseId: a.id,
+                        name: a.name,
+                        // Avatar REAL guardado con la visita: la card pinta
+                        // la cara del canal, nunca un placeholder vacío.
+                        thumbnailUrl: a.thumbnailUrl,
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -1695,11 +1669,12 @@ class _VisitedArtistCardState extends State<_VisitedArtistCard> {
                     fit: StackFit.expand,
                     children: [
                       if (hasCover)
+                        // Helper único de avatar: recorte cuadrado hi-res
+                        // compartido con búsqueda/recap/now-playing.
                         CoverImage(
-                          source: artist.thumbnailUrl,
+                          source: ArtistAvatar.hiRes(artist.thumbnailUrl),
                           fit: BoxFit.cover,
-                          // Decode acorde al tamano en pantalla (desktop).
-                          cacheWidth: widget.cardSize == null ? 300 : 500,
+                          cacheWidth: ArtistAvatar.cacheWidthFor(size),
                           fallback: Container(
                             color: theme.colorScheme.surfaceContainerHigh,
                             child: Icon(
@@ -1879,25 +1854,29 @@ class _RecentPlaylistsRow extends StatelessWidget {
         ),
         SizedBox(
           height: 158,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: sidePad),
-            itemCount: playlists.length,
-            itemBuilder: (context, i) {
-              final playlist = playlists[i];
-              final isCurrent = playlist.id == activePlaylistId;
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: _RecentPlaylistCard(
-                  playlist: playlist,
-                  accent: accent,
-                  playingAccent: playlistAccent(context, playlist, theme),
-                  isCurrent: isCurrent,
-                  isPlaying: isPlaying,
-                  onTap: () => onOpen(playlist),
-                ),
-              );
-            },
+          // Desktop: rueda vertical → scroll horizontal + arrastre.
+          child: DragScroll(
+            builder: (controller) => ListView.builder(
+              controller: controller,
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.symmetric(horizontal: sidePad),
+              itemCount: playlists.length,
+              itemBuilder: (context, i) {
+                final playlist = playlists[i];
+                final isCurrent = playlist.id == activePlaylistId;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _RecentPlaylistCard(
+                    playlist: playlist,
+                    accent: accent,
+                    playingAccent: playlistAccent(context, playlist, theme),
+                    isCurrent: isCurrent,
+                    isPlaying: isPlaying,
+                    onTap: () => onOpen(playlist),
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ],

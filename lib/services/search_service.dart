@@ -42,6 +42,13 @@ class SearchService {
   /// Exposición de solo lectura para el detalle de ajustes (nº de entradas).
   SearchCacheStore? get cache => _cache;
 
+  /// Exposición de solo lectura del store de info por pista (canal
+  /// resuelto + créditos) para vistas fuera del pipeline de búsqueda.
+  TrackInfoCacheStore? get trackInfoCache => _trackInfoCache;
+
+  /// Exposición de solo lectura de la caché de avatares de canal.
+  ArtistAvatarCacheStore? get avatarCache => _avatarCache;
+
   /// Caché de detalles de artista (JSON por browseId, TTL 24h). `null` =
   /// desactivada (tests): el detalle va siempre a red.
   final ArtistCacheStore? _artistCache;

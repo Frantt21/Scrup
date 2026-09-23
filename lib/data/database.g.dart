@@ -90,6 +90,17 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _artistChannelIdMeta = const VerificationMeta(
+    'artistChannelId',
+  );
+  @override
+  late final GeneratedColumn<String> artistChannelId = GeneratedColumn<String>(
+    'artist_channel_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -100,6 +111,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     album,
     lastPlayed,
     playCount,
+    artistChannelId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -168,6 +180,15 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         playCount.isAcceptableOrUnknown(data['play_count']!, _playCountMeta),
       );
     }
+    if (data.containsKey('artist_channel_id')) {
+      context.handle(
+        _artistChannelIdMeta,
+        artistChannelId.isAcceptableOrUnknown(
+          data['artist_channel_id']!,
+          _artistChannelIdMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -209,6 +230,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.int,
         data['${effectivePrefix}play_count'],
       )!,
+      artistChannelId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}artist_channel_id'],
+      ),
     );
   }
 
@@ -229,6 +254,10 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final String? album;
   final DateTime? lastPlayed;
   final int playCount;
+
+  /// YouTube channel id (UC…) of the artist, learned from InnerTube search
+  /// rows or the track-owner lookup; powers recap artist avatars.
+  final String? artistChannelId;
   const TrackRow({
     required this.id,
     required this.title,
@@ -238,6 +267,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     this.album,
     this.lastPlayed,
     required this.playCount,
+    this.artistChannelId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -258,6 +288,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       map['last_played'] = Variable<DateTime>(lastPlayed);
     }
     map['play_count'] = Variable<int>(playCount);
+    if (!nullToAbsent || artistChannelId != null) {
+      map['artist_channel_id'] = Variable<String>(artistChannelId);
+    }
     return map;
   }
 
@@ -279,6 +312,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ? const Value.absent()
           : Value(lastPlayed),
       playCount: Value(playCount),
+      artistChannelId: artistChannelId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artistChannelId),
     );
   }
 
@@ -296,6 +332,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       album: serializer.fromJson<String?>(json['album']),
       lastPlayed: serializer.fromJson<DateTime?>(json['lastPlayed']),
       playCount: serializer.fromJson<int>(json['playCount']),
+      artistChannelId: serializer.fromJson<String?>(json['artistChannelId']),
     );
   }
   @override
@@ -310,6 +347,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'album': serializer.toJson<String?>(album),
       'lastPlayed': serializer.toJson<DateTime?>(lastPlayed),
       'playCount': serializer.toJson<int>(playCount),
+      'artistChannelId': serializer.toJson<String?>(artistChannelId),
     };
   }
 
@@ -322,6 +360,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     Value<String?> album = const Value.absent(),
     Value<DateTime?> lastPlayed = const Value.absent(),
     int? playCount,
+    Value<String?> artistChannelId = const Value.absent(),
   }) => TrackRow(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -333,6 +372,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     album: album.present ? album.value : this.album,
     lastPlayed: lastPlayed.present ? lastPlayed.value : this.lastPlayed,
     playCount: playCount ?? this.playCount,
+    artistChannelId: artistChannelId.present
+        ? artistChannelId.value
+        : this.artistChannelId,
   );
   TrackRow copyWithCompanion(TracksCompanion data) {
     return TrackRow(
@@ -350,6 +392,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ? data.lastPlayed.value
           : this.lastPlayed,
       playCount: data.playCount.present ? data.playCount.value : this.playCount,
+      artistChannelId: data.artistChannelId.present
+          ? data.artistChannelId.value
+          : this.artistChannelId,
     );
   }
 
@@ -363,7 +408,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('thumbnailUrl: $thumbnailUrl, ')
           ..write('album: $album, ')
           ..write('lastPlayed: $lastPlayed, ')
-          ..write('playCount: $playCount')
+          ..write('playCount: $playCount, ')
+          ..write('artistChannelId: $artistChannelId')
           ..write(')'))
         .toString();
   }
@@ -378,6 +424,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     album,
     lastPlayed,
     playCount,
+    artistChannelId,
   );
   @override
   bool operator ==(Object other) =>
@@ -390,7 +437,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.thumbnailUrl == this.thumbnailUrl &&
           other.album == this.album &&
           other.lastPlayed == this.lastPlayed &&
-          other.playCount == this.playCount);
+          other.playCount == this.playCount &&
+          other.artistChannelId == this.artistChannelId);
 }
 
 class TracksCompanion extends UpdateCompanion<TrackRow> {
@@ -402,6 +450,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<String?> album;
   final Value<DateTime?> lastPlayed;
   final Value<int> playCount;
+  final Value<String?> artistChannelId;
   final Value<int> rowid;
   const TracksCompanion({
     this.id = const Value.absent(),
@@ -412,6 +461,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.album = const Value.absent(),
     this.lastPlayed = const Value.absent(),
     this.playCount = const Value.absent(),
+    this.artistChannelId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TracksCompanion.insert({
@@ -423,6 +473,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.album = const Value.absent(),
     this.lastPlayed = const Value.absent(),
     this.playCount = const Value.absent(),
+    this.artistChannelId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        title = Value(title);
@@ -435,6 +486,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<String>? album,
     Expression<DateTime>? lastPlayed,
     Expression<int>? playCount,
+    Expression<String>? artistChannelId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -446,6 +498,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (album != null) 'album': album,
       if (lastPlayed != null) 'last_played': lastPlayed,
       if (playCount != null) 'play_count': playCount,
+      if (artistChannelId != null) 'artist_channel_id': artistChannelId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -459,6 +512,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<String?>? album,
     Value<DateTime?>? lastPlayed,
     Value<int>? playCount,
+    Value<String?>? artistChannelId,
     Value<int>? rowid,
   }) {
     return TracksCompanion(
@@ -470,6 +524,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       album: album ?? this.album,
       lastPlayed: lastPlayed ?? this.lastPlayed,
       playCount: playCount ?? this.playCount,
+      artistChannelId: artistChannelId ?? this.artistChannelId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -501,6 +556,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (playCount.present) {
       map['play_count'] = Variable<int>(playCount.value);
     }
+    if (artistChannelId.present) {
+      map['artist_channel_id'] = Variable<String>(artistChannelId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -518,6 +576,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('album: $album, ')
           ..write('lastPlayed: $lastPlayed, ')
           ..write('playCount: $playCount, ')
+          ..write('artistChannelId: $artistChannelId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3395,6 +3454,7 @@ typedef $$TracksTableCreateCompanionBuilder =
       Value<String?> album,
       Value<DateTime?> lastPlayed,
       Value<int> playCount,
+      Value<String?> artistChannelId,
       Value<int> rowid,
     });
 typedef $$TracksTableUpdateCompanionBuilder =
@@ -3407,6 +3467,7 @@ typedef $$TracksTableUpdateCompanionBuilder =
       Value<String?> album,
       Value<DateTime?> lastPlayed,
       Value<int> playCount,
+      Value<String?> artistChannelId,
       Value<int> rowid,
     });
 
@@ -3516,6 +3577,11 @@ class $$TracksTableFilterComposer
 
   ColumnFilters<int> get playCount => $composableBuilder(
     column: $table.playCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get artistChannelId => $composableBuilder(
+    column: $table.artistChannelId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3643,6 +3709,11 @@ class $$TracksTableOrderingComposer
     column: $table.playCount,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get artistChannelId => $composableBuilder(
+    column: $table.artistChannelId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$TracksTableAnnotationComposer
@@ -3683,6 +3754,11 @@ class $$TracksTableAnnotationComposer
 
   GeneratedColumn<int> get playCount =>
       $composableBuilder(column: $table.playCount, builder: (column) => column);
+
+  GeneratedColumn<String> get artistChannelId => $composableBuilder(
+    column: $table.artistChannelId,
+    builder: (column) => column,
+  );
 
   Expression<T> historyRefs<T extends Object>(
     Expression<T> Function($$HistoryTableAnnotationComposer a) f,
@@ -3800,6 +3876,7 @@ class $$TracksTableTableManager
                 Value<String?> album = const Value.absent(),
                 Value<DateTime?> lastPlayed = const Value.absent(),
                 Value<int> playCount = const Value.absent(),
+                Value<String?> artistChannelId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TracksCompanion(
                 id: id,
@@ -3810,6 +3887,7 @@ class $$TracksTableTableManager
                 album: album,
                 lastPlayed: lastPlayed,
                 playCount: playCount,
+                artistChannelId: artistChannelId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -3822,6 +3900,7 @@ class $$TracksTableTableManager
                 Value<String?> album = const Value.absent(),
                 Value<DateTime?> lastPlayed = const Value.absent(),
                 Value<int> playCount = const Value.absent(),
+                Value<String?> artistChannelId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TracksCompanion.insert(
                 id: id,
@@ -3832,6 +3911,7 @@ class $$TracksTableTableManager
                 album: album,
                 lastPlayed: lastPlayed,
                 playCount: playCount,
+                artistChannelId: artistChannelId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

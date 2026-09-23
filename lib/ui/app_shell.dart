@@ -432,6 +432,7 @@ class _AppShellState extends State<AppShell> {
         (playlist.id != _openPlaylist?.id ||
             _showSettings ||
             _showLyrics ||
+            _showRecap ||
             _openArtist != null);
     if (displaced) {
       final prevPlaylist = _openPlaylist;
@@ -439,6 +440,7 @@ class _AppShellState extends State<AppShell> {
       final prevAlbum = _artistAlbumOpenFlag;
       final prevLyrics = _showLyrics;
       final prevSettings = _showSettings;
+      final prevRecap = _showRecap;
       _pushHistory(
         () => setState(() {
           _openPlaylist = prevPlaylist;
@@ -446,6 +448,7 @@ class _AppShellState extends State<AppShell> {
           _artistAlbumOpenFlag = prevAlbum;
           _showLyrics = prevLyrics;
           _showSettings = prevSettings;
+          _showRecap = prevRecap;
         }),
       );
     }
@@ -453,6 +456,7 @@ class _AppShellState extends State<AppShell> {
       _openPlaylist = playlist;
       _showSettings = false;
       _showLyrics = false;
+      _showRecap = false;
       _openArtist = null;
       _artistAlbumOpenFlag = false;
     });
@@ -465,13 +469,15 @@ class _AppShellState extends State<AppShell> {
     final displaced = artist.browseId != _openArtist?.browseId ||
         _openPlaylist != null ||
         _showSettings ||
-        _showLyrics;
+        _showLyrics ||
+        _showRecap;
     if (displaced) {
       final prevPlaylist = _openPlaylist;
       final prevArtist = _openArtist;
       final prevAlbum = _artistAlbumOpenFlag;
       final prevLyrics = _showLyrics;
       final prevSettings = _showSettings;
+      final prevRecap = _showRecap;
       _pushHistory(
         () => setState(() {
           _openPlaylist = prevPlaylist;
@@ -479,6 +485,7 @@ class _AppShellState extends State<AppShell> {
           _artistAlbumOpenFlag = prevAlbum;
           _showLyrics = prevLyrics;
           _showSettings = prevSettings;
+          _showRecap = prevRecap;
         }),
       );
     }
@@ -490,6 +497,7 @@ class _AppShellState extends State<AppShell> {
       _openPlaylist = null;
       _showLyrics = false;
       _showSettings = false;
+      _showRecap = false;
     });
     unawaited(
       context.read<AppDatabase>().recordArtistVisit(
@@ -517,6 +525,7 @@ class _AppShellState extends State<AppShell> {
     final prevAlbum = _artistAlbumOpenFlag;
     final prevLyrics = _showLyrics;
     final prevSettings = _showSettings;
+    final prevRecap = _showRecap;
     _pushHistory(
       () => setState(() {
         _pendingAlbum = null;
@@ -525,6 +534,7 @@ class _AppShellState extends State<AppShell> {
         _artistAlbumOpenFlag = prevAlbum;
         _showLyrics = prevLyrics;
         _showSettings = prevSettings;
+        _showRecap = prevRecap;
       }),
     );
     _artistAlbumOpenFlag = false;
@@ -532,6 +542,7 @@ class _AppShellState extends State<AppShell> {
       _pendingAlbum = album;
       _showLyrics = false;
       _showSettings = false;
+      _showRecap = false;
       _openPlaylist = null;
     });
     // NOTA: la visita del artista NO se registra aquí (no conocemos su
@@ -620,13 +631,18 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final openPlaylist = _openPlaylist;
-    // "Zona" con botones home/search en la titlebar: playlist, ajustes y
-    // TAMBIÉN el canal del artista (antes el screen de artista no los
-    // mostraba porque no contaba como zona).
-    final inZone = _showSettings || openPlaylist != null || _openArtist != null;
+    // "Zona" con botones home/search en la titlebar: playlist, ajustes,
+    // canal del artista y recap.
+    final inZone =
+        _showSettings ||
+        openPlaylist != null ||
+        _openArtist != null ||
+        _showRecap;
     final barTitle = _showSettings
         ? l10n.settings
-        : (openPlaylist?.name ?? (_openArtist?.name ?? 'Scrup'));
+        : (_showRecap
+              ? l10n.recapTitle
+              : (openPlaylist?.name ?? (_openArtist?.name ?? 'Scrup')));
     final List<Widget> barActions = [
       if (inZone) ...[
         IconButton(
@@ -642,6 +658,7 @@ class _AppShellState extends State<AppShell> {
             _showLyrics = false;
             _openArtist = null;
             _artistAlbumOpenFlag = false;
+            _showRecap = false;
             _selectedIndex = 0;
           }),
         ),
@@ -670,6 +687,7 @@ class _AppShellState extends State<AppShell> {
             _showLyrics = false;
             _openArtist = null;
             _artistAlbumOpenFlag = false;
+            _showRecap = false;
             _selectedIndex = 1;
           }),
         ),
@@ -899,7 +917,6 @@ class _AppShellState extends State<AppShell> {
               key: ValueKey(_settingsOpenCount),
               onResetPanelSizes: _resetPanelSizes,
             ),
-            RecapView(onBack: () => setState(() => _showRecap = false)),
             _showFsOverlay
                 ? const SizedBox.shrink()
                 : TickerMode(
@@ -925,6 +942,7 @@ class _AppShellState extends State<AppShell> {
               )
             else
               const SizedBox.shrink(),
+            RecapView(onBack: () => setState(() => _showRecap = false)),
           ],
         ),
         Align(

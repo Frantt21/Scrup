@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,9 +8,12 @@ import '../../core/track.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../theme_controller.dart';
+import '../widgets/artist_avatar.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/screen_header.dart';
+import '../../services/artwork_palette_service.dart';
+import '../../services/search_service.dart';
 
 /// Recap screen: listening stats (all time / last 30 days / last 7 days) —
 /// total listening time, top tracks, top artists and top playlists, all from
@@ -24,12 +29,20 @@ class RecapView extends StatefulWidget {
 
 enum _RecapRange { all, month, week }
 
+/// Lado común de los tiles (artwork/artista/playlist) del recap.
+const double _recapTileSide = 52;
+
+/// Radio de esquina compartido con los artworks de la app.
+const double _recapTileRadius = 8;
+
 class _RecapViewState extends State<RecapView> {
   _RecapRange _range = _RecapRange.all;
   bool _loading = true;
   int _totalSeconds = 0;
   List<(Track, int)> _topTracks = const [];
   List<(String, int)> _topArtists = const [];
+  Map<String, String?> _artistAvatars = const {};
+  Map<String, String> _artistChannels = const {};
   List<RecapPlaylistEntry> _topPlaylists = const [];
 
   @override
@@ -57,14 +70,89 @@ class _RecapViewState extends State<RecapView> {
     final tracks = await db.topListenedTracks(since: since, limit: 10);
     final artists = await db.topListenedArtists(since: since, limit: 10);
     final playlists = await db.topListenedPlaylists(since: since, limit: 10);
+    final avatars = await _avatarsForTracks(tracks);
     if (!mounted) return;
     setState(() {
       _totalSeconds = total;
       _topTracks = tracks;
       _topArtists = artists;
       _topPlaylists = playlists;
+      _artistAvatars = avatars.$1;
+      _artistChannels = avatars.$2;
       _loading = false;
     });
+    // Faces missing from cache go to InnerTube in background; each one
+    // repaints its row when it resolves.
+    unawaited(_resolveMissingAvatars());
+  }
+
+  /// Disk-first avatar map for the top tracks: per-track channel from the
+  /// TrackInfoCache (already resolved for the now-playing panel), then the
+  /// shared avatar cache search/home populate. One entry per artist name.
+  Future<(Map<String, String?>, Map<String, String>)> _avatarsForTracks(
+    List<(Track, int)> tracks,
+  ) async {
+    // Providers are read through SearchService's read-only getters: the
+    // recap must not depend on where each store is provided in the tree.
+    final search = context.read<SearchService>();
+    final info = search.trackInfoCache;
+    final shared = search.avatarCache;
+    final urls = <String, String?>{};
+    final channels = <String, String>{};
+    for (final (t, _) in tracks) {
+      final name = t.artist.trim();
+      if (name.isEmpty || urls.containsKey(name)) continue;
+      var channelId = t.artistChannelId;
+      final ch = await info?.readChannel(t.id);
+      if (ch != null && ch.$1.isNotEmpty) channelId = ch.$1;
+      if (channelId != null && channelId.isNotEmpty) {
+        channels[name] = channelId;
+        urls[name] = await shared?.get(channelId);
+      }
+    }
+    return (urls, channels);
+  }
+
+  /// For top artists without a cached face: resolve the track's channel
+  /// (InnerTube `next`) and fetch the channel page. Saves channel + avatar
+  /// in the shared stores so search, home and the panel reuse them.
+  Future<void> _resolveMissingAvatars() async {
+    final search = context.read<SearchService>();
+    final info = search.trackInfoCache;
+    final shared = search.avatarCache;
+    for (final (t, _) in _topTracks) {
+      if (!mounted) return;
+      final name = t.artist.trim();
+      if (name.isEmpty) continue;
+      if (_artistAvatars[name] != null) continue;
+      var channelId = _artistChannels[name] ?? t.artistChannelId;
+      if (channelId == null || channelId.isEmpty) {
+        try {
+          final owner = await search.fetchTrackChannel(t.id);
+          if (owner == null || !mounted) continue;
+          channelId = owner.$1;
+          info?.writeChannel(t.id, owner.$1, owner.$2);
+          // Self-heal the DB row so future rounds skip this lookup.
+          await context.read<AppDatabase>().cacheTrack(
+            t.copyWith(artistChannelId: owner.$1),
+          );
+          if (!mounted) return;
+          setState(() => _artistChannels[name] = owner.$1);
+        } catch (_) {
+          continue;
+        }
+      }
+      try {
+        final detail = await search.fetchArtistDetail(channelId, name: name);
+        final url = detail?.thumbnailUrl;
+        if (url == null || url.isEmpty) continue;
+        unawaited(shared?.put(channelId, url));
+        if (!mounted) return;
+        setState(() => _artistAvatars[name] = url);
+      } catch (_) {
+        // Offline / failed: placeholder stays for this round.
+      }
+    }
   }
 
   @override
@@ -142,7 +230,12 @@ class _RecapViewState extends State<RecapView> {
                     items: _topTracks,
                   ),
                   const SizedBox(height: 20),
-                  _TopArtistsCard(theme: theme, accent: accent, items: _topArtists),
+                  _TopArtistsCard(
+                    theme: theme,
+                    accent: accent,
+                    items: _topArtists,
+                    avatars: _artistAvatars,
+                  ),
                   const SizedBox(height: 20),
                   _TopPlaylistsCard(
                     theme: theme,
@@ -160,8 +253,34 @@ class _RecapViewState extends State<RecapView> {
     );
 
     if (mobile) return body;
-    // Desktop: fondo transparente, el shell pinta detrás.
-    return body;
+
+    // Desktop: el MISMO contenedor flotante que settings/playlist (margen,
+    // sombra y superficie plano con el borde 18).
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, kPlayerClearance),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.45),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.72,
+            ),
+          ),
+          child: body,
+        ),
+      ),
+    );
   }
 }
 
@@ -181,27 +300,74 @@ class _RangeSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return SegmentedButton<_RecapRange>(
-      style: SegmentedButton.styleFrom(
-        selectedBackgroundColor: accent.withValues(alpha: 0.2),
-        selectedForegroundColor: Theme.of(context).colorScheme.onSurface,
-      ),
-      segments: [
-        ButtonSegment(
-          value: _RecapRange.all,
-          label: Text(l10n.recapRangeAll),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _RangePill(
+          label: l10n.recapRangeAll,
+          accent: accent,
+          selected: selected == _RecapRange.all,
+          onTap: () => onChanged(_RecapRange.all),
         ),
-        ButtonSegment(
-          value: _RecapRange.month,
-          label: Text(l10n.recapRangeMonth),
+        _RangePill(
+          label: l10n.recapRangeMonth,
+          accent: accent,
+          selected: selected == _RecapRange.month,
+          onTap: () => onChanged(_RecapRange.month),
         ),
-        ButtonSegment(
-          value: _RecapRange.week,
-          label: Text(l10n.recapRangeWeek),
+        _RangePill(
+          label: l10n.recapRangeWeek,
+          accent: accent,
+          selected: selected == _RecapRange.week,
+          onTap: () => onChanged(_RecapRange.week),
         ),
       ],
-      selected: {selected},
-      onSelectionChanged: (s) => onChanged(s.first),
+    );
+  }
+}
+
+class _RangePill extends StatelessWidget {
+  final String label;
+  final Color accent;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RangePill({
+    required this.label,
+    required this.accent,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: selected
+              ? accent
+              : theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.5,
+                ),
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: selected
+                ? ArtworkPaletteService.prefersBlackInk(accent)
+                    ? Colors.black
+                    : Colors.white
+                : theme.colorScheme.onSurface,
+            fontWeight: selected ? FontWeight.w600 : null,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -336,14 +502,14 @@ class _TrackStatRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(_recapTileRadius),
             child: SizedBox(
-              width: 46,
-              height: 46,
+              width: _recapTileSide,
+              height: _recapTileSide,
               child: CoverImage(
                 source: track.thumbnailUrl,
                 fit: BoxFit.cover,
-                cacheWidth: 92,
+                cacheWidth: (_recapTileSide * 2).round(),
                 fallback: ColoredBox(
                   color: theme.colorScheme.surfaceContainerHighest,
                   child: Icon(
@@ -407,10 +573,14 @@ class _TopArtistsCard extends StatelessWidget {
   final Color accent;
   final List<(String, int)> items;
 
+  /// Artist name → avatar URL (disk/in-memory; may be null while loading).
+  final Map<String, String?> avatars;
+
   const _TopArtistsCard({
     required this.theme,
     required this.accent,
     required this.items,
+    required this.avatars,
   });
 
   @override
@@ -446,14 +616,12 @@ class _TopArtistsCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  child: Icon(
-                    Icons.person_rounded,
-                    size: 20,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                // Mismo tamaño/radio que los artworks: caras cuadradas
+                // redondeadas alineadas con las portadas.
+                ArtistAvatarImage(
+                  url: avatars[items[i].$1],
+                  side: _recapTileSide,
+                  radius: _recapTileRadius,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -535,14 +703,14 @@ class _TopPlaylistsCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(_recapTileRadius),
                   child: SizedBox(
-                    width: 46,
-                    height: 46,
+                    width: _recapTileSide,
+                    height: _recapTileSide,
                     child: CoverImage(
                       source: items[i].coverUrl,
                       fit: BoxFit.cover,
-                      cacheWidth: 92,
+                      cacheWidth: (_recapTileSide * 2).round(),
                       fallback: ColoredBox(
                         color: theme.colorScheme.surfaceContainerHighest,
                         child: Icon(

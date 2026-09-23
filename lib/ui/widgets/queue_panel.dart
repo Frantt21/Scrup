@@ -14,6 +14,7 @@ import '../../services/search_service.dart'
     show SearchService, YtmArtist, YtmArtistDetail, YtmTrackCredits;
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
+import 'artist_avatar.dart';
 import 'cover_image.dart';
 import 'track_tile.dart';
 
@@ -1415,29 +1416,24 @@ class _ArtistInfoCard extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // Big avatar on top.
-              ClipOval(
-                child: SizedBox(
-                  width: avatarSide,
-                  height: avatarSide,
-                  child: skeleton
-                      ? ColoredBox(
-                          color: theme.colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.12),
-                        )
-                      : CoverImage(
-                          source: detail?.thumbnailUrl,
-                          fallback: ColoredBox(
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            child: Icon(
-                              Icons.person_rounded,
-                              size: 34,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
+              // Big avatar on top (helper único: recorte cuadrado hi-res).
+              if (skeleton)
+                ClipOval(
+                  child: SizedBox(
+                    width: avatarSide,
+                    height: avatarSide,
+                    child: ColoredBox(
+                      color: theme.colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.12),
+                    ),
+                  ),
+                )
+              else
+                ArtistAvatarImage(
+                  url: detail?.thumbnailUrl,
+                  side: avatarSide,
+                  circle: true,
                 ),
-              ),
               const SizedBox(height: 10),
               // Name below the avatar.
               if (skeleton)

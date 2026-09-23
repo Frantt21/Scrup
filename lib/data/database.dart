@@ -72,7 +72,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -128,6 +128,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 12) {
         // Listening time (recap: total, top tracks/artists/playlists).
         await m.createTable(listenSessions);
+      }
+      if (from < 13) {
+        // Artist channel id per track (recap artist avatars).
+        await m.addColumn(tracks, tracks.artistChannelId);
       }
     },
   );
@@ -288,6 +292,9 @@ class AppDatabase extends _$AppDatabase {
         durationSeconds: Value(track.duration?.inSeconds),
         thumbnailUrl: Value(track.thumbnailUrl),
         album: Value(track.album),
+        artistChannelId: track.artistChannelId == null
+            ? const Value.absent()
+            : Value(track.artistChannelId),
       ),
     );
   }
