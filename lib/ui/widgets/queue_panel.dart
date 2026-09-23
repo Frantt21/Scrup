@@ -1132,11 +1132,11 @@ class _NowPlayingSkeleton extends StatelessWidget {
 /// luminance). Tapping opens the full lyrics view.
 class _LyricsPreviewCard extends StatelessWidget {
   /// Fixed card height, sized from the START to fit the worst case
-  /// (focus line wrapped to 3 lines) with room to breathe: 16×2 padding +
-  /// two 1-line slots + one 3-line focus slot + two 10px gaps. Shared with
-  /// the loading skeleton so the panel never shifts when lyrics arrive.
+  /// (focus line wrapped to 3 lines): two 1-line rows + one 3-line focus +
+  /// two 16px gaps + 8px breathing. Shared with the loading skeleton so
+  /// the panel never shifts when lyrics arrive.
   static const double previewHeight =
-      16 * 2 + (15 * 1.35) * 2 + (18 * 1.35 * 3) + 10 * 2;
+      (15 * 1.3) * 2 + (18 * 1.3 * 3) + 16 * 2 + 8;
 
   final SyncedLyrics lyrics;
 
@@ -1171,15 +1171,13 @@ class _LyricsPreviewCard extends StatelessWidget {
     final current = lineAt(focus);
     final next = lineAt(focus + 1);
 
-    // FIXED height with GENEROUS slots: every row is a fixed-height box
-    // (the focus row reserves TWO lines) with the text vertically centered
-    // inside. The card is always the same height — a wrapping line fills
-    // its reserved space instead of expanding the card — and the gaps
-    // between rows keep the preview airy.
-    const rowGap = 10.0;
-    const padV = 16.0;
-    final slotH = 15 * 1.35;          // inactive line slot (1 line)
-    final focusSlotH = 18 * 1.35 * 3; // focus slot (up to 3 lines, wraps)
+    // NATURAL text flow with the MAIN lyrics rhythm: the three lines keep
+    // a CONSTANT 16px gap between visual lines (the main container keeps
+    // ~24px between line boxes) and the whole group centers vertically.
+    // The card height is fixed for the 3-line worst case: when the focus
+    // line is short, the slack becomes symmetric breathing room above and
+    // below the group — never an asymmetric hole under one line.
+    const rowGap = 16.0;
 
     return Material(
       color: Colors.transparent,
@@ -1190,22 +1188,20 @@ class _LyricsPreviewCard extends StatelessWidget {
         child: Container(
           width: double.infinity,
           height: previewHeight,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: padV),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Fixed-height slots, text centered: absent lines (start/end
-              // of song) keep their reserved row, a 1-line focus centers in
-              // its 2-line slot, and nothing ever resizes the card.
-              _line(prev, on.withValues(alpha: 0.55), slotH),
-              SizedBox(height: rowGap),
-              _line(current, on, focusSlotH, emphasized: true),
-              SizedBox(height: rowGap),
-              _line(next, on.withValues(alpha: 0.55), slotH),
+              _line(prev, on.withValues(alpha: 0.55)),
+              const SizedBox(height: rowGap),
+              _line(current, on, emphasized: true),
+              const SizedBox(height: rowGap),
+              _line(next, on.withValues(alpha: 0.55)),
             ],
           ),
         ),
@@ -1213,24 +1209,17 @@ class _LyricsPreviewCard extends StatelessWidget {
     );
   }
 
-  Widget _line(String? text, Color color, double slotH, {bool emphasized = false}) {
-    return SizedBox(
-      height: slotH,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: text == null || text.isEmpty
-            ? null
-            : Text(
-                text,
-                maxLines: emphasized ? 3 : 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  height: 1.35,
-                  color: color,
-                  fontWeight: emphasized ? FontWeight.w700 : FontWeight.w500,
-                  fontSize: emphasized ? 18 : 15,
-                ),
-              ),
+  Widget _line(String? text, Color color, {bool emphasized = false}) {
+    if (text == null || text.isEmpty) return const SizedBox.shrink();
+    return Text(
+      text,
+      maxLines: emphasized ? 3 : 1,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        height: 1.3,
+        color: color,
+        fontWeight: emphasized ? FontWeight.w700 : FontWeight.w500,
+        fontSize: emphasized ? 18 : 15,
       ),
     );
   }

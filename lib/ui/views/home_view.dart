@@ -582,9 +582,13 @@ class _HomeViewState extends State<HomeView> {
                   if (_trending.isNotEmpty) ...[
                     SliverToBoxAdapter(
                       child: Padding(
+                        // MISMO ritmo que los títulos de las demás
+                        // secciones (8 arriba / 8 abajo): antes usaba 4
+                        // arriba y la sección quedaba más pegada a la
+                        // anterior que el resto.
                         padding: EdgeInsets.fromLTRB(
                           mobile ? 16 : 24,
-                          4,
+                          8,
                           mobile ? 16 : 24,
                           8,
                         ),
