@@ -641,6 +641,10 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
   /// True while the credits request is in flight (drives the skeleton).
   bool _creditsLoading = false;
 
+  /// True once the lyrics fetch finished (found or not): distinguishes the
+  /// loading skeleton from a definitive "no lyrics" result.
+  bool _lyricsLoaded = false;
+
   @override
   void initState() {
     super.initState();
@@ -653,6 +657,7 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
         _artistLoading = false;
         _credits = null;
         _lyrics = null;
+        _lyricsLoaded = false;
         _lyricIndex = null;
       });
       unawaited(_refreshFavorite());
@@ -693,10 +698,16 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
       if (!mounted || _track?.id != t.id) return;
       setState(() {
         _lyrics = lyrics;
+        _lyricsLoaded = true;
         _lyricIndex = lyrics?.getCurrentLineIndex(widget.player.positionValue);
       });
     } catch (_) {
-      if (mounted && _track?.id == t.id) setState(() => _lyrics = null);
+      if (mounted && _track?.id == t.id) {
+        setState(() {
+          _lyrics = null;
+          _lyricsLoaded = true;
+        });
+      }
     }
   }
 
@@ -969,6 +980,54 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
               artworkUrl: track.thumbnailUrl,
               theme: theme,
               onTap: widget.onOpenLyrics,
+            )
+          else if (_lyricsLoaded)
+            // Definitive "no lyrics": SAME message as the main lyrics view
+            // (title + hint), in a card of the real card's height.
+            Container(
+              width: double.infinity,
+              height: _LyricsPreviewCard.previewHeight,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.lyrics_rounded,
+                        size: 18,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          l10n.lyricsNotFound,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.lyricsNotFoundHint,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             )
           else
             // Lyrics loading skeleton: EXACTLY the real card's height.
@@ -1361,7 +1420,7 @@ class _CreditsCard extends StatelessWidget {
 
 /// Clickable artist card: accent tint from the artist avatar, avatar, name,
 /// monthly listeners ("218M monthly audience") when already resolved.
-class _ArtistInfoCard extends StatelessWidget {
+class _ArtistInfoCard extends StatefulWidget {
   final Track track;
   final YtmArtistDetail? detail;
 
@@ -1381,19 +1440,96 @@ class _ArtistInfoCard extends StatelessWidget {
   });
 
   @override
+  State<_ArtistInfoCard> createState() => _ArtistInfoCardState();
+}
+
+class _ArtistInfoCardState extends State<_ArtistInfoCard> {
+  /// Accent extracted/looked up for the CURRENT avatar URL (null while not
+  /// available). Extraction happens HERE when the channel palette is not
+  /// cached yet — under the SAME canonical key the artist screen reads, so
+  /// whoever runs first fills the cache for both.
+  Color? _accent;
+  String? _accentFor;
+  bool _extracting = false;
+
+  @override
+  void didUpdateWidget(covariant _ArtistInfoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.detail?.thumbnailUrl != oldWidget.detail?.thumbnailUrl) {
+      _accent = null;
+      _extracting = false;
+    }
+  }
+
+  /// Sync cache read; on miss, async extraction via the SAME service/store
+  /// the artist screen uses (same canonical key → shared entry).
+  Color? _resolveAccent(BuildContext context) {
+    final url = widget.detail?.thumbnailUrl;
+    if (url == null || url.isEmpty) return null;
+    final store = context.read<PaletteCacheStore>();
+    final cached = store.get(url) ??
+        (() {
+          final trio = store.getTrio(url);
+          return trio == null
+              ? null
+              : (ArtworkPaletteService.accentFromTrio(trio) ?? trio.first);
+        })();
+    if (cached != null) {
+      _accent = cached;
+      _accentFor = url;
+      return cached;
+    }
+    // Not cached: extract once in background (dedup per URL; failed URLs
+    // are not retried — same rule as the artist screen).
+    if (!_extracting && _accentFor != url && !store.isFailed(url)) {
+      _extracting = true;
+      _accentFor = url;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_extract(url));
+      });
+    }
+    return _accent;
+  }
+
+  Future<void> _extract(String url) async {
+    try {
+      final store = context.read<PaletteCacheStore>();
+      final trio = await ArtworkPaletteService.trioFor(
+        url,
+        store,
+        artworkCache: context.read<ArtworkCacheService>(),
+      );
+      final color = trio.isEmpty
+          ? null
+          : (ArtworkPaletteService.accentFromTrio(trio) ?? trio.first);
+      if (!mounted) return;
+      setState(() => _accent = color);
+    } catch (_) {
+      // Leave the neutral background; isFailed prevents retry loops.
+    } finally {
+      _extracting = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = widget.theme;
     final accent = _resolveAccent(context);
     final bg = accent == null
         ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35)
         : Color.alphaBlend(accent.withValues(alpha: 0.16),
             theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35));
-    final avatarSide = 72.0;
-    final skeleton = detail == null;
+    const avatarSide = 72.0;
+    // Skeleton ONLY while the resolution is actively in flight: when the
+    // lookup ENDED without data (offline, channel not found) the card
+    // paints with the name it already knows — never a stuck skeleton.
+    final skeleton = widget.detail == null && widget.loading;
+    final name = widget.detail?.name ?? widget.track.artist;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: skeleton ? null : onOpen,
+        onTap: skeleton ? null : widget.onOpen,
         borderRadius: BorderRadius.circular(16),
         mouseCursor: SystemMouseCursors.click,
         child: Container(
@@ -1419,12 +1555,12 @@ class _ArtistInfoCard extends StatelessWidget {
                 )
               else
                 ArtistAvatarImage(
-                  url: detail?.thumbnailUrl,
+                  url: widget.detail?.thumbnailUrl,
                   side: avatarSide,
                   circle: true,
                 ),
               const SizedBox(height: 10),
-              // Name below the avatar.
+              // Name below the avatar (fallback: the track's artist name).
               if (skeleton)
                 Container(
                   width: 120,
@@ -1437,7 +1573,7 @@ class _ArtistInfoCard extends StatelessWidget {
                 )
               else
                 Text(
-                  detail!.name,
+                  name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
@@ -1459,7 +1595,7 @@ class _ArtistInfoCard extends StatelessWidget {
                 )
               else
                 Text(
-                  detail!.audienceText ?? l10n.aboutArtist,
+                  widget.detail?.audienceText ?? widget.l10n.aboutArtist,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
@@ -1472,15 +1608,5 @@ class _ArtistInfoCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  /// Accent from the artist avatar (palette cache, sync read only: no
-  /// extraction here to keep the card cheap).
-  Color? _resolveAccent(BuildContext context) {
-    final url = detail?.thumbnailUrl;
-    if (url == null || url.isEmpty) return null;
-    final trio = context.read<PaletteCacheStore>().getTrio(url);
-    if (trio == null) return null;
-    return ArtworkPaletteService.accentFromTrio(trio);
   }
 }

@@ -33,6 +33,12 @@ import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 /// del grid de recientes: más grandes que las canciones recientes, con el
 /// MISMO gap de separación (10). Móvil no la usa (fila horizontal fija 140).
 const double kPlaylistCardScale = 1.25;
+
+/// Altura común de los banners de home ("Your likes" y "Your recap"): la
+/// pila de portadas del banner de likes mide exactamente esto, y el banner
+/// de recap se estira a la misma altura para que la fila/columna quede
+/// pareja en ambas plataformas.
+const double kHomeBannerHeight = 72;
 class HomeView extends StatefulWidget {
   /// Called when submitting a search from home (AppShell switches to the Search view and passes the query).
   final ValueChanged<String>? onSearch;
@@ -443,12 +449,12 @@ class _HomeViewState extends State<HomeView> {
                         child: Center(child: CircularProgressIndicator()),
                       ),
                     ),
-                  // ── Banner "Tus me gusta" ─────────────────────────
-                  // Card a todo el ancho con el título a la izquierda y las
-                  // 3 últimas portadas de favoritos sobrepuestas a la
-                  // derecha. Reproduce los favoritos al tocarlo; oculto si
-                  // no hay ningún favorito aún.
-                  if (_loaded && _likes.isNotEmpty)
+                  // ── Banners "Tus me gusta" + "Recap" ────────────────
+                  // Desktop: lado a lado [Your likes][Your recap]; móvil:
+                  // apilados a ancho completo. Likes abre la playlist de
+                  // favoritos REAL (gestionada por el AppShell); recap abre
+                  // el screen de estadísticas.
+                  if (_loaded)
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: EdgeInsets.fromLTRB(
@@ -457,40 +463,74 @@ class _HomeViewState extends State<HomeView> {
                           mobile ? 16 : 24,
                           12,
                         ),
-                        child: _YourLikesBanner(
-                          likes: _likes,
-                          title: l10n.yourLikes,
-                          // Abre la playlist de favoritos REAL (su detalle,
-                          // gestionado por el AppShell): no crea una cola
-                          // nueva ni toca la reproducción.
-                          onOpenPlaylist: () async {
-                            final db = context.read<AppDatabase>();
-                            final id = await db.ensureFavoritesPlaylist();
-                            final pl = await db.getPlaylist(id);
-                            if (pl != null && context.mounted) {
-                              _openPlaylist(pl);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  // ── Banner "Recap" ──────────────────────────────────
-                  // Entrada al recap de escucha: tiempo total, top
-                  // canciones/artistas/playlists. Siempre visible.
-                  if (_loaded)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          mobile ? 16 : 24,
-                          _likes.isNotEmpty ? 12 : 8,
-                          mobile ? 16 : 24,
-                          12,
-                        ),
-                        child: _RecapBanner(
-                          title: l10n.recapTitle,
-                          subtitle: l10n.recapBannerSubtitle,
-                          onOpen: widget.onOpenRecap,
-                        ),
+                        child: mobile
+                            ? Column(
+                                children: [
+                                  if (_likes.isNotEmpty) ...[
+                                    _YourLikesBanner(
+                                      likes: _likes,
+                                      title: l10n.yourLikes,
+                                      onOpenPlaylist: () async {
+                                        final db = context.read<AppDatabase>();
+                                        final id =
+                                            await db.ensureFavoritesPlaylist();
+                                        final pl = await db.getPlaylist(id);
+                                        if (pl != null && context.mounted) {
+                                          _openPlaylist(pl);
+                                        }
+                                      },
+                                    ),
+                                    const SizedBox(height: 10),
+                                  ],
+                                  _RecapBanner(
+                                    title: l10n.recapTitle,
+                                    subtitle: l10n.recapBannerSubtitle,
+                                    onOpen: widget.onOpenRecap,
+                                  ),
+                                ],
+                              )
+                            : SizedBox(
+                                // Altura fija = pila de portadas de likes.
+                                // SIN CrossAxisAlignment.stretch: dentro de
+                                // un sliver dispara el assertion de semantics
+                                // (!semantics.parentDataDirty) y no pinta los
+                                // banners. Cada banner llena con SizedBox.expand.
+                                height: 72,
+                                child: Row(
+                                  children: [
+                                    if (_likes.isNotEmpty)
+                                      Expanded(
+                                        child: SizedBox.expand(
+                                          child: _YourLikesBanner(
+                                            likes: _likes,
+                                            title: l10n.yourLikes,
+                                            onOpenPlaylist: () async {
+                                              final db =
+                                                  context.read<AppDatabase>();
+                                              final id =
+                                                  await db.ensureFavoritesPlaylist();
+                                              final pl = await db.getPlaylist(id);
+                                              if (pl != null && context.mounted) {
+                                                _openPlaylist(pl);
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    if (_likes.isNotEmpty)
+                                      const SizedBox(width: 10),
+                                    Expanded(
+                                      child: SizedBox.expand(
+                                        child: _RecapBanner(
+                                          title: l10n.recapTitle,
+                                          subtitle: l10n.recapBannerSubtitle,
+                                          onOpen: widget.onOpenRecap,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                       ),
                     ),
                   if (_loaded)
@@ -543,7 +583,9 @@ class _HomeViewState extends State<HomeView> {
                   // propio hueco inferior; aquí solo el gap de sección.
                   if (recentPlaylists.isNotEmpty)
                     SliverPadding(
-                      padding: EdgeInsets.only(top: mobile ? 4 : 2),
+                      // MISMA separación entre secciones que las demás
+                      // (16): antes eran 4/2 y la sección quedaba pegada.
+                      padding: const EdgeInsets.only(top: 16),
                       sliver: SliverToBoxAdapter(
                         child: mobile
                           ? _RecentPlaylistsRow(
@@ -582,13 +624,11 @@ class _HomeViewState extends State<HomeView> {
                   if (_trending.isNotEmpty) ...[
                     SliverToBoxAdapter(
                       child: Padding(
-                        // MISMO ritmo que los títulos de las demás
-                        // secciones (8 arriba / 8 abajo): antes usaba 4
-                        // arriba y la sección quedaba más pegada a la
-                        // anterior que el resto.
+                        // MISMO ritmo de sección: 16 arriba (separación
+                        // entre secciones) + 8 abajo (título → cards).
                         padding: EdgeInsets.fromLTRB(
                           mobile ? 16 : 24,
-                          8,
+                          16,
                           mobile ? 16 : 24,
                           8,
                         ),
@@ -1078,7 +1118,7 @@ class _YourLikesBanner extends StatelessWidget {
     // ALTURA FIJA de la pila: dentro de un sliver la altura no viene
     // acotada (double.infinity en contexto sin límite = excepción de
     // layout que dejaba el home entero en blanco tras el header).
-    const double bannerHeight = 72.0;
+    const double bannerHeight = kHomeBannerHeight;
     final covers = <Widget>[];
     for (var i = 0; i < likes.length && i < 3; i++) {
       final t = likes[i];
@@ -1175,20 +1215,31 @@ class _RecapBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = context.watch<ThemeController>().accentColor ??
-        theme.colorScheme.primary;
+    // MISMO background que el banner de favoritos: tinte del primario del
+    // tema al 16% (no del acento dinámico del player, que destonaba junto
+    // a su vecino en la fila).
     return Material(
-      color: accent.withValues(alpha: 0.16),
+      color: theme.colorScheme.primary.withValues(alpha: 0.16),
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              Icon(Icons.bar_chart_rounded, color: accent, size: 22),
-              const SizedBox(width: 10),
+      child: SizedBox(
+        // MISMA altura que el banner de likes (kHomeBannerHeight): en móvil
+        // viven apilados en columna y sin esto el recap quedaba más bajo.
+        height: kHomeBannerHeight,
+        child: InkWell(
+          onTap: onOpen,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                // MISMO color de icono que el banner de favoritos: el primario
+                // del tema (coherente en la fila).
+                Icon(
+                  Icons.bar_chart_rounded,
+                  color: theme.colorScheme.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1217,7 +1268,8 @@ class _RecapBanner extends StatelessWidget {
                 Icons.chevron_right_rounded,
                 color: theme.colorScheme.onSurfaceVariant,
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1362,7 +1414,8 @@ class _LibraryAlbumsRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: EdgeInsets.fromLTRB(sidePad, 8, sidePad, 8),
+          // MISMO ritmo de sección: 16 arriba + 8 abajo.
+          padding: EdgeInsets.fromLTRB(sidePad, 16, sidePad, 8),
           child: Text(
             l10n.libraryAlbumsTitle,
             style: theme.textTheme.titleMedium?.copyWith(
@@ -1571,7 +1624,9 @@ class _VisitedArtistsRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: EdgeInsets.fromLTRB(sidePad, 8, sidePad, 8),
+          // MISMO ritmo de sección: 16 arriba (separación entre secciones)
+          // + 8 abajo (título → cards), igual que las demás filas.
+          padding: EdgeInsets.fromLTRB(sidePad, 16, sidePad, 8),
           child: Text(
             l10n.visitedArtistsTitle,
             style: theme.textTheme.titleMedium?.copyWith(
@@ -1580,9 +1635,10 @@ class _VisitedArtistsRow extends StatelessWidget {
           ),
         ),
         SizedBox(
-          // Alto de la fila = card + 18 (deja el margen vertical del
-          // centrado, igual que 158 = 140 + 18) en ambas plataformas.
-          height: size + 18,
+          // Alto de la fila = card EXACTA: antes era size+18 con la card
+          // centrada (9px muertos arriba/abajo) y el título quedaba más
+          // lejos de sus cards que en las demás secciones.
+          height: size,
           // Desktop: rueda vertical → scroll horizontal + arrastre.
           child: DragScroll(
             builder: (controller) => ListView.builder(
@@ -1780,6 +1836,8 @@ class _RecentPlaylistsGrid extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
+            // MISMO ritmo: 8 abajo (título → cards). El top lo pone la
+            // separación entre secciones del sliver padre (16).
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               AppLocalizations.of(context).recentPlaylistsTitle,

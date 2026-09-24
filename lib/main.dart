@@ -113,6 +113,9 @@ Future<void> main() async {
   final database = AppDatabase();
   try {
     await database.ensureFavoritesPlaylist();
+    // Repara favoritos duplicados de carreras de arranque previas: sin esto
+    // el banner "Your likes" de home puede leer la favorito vacía.
+    await database.mergeDuplicateFavorites();
   } catch (_) {}
 
   final paletteCache = await PaletteCacheStore.load(database);

@@ -972,10 +972,12 @@ class _AppShellState extends State<AppShell> {
       children: [
         IndexedStack(
           // Orden de slots: 0 home, 1 búsqueda, 2 librería, 3 playlist,
-          // 4 ajustes, 5 letras, 6 ARTISTA. (Antes el índice del artista
-          // apuntaba al slot de letras — SizedBox.shrink sin pista — y el
-          // screen quedaba en negro.)
-          index: _showLyrics
+          // 4 ajustes, 5 letras, 6 ARTISTA, 7 recap. (Antes el índice del
+          // artista apuntaba al slot de letras — SizedBox.shrink sin pista —
+          // y el screen quedaba en negro.)
+          index: _showRecap
+              ? 7
+              : _showLyrics
               ? 5
               : (openPlaylist != null
                     ? 3
@@ -992,6 +994,7 @@ class _AppShellState extends State<AppShell> {
               onOpenPlaylist: _selectPlaylist,
               onOpenArtist: _openArtistDetail,
               onOpenAlbum: _openExternalAlbum,
+              onOpenRecap: _openRecap,
             ),
             // bottom: FALSE: el inset inferior del sistema ya lo absorbe la
             // NavigationBar del shell (64+inset). Con el SafeArea completo
@@ -1072,6 +1075,14 @@ class _AppShellState extends State<AppShell> {
               )
             else
               const SizedBox.shrink(),
+            // Recap (móvil): screen del shell con nav + miniplayer visibles.
+            SafeArea(
+              top: true,
+              bottom: false,
+              child: RecapView(
+                onBack: () => setState(() => _showRecap = false),
+              ),
+            ),
           ],
         ),
         // NOTE: la cola m�vil ya NO se dibuja como overlay a pantalla
@@ -1233,6 +1244,9 @@ class _AppShellState extends State<AppShell> {
       _openPlaylist = null;
       _showLyrics = false;
       _openArtist = null;
+      _showRecap = false;
+      _artistAlbumOpenFlag = false;
+      _pendingAlbum = null;
       if (i == 3) {
         _showSettings = true;
       } else {

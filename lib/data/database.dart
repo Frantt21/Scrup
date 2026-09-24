@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -133,6 +135,22 @@ class AppDatabase extends _$AppDatabase {
         // Artist channel id per track (recap artist avatars).
         await m.addColumn(tracks, tracks.artistChannelId);
       }
+    },
+    beforeOpen: (details) async {
+      // Duplicados de favoritos (carreras de arranque previas): fusionar
+      // ANTES de crear el índice único parcial que los impide para siempre.
+      await _ensureFavoritesPlaylist();
+      await mergeDuplicateFavorites();
+      // Likes huérfanos: el cleanup buggy anterior borraba la fila de la
+      // favorito SIN borrar sus playlistTracks (FK OFF en drift) → los
+      // likes quedaron apuntando a una playlist inexistente y el banner
+      // "Your likes" quedaba vacío aunque el usuario tuviera favoritos.
+      await rescueOrphanedPlaylistTracks();
+      await customStatement(
+        'CREATE UNIQUE INDEX IF NOT EXISTS '
+        'idx_playlists_single_favorites ON playlists (is_favorites) '
+        'WHERE is_favorites = 1',
+      );
     },
   );
 
@@ -544,18 +562,142 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// Promesa en vuelo del ensure: todos los callers simultáneos comparten
+  /// el MISMO futuro. El check-then-insert no es atómico entre awaits y
+  /// tres callers en paralelo (HomeView, PlayerBar, overlay) creaban tres
+  /// favoritos: cada SELECT veía vacío antes de que el anterior insertara.
+  Future<int>? _favoritesEnsure;
+
   /// Return the Favorites playlist id, creating it if it does not exist.
-  Future<int> ensureFavoritesPlaylist() async {
-    final existing = await (select(
-      playlists,
-    )..where((p) => p.isFavorites.equals(true))).getSingleOrNull();
-    if (existing != null) return existing.id;
+  Future<int> ensureFavoritesPlaylist() {
+    return _favoritesEnsure ??= _ensureFavoritesPlaylist().whenComplete(() {
+      _favoritesEnsure = null;
+    });
+  }
+
+  Future<int> _ensureFavoritesPlaylist() async {
+    final existing = await (select(playlists)
+          ..where((p) => p.isFavorites.equals(true))
+          ..orderBy([(p) => OrderingTerm.asc(p.id)])
+          ..limit(1))
+        .get();
+    if (existing.isNotEmpty) return existing.first.id;
+    // Backstop: el índice único parcial (beforeOpen) rechaza un segundo
+    // favorito si algo se saltara la serialización.
     return into(playlists).insert(
       PlaylistsCompanion.insert(
         name: 'Favoritos',
         isFavorites: const Value(true),
       ),
     );
+  }
+
+  /// FUSIONA las playlists de favoritos duplicadas (de carreras de arranque
+  /// previas): mueve los tracks a la más antigua (respetando la clave única
+  /// playlist/track), repunta la portada si faltaba y borra el resto. Sin
+  /// esto, `watchLatestPlaylistTracks` del banner "Your likes" puede quedar
+  /// apuntando a una favorito vacía mientras los likes viven en un duplicado.
+  Future<void> mergeDuplicateFavorites() async {
+    final favs = await (select(playlists)
+          ..where((p) => p.isFavorites.equals(true))
+          ..orderBy([(p) => OrderingTerm.asc(p.id)]))
+        .get();
+    if (favs.length < 2) return;
+    final keep = favs.first;
+    await transaction(() async {
+      var nextPos = await (selectOnly(playlistTracks)
+            ..addColumns([playlistTracks.position.max()])
+            ..where(playlistTracks.playlistId.equals(keep.id)))
+          .map((row) => row.read(playlistTracks.position.max()) ?? 0)
+          .getSingle();
+      for (final dup in favs.skip(1)) {
+        final rows = await (select(playlistTracks)
+              ..where((pt) => pt.playlistId.equals(dup.id)))
+            .get();
+        for (final row in rows) {
+          final already = await (select(playlistTracks)
+                ..where(
+                  (pt) =>
+                      pt.playlistId.equals(keep.id) &
+                      pt.trackId.equals(row.trackId),
+                ))
+              .get();
+          if (already.isEmpty) {
+            await into(playlistTracks).insert(
+              PlaylistTracksCompanion.insert(
+                playlistId: keep.id,
+                trackId: row.trackId,
+                position: nextPos + 1,
+              ),
+            );
+            nextPos++;
+          }
+        }
+        if (keep.coverUrl == null && dup.coverUrl != null) {
+          await (update(playlists)..where((p) => p.id.equals(keep.id))).write(
+            PlaylistsCompanion(coverUrl: Value(dup.coverUrl)),
+          );
+        }
+        // Los playlistTracks del duplicado ya se movieron; las filas
+        // restantes (repetidas) se borran antes de la playlist por el FK.
+        await (delete(playlistTracks)
+              ..where((pt) => pt.playlistId.equals(dup.id)))
+            .go();
+        await (delete(playlists)..where((p) => p.id.equals(dup.id))).go();
+      }
+    });
+  }
+
+  /// RESCATA los likes huérfanos: playlistTracks apuntando a playlists que
+  /// ya no existen. Los mueve a la favorito (keep) con posición alta para
+  /// que el banner "Your likes" los lea primero (los últimos likeados son
+  /// los más recientes). Sin FK activa, el cleanup buggy anterior dejaba
+  /// estos huérfanos al borrar la fila de la favorito.
+  Future<void> rescueOrphanedPlaylistTracks() async {
+    final favs = await (select(playlists)
+          ..where((p) => p.isFavorites.equals(true))
+          ..orderBy([(p) => OrderingTerm.asc(p.id)])
+          ..limit(1))
+        .get();
+    if (favs.isEmpty) return;
+    final keepId = favs.first.id;
+
+    // Left outer join tipado: huérfanos = playlist_tracks sin playlist padre.
+    final orphanRows = await (select(playlistTracks).join([
+      leftOuterJoin(
+        playlists,
+        playlists.id.equalsExp(playlistTracks.playlistId),
+        useColumns: false,
+      ),
+    ])..where(playlists.id.isNull()))
+        .get();
+    if (orphanRows.isEmpty) return;
+
+    var nextPos = await (selectOnly(playlistTracks)
+          ..addColumns([playlistTracks.position.max()])
+          ..where(playlistTracks.playlistId.equals(keepId)))
+        .map((row) => row.read(playlistTracks.position.max()) ?? 0)
+        .getSingle();
+
+    await transaction(() async {
+      for (final row in orphanRows) {
+        final orphan = row.readTable(playlistTracks);
+        // La playlist de origen ya no existe: su posición ya no importa.
+        // OnConflictUpdate respeta la clave única (playlist, track).
+        await into(playlistTracks).insertOnConflictUpdate(
+          PlaylistTracksCompanion.insert(
+            playlistId: keepId,
+            trackId: orphan.trackId,
+            position: nextPos + 1,
+          ),
+        );
+        nextPos++;
+        // El huérfano se elimina: su playlist no volverá a existir.
+        await (delete(playlistTracks)
+              ..where((pt) => pt.id.equals(orphan.id)))
+            .go();
+      }
+    });
   }
 
   /// ids of playlists that already contain [trackId]: the "add to playlist" modal marks those with a check.

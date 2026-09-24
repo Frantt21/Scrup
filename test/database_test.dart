@@ -141,9 +141,11 @@ void main() {
       final id = await db.createPlaylist('Favoritas');
       expect(id, greaterThan(0));
 
+      // beforeOpen garantiza la playlist de Favoritos (especial): filtrarla
+      // del conteo.
       final playlists = await db.watchPlaylists().first;
-      expect(playlists.length, 1);
-      expect(playlists.first.name, 'Favoritas');
+      expect(playlists.where((p) => !p.isFavorites).length, 1);
+      expect(playlists.firstWhere((p) => !p.isFavorites).name, 'Favoritas');
     });
 
     test('añadir canción a playlist sin duplicar', () async {
@@ -241,8 +243,10 @@ void main() {
       );
       await db.deletePlaylist(playlistId);
 
+      // beforeOpen garantiza la playlist de Favoritos (especial): solo la
+      // creada por este test debe desaparecer.
       final playlists = await db.watchPlaylists().first;
-      expect(playlists, isEmpty);
+      expect(playlists.where((p) => !p.isFavorites), isEmpty);
       final tracks = await db.watchPlaylistTracks(playlistId).first;
       expect(tracks, isEmpty);
     });
