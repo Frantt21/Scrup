@@ -169,7 +169,7 @@
   "karaokeSweepHint": "Подсвечивает текст слово за словом в такт песне",
   "done": "Готово",
   "importSpotify": "Импортировать плейлист",
-  "spotifyUrlHint": "Ссылка на плейлист Spotify или YouTube",
+  "spotifyUrlHint": "Ссылка на плейлист Spotify, YouTube или Apple Music",
   "importAction": "Импортировать",
   "spotifyFetchError": "Не удалось прочитать плейлист (проверьте ссылку и доступность)",
   "spotifyNoMatch": "Нет совпадения",

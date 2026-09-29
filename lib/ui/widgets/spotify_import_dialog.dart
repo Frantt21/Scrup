@@ -7,11 +7,12 @@ import 'package:provider/provider.dart';
 import '../../core/binaries.dart';
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/apple_music_import_service.dart';
 import '../../services/spotify_import_service.dart';
 import '../../services/ytdlp_service.dart';
 import '../../services/ytmusic_service.dart';
 
-/// Open the playlist migration dialog for Scrup. It detects the source from the link: Spotify (public embed, first ~100) or YouTube/YouTube Music (InnerTube browse, no practical limit). It returns the chosen name and the tracks matched on YouTube, or null if the user cancels.
+/// Open the playlist migration dialog for Scrup. It detects the source from the link: Apple Music (public web player, full metadata declared), Spotify (public embed, first ~100) or YouTube/YouTube Music (InnerTube browse, no practical limit). It returns the chosen name and the tracks matched on YouTube, or null if the user cancels.
 Future<({String name, List<Track> tracks})?> showSpotifyImportDialog(
   BuildContext context,
 ) {
@@ -53,6 +54,12 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
   List<_RowState> _rows = const [];
   int _matched = 0;
 
+  /// Total real según la fuente (Apple Music declara trackCount): si excede
+  /// lo obtenido, la playlist vino recortada y se avisa en el resumen.
+  int? _declaredTotal;
+
+  final _appleMusic = AppleMusicImportService();
+
   @override
   void dispose() {
     _urlCtrl.dispose();
@@ -64,6 +71,8 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
     if (input.isEmpty || _phase == _Phase.fetching) return;
     if (SpotifyImportService.extractPlaylistId(input) != null) {
       await _startSpotify(input);
+    } else if (AppleMusicImportService.extractPlaylistId(input) != null) {
+      await _startAppleMusic(input);
     } else if (YtMusicService.extractYoutubePlaylistId(input) != null) {
       await _startYoutube(input);
     } else {
@@ -77,6 +86,7 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
     setState(() {
       _phase = _Phase.fetching;
       _error = null;
+      _declaredTotal = null;
     });
     YtmPlaylist playlist;
     try {
@@ -113,6 +123,7 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
     setState(() {
       _phase = _Phase.fetching;
       _error = null;
+      _declaredTotal = null;
     });
     SpotifyPlaylist playlist;
     try {
@@ -128,6 +139,61 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
     if (!mounted) return;
     setState(() {
       _playlistName = playlist.name;
+      _rows = [
+        for (final t in playlist.tracks)
+          _RowState(label: t.title, sub: t.artists),
+      ];
+      _matched = 0;
+      _phase = _Phase.matching;
+    });
+    await service.importToYoutube(
+      playlist: playlist,
+      ytDlp: context.read<YtDlpService>(),
+      ytMusic: YtMusicService(),
+      onResult: (r) {
+        if (!mounted) return;
+        setState(() {
+          _rows[r.index] = _RowState(
+            label: r.requested.title,
+            sub: r.requested.artists,
+            status: r.hasMatch ? _RowStatus.matched : _RowStatus.unmatched,
+            track: r.match,
+          );
+          if (r.hasMatch) _matched++;
+        });
+      },
+    );
+    if (!mounted) return;
+    setState(() => _phase = _Phase.done);
+  }
+
+  /// Apple Music: web player público (serialized-server-data) → emparejar
+  /// contra YouTube con el MISMO pipeline que Spotify.
+  Future<void> _startAppleMusic(String input) async {
+    final l10n = AppLocalizations.of(context);
+    final service = SpotifyImportService();
+    setState(() {
+      _phase = _Phase.fetching;
+      _error = null;
+    });
+    SpotifyPlaylist playlist;
+    try {
+      playlist = await _appleMusic.fetchPlaylist(input);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _phase = _Phase.url;
+        _error = l10n.spotifyFetchError;
+      });
+      return;
+    }
+    if (!mounted) return;
+    final declared = playlist.declaredTrackCount;
+    setState(() {
+      _playlistName = playlist.name;
+      _declaredTotal = (declared != null && declared > playlist.tracks.length)
+          ? declared
+          : null;
       _rows = [
         for (final t in playlist.tracks)
           _RowState(label: t.title, sub: t.artists),
@@ -293,9 +359,13 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
 
   Widget _buildProgress(ThemeData theme, AppLocalizations l10n) {
     final total = _rows.length;
-    // El embed público de Spotify trunca ~100 pistas y no expone el total:
-    // si llegamos justo al límite asumimos recorte y avisamos.
-    final truncated = total >= 100;
+    // Spotify: el embed público trunca ~100 pistas y no expone el total →
+    // heurística: si llegamos justo al límite asumimos recorte.
+    // Apple Music: el web player declara el trackCount real → aviso exacto
+    // cuando lo obtenido es menor (lazy-load a partir de ~300 pistas).
+    final truncated = _declaredTotal != null
+        ? total < _declaredTotal!
+        : total >= 100;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,

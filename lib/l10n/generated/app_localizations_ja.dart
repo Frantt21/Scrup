@@ -558,7 +558,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get importSpotify => 'プレイリストをインポート';
 
   @override
-  String get spotifyUrlHint => 'Spotify・YouTubeのプレイリストリンク';
+  String get spotifyUrlHint => 'Spotify・YouTube・Apple Musicのプレイリストリンク';
 
   @override
   String get importAction => 'インポート';

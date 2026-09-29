@@ -169,7 +169,7 @@
   "karaokeSweepHint": "노래에 맞춰 가사를 단어별로 강조합니다",
   "done": "완료",
   "importSpotify": "플레이리스트 가져오기",
-  "spotifyUrlHint": "Spotify 또는 YouTube 재생목록 링크",
+  "spotifyUrlHint": "Spotify, YouTube 또는 Apple Music 재생목록 링크",
   "importAction": "가져오기",
   "spotifyFetchError": "플레이리스트를 읽을 수 없습니다(링크와 공개 여부를 확인하세요)",
   "spotifyNoMatch": "일치 없음",

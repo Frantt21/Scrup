@@ -290,7 +290,7 @@
   "karaokeSweepHint": "Highlights the lyrics word by word along the song",
   "done": "Done",
   "importSpotify": "Import playlist",
-  "spotifyUrlHint": "Spotify or YouTube playlist link",
+  "spotifyUrlHint": "Spotify, YouTube or Apple Music playlist link",
   "importAction": "Import",
   "spotifyFetchError": "Could not read the playlist (is the link correct and public?)",
   "spotifyNoMatch": "No match found",

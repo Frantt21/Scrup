@@ -567,7 +567,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importSpotify => 'Import playlist';
 
   @override
-  String get spotifyUrlHint => 'Spotify or YouTube playlist link';
+  String get spotifyUrlHint => 'Spotify, YouTube or Apple Music playlist link';
 
   @override
   String get importAction => 'Import';

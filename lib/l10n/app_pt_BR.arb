@@ -168,7 +168,7 @@
   "karaokeSweepHint": "Realça a letra palavra a palavra ao ritmo da música",
   "done": "Concluído",
   "importSpotify": "Importar playlist",
-  "spotifyUrlHint": "Link da playlist do Spotify ou YouTube",
+  "spotifyUrlHint": "Link de playlist do Spotify, YouTube ou Apple Music",
   "importAction": "Importar",
   "spotifyFetchError": "Não foi possível ler a playlist (o link está correto e ela é pública?)",
   "spotifyNoMatch": "Sem correspondência",

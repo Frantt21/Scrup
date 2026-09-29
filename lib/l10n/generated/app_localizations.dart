@@ -1126,7 +1126,7 @@ abstract class AppLocalizations {
   /// No description provided for @spotifyUrlHint.
   ///
   /// In es, this message translates to:
-  /// **'Enlace de playlist de Spotify o YouTube'**
+  /// **'Enlace de playlist de Spotify, YouTube o Apple Music'**
   String get spotifyUrlHint;
 
   /// No description provided for @importAction.

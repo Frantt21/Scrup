@@ -556,7 +556,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get importSpotify => '导入播放列表';
 
   @override
-  String get spotifyUrlHint => 'Spotify 或 YouTube 播放列表链接';
+  String get spotifyUrlHint => 'Spotify、YouTube 或 Apple Music 播放列表链接';
 
   @override
   String get importAction => '导入';

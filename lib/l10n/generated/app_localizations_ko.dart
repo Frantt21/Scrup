@@ -558,7 +558,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get importSpotify => '플레이리스트 가져오기';
 
   @override
-  String get spotifyUrlHint => 'Spotify 또는 YouTube 재생목록 링크';
+  String get spotifyUrlHint => 'Spotify, YouTube 또는 Apple Music 재생목록 링크';
 
   @override
   String get importAction => '가져오기';

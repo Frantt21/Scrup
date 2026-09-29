@@ -26,11 +26,16 @@ class SpotifyPlaylist {
     required this.id,
     required this.name,
     required this.tracks,
+    this.declaredTrackCount,
   });
 
   final String id;
   final String name;
   final List<SpotifyPlaylistTrack> tracks;
+
+  /// Total declarado por la fuente (si lo expone). Apple Music lo incluye
+  /// en el header del web player; el embed de Spotify no.
+  final int? declaredTrackCount;
 }
 
 class SpotifyMatchResult {

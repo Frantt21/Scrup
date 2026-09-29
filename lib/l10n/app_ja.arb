@@ -169,7 +169,7 @@
   "karaokeSweepHint": "曲に合わせて歌詞を単語ごとにハイライトします",
   "done": "完了",
   "importSpotify": "プレイリストをインポート",
-  "spotifyUrlHint": "Spotify・YouTubeのプレイリストリンク",
+  "spotifyUrlHint": "Spotify・YouTube・Apple Musicのプレイリストリンク",
   "importAction": "インポート",
   "spotifyFetchError": "プレイリストを読み込めませんでした（リンクと公開設定を確認してください）",
   "spotifyNoMatch": "一致なし",

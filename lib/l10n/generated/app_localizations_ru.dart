@@ -574,7 +574,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get importSpotify => 'Импортировать плейлист';
 
   @override
-  String get spotifyUrlHint => 'Ссылка на плейлист Spotify или YouTube';
+  String get spotifyUrlHint =>
+      'Ссылка на плейлист Spotify, YouTube или Apple Music';
 
   @override
   String get importAction => 'Импортировать';

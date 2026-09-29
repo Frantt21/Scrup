@@ -568,7 +568,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get importSpotify => 'Importar playlist';
 
   @override
-  String get spotifyUrlHint => 'Link da playlist do Spotify ou YouTube';
+  String get spotifyUrlHint =>
+      'Link de playlist do Spotify, YouTube ou Apple Music';
 
   @override
   String get importAction => 'Importar';
@@ -1417,7 +1418,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get importSpotify => 'Importar playlist';
 
   @override
-  String get spotifyUrlHint => 'Link da playlist do Spotify ou YouTube';
+  String get spotifyUrlHint =>
+      'Link de playlist do Spotify, YouTube ou Apple Music';
 
   @override
   String get importAction => 'Importar';
