@@ -631,18 +631,22 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final openPlaylist = _openPlaylist;
-    // "Zona" con botones home/search en la titlebar: playlist, ajustes,
-    // canal del artista y recap.
+    // "Zona" con botones home/back/search en la titlebar: playlist,
+    // ajustes, canal del artista, recap y BÚSQUEDA (ahí home/back navegan,
+    // sin botón de búsqueda: ya estás en ese screen).
     final inZone =
         _showSettings ||
         openPlaylist != null ||
         _openArtist != null ||
-        _showRecap;
+        _showRecap ||
+        _selectedIndex == 1;
     final barTitle = _showSettings
         ? l10n.settings
         : (_showRecap
               ? l10n.recapTitle
-              : (openPlaylist?.name ?? (_openArtist?.name ?? 'Scrup')));
+              : (openPlaylist?.name ??
+                    (_openArtist?.name ??
+                        (_selectedIndex == 1 ? l10n.searchTitle : 'Scrup'))));
     final List<Widget> barActions = [
       if (inZone) ...[
         IconButton(
@@ -674,23 +678,25 @@ class _AppShellState extends State<AppShell> {
           tooltip: l10n.back,
           onPressed: _navigateBack,
         ),
-        IconButton(
-          icon: const Icon(Icons.search_rounded),
-          visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-          padding: EdgeInsets.zero,
-          tooltip: l10n.searchTitle,
-          onPressed: () => setState(() {
-            _history.clear();
-            _showSettings = false;
-            _openPlaylist = null;
-            _showLyrics = false;
-            _openArtist = null;
-            _artistAlbumOpenFlag = false;
-            _showRecap = false;
-            _selectedIndex = 1;
-          }),
-        ),
+        // Botón de búsqueda: solo cuando NO estás ya en search.
+        if (_selectedIndex != 1)
+          IconButton(
+            icon: const Icon(Icons.search_rounded),
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+            padding: EdgeInsets.zero,
+            tooltip: l10n.searchTitle,
+            onPressed: () => setState(() {
+              _history.clear();
+              _showSettings = false;
+              _openPlaylist = null;
+              _showLyrics = false;
+              _openArtist = null;
+              _artistAlbumOpenFlag = false;
+              _showRecap = false;
+              _selectedIndex = 1;
+            }),
+          ),
       ],
     ];
     final Widget barTrailing = IconButton(
@@ -1230,6 +1236,8 @@ class _AppShellState extends State<AppShell> {
       return;
     }
     if (_selectedIndex != 0) {
+      // El back desde una pestaña (search/library/recap en nav) vuelve a
+      // HOME: search no es un hub de navegación.
       setState(() => _selectedIndex = 0);
       return;
     }

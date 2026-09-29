@@ -48,7 +48,11 @@ class _SearchViewState extends State<SearchView> {
   final _searchFocus = FocusNode();
 
   List<Track> _results = const [];
-  List<YtmArtist> _artists = const [];
+
+  /// Layout final de resultados: el artista buscado (o el mejor match) va
+  /// PRIMERO, seguido de las canciones con el resto de artistas intercalados
+  /// cada 3 filas. Elementos: YtmArtist | Track.
+  List<Object> _items = const [];
 
   /// Avatares reales de canal (UC… → URL), resueltos en background por [_resolveArtistAvatars] tras pintar la lista. Mientras no llega, la fila muestra el placeholder genérico (nunca la portada de una canción, que era el "avatar random" de antes).
   final Map<String, String?> _artistAvatars = {};
@@ -149,7 +153,7 @@ class _SearchViewState extends State<SearchView> {
       final artistList = SearchService.deriveArtists(tracks, limit: 8);
       setState(() {
         _results = tracks;
-        _artists = artistList;
+        _items = _buildLayout(tracks, artistList, q);
         _searching = false;
       });
       // Historial: consulta exitosa al frente (persistente, dedupe).
@@ -165,7 +169,7 @@ class _SearchViewState extends State<SearchView> {
       if (!mounted || token != _searchToken) return;
       setState(() {
         _results = const [];
-        _artists = const [];
+        _items = const [];
         _error = e.toString();
       });
     } finally {
@@ -282,13 +286,11 @@ class _SearchViewState extends State<SearchView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Sin botón atrás: home/back viven en la titlebar
+                          // del shell (misma zona que playlist/recap). El
+                          // título queda alineado con las demás screens.
                           Row(
                             children: [
-                              IconButton(
-                                icon: const Icon(Icons.arrow_back_rounded),
-                                tooltip: l10n.backToHome,
-                                onPressed: widget.onBack,
-                              ),
                               Text(
                                 l10n.searchTitle,
                                 style: theme.textTheme.headlineSmall?.copyWith(
@@ -389,19 +391,19 @@ class _SearchViewState extends State<SearchView> {
       // TrackTile interno — así los bordes de todas las filas quedan
       // alineados entre screens.
       padding: const EdgeInsets.fromLTRB(8, 8, 8, kPlayerOverlayInset),
-      itemCount: _results.length + _artists.length,
+      itemCount: _items.length,
       separatorBuilder: (_, _) => const SizedBox(height: 4),
       itemBuilder: (context, i) {
-        // Artistas PRIMERO (van con su propia fila).
-        if (i < _artists.length) {
-          final artist = _artists[i];
+        final item = _items[i];
+        if (item is YtmArtist) {
+          final artist = item;
           return _ArtistTile(
             artist: artist,
             avatarUrl: _artistAvatars[artist.browseId],
             onTap: () => _openArtist(artist),
           );
         }
-        final track = _results[i - _artists.length];
+        final track = item as Track;
         return TrackTile(
           track: track,
           onPlay: () => playTrack(context, track),
@@ -411,6 +413,39 @@ class _SearchViewState extends State<SearchView> {
         );
       },
     );
+  }
+
+  /// Orden de resultados: [artista buscado] → [3 canciones, otro artista,
+  /// …] → [canciones restantes]. El destacado es el primero de
+  /// deriveArtists SOLO si coincide exactamente con la query normalizada
+  /// (búsqueda por nombre de canal); en texto libre no se reordena.
+  List<Object> _buildLayout(
+    List<Track> tracks,
+    List<YtmArtist> artists,
+    String query,
+  ) {
+    if (artists.isEmpty) return List<Object>.from(tracks);
+    String norm(String s) => s
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\p{M}]'), '')
+        .replaceAll(RegExp(r'[^a-z0-9 ]'), '')
+        .trim();
+    final nq = norm(query);
+    final first = artists.first;
+    final isExact = nq.isNotEmpty && norm(first.name) == nq;
+    final top = isExact ? first : null;
+    final rest = isExact ? artists.skip(1).toList() : artists.toList();
+
+    final items = <Object>[?top];
+    var trackIdx = 0;
+    var artistIdx = 0;
+    while (trackIdx < tracks.length || artistIdx < rest.length) {
+      for (var k = 0; k < 3 && trackIdx < tracks.length; k++) {
+        items.add(tracks[trackIdx++]);
+      }
+      if (artistIdx < rest.length) items.add(rest[artistIdx++]);
+    }
+    return items;
   }
 
   /// Toca un artista → screen de detalle. En móvil el AppShell lo monta
@@ -449,18 +484,23 @@ class _ArtistTile extends StatelessWidget {
     final thumb = avatarUrl;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        // MISMA geometría que TrackTile (h8/v6, thumb 56, gap 12): los
+        // extremos de la fila quedan alineados con las canciones y el gap
+        // artwork↔texto es el mismo.
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: Row(
           children: [
-            // CUADRADA redondeada (14dp), no círculo: mismo estilo que las
-            // portadas de playlists/canciones, pero MÁS GRANDE que una fila
-            // de canción (64dp) para destacar la sección de artistas.
             ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: ArtistAvatarImage(url: thumb, side: 64),
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 56,
+                height: 56,
+                child: ArtistAvatarImage(url: thumb, side: 56),
+              ),
             ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,10 +509,11 @@ class _ArtistTile extends StatelessWidget {
                     artist.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyLarge?.copyWith(
+                    style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     l10n.searchArtistsSection,
                     maxLines: 1,
