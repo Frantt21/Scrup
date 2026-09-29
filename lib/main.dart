@@ -74,8 +74,8 @@ Future<void> main() async {
       await windowManager.setPreventClose(true);
     } catch (_) {}
     final windowOptions = WindowOptions(
-      size: const Size(1400, 800),
-      minimumSize: const Size(1440, 800),
+      size: const Size(1400, 1000),
+      minimumSize: const Size(1440, 1000),
       center: true,
       title: 'Scrup',
       // Hide the native bar on Windows and macOS (macOS already configured it above; kept here for waitUntilReadyToShow). On Linux it is NOT passed (null): setTitleBarStyle(normal) would UNDO the earlier setAsFrameless() and reactivate the native window manager bar.
