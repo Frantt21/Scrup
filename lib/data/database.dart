@@ -76,6 +76,19 @@ class AppDatabase extends _$AppDatabase {
   @override
   int get schemaVersion => 13;
 
+  /// Registra (sin reventar el arranque) un fallo de reparación en
+  /// beforeOpen. La BD debe abrir SIEMPRE: estas reparaciones son
+  /// best-effort y se reintentarán en la próxima apertura.
+  void _logMigrationFailure(String step, Object error) {
+    // Sin print: drift ya expone el error vía driftRuntimeOptions si hay
+    // listener; aquí solo lo dejamos visible en debug.
+    assert(() {
+      // ignore: avoid_print
+      print('[scrup/db] reparación "$step" falló (best-effort): $error');
+      return true;
+    }());
+  }
+
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
@@ -133,24 +146,55 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 13) {
         // Artist channel id per track (recap artist avatars).
-        await m.addColumn(tracks, tracks.artistChannelId);
+        // Idempotente: builds anteriores creaban esta columna en el CREATE
+        // TABLE sin subir la versión (user_version 12 con la columna ya
+        // presente) → un ALTER TABLE plano explotaba con "duplicate column
+        // name" y la BD dejaba de abrir (app colgada cargando).
+        try {
+          await m.addColumn(tracks, tracks.artistChannelId);
+        } on Exception catch (e) {
+          // "duplicate column name" significa exactamente que la columna ya
+          // existe: el resultado que queríamos. (No se puede consultar la
+          // estructura aquí: cualquier query durante onUpgrade re-entra en
+          // la apertura de la BD y re-ejecuta la migración.)
+          if (!e.toString().contains('duplicate column name')) rethrow;
+        }
       }
     },
     beforeOpen: (details) async {
+      // Todo lo que hay aquí es REPARACIÓN best-effort: si un paso falla
+      // (datos inesperados, carreras previas, etc.) la BD debe abrir igual;
+      // un fallo aquí nunca debe colgar el arranque de la app.
       // Duplicados de favoritos (carreras de arranque previas): fusionar
       // ANTES de crear el índice único parcial que los impide para siempre.
-      await _ensureFavoritesPlaylist();
-      await mergeDuplicateFavorites();
+      try {
+        await _ensureFavoritesPlaylist();
+      } catch (e) {
+        _logMigrationFailure('ensureFavoritesPlaylist', e);
+      }
+      try {
+        await mergeDuplicateFavorites();
+      } catch (e) {
+        _logMigrationFailure('mergeDuplicateFavorites', e);
+      }
       // Likes huérfanos: el cleanup buggy anterior borraba la fila de la
       // favorito SIN borrar sus playlistTracks (FK OFF en drift) → los
       // likes quedaron apuntando a una playlist inexistente y el banner
       // "Your likes" quedaba vacío aunque el usuario tuviera favoritos.
-      await rescueOrphanedPlaylistTracks();
-      await customStatement(
-        'CREATE UNIQUE INDEX IF NOT EXISTS '
-        'idx_playlists_single_favorites ON playlists (is_favorites) '
-        'WHERE is_favorites = 1',
-      );
+      try {
+        await rescueOrphanedPlaylistTracks();
+      } catch (e) {
+        _logMigrationFailure('rescueOrphanedPlaylistTracks', e);
+      }
+      try {
+        await customStatement(
+          'CREATE UNIQUE INDEX IF NOT EXISTS '
+          'idx_playlists_single_favorites ON playlists (is_favorites) '
+          'WHERE is_favorites = 1',
+        );
+      } catch (e) {
+        _logMigrationFailure('idx_playlists_single_favorites', e);
+      }
     },
   );
 

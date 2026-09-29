@@ -14,7 +14,9 @@ import '../data/database.dart';
 class PaletteCacheStore {
   PaletteCacheStore._(this._db);
 
-  final AppDatabase _db;
+  /// Null en el modo degradado [empty]: sin BD no hay persistencia; los
+  /// colores extraídos viven solo en RAM durante la sesión.
+  final AppDatabase? _db;
 
   static const int _maxEntries = 1500;
 
@@ -23,6 +25,12 @@ class PaletteCacheStore {
   static const int _cacheVersion = 5;
 
   static const int _maxFailedEntries = 1000;
+
+  /// Store vacío (solo memoria): fallback si la BD no está disponible en el
+  /// arranque. Los colores extraídos viven en RAM; sin persistencia.
+  factory PaletteCacheStore.empty() {
+    return PaletteCacheStore._(null);
+  }
 
   // Key: url->int (accent) or url:t->list of 3 ints (trio).
   final Map<String, Object> _colors = {};
@@ -166,9 +174,11 @@ class PaletteCacheStore {
       _colors.remove(key);
       _dirty.remove(key);
     }
+    final db = _db;
+    if (db == null) return;
     try {
       for (final key in [canonTrio, canonAccent, '$_trioPrefix$url', '$_accentSuffix$url']) {
-        await _db.deletePalette(key);
+        await db.deletePalette(key);
       }
     } catch (_) {}
   }
@@ -196,6 +206,12 @@ class PaletteCacheStore {
   }
 
   Future<void> _save() async {
+    final db = _db;
+    if (db == null) {
+      // Modo degradado (sin BD): nada que persistir.
+      _dirty.clear();
+      return;
+    }
     if (_dirty.isEmpty && !_saving) return;
     if (_saving) {
       _savePending = true;
@@ -207,10 +223,10 @@ class PaletteCacheStore {
         final v = _colors[url];
         if (v == null) continue;
         final colors = v is int ? [v] : List<int>.from(v as List);
-        await _db.upsertPalette(url, colors);
+        await db.upsertPalette(url, colors);
       }
       _dirty.clear();
-      await _db.trimPalettes(_maxEntries);
+      await db.trimPalettes(_maxEntries);
     } catch (_) {}
     _saving = false;
     if (_savePending) {

@@ -74,8 +74,8 @@ Future<void> main() async {
       await windowManager.setPreventClose(true);
     } catch (_) {}
     final windowOptions = WindowOptions(
-      size: const Size(1400, 1000),
-      minimumSize: const Size(1440, 1000),
+      size: const Size(1500, 800),
+      minimumSize: const Size(1500, 800),
       center: true,
       title: 'Scrup',
       // Hide the native bar on Windows and macOS (macOS already configured it above; kept here for waitUntilReadyToShow). On Linux it is NOT passed (null): setTitleBarStyle(normal) would UNDO the earlier setAsFrameless() and reactivate the native window manager bar.
@@ -118,7 +118,14 @@ Future<void> main() async {
     await database.mergeDuplicateFavorites();
   } catch (_) {}
 
-  final paletteCache = await PaletteCacheStore.load(database);
+  // Si la BD no pudiera abrir (migración/repación fallida), degradamos la
+  // persistencia de paletas en vez de colgar el arranque sin UI.
+  PaletteCacheStore paletteCache;
+  try {
+    paletteCache = await PaletteCacheStore.load(database);
+  } catch (_) {
+    paletteCache = PaletteCacheStore.empty();
+  }
 
   final settings = SettingsStore();
   var initialLocale = const Locale('es');
