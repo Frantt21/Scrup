@@ -540,49 +540,52 @@ class _LyricsDisplayState extends State<LyricsDisplay>
                     onTap: _syncToCurrentLine,
                     mouseCursor: SystemMouseCursors.click,
                     borderRadius: BorderRadius.circular(30),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      // The pill inverts the ink: accent letters on the
-                      // opposite B/N color (same contrast rule everywhere).
-                      color: widget.embedded
-                          ? (widget.accentColor ??
-                                Theme.of(context).colorScheme.primary)
+                  child: Builder(
+                    builder: (context) {
+                      // La píldora se basta sola: fondo y tinta derivan del
+                      // MISMO acento efectivo y la tinta es SIEMPRE el B/N
+                      // opuesto al fondo de la píldora (nunca color acento:
+                      // un acento cercano al umbral de luminancia quedaba
+                      // casi invisible sobre su propio B/N invertido).
+                      final effectiveAccent =
+                          widget.accentColor ??
+                          Theme.of(context).colorScheme.primary;
+                      final pillBg = widget.embedded
+                          ? effectiveAccent
                           : ArtworkPaletteService.prefersBlackInk(
-                              widget.accentColor ??
-                                  Theme.of(context).colorScheme.primary,
-                            )
-                          ? Colors.white
-                          : Colors.black,
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.sync_rounded,
-                          color: widget.embedded
-                              ? Colors.white
-                              : widget.accentColor,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          l10n.syncLyrics,
-                          style: TextStyle(
-                            color: widget.embedded
+                                  effectiveAccent,
+                                )
                                 ? Colors.white
-                                : widget.accentColor,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
+                                : Colors.black;
+                      final ink = ArtworkPaletteService.prefersBlackInk(pillBg)
+                          ? Colors.black
+                          : Colors.white;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
                         ),
-                        // (ink colors unchanged: they ride on the pill bg)
-                      ],
-                    ),
+                        decoration: BoxDecoration(
+                          color: pillBg,
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.sync_rounded, color: ink, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              l10n.syncLyrics,
+                              style: TextStyle(
+                                color: ink,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
                 ),
