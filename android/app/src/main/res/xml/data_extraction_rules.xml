@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Reglas de backup/transferencia (Android 12+). Objetivo: que la base de
+   datos de Scrup (scrup.sqlite: playlists, likes, historial y los chunks de
+   listen_sessions que alimentan el Recap) sobreviva a desinstalar/reinstalar
+   vía D2D (device-to-device) y Auto Backup.
+   Sin <include>, TODO lo no excluido se respalda por defecto (incluye
+   app_flutter/scrup.sqlite y shared_prefs). Aquí solo restamos los caches
+   regenerables:
+   - audio_cache: audio descargado (getApplicationSupportDirectory en Android
+     = files/). Regenerable, puede pesar cientos de MB.
+   - artwork_cache: ídem para portadas.
+-->
+<data-extraction-rules>
+    <exclude domain="filelist" path="audio_cache" />
+    <exclude domain="filelist" path="artwork_cache" />
+</data-extraction-rules>

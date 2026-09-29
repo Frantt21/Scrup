@@ -14,7 +14,19 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:extractNativeLibs="true">
+        android:extractNativeLibs="true"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules">
+        <!-- Preservación de datos del usuario: scrup.sqlite (playlists,
+             likes, listen_sessions del Recap) sobrevive a desinstalar/
+             reinstalar vía Auto Backup / D2D y a restores de cloud. Los
+             caches de audio/portada quedan fuera (regenerables).
+             hasFragileUserData: Android ofrece conservar los datos al
+             desinstalar (API 30+). -->
+        <property
+            android:name="android.app.PROPERTY_HAS_FRAGILE_USER_DATA"
+            android:value="true" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

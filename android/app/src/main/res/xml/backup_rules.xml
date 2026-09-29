@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Backup Auto Backup para Android < 12 (fullBackupContent). Igual criterio
+   que data_extraction_rules.xml: respaldar todo (incluye app_flutter/
+   scrup.sqlite con playlists, likes y listen_sessions del Recap) y excluir
+   los caches regenerables de audio y portadas.
+-->
+<full-backup-content>
+    <exclude domain="file" path="audio_cache" />
+    <exclude domain="file" path="artwork_cache" />
+</full-backup-content>
