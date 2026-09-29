@@ -753,6 +753,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchArtistsSection => '歌手';
 
   @override
+  String get searchFilterAll => '全部';
+
+  @override
+  String get searchFilterSongs => '歌曲';
+
+  @override
+  String get searchFilterArtists => '歌手';
+
+  @override
   String searchArtistPlaying(String name) {
     return '正在播放 $name';
   }

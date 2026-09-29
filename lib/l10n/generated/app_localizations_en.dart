@@ -767,6 +767,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchArtistsSection => 'Artist';
 
   @override
+  String get searchFilterAll => 'All';
+
+  @override
+  String get searchFilterSongs => 'Songs';
+
+  @override
+  String get searchFilterArtists => 'Artists';
+
+  @override
   String searchArtistPlaying(String name) {
     return 'Playing $name';
   }

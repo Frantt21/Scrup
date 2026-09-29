@@ -755,6 +755,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get searchArtistsSection => 'アーティスト';
 
   @override
+  String get searchFilterAll => 'すべて';
+
+  @override
+  String get searchFilterSongs => '曲';
+
+  @override
+  String get searchFilterArtists => 'アーティスト';
+
+  @override
   String searchArtistPlaying(String name) {
     return '$name を再生中';
   }

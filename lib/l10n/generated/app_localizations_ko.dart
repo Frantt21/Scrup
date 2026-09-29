@@ -755,6 +755,15 @@ class AppLocalizationsKo extends AppLocalizations {
   String get searchArtistsSection => '아티스트';
 
   @override
+  String get searchFilterAll => '전체';
+
+  @override
+  String get searchFilterSongs => '곡';
+
+  @override
+  String get searchFilterArtists => '아티스트';
+
+  @override
   String searchArtistPlaying(String name) {
     return '$name 재생 중';
   }

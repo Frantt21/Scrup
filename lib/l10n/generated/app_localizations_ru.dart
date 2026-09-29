@@ -775,6 +775,15 @@ class AppLocalizationsRu extends AppLocalizations {
   String get searchArtistsSection => 'Исполнитель';
 
   @override
+  String get searchFilterAll => 'Все';
+
+  @override
+  String get searchFilterSongs => 'Треки';
+
+  @override
+  String get searchFilterArtists => 'Исполнители';
+
+  @override
   String searchArtistPlaying(String name) {
     return 'Воспроизводится $name';
   }

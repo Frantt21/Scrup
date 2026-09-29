@@ -16,6 +16,9 @@ import '../widgets/artist_avatar.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 import '../widgets/track_tile.dart';
 
+/// Filtro de resultados de búsqueda.
+enum _SearchFilter { all, songs, artists }
+
 /// Search view: searches songs on YouTube and lets you play them or add them to a playlist.
 class SearchView extends StatefulWidget {
   /// External search query (launched from home). When it changes, the view runs the search and shows it. It is a [ValueNotifier] because the view consumes it (resets to null) to allow repeating an identical query.
@@ -62,6 +65,9 @@ class _SearchViewState extends State<SearchView> {
 
   /// Historial persistente de búsquedas: chips bajo el campo; un toque repite la consulta. Cada búsqueda exitosa sube al frente.
   List<String> _history = const [];
+
+  /// Filtro activo de resultados: Todos / Canciones / Artistas.
+  _SearchFilter _filter = _SearchFilter.all;
 
   /// Pista en reproducción (para el indicador de "en reproducción").
   Track? _currentTrack;
@@ -384,6 +390,93 @@ class _SearchViewState extends State<SearchView> {
       );
     }
 
+    // Pills de filtro (Todos/Canciones/Artistas) sobre la lista.
+    return Column(
+      children: [
+        _buildFilterRow(theme, l10n),
+        Expanded(child: _buildResultsList(theme)),
+      ],
+    );
+  }
+
+  /// Resultados según el filtro activo.
+  List<Object> get _filteredItems => switch (_filter) {
+    _SearchFilter.all => _items,
+    _SearchFilter.songs => _items.whereType<Track>().toList(),
+    _SearchFilter.artists => _items.whereType<YtmArtist>().toList(),
+  };
+
+  Widget _buildFilterRow(ThemeData theme, AppLocalizations l10n) {
+    Widget pill(_SearchFilter f, String label, int? count) {
+      final selected = _filter == f;
+      final fg = selected
+          ? theme.colorScheme.onPrimary
+          : theme.colorScheme.onSurfaceVariant;
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: InkWell(
+          onTap: () {
+            if (_filter == f) return;
+            setState(() => _filter = f);
+            // Reset del scroll al cambiar de pestaña.
+            if (_scrollController.hasClients) _scrollController.jumpTo(0);
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              color: selected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: fg,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (count != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '$count',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: fg.withValues(alpha: 0.75),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final songCount = _results.length;
+    final artistCount = _items.whereType<YtmArtist>().length;
+    // 16dp: alinea las pills con el borde del artwork de las filas
+    // (8 del ListView + 8 interno del tile). Arriba: en desktop la caja de
+    // vidrio ya da aire (2dp); en móvil el body va directo bajo el campo
+    // de búsqueda → 12dp para que no queden pegadas.
+    final topPad = Binaries.isMobile ? 12.0 : 2.0;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, topPad, 16, 8),
+      child: Row(
+        children: [
+          pill(_SearchFilter.all, l10n.searchFilterAll, null),
+          pill(_SearchFilter.songs, l10n.searchFilterSongs, songCount),
+          pill(_SearchFilter.artists, l10n.searchFilterArtists, artistCount),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultsList(ThemeData theme) {
     return ListView.separated(
       controller: _scrollController,
       // MISMO ancho útil que las demás listas (playlist/top tracks): esas
@@ -391,10 +484,10 @@ class _SearchViewState extends State<SearchView> {
       // TrackTile interno — así los bordes de todas las filas quedan
       // alineados entre screens.
       padding: const EdgeInsets.fromLTRB(8, 8, 8, kPlayerOverlayInset),
-      itemCount: _items.length,
+      itemCount: _filteredItems.length,
       separatorBuilder: (_, _) => const SizedBox(height: 4),
       itemBuilder: (context, i) {
-        final item = _items[i];
+        final item = _filteredItems[i];
         if (item is YtmArtist) {
           final artist = item;
           return _ArtistTile(

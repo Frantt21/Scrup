@@ -390,6 +390,9 @@
   "providerKpoe": "KPoe · palabra a palabra",
   "providerLrclib": "LRCLIB · línea",
   "searchArtistsSection": "Artista",
+  "searchFilterAll": "Todos",
+  "searchFilterSongs": "Canciones",
+  "searchFilterArtists": "Artistas",
   "searchArtistPlaying": "Reproduciendo {name}",
   "@searchArtistPlaying": {
     "description": "Snackbar al reproducir el catálogo de un artista desde la búsqueda",

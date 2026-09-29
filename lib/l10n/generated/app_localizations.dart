@@ -1501,6 +1501,24 @@ abstract class AppLocalizations {
   /// **'Artista'**
   String get searchArtistsSection;
 
+  /// No description provided for @searchFilterAll.
+  ///
+  /// In es, this message translates to:
+  /// **'Todos'**
+  String get searchFilterAll;
+
+  /// No description provided for @searchFilterSongs.
+  ///
+  /// In es, this message translates to:
+  /// **'Canciones'**
+  String get searchFilterSongs;
+
+  /// No description provided for @searchFilterArtists.
+  ///
+  /// In es, this message translates to:
+  /// **'Artistas'**
+  String get searchFilterArtists;
+
   /// Snackbar al reproducir el catálogo de un artista desde la búsqueda
   ///
   /// In es, this message translates to:

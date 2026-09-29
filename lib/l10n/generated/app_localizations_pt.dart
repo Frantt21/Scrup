@@ -769,6 +769,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchArtistsSection => 'Artista';
 
   @override
+  String get searchFilterAll => 'Tudo';
+
+  @override
+  String get searchFilterSongs => 'Músicas';
+
+  @override
+  String get searchFilterArtists => 'Artistas';
+
+  @override
   String searchArtistPlaying(String name) {
     return 'Reproduzindo $name';
   }
@@ -1605,6 +1614,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get searchArtistsSection => 'Artista';
+
+  @override
+  String get searchFilterAll => 'Tudo';
+
+  @override
+  String get searchFilterSongs => 'Músicas';
+
+  @override
+  String get searchFilterArtists => 'Artistas';
 
   @override
   String searchArtistPlaying(String name) {
