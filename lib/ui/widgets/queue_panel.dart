@@ -3,20 +3,29 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/track.dart';
-import '../../core/synced_lyrics.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
-import '../../services/lyrics_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import '../../services/search_service.dart'
-    show SearchService, YtmArtist, YtmArtistDetail, YtmTrackCredits;
+    show SearchService, YtmArtist, YtmArtistDetail;
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
 import 'artist_avatar.dart';
 import 'cover_image.dart';
+import 'now_playing_cards.dart';
 import 'track_tile.dart';
+
+// Cards del now playing extraídas a [now_playing_cards.dart] para
+// compartirlas con el player expandido de Android; reexportadas aquí para
+// no tocar los imports de quienes ya consumían este archivo.
+export 'now_playing_cards.dart'
+    show
+        CreditsCard,
+        LyricsPreviewCard,
+        NowPlayingExtras,
+        kNowPlayingCardGap;
 
 /// Fixed width of the open queue panel (same philosophy as the sidebar).
 const double kQueuePanelWidth = 300;
@@ -615,16 +624,8 @@ class _NowPlayingPanel extends StatefulWidget {
 
 class _NowPlayingPanelState extends State<_NowPlayingPanel> {
   StreamSubscription<Track?>? _trackSub;
-  StreamSubscription<Duration>? _positionSub;
   Track? _track;
   bool _isFavorite = false;
-
-  /// Synced lyrics of the current track (LyricsService cache makes this
-  /// instant when the lyrics view already fetched them).
-  SyncedLyrics? _lyrics;
-
-  /// Current lyric line index, updated from the throttled position stream.
-  int? _lyricIndex;
 
   /// Artist card detail (listeners text). Resolved in background from the
   /// artist cache; `null` while loading or when the channel is unknown.
@@ -633,17 +634,6 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
   /// True while the channel is being resolved (background search fallback
   /// when the track has no channelId).
   bool _artistLoading = false;
-
-  /// Track credits (WEB `next` description panel). Null while loading or
-  /// when the track has none.
-  YtmTrackCredits? _credits;
-
-  /// True while the credits request is in flight (drives the skeleton).
-  bool _creditsLoading = false;
-
-  /// True once the lyrics fetch finished (found or not): distinguishes the
-  /// loading skeleton from a definitive "no lyrics" result.
-  bool _lyricsLoaded = false;
 
   @override
   void initState() {
@@ -655,60 +645,18 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
         _track = t;
         _artistDetail = null;
         _artistLoading = false;
-        _credits = null;
-        _lyrics = null;
-        _lyricsLoaded = false;
-        _lyricIndex = null;
       });
       unawaited(_refreshFavorite());
       unawaited(_loadArtistDetail());
-      unawaited(_loadCredits());
-      unawaited(_loadLyrics());
-    });
-    _positionSub = widget.player.position.listen((_) {
-      if (!mounted) return;
-      final lyrics = _lyrics;
-      if (lyrics == null) return;
-      final idx = lyrics.getCurrentLineIndex(widget.player.positionValue);
-      if (idx != _lyricIndex) setState(() => _lyricIndex = idx);
     });
     unawaited(_refreshFavorite());
     unawaited(_loadArtistDetail());
-    unawaited(_loadCredits());
-    unawaited(_loadLyrics());
   }
 
   @override
   void dispose() {
     _trackSub?.cancel();
-    _positionSub?.cancel();
     super.dispose();
-  }
-
-  /// Fetches the current track's lyrics in background (cached after the
-  /// first fetch — shares the SAME LyricsService singleton as the lyrics
-  /// view, so no duplicated requests).
-  Future<void> _loadLyrics() async {
-    final t = _track;
-    if (t == null || !mounted) return;
-    try {
-      final lyrics = await context
-          .read<LyricsService>()
-          .fetchLyrics(t.title, t.artist);
-      if (!mounted || _track?.id != t.id) return;
-      setState(() {
-        _lyrics = lyrics;
-        _lyricsLoaded = true;
-        _lyricIndex = lyrics?.getCurrentLineIndex(widget.player.positionValue);
-      });
-    } catch (_) {
-      if (mounted && _track?.id == t.id) {
-        setState(() {
-          _lyrics = null;
-          _lyricsLoaded = true;
-        });
-      }
-    }
   }
 
   Future<void> _refreshFavorite() async {
@@ -792,35 +740,6 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
 
   String? _fallbackChannelId;
 
-  /// Loads the credits for the CURRENT track via the resolver (official
-  /// "Song credits" dialog, then auto-generated description, then InnerTube
-  /// search fallback for cached tracks without credits). Late responses from
-  /// a previous track are discarded (guard by videoId). Silent failure:
-  /// without credits nothing renders.
-  Future<void> _loadCredits() async {
-    final t = _track;
-    final videoId = t?.id.trim() ?? '';
-    if (t == null || videoId.isEmpty || !mounted) return;
-    if (mounted) setState(() => _creditsLoading = true);
-    try {
-      final credits = await context
-          .read<SearchService>()
-          .resolveTrackCredits(videoId, t.title, t.artist);
-      if (!mounted || _track?.id.trim() != videoId) return;
-      setState(() {
-        _credits = credits;
-        _creditsLoading = false;
-      });
-    } catch (_) {
-      if (mounted && _track?.id.trim() == videoId) {
-        setState(() {
-          _credits = null;
-          _creditsLoading = false;
-        });
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
@@ -864,15 +783,8 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
     );
 
     // Skeleton block helper shared by the credits/lyrics placeholders.
-    final skBase = theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.12);
-    Widget block(double w, double h, {double r = 8}) => Container(
-          width: w,
-          height: h,
-          decoration: BoxDecoration(
-            color: skBase,
-            borderRadius: BorderRadius.circular(r),
-          ),
-        );
+    // (Ahora viven en [now_playing_cards.dart]: LyricsCardSkeleton y
+    // CreditsCardSkeleton viajan con las cards.)
 
     Widget body;
     if (track == null) {
@@ -972,105 +884,16 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
                     ),
                   ),
           ),
-          const SizedBox(height: 14),
-          if (_lyrics != null)
-            _LyricsPreviewCard(
-              lyrics: _lyrics!,
-              focusIndex: _lyricIndex,
-              artworkUrl: track.thumbnailUrl,
-              theme: theme,
-              onTap: widget.onOpenLyrics,
-            )
-          else if (_lyricsLoaded)
-            // Definitive "no lyrics": SAME message as the main lyrics view
-            // (title + hint), in a card of the real card's height.
-            Container(
-              width: double.infinity,
-              height: _LyricsPreviewCard.previewHeight,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.lyrics_rounded,
-                        size: 18,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          l10n.lyricsNotFound,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    l10n.lyricsNotFoundHint,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            // Lyrics loading skeleton: EXACTLY the real card's height.
-            Container(
-              width: double.infinity,
-              height: _LyricsPreviewCard.previewHeight,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          const SizedBox(height: 14),
-          if (_credits != null)
-            _CreditsCard(
-              credits: _credits!,
-              theme: theme,
-              l10n: l10n,
-              artworkUrl: track.thumbnailUrl,
-            )
-          else if (_creditsLoading)
-            // Credits loading skeleton: header + one section + 3 bullets.
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  block(70, 14, r: 6),
-                  const SizedBox(height: 10),
-                  block(90, 10, r: 5),
-                  const SizedBox(height: 4),
-                  block(double.infinity, 10, r: 5),
-                  const SizedBox(height: 5),
-                  block(160, 10, r: 5),
-                ],
-              ),
-            ),
+          const SizedBox(height: 8),
+          // Cards de letras + créditos EXTRAÍDAS a [NowPlayingExtras] para
+          // compartirlas con el player expandido de Android. El panel solo
+          // alimenta la pista actual (las cargas viven en el widget nuevo).
+          NowPlayingExtras(
+            track: track,
+            theme: theme,
+            l10n: l10n,
+            onOpenLyrics: widget.onOpenLyrics,
+          ),
         ],
       );
     }
@@ -1183,238 +1006,6 @@ class _NowPlayingSkeleton extends StatelessWidget {
         ],
       ],
     );
-  }
-}
-
-/// Lyrics preview: previous / focus / next lines on the SAME flat accent
-/// background as the lyrics container (artwork accent + pure B/W ink by
-/// luminance). Tapping opens the full lyrics view.
-class _LyricsPreviewCard extends StatelessWidget {
-  /// Fixed card height, sized from the START to fit the worst case
-  /// (focus line wrapped to 3 lines): two 1-line rows + one 3-line focus +
-  /// two 16px gaps + 8px breathing. Shared with the loading skeleton so
-  /// the panel never shifts when lyrics arrive.
-  static const double previewHeight =
-      (15 * 1.3) * 2 + (18 * 1.3 * 3) + 16 * 2 + 8;
-
-  final SyncedLyrics lyrics;
-
-  /// Current line index (null = nothing active yet → show line 0 as focus).
-  final int? focusIndex;
-  final String? artworkUrl;
-  final ThemeData theme;
-  final VoidCallback? onTap;
-
-  const _LyricsPreviewCard({
-    required this.lyrics,
-    required this.focusIndex,
-    required this.theme,
-    this.artworkUrl,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = _resolveAccent(context);
-    final bg = accent ?? theme.colorScheme.surfaceContainer;
-    final on = accent == null
-        ? theme.colorScheme.onSurface
-        : (ArtworkPaletteService.prefersBlackInk(accent)
-              ? Colors.black
-              : Colors.white);
-
-    final lines = lyrics.lines;
-    final focus = focusIndex ?? 0;
-    String? lineAt(int i) => (i >= 0 && i < lines.length) ? lines[i].text : null;
-    final prev = lineAt(focus - 1);
-    final current = lineAt(focus);
-    final next = lineAt(focus + 1);
-
-    // NATURAL text flow with the MAIN lyrics rhythm: the three lines keep
-    // a CONSTANT 16px gap between visual lines (the main container keeps
-    // ~24px between line boxes) and the whole group centers vertically.
-    // The card height is fixed for the 3-line worst case: when the focus
-    // line is short, the slack becomes symmetric breathing room above and
-    // below the group — never an asymmetric hole under one line.
-    const rowGap = 16.0;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        mouseCursor: SystemMouseCursors.click,
-        child: Container(
-          width: double.infinity,
-          height: previewHeight,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _line(prev, on.withValues(alpha: 0.55)),
-              const SizedBox(height: rowGap),
-              _line(current, on, emphasized: true),
-              const SizedBox(height: rowGap),
-              _line(next, on.withValues(alpha: 0.55)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _line(String? text, Color color, {bool emphasized = false}) {
-    if (text == null || text.isEmpty) return const SizedBox.shrink();
-    return Text(
-      text,
-      maxLines: emphasized ? 3 : 1,
-      overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.bodyMedium?.copyWith(
-        height: 1.3,
-        color: color,
-        fontWeight: emphasized ? FontWeight.w700 : FontWeight.w500,
-        fontSize: emphasized ? 18 : 15,
-      ),
-    );
-  }
-
-  /// Accent from the track artwork — canonical entry first (same as the
-  /// player/lyrics), trio-derived as legacy fallback.
-  Color? _resolveAccent(BuildContext context) {
-    final url = artworkUrl;
-    if (url == null || url.isEmpty) return null;
-    final store = context.read<PaletteCacheStore>();
-    final canonical = store.get(url);
-    if (canonical != null) return canonical;
-    final trio = store.getTrio(url);
-    if (trio == null) return null;
-    return ArtworkPaletteService.accentFromTrio(trio);
-  }
-}
-
-/// Credits card below the artist card: SAME recipe as `_ArtistInfoCard`
-/// (accent tint from the track artwork over the panel surface, radius 16,
-/// same paddings). Header + one pill per credit row, 2 per line.
-class _CreditsCard extends StatelessWidget {
-  final YtmTrackCredits credits;
-  final ThemeData theme;
-  final AppLocalizations l10n;
-
-  /// Current track artwork: source of the card's accent tint.
-  final String? artworkUrl;
-
-  const _CreditsCard({
-    required this.credits,
-    required this.theme,
-    required this.l10n,
-    this.artworkUrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = _resolveAccent(context);
-    final bg = accent == null
-        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35)
-        : Color.alphaBlend(
-            accent.withValues(alpha: 0.16),
-            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-          );
-
-    // One bullet row: 4px dot + text (wraps inside the row).
-    Widget bullet(String text, {IconData? icon}) => Padding(
-          padding: const EdgeInsets.only(bottom: 5),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 1),
-                child: icon != null
-                    ? Icon(
-                        icon,
-                        size: 14,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      )
-                    : Container(
-                        width: 4,
-                        height: 4,
-                        margin: const EdgeInsets.only(top: 6, right: 5),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.8),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-              ),
-              if (icon != null) const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  text,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    height: 1.35,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.92),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.creditsLabel,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          for (final s in credits.sections) ...[
-            // Section header: the credit role ("Performed by").
-            Text(
-              s.role,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 4),
-            for (final name in s.names) bullet(name),
-            const SizedBox(height: 8),
-          ],
-          if (credits.album != null)
-            bullet(credits.album!, icon: Icons.album_rounded),
-          if (credits.distributor != null)
-            bullet(credits.distributor!, icon: Icons.local_shipping_rounded),
-        ],
-      ),
-    );
-  }
-
-  /// Canonical track accent — the SAME cached entry the player and the
-  /// lyrics view paint with (NOT a re-derivation from the trio, which could
-  /// disagree at the margins). Trio-derived value only as legacy fallback.
-  Color? _resolveAccent(BuildContext context) {
-    final url = artworkUrl;
-    if (url == null || url.isEmpty) return null;
-    final store = context.read<PaletteCacheStore>();
-    final canonical = store.get(url);
-    if (canonical != null) return canonical;
-    final trio = store.getTrio(url);
-    if (trio == null) return null;
-    return ArtworkPaletteService.accentFromTrio(trio);
   }
 }
 

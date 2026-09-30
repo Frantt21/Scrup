@@ -836,8 +836,11 @@ class _AppShellState extends State<AppShell> {
                       onOpenQueue: _openQueueMobile,
                       onClose: () => _miniController
                           .animateToHeight(state: PanelState.MIN),
-                      // Al abrir/cerrar las letras se bloquea/desbloquea el
-                      // panel para que el player no se cierre por arrastre.
+                      // Al abrir/cerrar el sheet de letras se bloquea/
+                      // desbloquea el panel para que el player no se cierre
+                      // por arrastre. La card de letras del now playing abre
+                      // el sheet (dentro del overlay); el contenedor completo
+                      // sigue disponible por su camino propio.
                       onLyricsOpenChanged: (open) =>
                           _lyricsPanelLock.value = open,
                     );

@@ -18,6 +18,7 @@ import '../views/lyrics_view.dart';
 import 'context_menu_item.dart';
 import 'cover_image.dart';
 import 'edit_metadata_dialog.dart';
+import 'now_playing_cards.dart';
 import 'scrup_toasts.dart';
 
 /// Neutral pre-accent surface (player background before an accent is available).
@@ -148,6 +149,10 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
   /// Índice del vecino previsualizado durante el arrastre (para cambiar de
   /// lado en vivo si el dedo cruza el centro).
   int _artDragNeighbor = 0;
+
+  /// Sheet de letras (OCULTO por defecto): la card de letras del now
+  /// playing lo abre vía esta key (sin callback al shell).
+  final GlobalKey<_LyricsPeekState> _lyricsPeekKey = GlobalKey();
 
   /// Notifier del carrusel: el arrastre anima a ~60-120Hz y un `setState`
   /// del overlay entero por frame mataría el morph. El builder del artwork
@@ -1412,7 +1417,36 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
                     // encogerse al cambiar de canción.
                     child: SizedBox(
                       width: artSide,
-                      child: _contentColumn(theme),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _contentColumn(theme),
+                          // ── Cards del now playing (letras + créditos) ──
+                          // Recicladas del panel de desktop vía
+                          // [NowPlayingExtras]: la card de letras ABRE el
+                          // contenedor completo (reemplaza al antiguo sheet
+                          // sobresalido, eliminado). Se montan solo con el
+                          // player expandido (mismo gate que las letras).
+                          // El ValueListenableBuilder re-dona la pista actual:
+                          // la Column del player NO se reconstruye en cada
+                          // cambio de pista (sus hojas escuchan notifiers
+                          // propios), sin esto la card mostraría la vieja.
+                          if (lyricsActive)
+                            ValueListenableBuilder<Track?>(
+                              valueListenable: _nTrack,
+                              builder: (context, track, _) => Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: NowPlayingExtras(
+                                  track: track,
+                                  theme: theme,
+                                  l10n: AppLocalizations.of(context),
+                                  onOpenLyrics: () =>
+                                      _lyricsPeekKey.currentState?.open(),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1420,19 +1454,15 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
             ],
           ),
         ),
-        // ── Letras MONTADAS: sheet draggable que se abre arrastrándola.
-        //    FUERA del SafeArea inferior: su fondo llega al borde real de la
-        //    pantalla (edge-to-edge, por detrás de la barra transparente del
-        //    sistema); el contenido respeta el inset dentro del propio sheet.
-        //    Va anclado a la base con [Positioned] (sin altura impuesta):
-        //    el widget ocupa SOLO su propia altura, de modo que la región
-        //    por encima del sheet NO captura eventos (el [Align] a pantalla
-        //    completa absorbía todos los gestos y congelaba el player).
+        // ── Letras: sheet OCULTO por defecto (no sobresale). La card de
+        //    letras del now playing lo abre vía [_lyricsPeekKey]; su fondo
+        //    cubre los controles mientras está abierto.
         Positioned(
           left: 0,
           right: 0,
           bottom: 0,
           child: _LyricsPeek(
+            key: _lyricsPeekKey,
             enabled: lyricsActive,
             onChanged: widget.onLyricsOpenChanged,
           ),
@@ -1955,6 +1985,16 @@ class _AccentBackgroundState extends State<_AccentBackground>
 /// El sheet se desliza por encima de los controles (como en forawn_mobile),
 /// cubriéndolos mientras está abierto, y muestra las letras con
 /// [LyricsView] en modo `embedded`.
+
+/// Panel de letras MONTADO en el player expandido: OCULTO por defecto (no
+/// sobresale del player). Se abre desde la card de letras del now playing
+/// (ver [open]) y se cierra arrastrándolo hacia abajo o pulsando el
+/// handle/la «X». Mientras está abierto se desliza por encima de los
+/// controles cubriéndolos, y muestra las letras con [LyricsView] embedded.
+///
+/// El sheet se desliza por encima de los controles (como en forawn_mobile),
+/// cubriéndolos mientras está abierto, y muestra las letras con
+/// [LyricsView] en modo `embedded`.
 ///
 /// Se suscribe SOLO al acento ([ThemeController]): su geometría la recibe
 /// del morph del padre (LayoutBuilder) y las letras ([LyricsView]) ya
@@ -1968,7 +2008,7 @@ class _LyricsPeek extends StatefulWidget {
   /// Notifica a la app cuando se abre/cierra (para bloquear el panel).
   final ValueChanged<bool>? onChanged;
 
-  const _LyricsPeek({required this.enabled, this.onChanged});
+  const _LyricsPeek({super.key, required this.enabled, this.onChanged});
 
   @override
   State<_LyricsPeek> createState() => _LyricsPeekState();
@@ -1989,7 +2029,8 @@ class _LyricsPeekState extends State<_LyricsPeek> {
   bool get _darkContent => _theme.accentColor != null &&
       ArtworkPaletteService.prefersBlackInk(_theme.accentColor!);
 
-  Color get _staticWhite => _darkContent ? Colors.black : Colors.white;
+  Color get _staticWhite => _darkContent ? Colors.black : Colors.white;
+
 
   Color _staticWhiteA(double a) => _darkContent
       ? Colors.black.withValues(alpha: a)
@@ -2037,6 +2078,20 @@ class _LyricsPeekState extends State<_LyricsPeek> {
 
   /// Color previo del sheet para el fundido (igual que el fondo del player).
   Color? _sheetPrev;
+
+  /// `true` mientras el sheet se está mostrando (abierto o animando). Con
+  /// [_open] == 0 y !_shown el sheet NO se monta: no sobresale nada.
+  bool _shown = false;
+
+  /// Abre el sheet (desde la card de letras del now playing). Idempotente.
+  void open() {
+    if (_open >= 0.5 && _shown) return;
+    setState(() {
+      _shown = true;
+      _open = 1.0;
+    });
+    widget.onChanged?.call(true);
+  }
 
   // ── Acciones de letras en el header del sheet ────────────────────────
   // Claves internas de LyricsView: el botón vive aquí (Android no tiene
@@ -2128,6 +2183,11 @@ class _LyricsPeekState extends State<_LyricsPeek> {
     // widget ocupa SOLO el alto del sheet (el LayoutBuilder se ajusta al
     // child). Un [Align] a pantalla completa absorbía todos los gestos por
     // encima del sheet y congelaba el player.
+    // Oculto por completo cuando está cerrado y no hay gesto/animación en
+    // curso: el player expandido NO muestra ninguna franja de letras.
+    if (!_shown && !_dragging && _open == 0) {
+      return const SizedBox.shrink();
+    }
     return LayoutBuilder(
       builder: (context, c) {
         // Altura de referencia: si el padre no acota la altura (p. ej. un
@@ -2143,7 +2203,10 @@ class _LyricsPeekState extends State<_LyricsPeek> {
           // alto colapsado incluye el inset: handle de 48dp arriba + banda de
           // fondo del sheet por debajo hasta el borde.
           final double bottomInset = MediaQuery.paddingOf(context).bottom;
-          final collapsed = 48.0 + bottomInset;
+          // Sin franja permanente: el sheet parte de altura 0 (invisible) y se
+          // despliega completo desde la card. El inset inferior solo aplica
+          // mientras está abierto (su fondo sigue llegando al borde real).
+          final collapsed = 0.0;
           final openH = maxH * 0.80;
           // Recorrido total del sheet (recogido → abierto): se usa para que
           // el sheet siga al dedo 1:1 durante el arrastre.
@@ -2189,6 +2252,12 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                   ? Duration.zero
                   : const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
+              onEnd: () {
+                // Cierre terminado: desmonta el sheet (queda oculto).
+                if (_open == 0 && !_dragging && mounted) {
+                  setState(() => _shown = false);
+                }
+              },
               height: sheetH,
               width: double.infinity,
               // El padding del inset va AQUÍ (dentro de la caja con color de
