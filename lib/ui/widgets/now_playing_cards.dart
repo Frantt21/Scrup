@@ -7,12 +7,14 @@ import '../../core/binaries.dart';
 import '../../core/synced_lyrics.dart';
 import '../../core/track.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/lyrics_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
 import '../../services/search_service.dart'
-    show SearchService, YtmTrackCredits;
+    show SearchService, YtmArtist, YtmArtistDetail, YtmTrackCredits;
+import 'artist_avatar.dart';
 import '../theme_controller.dart';
 
 /// Gap estándar entre cards del now playing (desktop y móvil).
@@ -406,12 +408,23 @@ class NowPlayingExtras extends StatefulWidget {
   /// Abre el contenedor completo de letras (card tocada).
   final VoidCallback? onOpenLyrics;
 
+  /// Abre el detalle del artista (card de artista tocada). En desktop lo
+  /// provee el shell; en móvil lo provee AppShell también (screen dentro
+  /// del shell). Si es null, la card no es clicable.
+  final ValueChanged<YtmArtist>? onOpenArtist;
+
+  /// INSERTA la card de artista ENTRE letras y créditos (Android): el panel
+  /// desktop la pinta aparte (encima de las extras) y pasa [false].
+  final bool showArtistCard;
+
   const NowPlayingExtras({
     super.key,
     required this.track,
     required this.theme,
     required this.l10n,
     this.onOpenLyrics,
+    this.onOpenArtist,
+    this.showArtistCard = false,
   });
 
   @override
@@ -436,6 +449,13 @@ class _NowPlayingExtrasState extends State<NowPlayingExtras> {
   /// True cuando el fetch de letras terminó (encontradas o no): distingue el
   /// skeleton de un resultado definitivo "sin letras".
   bool _lyricsLoaded = false;
+
+  /// Detalle del artista de la pista (para la card de artista, Android).
+  YtmArtistDetail? _artistDetail;
+
+  /// Resolución del canal en curso (fallback vía InnerTube `next`).
+  bool _artistLoading = false;
+  String? _fallbackChannelId;
 
   StreamSubscription<Duration>? _positionSub;
 
@@ -464,6 +484,9 @@ class _NowPlayingExtrasState extends State<NowPlayingExtras> {
         _lyricIndex = null;
         _credits = null;
         _creditsLoading = false;
+        _artistDetail = null;
+        _artistLoading = false;
+        _fallbackChannelId = null;
       });
       _loadAll(widget.track);
     }
@@ -479,6 +502,72 @@ class _NowPlayingExtrasState extends State<NowPlayingExtras> {
     if (t == null) return;
     _loadLyrics(t);
     _loadCredits(t);
+    _loadArtistDetail(t);
+  }
+
+  /// Resuelve el detalle del artista con la MISMA regla estricta del panel
+  /// desktop: 1) channelId de la pista; 2) InnerTube `next` del videoId (el
+  /// dueño real que muestra YouTube). Respuestas tardías de una pista
+  /// anterior nunca sobreescriben la actual (guarda por channelId resuelto).
+  Future<void> _loadArtistDetail(Track t) async {
+    var channelId = t.artistChannelId;
+    String? channelName;
+    if (channelId == null || channelId.isEmpty) {
+      final videoId = t.id.trim();
+      if (videoId.isEmpty) return;
+      if (mounted) setState(() => _artistLoading = true);
+      try {
+        final owner = await context
+            .read<SearchService>()
+            .fetchTrackChannel(videoId);
+        if (!mounted || widget.track?.id.trim() != videoId) return;
+        if (owner == null) {
+          setState(() => _artistLoading = false);
+          return;
+        }
+        channelId = owner.$1;
+        channelName = owner.$2;
+        _fallbackChannelId = channelId;
+        setState(() {
+          _artistDetail = YtmArtistDetail(
+            browseId: channelId!,
+            name: channelName?.isNotEmpty == true ? channelName! : t.artist,
+            tracks: const [],
+            albums: const [],
+          );
+        });
+      } catch (_) {
+        if (mounted) setState(() => _artistLoading = false);
+        return;
+      }
+    }
+    if (channelId.isEmpty || !mounted) {
+      if (mounted) setState(() => _artistLoading = false);
+      return;
+    }
+    try {
+      final detail = await context.read<SearchService>().fetchArtistDetail(
+        channelId,
+        name: channelName?.isNotEmpty == true ? channelName : t.artist,
+      );
+      final resolved = _resolvedChannelId;
+      if (mounted && resolved == channelId) {
+        setState(() {
+          _artistDetail = detail ?? _artistDetail;
+          _artistLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _artistLoading = false);
+    }
+  }
+
+  /// Channel id de la pasada de resolución actual (guarda de respuestas
+  /// tardías).
+  String? get _resolvedChannelId {
+    final id = widget.track?.artistChannelId;
+    if (id != null && id.isNotEmpty) return id;
+    return _fallbackChannelId;
   }
 
   /// Busca las letras de la pista actual en background (cacheadas tras el
@@ -550,6 +639,34 @@ class _NowPlayingExtrasState extends State<NowPlayingExtras> {
     final Color? sheetAccent = Binaries.isMobile
         ? context.watch<ThemeController>().accentColor
         : null;
+    Widget artistCard = const SizedBox.shrink();
+    if (widget.showArtistCard) {
+      final detail = _artistDetail;
+      artistCard = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ArtistInfoCard(
+            track: track,
+            detail: detail,
+            loading: _artistLoading,
+            theme: theme,
+            l10n: l10n,
+            onOpen: detail == null || widget.onOpenArtist == null
+                ? null
+                : () => widget.onOpenArtist!(
+                    YtmArtist(
+                      browseId: detail.browseId,
+                      name: detail.name,
+                      thumbnailUrl: detail.thumbnailUrl,
+                      subscriberCount: detail.subscriberCount,
+                    ),
+                  ),
+          ),
+          const SizedBox(height: kNowPlayingCardGap),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -568,6 +685,8 @@ class _NowPlayingExtrasState extends State<NowPlayingExtras> {
         else
           LyricsCardSkeleton(theme: theme),
         const SizedBox(height: kNowPlayingCardGap),
+        // ANDROID: card de artista ENTRE letras y créditos.
+        artistCard,
         if (_credits != null)
           CreditsCard(
             credits: _credits!,
@@ -578,6 +697,198 @@ class _NowPlayingExtrasState extends State<NowPlayingExtras> {
         else if (_creditsLoading)
           CreditsCardSkeleton(theme: theme),
       ],
+    );
+  }
+}
+
+/// Clickable artist card: accent tint from the artist avatar, avatar, name,
+/// monthly listeners ("218M monthly audience") when already resolved.
+class ArtistInfoCard extends StatefulWidget {
+  final Track track;
+  final YtmArtistDetail? detail;
+
+  /// True while the channel is being resolved in background.
+  final bool loading;
+  final ThemeData theme;
+  final AppLocalizations l10n;
+  final VoidCallback? onOpen;
+
+  const ArtistInfoCard({super.key, required this.track,
+    required this.detail,
+    this.loading = false,
+    required this.theme,
+    required this.l10n,
+    this.onOpen,
+  });
+
+  @override
+  State<ArtistInfoCard> createState() => ArtistInfoCardState();
+}
+
+class ArtistInfoCardState extends State<ArtistInfoCard> {
+  /// Accent extracted/looked up for the CURRENT avatar URL (null while not
+  /// available). Extraction happens HERE when the channel palette is not
+  /// cached yet — under the SAME canonical key the artist screen reads, so
+  /// whoever runs first fills the cache for both.
+  Color? _accent;
+  String? _accentFor;
+  bool _extracting = false;
+
+  @override
+  void didUpdateWidget(covariant ArtistInfoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.detail?.thumbnailUrl != oldWidget.detail?.thumbnailUrl) {
+      _accent = null;
+      _extracting = false;
+    }
+  }
+
+  /// Sync cache read; on miss, async extraction via the SAME service/store
+  /// the artist screen uses (same canonical key → shared entry).
+  Color? _resolveAccent(BuildContext context) {
+    final url = widget.detail?.thumbnailUrl;
+    if (url == null || url.isEmpty) return null;
+    final store = context.read<PaletteCacheStore>();
+    final cached = store.get(url) ??
+        (() {
+          final trio = store.getTrio(url);
+          return trio == null
+              ? null
+              : (ArtworkPaletteService.accentFromTrio(trio) ?? trio.first);
+        })();
+    if (cached != null) {
+      _accent = cached;
+      _accentFor = url;
+      return cached;
+    }
+    // Not cached: extract once in background (dedup per URL; failed URLs
+    // are not retried — same rule as the artist screen).
+    if (!_extracting && _accentFor != url && !store.isFailed(url)) {
+      _extracting = true;
+      _accentFor = url;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_extract(url));
+      });
+    }
+    return _accent;
+  }
+
+  Future<void> _extract(String url) async {
+    try {
+      final store = context.read<PaletteCacheStore>();
+      final trio = await ArtworkPaletteService.trioFor(
+        url,
+        store,
+        artworkCache: context.read<ArtworkCacheService>(),
+      );
+      final color = trio.isEmpty
+          ? null
+          : (ArtworkPaletteService.accentFromTrio(trio) ?? trio.first);
+      if (!mounted) return;
+      setState(() => _accent = color);
+    } catch (_) {
+      // Leave the neutral background; isFailed prevents retry loops.
+    } finally {
+      _extracting = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    final accent = _resolveAccent(context);
+    final bg = accent == null
+        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35)
+        : Color.alphaBlend(accent.withValues(alpha: 0.16),
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35));
+    const avatarSide = 72.0;
+    // Skeleton ONLY while the resolution is actively in flight: when the
+    // lookup ENDED without data (offline, channel not found) the card
+    // paints with the name it already knows — never a stuck skeleton.
+    final skeleton = widget.detail == null && widget.loading;
+    final name = widget.detail?.name ?? widget.track.artist;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: skeleton ? null : widget.onOpen,
+        borderRadius: BorderRadius.circular(16),
+        mouseCursor: SystemMouseCursors.click,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: bg,
+          ),
+          child: Column(
+            children: [
+              // Big avatar on top (helper único: recorte cuadrado hi-res).
+              if (skeleton)
+                ClipOval(
+                  child: SizedBox(
+                    width: avatarSide,
+                    height: avatarSide,
+                    child: ColoredBox(
+                      color: theme.colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.12),
+                    ),
+                  ),
+                )
+              else
+                ArtistAvatarImage(
+                  url: widget.detail?.thumbnailUrl,
+                  side: avatarSide,
+                  circle: true,
+                ),
+              const SizedBox(height: 10),
+              // Name below the avatar (fallback: the track's artist name).
+              if (skeleton)
+                Container(
+                  width: 120,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                )
+              else
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              const SizedBox(height: 3),
+              // Monthly listeners below the name.
+              if (skeleton)
+                Container(
+                  width: 84,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                )
+              else
+                Text(
+                  widget.detail?.audienceText ?? widget.l10n.aboutArtist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

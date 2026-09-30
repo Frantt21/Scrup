@@ -12,6 +12,7 @@ import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
+import '../../services/search_service.dart' show YtmArtist;
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
 import '../views/lyrics_view.dart';
@@ -75,6 +76,9 @@ class MobilePlayerOverlay extends StatefulWidget {
   /// bloquee el tap/arrastre del panel expandido mientras está abierto).
   final ValueChanged<bool>? onLyricsOpenChanged;
 
+  /// Abre el detalle del artista (card de artista del now playing).
+  final ValueChanged<YtmArtist>? onOpenArtist;
+
   const MobilePlayerOverlay({
     super.key,
     required this.height,
@@ -82,6 +86,7 @@ class MobilePlayerOverlay extends StatefulWidget {
     required this.onOpenQueue,
     required this.onClose,
     this.onLyricsOpenChanged,
+    this.onOpenArtist,
   });
 
   @override
@@ -1431,18 +1436,23 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
                           // la Column del player NO se reconstruye en cada
                           // cambio de pista (sus hojas escuchan notifiers
                           // propios), sin esto la card mostraría la vieja.
+                          // SIN padding extra arriba: _contentColumn ya cierra
+                          // con SizedBox(height: 16) — el mismo aire que hay
+                          // tras la fila shuffle/repeat/add — y sumar otro
+                          // 16 duplicaba la separación respecto del resto.
                           if (lyricsActive)
                             ValueListenableBuilder<Track?>(
                               valueListenable: _nTrack,
-                              builder: (context, track, _) => Padding(
-                                padding: const EdgeInsets.only(top: 16),
-                                child: NowPlayingExtras(
-                                  track: track,
-                                  theme: theme,
-                                  l10n: AppLocalizations.of(context),
-                                  onOpenLyrics: () =>
-                                      _lyricsPeekKey.currentState?.open(),
-                                ),
+                              builder: (context, track, _) => NowPlayingExtras(
+                                track: track,
+                                theme: theme,
+                                l10n: AppLocalizations.of(context),
+                                onOpenLyrics: () =>
+                                    _lyricsPeekKey.currentState?.open(),
+                                // ANDROID: card de artista ENTRE letras y
+                                // créditos, clicable al detalle del canal.
+                                showArtistCard: true,
+                                onOpenArtist: widget.onOpenArtist,
                               ),
                             ),
                         ],
@@ -2207,7 +2217,9 @@ class _LyricsPeekState extends State<_LyricsPeek> {
           // despliega completo desde la card. El inset inferior solo aplica
           // mientras está abierto (su fondo sigue llegando al borde real).
           final collapsed = 0.0;
-          final openH = maxH * 0.80;
+          // Abierto: 90% de la pantalla (antes 80%): el karaoke gana espacio
+          // vertical; queda una franja del player arriba (header cerrar/cola).
+          final openH = maxH * 0.90;
           // Recorrido total del sheet (recogido → abierto): se usa para que
           // el sheet siga al dedo 1:1 durante el arrastre.
           final double travel = openH - collapsed;

@@ -843,6 +843,15 @@ class _AppShellState extends State<AppShell> {
                       // sigue disponible por su camino propio.
                       onLyricsOpenChanged: (open) =>
                           _lyricsPanelLock.value = open,
+                      // Card de artista del now playing → detalle del canal
+                      // (montado dentro del shell, nav+miniplayer visibles).
+                      // El player se COLAPSA primero: el screen vive en el
+                      // IndexedStack del shell, por debajo del overlay — sin
+                      // colapsar el artista quedaría tapado por el player.
+                      onOpenArtist: (artist) {
+                        _miniController.animateToHeight(state: PanelState.MIN);
+                        _openArtistDetail(artist);
+                      },
                     );
                   },
                 ),

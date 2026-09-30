@@ -12,7 +12,6 @@ import '../../services/search_service.dart'
     show SearchService, YtmArtist, YtmArtistDetail;
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
-import 'artist_avatar.dart';
 import 'cover_image.dart';
 import 'now_playing_cards.dart';
 import 'track_tile.dart';
@@ -22,6 +21,7 @@ import 'track_tile.dart';
 // no tocar los imports de quienes ya consumían este archivo.
 export 'now_playing_cards.dart'
     show
+        ArtistInfoCard,
         CreditsCard,
         LyricsPreviewCard,
         NowPlayingExtras,
@@ -867,7 +867,7 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
             ),
           ),
           const SizedBox(height: 8),
-          _ArtistInfoCard(
+          ArtistInfoCard(
             track: track,
             detail: _artistDetail,
             loading: _artistLoading,
@@ -1005,199 +1005,6 @@ class _NowPlayingSkeleton extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-/// Clickable artist card: accent tint from the artist avatar, avatar, name,
-/// monthly listeners ("218M monthly audience") when already resolved.
-class _ArtistInfoCard extends StatefulWidget {
-  final Track track;
-  final YtmArtistDetail? detail;
-
-  /// True while the channel is being resolved in background.
-  final bool loading;
-  final ThemeData theme;
-  final AppLocalizations l10n;
-  final VoidCallback? onOpen;
-
-  const _ArtistInfoCard({
-    required this.track,
-    required this.detail,
-    this.loading = false,
-    required this.theme,
-    required this.l10n,
-    this.onOpen,
-  });
-
-  @override
-  State<_ArtistInfoCard> createState() => _ArtistInfoCardState();
-}
-
-class _ArtistInfoCardState extends State<_ArtistInfoCard> {
-  /// Accent extracted/looked up for the CURRENT avatar URL (null while not
-  /// available). Extraction happens HERE when the channel palette is not
-  /// cached yet — under the SAME canonical key the artist screen reads, so
-  /// whoever runs first fills the cache for both.
-  Color? _accent;
-  String? _accentFor;
-  bool _extracting = false;
-
-  @override
-  void didUpdateWidget(covariant _ArtistInfoCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.detail?.thumbnailUrl != oldWidget.detail?.thumbnailUrl) {
-      _accent = null;
-      _extracting = false;
-    }
-  }
-
-  /// Sync cache read; on miss, async extraction via the SAME service/store
-  /// the artist screen uses (same canonical key → shared entry).
-  Color? _resolveAccent(BuildContext context) {
-    final url = widget.detail?.thumbnailUrl;
-    if (url == null || url.isEmpty) return null;
-    final store = context.read<PaletteCacheStore>();
-    final cached = store.get(url) ??
-        (() {
-          final trio = store.getTrio(url);
-          return trio == null
-              ? null
-              : (ArtworkPaletteService.accentFromTrio(trio) ?? trio.first);
-        })();
-    if (cached != null) {
-      _accent = cached;
-      _accentFor = url;
-      return cached;
-    }
-    // Not cached: extract once in background (dedup per URL; failed URLs
-    // are not retried — same rule as the artist screen).
-    if (!_extracting && _accentFor != url && !store.isFailed(url)) {
-      _extracting = true;
-      _accentFor = url;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_extract(url));
-      });
-    }
-    return _accent;
-  }
-
-  Future<void> _extract(String url) async {
-    try {
-      final store = context.read<PaletteCacheStore>();
-      final trio = await ArtworkPaletteService.trioFor(
-        url,
-        store,
-        artworkCache: context.read<ArtworkCacheService>(),
-      );
-      final color = trio.isEmpty
-          ? null
-          : (ArtworkPaletteService.accentFromTrio(trio) ?? trio.first);
-      if (!mounted) return;
-      setState(() => _accent = color);
-    } catch (_) {
-      // Leave the neutral background; isFailed prevents retry loops.
-    } finally {
-      _extracting = false;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = widget.theme;
-    final accent = _resolveAccent(context);
-    final bg = accent == null
-        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35)
-        : Color.alphaBlend(accent.withValues(alpha: 0.16),
-            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35));
-    const avatarSide = 72.0;
-    // Skeleton ONLY while the resolution is actively in flight: when the
-    // lookup ENDED without data (offline, channel not found) the card
-    // paints with the name it already knows — never a stuck skeleton.
-    final skeleton = widget.detail == null && widget.loading;
-    final name = widget.detail?.name ?? widget.track.artist;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: skeleton ? null : widget.onOpen,
-        borderRadius: BorderRadius.circular(16),
-        mouseCursor: SystemMouseCursors.click,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: bg,
-          ),
-          child: Column(
-            children: [
-              // Big avatar on top (helper único: recorte cuadrado hi-res).
-              if (skeleton)
-                ClipOval(
-                  child: SizedBox(
-                    width: avatarSide,
-                    height: avatarSide,
-                    child: ColoredBox(
-                      color: theme.colorScheme.onSurfaceVariant
-                          .withValues(alpha: 0.12),
-                    ),
-                  ),
-                )
-              else
-                ArtistAvatarImage(
-                  url: widget.detail?.thumbnailUrl,
-                  side: avatarSide,
-                  circle: true,
-                ),
-              const SizedBox(height: 10),
-              // Name below the avatar (fallback: the track's artist name).
-              if (skeleton)
-                Container(
-                  width: 120,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.onSurfaceVariant
-                        .withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                )
-              else
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              const SizedBox(height: 3),
-              // Monthly listeners below the name.
-              if (skeleton)
-                Container(
-                  width: 84,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.onSurfaceVariant
-                        .withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                )
-              else
-                Text(
-                  widget.detail?.audienceText ?? widget.l10n.aboutArtist,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
