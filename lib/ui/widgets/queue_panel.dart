@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/track.dart';
+import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
@@ -627,6 +628,13 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
   Track? _track;
   bool _isFavorite = false;
 
+  /// Favoritos REACTIVO (misma receta que PlayerBar): stream de drift sobre
+  /// la playlist de favoritos. El toggle del player (o de cualquier otra
+  /// superficie) escribe en la BD y este stream repinta la card sin
+  /// one-shots — antes el panel no escuchaba al botón del player.
+  StreamSubscription<bool>? _favSub;
+  int _favoritesId = -1;
+
   /// Artist card detail (listeners text). Resolved in background from the
   /// artist cache; `null` while loading or when the channel is unknown.
   YtmArtistDetail? _artistDetail;
@@ -646,28 +654,46 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
         _artistDetail = null;
         _artistLoading = false;
       });
-      unawaited(_refreshFavorite());
+      _subscribeFavorite();
       unawaited(_loadArtistDetail());
     });
-    unawaited(_refreshFavorite());
+    unawaited(_setupFavorites());
     unawaited(_loadArtistDetail());
   }
 
   @override
   void dispose() {
     _trackSub?.cancel();
+    _favSub?.cancel();
     super.dispose();
   }
 
-  Future<void> _refreshFavorite() async {
-    final t = _track;
-    if (t == null || !mounted) return;
-    try {
-      final fav = await isTrackFavorite(context, t);
-      if (mounted && t.id == _track?.id) {
-        setState(() => _isFavorite = fav);
-      }
-    } catch (_) {}
+  /// Resuelve el id de la playlist de favoritos (promesa serializada del
+  /// db) y arma la suscripción del stream.
+  Future<void> _setupFavorites() async {
+    final db = context.read<AppDatabase>();
+    final id = await db.ensureFavoritesPlaylist();
+    if (!mounted) return;
+    _favoritesId = id;
+    _subscribeFavorite();
+  }
+
+  /// (Re)suscribe el stream de favoritos para la pista ACTUAL. Cualquier
+  /// escritura externa (player bar, menús, panel) dispara el repaint.
+  void _subscribeFavorite() {
+    _favSub?.cancel();
+    _favSub = null;
+    if (_favoritesId < 0) return;
+    final track = _track;
+    if (track == null) {
+      if (mounted && _isFavorite) setState(() => _isFavorite = false);
+      return;
+    }
+    final db = context.read<AppDatabase>();
+    _favSub = db.watchTrackInPlaylist(_favoritesId, track.id).listen((inside) {
+      if (!mounted) return;
+      setState(() => _isFavorite = inside);
+    });
   }
 
   /// Resolves the artist detail in background with a STRICT 100% rule:
@@ -839,12 +865,13 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
                   padding: EdgeInsets.zero,
                   iconSize: 18,
                   onPressed: () async {
-                    await toggleTrackFavorite(
-                      context,
-                      track,
-                      current: _isFavorite,
-                    );
-                    if (mounted) unawaited(_refreshFavorite());
+                    // El toggle consulta el estado REAL en la BD (no el del
+                    // botón) y devuelve el resultado: se pinta de inmediato.
+                    // El stream reactivo lo confirma/corrige después.
+                    final nowFav = await toggleTrackFavorite(context, track);
+                    if (mounted && nowFav != _isFavorite) {
+                      setState(() => _isFavorite = nowFav);
+                    }
                   },
                   icon: Icon(
                     _isFavorite

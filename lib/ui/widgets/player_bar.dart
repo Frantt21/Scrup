@@ -196,7 +196,9 @@ class _PlayerBarState extends State<PlayerBar>
     );
     if (!mounted || action == null) return;
     if (action == 'fav') {
-      await toggleTrackFavorite(context, track, current: _isFavorite);
+      // El toggle consulta el estado REAL en la BD; el stream de favoritos
+      // repinta el botón con el resultado.
+      await toggleTrackFavorite(context, track);
     } else if (action == 'edit') {
       await _showEditMetadataDialog(track);
     } else if (action == 'add') {

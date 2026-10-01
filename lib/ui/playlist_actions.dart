@@ -37,24 +37,33 @@ Future<void> showAddToPlaylistDialog(BuildContext context, Track track) async {
 /// Añade [track] a la playlist de FAVORITOS (o la quita si [current] es
 /// true). Compartido por todos los context menus (recientes, player,
 /// listas de artista/álbum): una sola fuente de verdad para el toggle.
-Future<void> toggleTrackFavorite(
+/// Alterna la pista en la playlist de favoritos y devuelve el estado REAL
+/// resultante (`true` = quedó en favoritos).
+///
+/// El estado se consulta en la BD en este momento (NO se confía en el
+/// estado del botón, que puede estar desactualizado): si el botón decía
+/// "no favorita" pero la pista ya estaba, se ELIMINA y el toast dice lo que
+/// pasó de verdad — antes un estado viejo hacía toasts falsos de "agregada"
+/// en cada clic.
+Future<bool> toggleTrackFavorite(
   BuildContext context,
-  Track track, {
-  required bool current,
-}) async {
+  Track track,
+) async {
   final db = context.read<AppDatabase>();
   final id = await db.ensureFavoritesPlaylist();
-  if (current) {
+  final wasFav = (await db.playlistIdsContainingTrack(track.id)).contains(id);
+  if (wasFav) {
     await db.removeFromPlaylist(id, track.id);
   } else {
     await db.addToPlaylist(id, track);
   }
-  if (!context.mounted) return;
+  if (!context.mounted) return !wasFav;
   final l10n = AppLocalizations.of(context);
   showScrupToast(
-    current ? l10n.removeFromFavorites : l10n.addToFavorites,
+    wasFav ? l10n.removeFromFavorites : l10n.addToFavorites,
     kind: ScrupToastKind.success,
   );
+  return !wasFav;
 }
 
 /// ¿Está [track] en la playlist de favoritos? (consulta puntual; para

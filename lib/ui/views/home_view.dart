@@ -801,11 +801,7 @@ class _RecentCardState extends State<_RecentCard> {
     );
     if (!mounted || action == null) return;
     if (action == 'fav') {
-      await toggleTrackFavorite(
-        context,
-        widget.track,
-        current: await isTrackFavorite(context, widget.track),
-      );
+      await toggleTrackFavorite(context, widget.track);
     } else if (action == 'add') {
       await showAddToPlaylistDialog(context, widget.track);
     } else if (action == 'recalc') {
@@ -925,11 +921,7 @@ class _RecentCardState extends State<_RecentCard> {
     );
     if (!mounted || action == null) return;
     if (action == 'fav') {
-      await toggleTrackFavorite(
-        context,
-        widget.track,
-        current: await isTrackFavorite(context, widget.track),
-      );
+      await toggleTrackFavorite(context, widget.track);
     } else if (action == 'add') {
       await showAddToPlaylistDialog(context, widget.track);
     } else if (action == 'recalc') {

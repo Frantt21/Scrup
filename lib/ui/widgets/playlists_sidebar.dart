@@ -155,7 +155,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
     if (action == 'play') {
       widget.onSelectPlaylist(playlist);
     } else if (action == 'fav' && current != null) {
-      await toggleTrackFavorite(context, current, current: isFav);
+      await toggleTrackFavorite(context, current);
     }
   }
 

@@ -66,7 +66,7 @@ Future<void> _showTrackMenuShared(
   );
   if (!context.mounted || action == null) return;
   if (action == 'fav') {
-    await toggleTrackFavorite(context, track, current: isFav);
+    await toggleTrackFavorite(context, track);
   } else if (action == 'add') {
     await showAddToPlaylistDialog(context, track);
   }
