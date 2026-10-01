@@ -202,6 +202,11 @@
   "imageCopied": "图片已复制到剪贴板",
   "imageSaved": "图片已保存",
   "shareRoundedCorners": "圆角",
+  "shareSelectLines": "最多选择 3 行",
+  "shareContinue": "继续",
+  "shareBackToSelection": "返回选择",
+  "shareSavedToGallery": "图片已保存到相册",
+  "shareSaveError": "无法保存图片",
   "selectedLinesCount": "已选择 {count} / {max} 行",
   "@selectedLinesCount": {
     "placeholders": {

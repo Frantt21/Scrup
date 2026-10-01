@@ -1279,6 +1279,36 @@ abstract class AppLocalizations {
   /// **'Esquinas redondeadas'**
   String get shareRoundedCorners;
 
+  /// No description provided for @shareSelectLines.
+  ///
+  /// In es, this message translates to:
+  /// **'Selecciona hasta 3 líneas'**
+  String get shareSelectLines;
+
+  /// No description provided for @shareContinue.
+  ///
+  /// In es, this message translates to:
+  /// **'Continuar'**
+  String get shareContinue;
+
+  /// No description provided for @shareBackToSelection.
+  ///
+  /// In es, this message translates to:
+  /// **'Volver a la selección'**
+  String get shareBackToSelection;
+
+  /// No description provided for @shareSavedToGallery.
+  ///
+  /// In es, this message translates to:
+  /// **'Imagen guardada en tus imágenes'**
+  String get shareSavedToGallery;
+
+  /// No description provided for @shareSaveError.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudo guardar la imagen'**
+  String get shareSaveError;
+
   /// No description provided for @selectedLinesCount.
   ///
   /// In es, this message translates to:

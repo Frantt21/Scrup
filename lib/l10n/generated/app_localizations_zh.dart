@@ -636,6 +636,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shareRoundedCorners => '圆角';
 
   @override
+  String get shareSelectLines => '最多选择 3 行';
+
+  @override
+  String get shareContinue => '继续';
+
+  @override
+  String get shareBackToSelection => '返回选择';
+
+  @override
+  String get shareSavedToGallery => '图片已保存到相册';
+
+  @override
+  String get shareSaveError => '无法保存图片';
+
+  @override
   String selectedLinesCount(int count, int max) {
     return '已选择 $count / $max 行';
   }

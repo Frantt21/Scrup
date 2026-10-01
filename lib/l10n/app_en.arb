@@ -323,6 +323,11 @@
   "imageCopied": "Image copied to clipboard",
   "imageSaved": "Image saved",
   "shareRoundedCorners": "Rounded corners",
+  "shareSelectLines": "Select up to 3 lines",
+  "shareContinue": "Continue",
+  "shareBackToSelection": "Back to selection",
+  "shareSavedToGallery": "Image saved to your pictures",
+  "shareSaveError": "Could not save the image",
   "selectedLinesCount": "{count} of {max} lines selected",
   "@selectedLinesCount": {
     "placeholders": {

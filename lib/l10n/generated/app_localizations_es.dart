@@ -653,6 +653,21 @@ class AppLocalizationsEs extends AppLocalizations {
   String get shareRoundedCorners => 'Esquinas redondeadas';
 
   @override
+  String get shareSelectLines => 'Selecciona hasta 3 líneas';
+
+  @override
+  String get shareContinue => 'Continuar';
+
+  @override
+  String get shareBackToSelection => 'Volver a la selección';
+
+  @override
+  String get shareSavedToGallery => 'Imagen guardada en tus imágenes';
+
+  @override
+  String get shareSaveError => 'No se pudo guardar la imagen';
+
+  @override
   String selectedLinesCount(int count, int max) {
     return '$count de $max lineas seleccionadas';
   }

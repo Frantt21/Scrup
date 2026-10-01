@@ -657,6 +657,21 @@ class AppLocalizationsRu extends AppLocalizations {
   String get shareRoundedCorners => 'Скруглённые углы';
 
   @override
+  String get shareSelectLines => 'Выберите до 3 строк';
+
+  @override
+  String get shareContinue => 'Продолжить';
+
+  @override
+  String get shareBackToSelection => 'Назад к выбору';
+
+  @override
+  String get shareSavedToGallery => 'Изображение сохранено в галерею';
+
+  @override
+  String get shareSaveError => 'Не удалось сохранить изображение';
+
+  @override
   String selectedLinesCount(int count, int max) {
     return 'Выбрано строк: $count из $max';
   }

@@ -638,6 +638,21 @@ class AppLocalizationsKo extends AppLocalizations {
   String get shareRoundedCorners => '모서릴 모서릴';
 
   @override
+  String get shareSelectLines => '최대 3줄을 선택하세요';
+
+  @override
+  String get shareContinue => '계속';
+
+  @override
+  String get shareBackToSelection => '선택으로 돌아가기';
+
+  @override
+  String get shareSavedToGallery => '이미지가 갤러리에 저장되었습니다';
+
+  @override
+  String get shareSaveError => '이미지를 저장하지 못했습니다';
+
+  @override
   String selectedLinesCount(int count, int max) {
     return '$count / $max개 라인 선택됨';
   }

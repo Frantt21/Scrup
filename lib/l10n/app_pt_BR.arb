@@ -201,6 +201,11 @@
   "imageCopied": "Imagem copiada para a área de transferência",
   "imageSaved": "Imagem salva",
   "shareRoundedCorners": "Cantos arredondados",
+  "shareSelectLines": "Selecione até 3 linhas",
+  "shareContinue": "Continuar",
+  "shareBackToSelection": "Voltar à seleção",
+  "shareSavedToGallery": "Imagem salva nas suas imagens",
+  "shareSaveError": "Não foi possível salvar a imagem",
   "selectedLinesCount": "{count} de {max} linhas selecionadas",
   "@selectedLinesCount": {
     "placeholders": {

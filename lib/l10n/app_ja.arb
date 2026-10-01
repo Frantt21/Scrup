@@ -202,6 +202,11 @@
   "imageCopied": "画像をクリップボードにコピーしました",
   "imageSaved": "画像を保存しました",
   "shareRoundedCorners": "角丸",
+  "shareSelectLines": "最大3行を選択",
+  "shareContinue": "続ける",
+  "shareBackToSelection": "選択に戻る",
+  "shareSavedToGallery": "画像をギャラリーに保存しました",
+  "shareSaveError": "画像を保存できませんでした",
   "selectedLinesCount": "{count} / {max} 行を選択中",
   "@selectedLinesCount": {
     "placeholders": {

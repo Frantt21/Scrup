@@ -202,6 +202,11 @@
   "imageCopied": "Изображение скопировано в буфер обмена",
   "imageSaved": "Изображение сохранено",
   "shareRoundedCorners": "Скруглённые углы",
+  "shareSelectLines": "Выберите до 3 строк",
+  "shareContinue": "Продолжить",
+  "shareBackToSelection": "Назад к выбору",
+  "shareSavedToGallery": "Изображение сохранено в галерею",
+  "shareSaveError": "Не удалось сохранить изображение",
   "selectedLinesCount": "Выбрано строк: {count} из {max}",
   "@selectedLinesCount": {
     "placeholders": {

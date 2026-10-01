@@ -651,6 +651,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shareRoundedCorners => 'Cantos arredondados';
 
   @override
+  String get shareSelectLines => 'Selecione até 3 linhas';
+
+  @override
+  String get shareContinue => 'Continuar';
+
+  @override
+  String get shareBackToSelection => 'Voltar à seleção';
+
+  @override
+  String get shareSavedToGallery => 'Imagem salva nas suas imagens';
+
+  @override
+  String get shareSaveError => 'Não foi possível salvar a imagem';
+
+  @override
   String selectedLinesCount(int count, int max) {
     return '$count de $max linhas selecionadas';
   }
@@ -1508,6 +1523,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shareRoundedCorners => 'Cantos arredondados';
+
+  @override
+  String get shareSelectLines => 'Selecione até 3 linhas';
+
+  @override
+  String get shareContinue => 'Continuar';
+
+  @override
+  String get shareBackToSelection => 'Voltar à seleção';
+
+  @override
+  String get shareSavedToGallery => 'Imagem salva nas suas imagens';
+
+  @override
+  String get shareSaveError => 'Não foi possível salvar a imagem';
 
   @override
   String selectedLinesCount(int count, int max) {

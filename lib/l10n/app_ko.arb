@@ -202,6 +202,11 @@
   "imageCopied": "이미지가 클립보드에 복사되었습니다",
   "imageSaved": "이미지가 저장되었습니다",
   "shareRoundedCorners": "모서릴 모서릴",
+  "shareSelectLines": "최대 3줄을 선택하세요",
+  "shareContinue": "계속",
+  "shareBackToSelection": "선택으로 돌아가기",
+  "shareSavedToGallery": "이미지가 갤러리에 저장되었습니다",
+  "shareSaveError": "이미지를 저장하지 못했습니다",
   "selectedLinesCount": "{count} / {max}개 라인 선택됨",
   "@selectedLinesCount": {
     "placeholders": {

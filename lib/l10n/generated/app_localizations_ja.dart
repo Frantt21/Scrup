@@ -638,6 +638,21 @@ class AppLocalizationsJa extends AppLocalizations {
   String get shareRoundedCorners => '角丸';
 
   @override
+  String get shareSelectLines => '最大3行を選択';
+
+  @override
+  String get shareContinue => '続ける';
+
+  @override
+  String get shareBackToSelection => '選択に戻る';
+
+  @override
+  String get shareSavedToGallery => '画像をギャラリーに保存しました';
+
+  @override
+  String get shareSaveError => '画像を保存できませんでした';
+
+  @override
   String selectedLinesCount(int count, int max) {
     return '$count / $max 行を選択中';
   }
