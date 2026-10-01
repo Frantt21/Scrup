@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show File;
+import 'dart:io' show File, Platform;
 import 'dart:typed_data' show Uint8List;
 import 'dart:ui' as ui;
 
@@ -8,7 +8,8 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/scheduler.dart' show Ticker;
-import 'package:flutter/services.dart' show FilteringTextInputFormatter;
+import 'package:flutter/services.dart'
+    show FilteringTextInputFormatter, MethodChannel, PlatformException;
 import 'package:provider/provider.dart';
 
 import '../../core/lyrics_search_result.dart';
@@ -18,6 +19,7 @@ import '../../core/synced_lyrics.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
+import '../widgets/scrup_toasts.dart';
 import '../../services/lyrics_service.dart';
 import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
@@ -35,6 +37,12 @@ class LyricsView extends StatefulWidget {
 
   /// Static bridge for the lyrics sheet header (Android): the sheet calls these actions WITHOUT duplicating dialogs/state. The ACTIVE view fills the map on each build (callbacks with live state) and clears it on dispose. No GlobalObjectKey: 2 instances can coexist mounted (lyrics page + sheet) and the duplicate key breaks.
   static final Map<String, VoidCallback?> activeActions = {};
+
+  /// Notified whenever [activeActions] changes (view builds / disposes).
+  /// The sheet header listens so its buttons re-enable even though the view
+  /// registers AFTER the header builds in the same frame (map reads stale
+  /// during the header's own build otherwise).
+  static final ValueNotifier<int> actionsVersion = ValueNotifier(0);
 
   @override
   State<LyricsView> createState() => _LyricsViewState();
@@ -130,6 +138,20 @@ class _LyricsViewState extends State<LyricsView>
   @override
   void initState() {
     super.initState();
+    // Register available actions NOW (before first build): the sheet header
+    // builds BEFORE this view in the same frame and would otherwise see an
+    // empty map for the whole sheet session (it only rebuilds via the
+    // actionsVersion notifier).
+    LyricsView.activeActions['karaoke'] = () async {
+      final next = !_sweepEnabled;
+      setState(() => _sweepEnabled = next);
+      await context.read<SettingsStore>().setLyricsSweepEnabled(next);
+    };
+    LyricsView.activeActions['offset'] = null;
+    LyricsView.activeActions['search'] = null;
+    LyricsView.activeActions['share'] = null;
+    LyricsView.actionsVersion.value++;
+
     _player = context.read<PlayerService>();
     final player = _player;
     _track = player.currentTrackValue;
@@ -262,6 +284,7 @@ class _LyricsViewState extends State<LyricsView>
   @override
   void dispose() {
     LyricsView.activeActions.clear();
+    LyricsView.actionsVersion.value++;
     _trackSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
@@ -421,7 +444,7 @@ class _LyricsViewState extends State<LyricsView>
     setState(() => _openDialogs++);
     showDialog<void>(
       context: context,
-      builder: (ctx) => _LyricsShareDialog(
+      builder: (ctx) => LyricsShareDialog(
         lyrics: lyrics,
         initialIndex: idx,
         trackTitle: track.title,
@@ -453,6 +476,10 @@ class _LyricsViewState extends State<LyricsView>
     LyricsView.activeActions['offset'] = _lyrics == null ? null : _showSyncDialog;
     LyricsView.activeActions['search'] = _track == null ? null : _showSearchDialog;
     LyricsView.activeActions['share'] = _lyrics == null ? null : _showShareDialog;
+    // Refresh signal for the sheet header (Android): it reads the map during
+    // ITS OWN build (earlier in the frame), so it must rebuild to pick up
+    // availability changes (lyrics fetched, track changed, etc.).
+    LyricsView.actionsVersion.value++;
 
     final embedded = widget.embedded;
     // Desktop: fondo PLANO de acento (mismo lenguaje que el player) con
@@ -1523,7 +1550,7 @@ const double _kShareFontL = 48;
 /// Share dialog: export card (what gets saved) above; selectable lyrics
 /// (original lines, max 3 contiguous) below; S/M/L font pills + radius
 /// toggle (rounded vs sharp corners) for the exported image.
-class _LyricsShareDialog extends StatefulWidget {
+class LyricsShareDialog extends StatefulWidget {
   final SyncedLyrics lyrics;
   final int initialIndex;
   final String trackTitle;
@@ -1531,24 +1558,41 @@ class _LyricsShareDialog extends StatefulWidget {
   final String? artworkUrl;
   final Color? accentColor;
 
-  const _LyricsShareDialog({
+  /// MODO EMERGENTE (Android, dentro del sheet de letras): el dialog vive
+  /// dentro de un contenedor arrastrable a pantalla parcial y maneja DOS
+  /// pasos — 1) selección de líneas, 2) preview + controles. Cambia el
+  /// guardado (MediaStore/galería en vez de file_selector) y la cabecera.
+  final bool inline;
+
+  /// Solo en modo inline: cierra el contenedor completo (el sheet), no solo
+  /// este widget.
+  final VoidCallback? onCloseContainer;
+
+  const LyricsShareDialog({
+    super.key,
     required this.lyrics,
     required this.initialIndex,
     required this.trackTitle,
     required this.artist,
     this.artworkUrl,
     this.accentColor,
+    this.inline = false,
+    this.onCloseContainer,
   });
 
   @override
-  State<_LyricsShareDialog> createState() => _LyricsShareDialogState();
+  State<LyricsShareDialog> createState() => LyricsShareDialogState();
 }
 
-class _LyricsShareDialogState extends State<_LyricsShareDialog> {
+class LyricsShareDialogState extends State<LyricsShareDialog> {
   int _selStart = 0;
   int _selEnd = 0;
   double _fontSize = _kShareFontM;
   bool _rounded = true;
+
+  /// Paso actual del flujo inline (Android): selección → preview.
+  bool _previewing = false;
+
   final GlobalKey _captureKey = GlobalKey();
   // Static position parked at the initial line: the selection list does
   // not follow playback, but the auto-scroll centers the selection.
@@ -1626,6 +1670,21 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
     try {
       final bytes = await _captureBytes();
       if (bytes == null) return;
+
+      // ANDROID (inline): no hay file picker — la imagen se guarda en la
+      // galería del dispositivo vía MediaStore (API 29+: RELATIVE_PATH
+      // Pictures/Scrup; legacy: Pictures pública). Sin permisos en 29+.
+      if (widget.inline && Platform.isAndroid) {
+        final saved = await _saveToAndroidGallery(bytes);
+        if (!mounted) return;
+        showScrupToast(
+          saved ? l10n.shareSavedToGallery : l10n.shareSaveError,
+          kind: saved ? ScrupToastKind.success : ScrupToastKind.error,
+        );
+        return;
+      }
+
+      // DESKTOP: file_selector con nombre sugerido.
       final safe = widget.trackTitle
           .replaceAll(RegExp(r'[^\w\s-]'), '')
           .trim();
@@ -1648,6 +1707,34 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
       ).showSnackBar(SnackBar(content: Text(l10n.imageSaved)));
     } catch (e) {
       debugPrint('[Scrup] Share: error saving image: $e');
+      if (mounted && widget.inline) {
+        showScrupToast(
+          AppLocalizations.of(context).shareSaveError,
+          kind: ScrupToastKind.error,
+        );
+      }
+    }
+  }
+
+  /// Guarda el PNG en la galería de Android vía MediaStore (canal nativo de
+  /// MainActivity). Devuelve true si la inserción fue exitosa.
+  static const _saveChannel = MethodChannel(
+    'com.scrup.scrup/save_image',
+  );
+
+  Future<bool> _saveToAndroidGallery(Uint8List bytes) async {
+    try {
+      final safe = widget.trackTitle
+          .replaceAll(RegExp(r'[^\w\s-]'), '')
+          .trim();
+      final result = await _saveChannel.invokeMethod<bool>('savePng', {
+        'bytes': bytes,
+        'displayName':
+            '${safe.isEmpty ? 'lyrics' : safe} - scrup-${DateTime.now().millisecondsSinceEpoch}.png',
+      });
+      return result == true;
+    } on PlatformException {
+      return false;
     }
   }
 
@@ -1727,6 +1814,88 @@ class _LyricsShareDialogState extends State<_LyricsShareDialog> {
         ),
       ),
     );
+    // ANDROID (inline): flujo de 2 pasos SIN Dialog — el widget vive
+    // dentro del sheet arrastrable de letras. Paso 1: selección + botón
+    // continuar (idéntico al de sync). Paso 2: preview + controles.
+    if (widget.inline) {
+      return Column(
+        children: [
+          // Header compacto: título + volver al paso 1 (en preview).
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 8, 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _previewing ? l10n.shareLyrics : l10n.shareSelectLines,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (_previewing)
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                    tooltip: l10n.shareBackToSelection,
+                    onPressed: () => setState(() => _previewing = false),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  tooltip: l10n.close,
+                  onPressed: widget.onCloseContainer ??
+                      () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _previewing
+                ? SingleChildScrollView(
+                    child: Center(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: _buildCard(theme, accent),
+                      ),
+                    ),
+                  )
+                : selector,
+          ),
+          if (_previewing) ...[
+            const SizedBox(height: 6),
+            controls,
+          ],
+          const SizedBox(height: 8),
+          // Botón CONTINUAR (paso 1) — mismo estilo que el botón de
+          // sincronización (FilledButton del dialog de sync).
+          if (!_previewing)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => setState(() => _previewing = true),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    l10n.shareContinue,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return Dialog(
       backgroundColor: theme.colorScheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

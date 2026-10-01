@@ -2,6 +2,11 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- Red: InnerTube, descarga de audio y metadatos. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Guardar imágenes en la galería (share de lyrics) SOLO en Android < 10:
+         API 29+ usa MediaStore con scoped storage (sin permisos). -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"/>
     <!-- Notificación de MediaSession (API 33+: se pide en runtime). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Reproducción en segundo plano con la notificación de audio. -->

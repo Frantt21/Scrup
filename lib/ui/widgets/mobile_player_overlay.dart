@@ -6,7 +6,9 @@ import 'package:provider/provider.dart';
 
 import '../../core/track.dart';
 import '../../core/app_log.dart';
+import '../../core/synced_lyrics.dart';
 import '../../data/database.dart';
+import '../../services/lyrics_service.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
@@ -1475,6 +1477,10 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
             key: _lyricsPeekKey,
             enabled: lyricsActive,
             onChanged: widget.onLyricsOpenChanged,
+            // Para el MODO COMPARTIR: pista actual (título/artista/artwork)
+            // y posición (línea inicial de la selección).
+            track: _showingNow,
+            position: _nPos,
           ),
         ),
       ],
@@ -2018,7 +2024,19 @@ class _LyricsPeek extends StatefulWidget {
   /// Notifica a la app cuando se abre/cierra (para bloquear el panel).
   final ValueChanged<bool>? onChanged;
 
-  const _LyricsPeek({super.key, required this.enabled, this.onChanged});
+  /// Pista actual (para el modo compartir: título/artista/artwork).
+  final Track? track;
+
+  /// Posición de reproducción (línea inicial de la selección de share).
+  final ValueNotifier<Duration> position;
+
+  const _LyricsPeek({
+    super.key,
+    required this.enabled,
+    this.onChanged,
+    this.track,
+    required this.position,
+  });
 
   @override
   State<_LyricsPeek> createState() => _LyricsPeekState();
@@ -2125,6 +2143,15 @@ class _LyricsPeekState extends State<_LyricsPeek> {
     _ => Icons.share_rounded,
   };
 
+  /// Availability snapshot (lyrics/track loaded). The build subscribes to
+  /// the view's version notifier via [ValueListenableBuilder] so this header
+  /// rebuilds when the embedded LyricsView registers AFTER us in the same
+  /// frame — otherwise buttons would stay disabled for the whole session.
+  Set<String> get _availableActions => LyricsView.activeActions.entries
+      .where((e) => e.value != null)
+      .map((e) => e.key)
+      .toSet();
+
   String _lyricsActionTooltip(String action) {
     final l10n = AppLocalizations.of(context);
     return switch (action) {
@@ -2136,8 +2163,107 @@ class _LyricsPeekState extends State<_LyricsPeek> {
   }
 
   void _runLyricsAction(String action) {
+    // SHARE en Android: NO abre el dialog de desktop (no hay espacio) —
+    // activa el MODO COMPARTIR de este sheet: el mismo contenedor
+    // arrastrable muestra el flujo de 2 pasos (selección → preview) con el
+    // dialog inline reutilizado.
+    if (action == 'share') {
+      if (LyricsView.activeActions['share'] == null) return;
+      setState(() => _shareMode = true);
+      return;
+    }
     LyricsView.activeActions[action]?.call();
   }
+
+  /// `true` mientras el sheet muestra el flujo de compartir (2 pasos) en
+  /// lugar de las letras normales.
+  bool _shareMode = false;
+
+  /// Letras resueltas para el modo compartir (fetch con el MISMO singleton
+  /// LyricsService que usa el view — cacheado, sin request duplicado).
+  SyncedLyrics? _shareLyrics;
+  Track? _shareTrack;
+  bool _shareLoading = false;
+
+  /// Monta el flujo de compartir inline (2 pasos). Resuelve letras+track en
+  /// el primer build del modo y renderiza [LyricsShareDialog] con inline:true.
+  Widget _buildInlineShare(ThemeData theme) {
+    final track = widget.track;
+    if (_shareLoading && _shareTrack?.id == track?.id) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_shareTrack?.id != track?.id) {
+      // (Re)carga: pista nueva o primera entrada al modo.
+      _shareTrack = track;
+      _shareLyrics = null;
+      _shareLoading = true;
+      if (track != null) {
+        final title = track.title;
+        final artist = track.artist;
+        final db = context.read<AppDatabase>();
+        final svc = LyricsService(db);
+        unawaited(
+          svc.fetchLyrics(title, artist).then((l) {
+            if (!mounted) return;
+            setState(() {
+              _shareLyrics = l;
+              _shareLoading = false;
+            });
+          }).catchError((_) {
+            if (!mounted) return;
+            setState(() => _shareLoading = false);
+          }),
+        );
+      } else {
+        _shareLoading = false;
+      }
+    }
+    final lyrics = _shareLyrics;
+    final t = _shareTrack;
+    if (t == null) {
+      return Center(
+        child: Text(
+          AppLocalizations.of(context).lyricsNoTrack,
+          style: theme.textTheme.bodyMedium,
+        ),
+      );
+    }
+    if (lyrics == null) {
+      return Center(
+        child: Text(
+          AppLocalizations.of(context).lyricsNotFound,
+          style: theme.textTheme.bodyMedium,
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+    // Línea inicial: la actual del playback (sin offset manual: el share
+    // es una foto estática, y el offset del view no es accesible desde aquí).
+    final idx = lyrics.getCurrentLineIndex(widget.position.value) ?? 0;
+    return LyricsShareDialog(
+      lyrics: lyrics,
+      initialIndex: idx,
+      trackTitle: t.title,
+      artist: t.artist,
+      artworkUrl: t.thumbnailUrl,
+      accentColor: _theme.accentColor,
+      inline: true,
+      onCloseContainer: () {
+        // Cierra el flujo Y el sheet: vuelve al player expandido normal.
+        setState(() {
+          _shareMode = false;
+          _shareLyrics = null;
+          _shareTrack = null;
+        });
+        _toggle();
+      },
+    );
+  }
+
+  /// Datos vivos de la pista con letras (los toma del registro de
+  /// LyricsView indirectamente: el dialog inline necesita lyrics/track; el
+  /// view activo los expone vía el closure de share — aquí usamos el track
+  /// del player y pedimos las letras al servicio con el MISMO cache).
 
   void _onDragStart(DragStartDetails d) {
     _dragging = true;
@@ -2175,14 +2301,32 @@ class _LyricsPeekState extends State<_LyricsPeek> {
       target = _open >= 0.5;
     }
     final changed = target != (_open >= 0.5);
-    setState(() => _open = target ? 1.0 : 0.0);
+    setState(() {
+      _open = target ? 1.0 : 0.0;
+      // Cierre por drag: reset del modo compartir también.
+      if (!target) {
+        _shareMode = false;
+        _shareLyrics = null;
+        _shareTrack = null;
+        _shareLoading = false;
+      }
+    });
     if (changed) widget.onChanged?.call(target);
   }
 
   void _toggle() {
     final target = _open < 0.5;
     final changed = target != (_open >= 0.5);
-    setState(() => _open = target ? 1.0 : 0.0);
+    setState(() {
+      _open = target ? 1.0 : 0.0;
+      // Al cerrar el sheet sale del modo compartir (reset de estado).
+      if (!target) {
+        _shareMode = false;
+        _shareLyrics = null;
+        _shareTrack = null;
+        _shareLoading = false;
+      }
+    });
     if (changed) widget.onChanged?.call(target);
   }
 
@@ -2340,8 +2484,10 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                                 ),
                               );
                             },
-                            child: _open >= 0.5
-                                ? Row(
+                            child: ValueListenableBuilder<int>(
+                              valueListenable: LyricsView.actionsVersion,
+                              builder: (context, _, _) => _open >= 0.5
+                                  ? Row(
                                       key: const ValueKey('lyr-actions'),
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -2357,16 +2503,16 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                                             tooltip: _lyricsActionTooltip(
                                               action,
                                             ),
-                                            onPressed:
-                                                LyricsView.activeActions[action] ==
-                                                    null
+                                            onPressed: !_availableActions
+                                                    .contains(action)
                                                 ? null
                                                 : () =>
                                                       _runLyricsAction(action),
                                           ),
                                       ],
                                     )
-                                : const SizedBox(width: 0, height: 0),
+                                  : const SizedBox(width: 0, height: 0),
+                            ),
                           ),
                           IconButton(
                             icon: Icon(
@@ -2387,6 +2533,9 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                   // por cambio de pista. Con el sheet cerrado (solo el handle)
                   // sus tickers (suavizado/karaoke) quedan MUTEADOS con
                   // [TickerMode] — se reanudan al abrir el sheet.
+                  // MODO COMPARTIR (_shareMode): en lugar de las letras, el
+                  // mismo contenedor muestra el flujo de 2 pasos (selección
+                  // de líneas → preview + controles) del dialog inline.
                   if (widget.enabled)
                     TickerMode(
                       enabled: _open >= 0.35,
@@ -2410,7 +2559,9 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                               color: _staticWhite,
                             ),
                           ),
-                          child: const LyricsView(embedded: true),
+                          child: _shareMode
+                              ? _buildInlineShare(theme)
+                              : const LyricsView(embedded: true),
                         ),
                       ),
                     ),
