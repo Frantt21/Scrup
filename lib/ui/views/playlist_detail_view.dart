@@ -316,6 +316,12 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
     } catch (_) {}
   }
 
+  /// True si TODAS las pistas de la playlist están en disco: el botón de
+  /// descarga muestra entonces el estado "disponible sin conexión" en vez
+  /// del icono de descarga.
+  bool get _allTracksCached =>
+      _tracks.isNotEmpty && _tracks.every((t) => _cachedIds.contains(t.id));
+
   // Download every playlist track offline via the app-wide background
   // service (already-cached tracks are skipped inside the service).
   Future<void> _downloadAllTracks() async {
@@ -981,14 +987,22 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                                 ),
                                               ),
                                             )
-                                          : const Icon(
-                                              Icons.download_rounded,
-                                              key: ValueKey('icon'),
+                                          : Icon(
+                                              _allTracksCached
+                                                  ? Icons.download_done_rounded
+                                                  : Icons.download_rounded,
+                                              key: ValueKey(
+                                                _allTracksCached
+                                                    ? 'done'
+                                                    : 'icon',
+                                              ),
                                             ),
                                     );
                                   },
                                 ),
-                                tooltip: l10n.downloadPlaylist,
+                                tooltip: _allTracksCached
+                                    ? l10n.availableOffline
+                                    : l10n.downloadPlaylist,
                               ),
                             ],
                           ),
@@ -1774,14 +1788,22 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                                                     ),
                                                   ),
                                                 )
-                                              : const Icon(
-                                                  Icons.download_rounded,
-                                                  key: ValueKey('icon'),
+                                              : Icon(
+                                                  _allTracksCached
+                                                      ? Icons.download_done_rounded
+                                                      : Icons.download_rounded,
+                                                  key: ValueKey(
+                                                    _allTracksCached
+                                                        ? 'done'
+                                                        : 'icon',
+                                                  ),
                                                 ),
                                         );
                                       },
                                     ),
-                                    tooltip: l10n.downloadPlaylist,
+                                    tooltip: _allTracksCached
+                                        ? l10n.availableOffline
+                                        : l10n.downloadPlaylist,
                                   ),
                                   AnimatedContainer(
                                     duration: const Duration(milliseconds: 250),

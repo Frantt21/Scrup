@@ -14,6 +14,7 @@ import '../../services/artwork_cache_service.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
 import '../../services/player_service.dart';
+import '../../services/playlist_download_service.dart';
 import '../../services/search_service.dart' show YtmArtist;
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
@@ -571,10 +572,12 @@ class _MobilePlayerOverlayState extends State<MobilePlayerOverlay>
     final track = _nTrack.value;
     if (track == null || _favoritesId < 0) return;
     final db = context.read<AppDatabase>();
+    final downloads = context.read<PlaylistDownloadService>();
     if (_nFav.value) {
       await db.removeFromPlaylist(_favoritesId, track.id);
     } else {
       await db.addToPlaylist(_favoritesId, track);
+      keepPlaylistOffline(db, downloads, _favoritesId, track);
     }
   }
 

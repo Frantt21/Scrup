@@ -10,6 +10,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../services/artwork_cache_service.dart';
 import '../../services/audio_cache_service.dart';
 import '../../services/player_service.dart';
+import '../../services/playlist_download_service.dart';
 import '../playlist_actions.dart';
 import '../theme_controller.dart';
 import '../widgets/context_menu_item.dart';
@@ -249,10 +250,12 @@ class _PlayerBarState extends State<PlayerBar>
     final track = _track;
     if (track == null) return;
     final db = context.read<AppDatabase>();
+    final downloads = context.read<PlaylistDownloadService>();
     if (_isFavorite) {
       await db.removeFromPlaylist(_favoritesId, track.id);
     } else {
       await db.addToPlaylist(_favoritesId, track);
+      keepPlaylistOffline(db, downloads, _favoritesId, track);
     }
   }
 

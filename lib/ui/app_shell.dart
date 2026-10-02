@@ -11,9 +11,11 @@ import '../core/binaries.dart';
 import '../data/database.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
+import '../services/playlist_download_service.dart';
 import '../services/search_service.dart' show YtmAlbum, YtmArtist;
 import '../services/settings_store.dart';
 import '../services/update_service.dart';
+import 'playlist_actions.dart';
 import 'views/artist_detail_view.dart';
 import 'views/home_view.dart';
 import 'views/library_view.dart';
@@ -307,6 +309,7 @@ class _AppShellState extends State<AppShell> {
     final track = player.currentTrackValue;
     if (track == null) return;
     final db = context.read<AppDatabase>();
+    final downloads = context.read<PlaylistDownloadService>();
     final id = await db.ensureFavoritesPlaylist();
     final query = db.select(db.playlistTracks)
       ..where(
@@ -317,6 +320,7 @@ class _AppShellState extends State<AppShell> {
       await db.removeFromPlaylist(id, track.id);
     } else {
       await db.addToPlaylist(id, track);
+      keepPlaylistOffline(db, downloads, id, track);
     }
   }
 

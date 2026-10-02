@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../core/track.dart';
+import '../data/database.dart';
 import 'audio_cache_service.dart';
 
 /// App-lifetime playlist downloader. Lives above [AudioCacheService] so the
@@ -95,6 +96,35 @@ class PlaylistDownloadService extends ChangeNotifier {
     notifyListeners();
     unawaited(_runBatch(token));
     return toQueue.length;
+  }
+
+  /// Mantén el estado offline de una playlist: si [playlistId] YA tenía
+  /// canciones descargadas (alguna pista de la playlist está en disco),
+  /// descarga en segundo plano [track], que acaba de ser añadida. Así una
+  /// playlist que se descargó por completo se mantiene completa al agregar
+  /// canciones nuevas.
+  ///
+  /// Best-effort: nunca lanza. Si la playlist no tenía nada descargado, o la
+  /// pista ya está en caché, no hace nada.
+  Future<void> autoDownloadAddedTrack(
+    AppDatabase db,
+    int playlistId,
+    Track track,
+  ) async {
+    try {
+      if (await _cache.cachedPath(track.id) != null) return;
+      final ids = await db.playlistTrackIds(playlistId);
+      final cached = await _cache.cachedIds();
+      // "Ya tenía descargas": alguna OTRA pista de la playlist está en disco
+      // (se excluye la recién añadida).
+      final hadDownloads = ids.any(
+        (id) => id != track.id && cached.contains(id),
+      );
+      if (!hadDownloads) return;
+      await downloadPlaylist([track]);
+    } catch (_) {
+      // Best-effort: la auto-descarga nunca debe romper la acción del usuario.
+    }
   }
 
   Future<void> _runBatch(int token) async {

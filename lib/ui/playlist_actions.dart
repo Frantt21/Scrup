@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -5,13 +7,30 @@ import '../core/track.dart';
 import '../data/database.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
+import '../services/playlist_download_service.dart';
 import 'widgets/cover_image.dart';
 import 'widgets/scrup_toasts.dart';
+
+/// Mantén el estado offline de una playlist: si [playlistId] ya tenía
+/// canciones descargadas, descarga en segundo plano la [track] recién
+/// añadida. Llama DESPUÉS de añadirla a la BD.
+///
+/// Es lo que hace que una playlist descargada por completo siga completa
+/// cuando se le agregan canciones nuevas. Best-effort y no bloqueante.
+void keepPlaylistOffline(
+  AppDatabase db,
+  PlaylistDownloadService service,
+  int playlistId,
+  Track track,
+) {
+  unawaited(service.autoDownloadAddedTrack(db, playlistId, track));
+}
 
 /// Show the modal to add [track] to a playlist: a dialog with the playlists in a grid (cover + title) and a final cell to create a new one. Shared between the search, recent tracks, player, etc.
 Future<void> showAddToPlaylistDialog(BuildContext context, Track track) async {
   final l10n = AppLocalizations.of(context);
   final db = context.read<AppDatabase>();
+  final downloads = context.read<PlaylistDownloadService>();
   final playlists = await db.watchPlaylists().first;
   // Playlists que ya contienen la pista: se marcan con un check en el modal.
   final containing = await db.playlistIdsContainingTrack(track.id);
@@ -26,9 +45,13 @@ Future<void> showAddToPlaylistDialog(BuildContext context, Track track) async {
     ),
   );
   if (selected == null || !context.mounted) return;
-  await db.addToPlaylist(selected, track);      // If the selected playlist is the one currently playing, add the song to the player queue too.
-      final player = context.read<PlayerService>();
-      if (player.activePlaylistId.value == selected) {
+  // Lectura ANTES de los awaits (evita use_build_context_synchronously).
+  final player = context.read<PlayerService>();
+  await db.addToPlaylist(selected, track);
+  keepPlaylistOffline(db, downloads, selected, track);
+  // If the selected playlist is the one currently playing, add the song to the
+  // player queue too.
+  if (player.activePlaylistId.value == selected) {
     player.addToQueue(track);
   }
   showScrupToast(l10n.addedToPlaylist, kind: ScrupToastKind.success);
@@ -50,12 +73,14 @@ Future<bool> toggleTrackFavorite(
   Track track,
 ) async {
   final db = context.read<AppDatabase>();
+  final downloads = context.read<PlaylistDownloadService>();
   final id = await db.ensureFavoritesPlaylist();
   final wasFav = (await db.playlistIdsContainingTrack(track.id)).contains(id);
   if (wasFav) {
     await db.removeFromPlaylist(id, track.id);
   } else {
     await db.addToPlaylist(id, track);
+    keepPlaylistOffline(db, downloads, id, track);
   }
   if (!context.mounted) return !wasFav;
   final l10n = AppLocalizations.of(context);
