@@ -287,7 +287,7 @@
   "recapTopPlaylists": "最常听的播放列表",
   "recapDeletedPlaylist": "已删除的播放列表",
   "recapEmpty": "播放一些音乐来生成你的回顾",
-  "libraryAlbumsTitle": "你资料库中的专辑",
+  "libraryAlbumsTitle": "包含你资料库中歌曲的专辑",
   "trendingTitle": "本周热门",
   "crossfade": "淡入淡出",
   "crossfadeHint": "歌曲之间的淡入淡出：当前歌曲结束前开始播放下一首",

@@ -174,6 +174,14 @@ class _HomeViewState extends State<HomeView> {
           .read<AppDatabase>()
           .watchPlaylists()
           .listen((_) => _scheduleLibraryAlbumsReload());
+      // Añadir/quitar una canción toca `playlist_tracks` (NO `playlists`): sin
+      // esta suscripción el álbum de una canción recién marcada como favorita
+      // no aparecía hasta reiniciar sesión. watchPlaylistTrackCounts observa
+      // la tabla playlist_tracks.
+      _libraryTracksSub = context
+          .read<AppDatabase>()
+          .watchPlaylistTrackCounts()
+          .listen((_) => _scheduleLibraryAlbumsReload());
       // Banner de favoritos (no bloquea _loaded: es optativo).
       unawaited(
         context.read<AppDatabase>().ensureFavoritesPlaylist().then((id) {
@@ -226,6 +234,7 @@ class _HomeViewState extends State<HomeView> {
     _likesSub?.cancel();
     _recentPlaylistsSub?.cancel();
     _recentPlaylistsSub2?.cancel();
+    _libraryTracksSub?.cancel();
     _albumRecDebounce?.cancel();
     _visitedArtistsSub?.cancel();
     _nullTrackTimer?.cancel();
@@ -243,6 +252,7 @@ class _HomeViewState extends State<HomeView> {
   }
 
   StreamSubscription<List<Playlist>>? _recentPlaylistsSub2;
+  StreamSubscription<Map<int, int>>? _libraryTracksSub;
 
   /// Debounce de la recarga de albums recomendados: las emisiones de
   /// watchPlaylists llegan en ráfaga (cada addToPlaylist toca la tabla);

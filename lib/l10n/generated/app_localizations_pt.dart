@@ -866,7 +866,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get recapEmpty => 'Reproduza música para criar o seu recap';
 
   @override
-  String get libraryAlbumsTitle => 'Álbuns da sua biblioteca';
+  String get libraryAlbumsTitle => 'Álbuns com músicas da sua biblioteca';
 
   @override
   String get trendingTitle => 'Tendências da semana';
@@ -1749,7 +1749,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get recapEmpty => 'Reproduza música para criar o seu recap';
 
   @override
-  String get libraryAlbumsTitle => 'Álbuns da sua biblioteca';
+  String get libraryAlbumsTitle => 'Álbuns com músicas da sua biblioteca';
 
   @override
   String get trendingTitle => 'Tendências da semana';

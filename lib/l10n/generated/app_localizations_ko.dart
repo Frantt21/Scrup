@@ -851,7 +851,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get recapEmpty => '음악을 재생하면 리캡이 만들어집니다';
 
   @override
-  String get libraryAlbumsTitle => '라이브러리의 앨범';
+  String get libraryAlbumsTitle => '라이브러리의 곡이 있는 앨범';
 
   @override
   String get trendingTitle => '이번 주 인기';

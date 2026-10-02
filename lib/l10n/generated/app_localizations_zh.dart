@@ -849,7 +849,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get recapEmpty => '播放一些音乐来生成你的回顾';
 
   @override
-  String get libraryAlbumsTitle => '你资料库中的专辑';
+  String get libraryAlbumsTitle => '包含你资料库中歌曲的专辑';
 
   @override
   String get trendingTitle => '本周热门';

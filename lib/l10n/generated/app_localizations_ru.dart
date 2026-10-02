@@ -872,7 +872,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get recapEmpty => 'Включите музыку, чтобы создать рекап';
 
   @override
-  String get libraryAlbumsTitle => 'Альбомы из вашей библиотеки';
+  String get libraryAlbumsTitle => 'Альбомы с песнями из вашей библиотеки';
 
   @override
   String get trendingTitle => 'В тренде на этой неделе';

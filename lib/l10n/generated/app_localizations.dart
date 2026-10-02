@@ -1684,7 +1684,7 @@ abstract class AppLocalizations {
   /// No description provided for @libraryAlbumsTitle.
   ///
   /// In es, this message translates to:
-  /// **'Albums con canciones de tu libreria'**
+  /// **'Álbumes con canciones de tu biblioteca'**
   String get libraryAlbumsTitle;
 
   /// No description provided for @trendingTitle.

@@ -363,15 +363,16 @@ class SearchService {
   /// filter. Returns up to [limit] unique albums, preserving seed order.
   /// Cached per source key with the standard 6h TTL. Fault-tolerant: any
   /// error / empty seeds -> empty list (the section just hides).
+  ///
+  /// La clave incluye TODOS los seeds (no solo los primeros): agregar una
+  /// canción cambia el conjunto y fuerza un refetch, en vez de devolver una
+  /// entrada de caché vieja durante 6h.
   Future<List<YtmAlbum>> recommendedAlbumsFromLibrary(
     List<(String, String)> seeds, {
     int limit = 8,
   }) async {
     if (seeds.isEmpty) return const [];
-    final key = seeds
-        .take(6)
-        .map((s) => '${s.$1}|${s.$2}')
-        .join(';;');
+    final key = seeds.map((s) => '${s.$1}|${s.$2}').join(';;');
     // Persistent cache: the seed set changes rarely and each miss costs one
     // InnerTube request per seed. Disk serves previous sessions instantly.
     final store = _albumRecCache;

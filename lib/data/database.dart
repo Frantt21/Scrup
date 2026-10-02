@@ -845,19 +845,24 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Distinct (album, artist) pairs from the user's saved tracks — every
-  /// playlist (favorites included), ONE SQL query. Ordered by how many
-  /// different songs share the album (strongest signal first): the home
-  /// "albums from your library" row is seeded from these. Null albums are
-  /// excluded (no seed without an album name).
+  /// playlist (favorites included), ONE SQL query. Ordered by RECENCY (the
+  /// track most recently added to a playlist first, using its position as a
+  /// proxy) and then by how many different songs share the album: the home
+  /// "albums from your library" row is seeded from these, so adding a single
+  /// song surfaces its album at the top instead of being buried under albums
+  /// with more saved songs. Null albums are excluded (no seed without an
+  /// album name).
   Future<List<(String, String)>> libraryAlbumSeeds({int limit = 12}) async {
     final countExp = tracks.id.count();
+    final recencyExp = playlistTracks.position.max();
     final query = selectOnly(tracks).join([
       innerJoin(playlistTracks, playlistTracks.trackId.equalsExp(tracks.id)),
     ])
-      ..addColumns([tracks.album, tracks.artist, countExp])
+      ..addColumns([tracks.album, tracks.artist, countExp, recencyExp])
       ..where(tracks.album.isNull().not() & tracks.album.equals('').not())
       ..groupBy([tracks.album, tracks.artist])
       ..orderBy([
+        OrderingTerm.desc(recencyExp),
         OrderingTerm.desc(countExp),
         OrderingTerm.desc(tracks.album),
       ])

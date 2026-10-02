@@ -868,7 +868,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get recapEmpty => 'Reproduce música para construir tu recap';
 
   @override
-  String get libraryAlbumsTitle => 'Albums con canciones de tu libreria';
+  String get libraryAlbumsTitle => 'Álbumes con canciones de tu biblioteca';
 
   @override
   String get trendingTitle => 'Tendencias de la semana';

@@ -851,7 +851,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get recapEmpty => '音楽を再生するとレキャップが作られます';
 
   @override
-  String get libraryAlbumsTitle => 'ライブラリのアルバム';
+  String get libraryAlbumsTitle => 'ライブラリの曲を含むアルバム';
 
   @override
   String get trendingTitle => '今週のトレンド';

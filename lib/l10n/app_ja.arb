@@ -287,7 +287,7 @@
   "recapTopPlaylists": "よく聴くプレイリスト",
   "recapDeletedPlaylist": "削除されたプレイリスト",
   "recapEmpty": "音楽を再生するとレキャップが作られます",
-  "libraryAlbumsTitle": "ライブラリのアルバム",
+  "libraryAlbumsTitle": "ライブラリの曲を含むアルバム",
   "trendingTitle": "今週のトレンド",
   "crossfade": "クロスフェード",
   "crossfadeHint": "曲のフェード: 現在の曲が終わる前に次の曲を再生開始します",
