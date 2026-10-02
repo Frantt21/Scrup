@@ -178,6 +178,11 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   /// Álbum/single abierto: se muestra EMBEBIDO (en vez del contenido del artista, sin push de ruta) — nav + miniplayer visibles.
   YtmAlbum? _openedAlbum;
 
+  /// El álbum abierto vino de FUERA (biblioteca/home vía `pendingAlbum`), no
+  /// de este canal. No existe un canal real al que volver, así que el atrás
+  /// debe cerrar el screen completo (no mostrar el canal fantasma).
+  bool _albumFromShell = false;
+
   @override
   void didUpdateWidget(covariant ArtistDetailView oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -185,12 +190,18 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     // de Android): limpia el estado interno. Antes solo se togglaba el flag
     // del shell y el álbum seguía abierto → el botón "no hacía nada".
     if (!widget.albumOpen && oldWidget.albumOpen && _openedAlbum != null) {
-      setState(() => _openedAlbum = null);
+      setState(() {
+        _openedAlbum = null;
+        _albumFromShell = false;
+      });
     }
     // Shell cleared the pending external album request (back from the
     // album): close the embedded album view.
     if (oldWidget.pendingAlbum != null && widget.pendingAlbum == null) {
-      setState(() => _openedAlbum = null);
+      setState(() {
+        _openedAlbum = null;
+        _albumFromShell = false;
+      });
     }
   }
 
@@ -220,6 +231,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     // directly, skipping the channel (the album screen is self-contained).
     if (widget.pendingAlbum != null) {
       _openedAlbum = widget.pendingAlbum;
+      _albumFromShell = true;
     }
     unawaited(_load());
   }
@@ -315,12 +327,27 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   /// Álbum/single → muestra su tracklist EMBEBIDO (sin Navigator.push): el
   /// spinner vive DENTRO de esa vista mientras trae las pistas.
   Future<void> _openAlbum(YtmAlbum album) async {
-    setState(() => _openedAlbum = album);
+    setState(() {
+      _openedAlbum = album;
+      _albumFromShell = false;
+    });
     widget.onAlbumOpenChanged?.call(true);
   }
 
   void _back() {
     if (_openedAlbum != null) {
+      // Álbum abierto desde la biblioteca/home: no hay canal real que mostrar
+      // al volver, así que el atrás cierra el screen completo (el shell
+      // deshace su historial y devuelve a la lista de origen).
+      if (_albumFromShell) {
+        final cb = widget.onBack;
+        if (cb != null) {
+          cb();
+        } else {
+          Navigator.of(context).maybePop();
+        }
+        return;
+      }
       setState(() => _openedAlbum = null);
       widget.onAlbumOpenChanged?.call(false);
       return;

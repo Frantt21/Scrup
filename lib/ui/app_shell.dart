@@ -592,6 +592,22 @@ class _AppShellState extends State<AppShell> {
     // canal); el detalle del canal la registra si el usuario navega a él.
   }
 
+  /// Cierra el screen de artista/álbum desde su propio botón atrás interno.
+  /// Si se abrió por un álbum externo (biblioteca/home) hay una entrada de
+  /// historial que deshacer → se navega atrás con la lógica normal; para un
+  /// canal real, simplemente se limpia el artista.
+  void _closeArtistScreen() {
+    if (_pendingAlbum != null && _history.isNotEmpty) {
+      _navigateBack();
+      return;
+    }
+    setState(() {
+      _openArtist = null;
+      _artistAlbumOpenFlag = false;
+      _pendingAlbum = null;
+    });
+  }
+
   /// YtmArtist mínimo para montar el screen cuando SOLO hay álbum pendiente
   /// (apertura desde home): el detalle del canal no se carga (el álbum es
   /// self-contained) — el nombre se usa solo como fallback.
@@ -999,11 +1015,7 @@ class _AppShellState extends State<AppShell> {
                 artist: openArtist ?? _pendingAlbumArtist,
                 albumOpen: _artistAlbumOpenFlag,
                 pendingAlbum: _pendingAlbum,
-                onBack: () => setState(() {
-                  _openArtist = null;
-                  _artistAlbumOpenFlag = false;
-                  _pendingAlbum = null;
-                }),
+                onBack: _closeArtistScreen,
                 onAlbumOpenChanged: (open) => setState(
                   () => _artistAlbumOpenFlag = open,
                 ),
@@ -1138,11 +1150,7 @@ class _AppShellState extends State<AppShell> {
                 artist: openArtist ?? _pendingAlbumArtist,
                 albumOpen: _artistAlbumOpenFlag,
                 pendingAlbum: _pendingAlbum,
-                onBack: () => setState(() {
-                  _openArtist = null;
-                  _artistAlbumOpenFlag = false;
-                  _pendingAlbum = null;
-                }),
+                onBack: _closeArtistScreen,
                 onAlbumOpenChanged: (open) =>
                     setState(() => _artistAlbumOpenFlag = open),
               )
