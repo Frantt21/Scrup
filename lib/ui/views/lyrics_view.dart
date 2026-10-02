@@ -371,13 +371,23 @@ class _LyricsViewState extends State<LyricsView>
     return _audioPathFuture!;
   }
 
+  /// Contexto para abrir los modales de letras SIN heredar el Theme local que
+  /// envuelve al view embebido. El sheet de Android sobrescribe primary/
+  /// onSurface/onSurfaceVariant a B/N para contrastar con su acento; sin esto,
+  /// `showDialog` captura ese override (InheritedTheme.capture) y los textos
+  /// internos del modal se pintan B/N aunque el modal tenga su propio fondo.
+  /// El contexto del Navigator raíz está POR ENCIMA del override: el modal
+  /// usa el theme real de la app.
+  BuildContext _dialogContext() =>
+      Navigator.of(context, rootNavigator: true).context;
+
   Future<void> _showSearchDialog() async {
     final track = _track;
     if (track == null) return;
     setState(() => _openDialogs++);
     try {
     final result = await showDialog<LyricsSearchResult>(
-      context: context,
+      context: _dialogContext(),
       builder: (ctx) => _LyricsSearchDialog(
         initialQuery: '${track.title} ${track.artist}',
         titleHint: track.title,
@@ -419,7 +429,7 @@ class _LyricsViewState extends State<LyricsView>
     setState(() => _openDialogs++);
     try {
     await showDialog<void>(
-      context: context,
+      context: _dialogContext(),
       builder: (ctx) => _LyricsSyncDialog(
         lyrics: lyrics,
         positionNotifier: _position,
@@ -450,7 +460,7 @@ class _LyricsViewState extends State<LyricsView>
         lyrics.getCurrentLineIndex(_position.value - _lyricsOffset) ?? 0;
     setState(() => _openDialogs++);
     showDialog<void>(
-      context: context,
+      context: _dialogContext(),
       builder: (ctx) => LyricsShareDialog(
         lyrics: lyrics,
         initialIndex: idx,
