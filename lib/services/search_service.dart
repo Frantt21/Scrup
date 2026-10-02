@@ -512,7 +512,12 @@ class SearchService {
                 final prev = _avatarMemo[id];
                 _avatarMemo[id] = url;
                 unawaited(_avatarCache?.put(id, url));
-                if (prev != null && prev != url) onUpdated?.call(id, url);
+                // Notifica SIEMPRE que el avatar resuelto difiera del previo,
+                // incluido el caso `prev == null` (primera vez que se ve el
+                // canal sin caché en disco): sin esto la fila recién resuelta
+                // no se repintaba y el avatar solo aparecía en la siguiente
+                // búsqueda (ya servido desde memoria).
+                if (prev != url) onUpdated?.call(id, url);
               } else {
                 _avatarFailedAt[id] = DateTime.now();
               }
