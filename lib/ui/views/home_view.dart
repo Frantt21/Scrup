@@ -660,31 +660,42 @@ class _HomeViewState extends State<HomeView> {
                         ),
                       ),
                     ),
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        mobile ? 16 : 24,
-                        0,
-                        mobile ? 16 : 24,
-                        mobile ? 12 : 8,
-                      ),
-                      sliver: SliverGrid(
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: cols,
-                          mainAxisSpacing: mobile ? 6 : 10,
-                          crossAxisSpacing: mobile ? 6 : 10,
-                          childAspectRatio: 1,
-                        ),
-                        delegate: SliverChildBuilderDelegate((context, i) {
-                          final track = _trending[i];
-                          return _RecentCard(
-                            track: track,
-                            onPlay: () => playTrack(context, track),
-                            isCurrent: track.id == _currentTrack?.id,
+                    if (mobile)
+                      // Móvil: carrusel paginado 2×2 con indicador de puntos
+                      // (en vez del grid de 3 columnas con 5 filas).
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: _TrendingPager(
+                            tracks: _trending,
+                            onPlay: (t) => unawaited(playTrack(context, t)),
+                            currentTrackId: _currentTrack?.id,
                             isPlaying: _playing,
-                          );
-                        }, childCount: _trending.length),
+                          ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                        sliver: SliverGrid(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: cols,
+                                mainAxisSpacing: 10,
+                                crossAxisSpacing: 10,
+                                childAspectRatio: 1,
+                              ),
+                          delegate: SliverChildBuilderDelegate((context, i) {
+                            final track = _trending[i];
+                            return _RecentCard(
+                              track: track,
+                              onPlay: () => playTrack(context, track),
+                              isCurrent: track.id == _currentTrack?.id,
+                              isPlaying: _playing,
+                            );
+                          }, childCount: _trending.length),
+                        ),
                       ),
-                    ),
                   ],
                   // Artistas visitados (DESPUÉS de las playlists recientes,
                   // mismo estilo de fila horizontal)
@@ -764,6 +775,140 @@ class _HomeViewState extends State<HomeView> {
 /// Tarjeta cuadrada con el artwork completo y título/artista en la esquina
 /// inferior, con un hover que muestra el botón de play (sin animación de
 /// escala).
+/// Carrusel paginado de las tendencias (solo móvil): páginas de 3 columnas ×
+/// 2 filas, scroll horizontal e indicador de puntos. Cada card queda cuadrada
+/// porque el alto del grid se deriva del ancho y las columnas. Con los ~14
+/// items que llegan de los charts salen 3 páginas (6 + 6 + 2).
+class _TrendingPager extends StatefulWidget {
+  final List<Track> tracks;
+  final void Function(Track) onPlay;
+  final String? currentTrackId;
+  final bool isPlaying;
+
+  const _TrendingPager({
+    required this.tracks,
+    required this.onPlay,
+    required this.currentTrackId,
+    required this.isPlaying,
+  });
+
+  @override
+  State<_TrendingPager> createState() => _TrendingPagerState();
+}
+
+class _TrendingPagerState extends State<_TrendingPager> {
+  static const int _cols = 3;
+  static const int _rows = 2;
+  static const double _gap = 6;
+
+  final PageController _controller = PageController();
+  int _page = 0;
+
+  int get _perPage => _cols * _rows;
+
+  int get _pageCount {
+    final n = (widget.tracks.length / _perPage).ceil();
+    return n < 1 ? 1 : n;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Índice del dot resaltado, tolerante a que la lista encoja.
+    final active = _page < _pageCount ? _page : _pageCount - 1;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // Cada card es cuadrada: lado = (ancho − gaps) / columnas; el alto
+            // del grid es filas·lado + gaps inter-fila.
+            final cardW =
+                (constraints.maxWidth - (_cols - 1) * _gap) / _cols;
+            final gridH = _rows * cardW + (_rows - 1) * _gap;
+            return SizedBox(
+              height: gridH,
+              child: PageView.builder(
+                controller: _controller,
+                itemCount: _pageCount,
+                onPageChanged: (i) => setState(() => _page = i),
+                itemBuilder: (context, page) {
+                  final start = page * _perPage;
+                  final slice = widget.tracks.sublist(
+                    start,
+                    (start + _perPage).clamp(0, widget.tracks.length),
+                  );
+                  return Column(
+                    children: [
+                      for (var r = 0; r < _rows; r++) ...[
+                        if (r > 0) const SizedBox(height: _gap),
+                        Expanded(child: _row(slice, r * _cols)),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < _pageCount; i++)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: i == active ? 18 : 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  color: i == active
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.35,
+                        ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Una fila de hasta [_cols] cards (faltantes → hueco vacío para que el
+  /// alto no cambie en la última página).
+  Widget _row(List<Track> slice, int offset) {
+    return Row(
+      children: [
+        for (var c = 0; c < _cols; c++) ...[
+          if (c > 0) const SizedBox(width: _gap),
+          Expanded(
+            child: offset + c < slice.length
+                ? _card(slice[offset + c])
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _card(Track track) {
+    return _RecentCard(
+      track: track,
+      onPlay: () => widget.onPlay(track),
+      isCurrent: track.id == widget.currentTrackId,
+      isPlaying: widget.isPlaying,
+    );
+  }
+}
+
 class _RecentCard extends StatefulWidget {
   final Track track;
   final VoidCallback onPlay;
