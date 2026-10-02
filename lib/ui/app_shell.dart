@@ -638,6 +638,7 @@ class _AppShellState extends State<AppShell> {
         _showSettings ||
         openPlaylist != null ||
         _openArtist != null ||
+        _pendingAlbum != null ||
         _showRecap ||
         _selectedIndex == 1;
     final barTitle = _showSettings
@@ -646,6 +647,7 @@ class _AppShellState extends State<AppShell> {
               ? l10n.recapTitle
               : (openPlaylist?.name ??
                     (_openArtist?.name ??
+                        _pendingAlbum?.title ??
                         (_selectedIndex == 1 ? l10n.searchTitle : 'Scrup'))));
     final List<Widget> barActions = [
       if (inZone) ...[
@@ -661,6 +663,7 @@ class _AppShellState extends State<AppShell> {
             _openPlaylist = null;
             _showLyrics = false;
             _openArtist = null;
+            _pendingAlbum = null;
             _artistAlbumOpenFlag = false;
             _showRecap = false;
             _selectedIndex = 0;
@@ -692,6 +695,7 @@ class _AppShellState extends State<AppShell> {
               _openPlaylist = null;
               _showLyrics = false;
               _openArtist = null;
+              _pendingAlbum = null;
               _artistAlbumOpenFlag = false;
               _showRecap = false;
               _selectedIndex = 1;
@@ -902,7 +906,8 @@ class _AppShellState extends State<AppShell> {
                           ? 3
                           : (_showRecap
                                 ? 6
-                                : (openArtist != null
+                                : ((openArtist != null ||
+                                          _pendingAlbum != null)
                                       ? 5
                                       : _selectedIndex)))),
           children: [
@@ -1002,7 +1007,10 @@ class _AppShellState extends State<AppShell> {
                     ? 3
                     : (_showSettings
                           ? 4
-                          : (openArtist != null ? 6 : _selectedIndex))),
+                          : ((openArtist != null ||
+                                    _pendingAlbum != null)
+                                ? 6
+                                : _selectedIndex))),
           children: [
             // Home sin SafeArea superior (edge-to-edge): el degradado de
             // acento del inicio se extiende detr�s de la barra de estado.
@@ -1239,6 +1247,12 @@ class _AppShellState extends State<AppShell> {
         _openArtist = null;
         _artistAlbumOpenFlag = false;
       });
+      return;
+    }
+    // Álbum abierto desde la biblioteca/home (sin canal de artista): el back
+    // cierra el screen del álbum.
+    if (_pendingAlbum != null) {
+      setState(() => _pendingAlbum = null);
       return;
     }
     if (_showSettings) {
