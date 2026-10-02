@@ -624,22 +624,9 @@ class _HomeViewState extends State<HomeView> {
                             ),
                       ),
                     ),
-                  // Albums recomendados (DESPUÉS de las playlists
-                  // recientes): extraídos de los (album, artista) guardados
-                  // en playlists/favoritos y resueltos en YT Music. Máx. 8,
-                  // fila horizontal scrolleable (mismo estilo que la fila de
-                  // playlists recientes). Ambas plataformas.
-                  if (_libraryAlbums.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: _LibraryAlbumsRow(
-                        albums: _libraryAlbums,
-                        cardSize: mobile ? null : playlistExtent,
-                        onOpen: widget.onOpenAlbum,
-                      ),
-                    ),
-                  // Tendencias semanales (DESPUÉS de los álbumes
-                  // recomendados, antes de artistas visitados): charts de
-                  // YT Music. MISMO GRID que las recientes (cards 1:1,
+                  // Tendencias semanales (DESPUÉS de las playlists
+                  // recientes y ANTES de los álbumes con canciones): charts
+                  // de YT Music. MISMO GRID que las recientes (cards 1:1,
                   // mismas columnas y espaciados).
                   if (_trending.isNotEmpty) ...[
                     SliverToBoxAdapter(
@@ -661,7 +648,7 @@ class _HomeViewState extends State<HomeView> {
                       ),
                     ),
                     if (mobile)
-                      // Móvil: carrusel paginado 2×2 con indicador de puntos
+                      // Móvil: carrusel paginado 3×2 con indicador de puntos
                       // (en vez del grid de 3 columnas con 5 filas).
                       SliverToBoxAdapter(
                         child: Padding(
@@ -697,6 +684,19 @@ class _HomeViewState extends State<HomeView> {
                         ),
                       ),
                   ],
+                  // Albums con canciones de tu biblioteca (DESPUÉS de las
+                  // tendencias): extraídos de los (album, artista) guardados
+                  // en playlists/favoritos y resueltos en YT Music. Máx. 8,
+                  // fila horizontal scrolleable (mismo estilo que la fila de
+                  // playlists recientes). Ambas plataformas.
+                  if (_libraryAlbums.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _LibraryAlbumsRow(
+                        albums: _libraryAlbums,
+                        cardSize: mobile ? null : playlistExtent,
+                        onOpen: widget.onOpenAlbum,
+                      ),
+                    ),
                   // Artistas visitados (DESPUÉS de las playlists recientes,
                   // mismo estilo de fila horizontal)
                   if (_visitedArtists.isNotEmpty)
