@@ -1300,9 +1300,11 @@ class _LocaleOption {
   const _LocaleOption(this.locale, this.label);
 }
 
-/// Tarjeta/sección de ajustes. En desktop es un fondo sutil redondeado; en
-/// móvil se elimina el contenedor (la sección ocupa todo el ancho) y las
-/// categorías se separan con una línea divisoria.
+/// Tarjeta/sección de ajustes. Mismo layout en desktop y móvil: el título
+/// (ícono + texto) vive DENTRO de la tarjeta. Solo cambia el fondo: en desktop
+/// es un tono translúcido sobre el cristal del contenedor; en móvil es sólido
+/// sobre el fondo negro puro del scaffold (un alpha compondría a casi negro y
+/// la tarjeta sería invisible).
 class _SectionCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -1340,38 +1342,17 @@ class _SectionCard extends StatelessWidget {
     );
 
     if (Binaries.isMobile) {
-      // Título de categoría FUERA del contenedor + card con el contenido.
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              // SÓLIDO: sobre el fondo negro puro del scaffold, el alpha 0.5
-              // componía a ~#0A0A0A y el card era invisible.
-              color: theme.colorScheme.surfaceContainer,
-            ),
-            child: child,
-          ),
-        ],
+      // Mismo layout que desktop: el título va DENTRO de la tarjeta.
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          // SÓLIDO: sobre el fondo negro puro del scaffold, el alpha 0.5
+          // componía a ~#0A0A0A y el card era invisible.
+          color: theme.colorScheme.surfaceContainer,
+        ),
+        child: content,
       );
     }
 
