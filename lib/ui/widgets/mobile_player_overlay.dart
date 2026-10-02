@@ -2047,6 +2047,14 @@ class _LyricsPeekState extends State<_LyricsPeek> {
   double _open = 0.0;
   bool _dragging = false;
 
+  /// Acciones de letras DISPONIBLES, publicadas por el [LyricsView] embebido
+  /// a través de su [LyricsView.actionsNotifier]. El header las usa para
+  /// habilitar/deshabilitar sus botones; al ser un notifier local (y no el
+  /// mapa estático leído durante el build) el refresco es fiable.
+  final ValueNotifier<Set<String>> _actionsNotifier = ValueNotifier(
+    const <String>{},
+  );
+
   late final ThemeController _theme;
 
   /// Acento actual del sheet (reservado; el fondo ahora usa el color de los
@@ -2082,6 +2090,7 @@ class _LyricsPeekState extends State<_LyricsPeek> {
   @override
   void dispose() {
     _theme.removeListener(_onAccentChanged);
+    _actionsNotifier.dispose();
     super.dispose();
   }
 
@@ -2142,15 +2151,6 @@ class _LyricsPeekState extends State<_LyricsPeek> {
     'search' => Icons.search_rounded,
     _ => Icons.share_rounded,
   };
-
-  /// Availability snapshot (lyrics/track loaded). The build subscribes to
-  /// the view's version notifier via [ValueListenableBuilder] so this header
-  /// rebuilds when the embedded LyricsView registers AFTER us in the same
-  /// frame — otherwise buttons would stay disabled for the whole session.
-  Set<String> get _availableActions => LyricsView.activeActions.entries
-      .where((e) => e.value != null)
-      .map((e) => e.key)
-      .toSet();
 
   String _lyricsActionTooltip(String action) {
     final l10n = AppLocalizations.of(context);
@@ -2484,9 +2484,9 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                                 ),
                               );
                             },
-                            child: ValueListenableBuilder<int>(
-                              valueListenable: LyricsView.actionsVersion,
-                              builder: (context, _, _) => _open >= 0.5
+                            child: ValueListenableBuilder<Set<String>>(
+                              valueListenable: _actionsNotifier,
+                              builder: (context, available, _) => _open >= 0.5
                                   ? Row(
                                       key: const ValueKey('lyr-actions'),
                                       mainAxisSize: MainAxisSize.min,
@@ -2503,8 +2503,7 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                                             tooltip: _lyricsActionTooltip(
                                               action,
                                             ),
-                                            onPressed: !_availableActions
-                                                    .contains(action)
+                                            onPressed: !available.contains(action)
                                                 ? null
                                                 : () =>
                                                       _runLyricsAction(action),
@@ -2561,7 +2560,10 @@ class _LyricsPeekState extends State<_LyricsPeek> {
                           ),
                           child: _shareMode
                               ? _buildInlineShare(theme)
-                              : const LyricsView(embedded: true),
+                              : LyricsView(
+                                  embedded: true,
+                                  actionsNotifier: _actionsNotifier,
+                                ),
                         ),
                       ),
                     ),

@@ -33,7 +33,14 @@ import '../widgets/player_bar.dart' show kPlayerClearance;
 class LyricsView extends StatefulWidget {
   final bool embedded;
 
-  const LyricsView({super.key, this.embedded = false});
+  /// Notifier opcional donde el view publica QUÉ acciones están disponibles
+  /// (subconjunto de las claves de [activeActions], sin las nulas). Lo usa el
+  /// header del sheet de Android para habilitar sus botones: publicar por
+  /// notifier (fuera del build) es fiable, a diferencia de leer el mapa
+  /// estático durante el build de un hermano.
+  final ValueNotifier<Set<String>>? actionsNotifier;
+
+  const LyricsView({super.key, this.embedded = false, this.actionsNotifier});
 
   /// Static bridge for the lyrics sheet header (Android): the sheet calls these actions WITHOUT duplicating dialogs/state. The ACTIVE view fills the map on each build (callbacks with live state) and clears it on dispose. No GlobalObjectKey: 2 instances can coexist mounted (lyrics page + sheet) and the duplicate key breaks.
   static final Map<String, VoidCallback?> activeActions = {};
@@ -480,6 +487,26 @@ class _LyricsViewState extends State<LyricsView>
     // ITS OWN build (earlier in the frame), so it must rebuild to pick up
     // availability changes (lyrics fetched, track changed, etc.).
     LyricsView.actionsVersion.value++;
+
+    // Publica la disponibilidad al notifier externo (si lo hay) FUERA del
+    // build: mutar un ValueNotifier durante el build marcaría su listener
+    // (el header del sheet) como dirty en plena fase de build. Se difiere a
+    // post-frame, así el header se actualiza en cuanto cambia la
+    // disponibilidad (letras cargadas, pista nueva, etc.).
+    final actionsNotifier = widget.actionsNotifier;
+    if (actionsNotifier != null) {
+      final available = <String>{
+        for (final e in LyricsView.activeActions.entries)
+          if (e.value != null) e.key,
+      };
+      final current = actionsNotifier.value;
+      if (available.length != current.length ||
+          !available.containsAll(current)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) actionsNotifier.value = available;
+        });
+      }
+    }
 
     final embedded = widget.embedded;
     // Desktop: fondo PLANO de acento (mismo lenguaje que el player) con
