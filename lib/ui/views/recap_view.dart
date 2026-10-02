@@ -12,6 +12,7 @@ import '../widgets/artist_avatar.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
 import '../widgets/screen_header.dart';
+import '../widgets/segmented_pills.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/search_service.dart';
 
@@ -300,6 +301,21 @@ class _RangeSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // Desktop: MISMO grupo segmentado que los tabs de la biblioteca.
+    if (Binaries.isDesktop) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: SegmentedPills<_RecapRange>(
+          selected: selected,
+          onChanged: onChanged,
+          items: [
+            SegmentedPill(value: _RecapRange.all, label: l10n.recapRangeAll),
+            SegmentedPill(value: _RecapRange.month, label: l10n.recapRangeMonth),
+            SegmentedPill(value: _RecapRange.week, label: l10n.recapRangeWeek),
+          ],
+        ),
+      );
+    }
     return Wrap(
       spacing: 8,
       runSpacing: 8,

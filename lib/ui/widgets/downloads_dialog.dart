@@ -2,10 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../core/binaries.dart';
 import '../../data/database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/audio_cache_service.dart';
 import 'scrup_toasts.dart';
+import 'segmented_pills.dart';
 
 /// Diálogo de descargas de settings: tabs (pills) por playlist con el
 /// espacio usado por las canciones descargadas de cada una, más la pestaña
@@ -136,19 +138,36 @@ class _DownloadsDialogState extends State<DownloadsDialog> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Tabs como pills (Wrap: en angostas bajan de línea).
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final tab in tabs.list)
-                      _Pill(
-                        tab: tab,
-                        selected: active == tab,
-                        onTap: () => setState(() => _selectedTabId = tab.id),
-                      ),
-                  ],
-                ),
+                // Desktop: MISMO grupo segmentado que los tabs de la
+                // biblioteca (scroll horizontal si hay muchas playlists).
+                // Móvil: pills sueltas que bajan de línea (Wrap).
+                if (Binaries.isDesktop)
+                  SegmentedPills<int>(
+                    selected: active.id,
+                    onChanged: (id) => setState(() => _selectedTabId = id),
+                    scrollable: true,
+                    items: [
+                      for (final tab in tabs.list)
+                        SegmentedPill(
+                          value: tab.id,
+                          label: tab.label,
+                          badge: _fmtBytes(tab.totalBytes),
+                        ),
+                    ],
+                  )
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final tab in tabs.list)
+                        _Pill(
+                          tab: tab,
+                          selected: active == tab,
+                          onTap: () => setState(() => _selectedTabId = tab.id),
+                        ),
+                    ],
+                  ),
                 const SizedBox(height: 12),
                 if (active.files.isEmpty)
                   Expanded(

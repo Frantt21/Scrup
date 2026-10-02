@@ -14,6 +14,7 @@ import '../playback.dart';
 import '../playlist_actions.dart';
 import '../widgets/artist_avatar.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
+import '../widgets/segmented_pills.dart';
 import '../widgets/track_tile.dart';
 
 /// Filtro de resultados de búsqueda.
@@ -407,6 +408,47 @@ class _SearchViewState extends State<SearchView> {
   };
 
   Widget _buildFilterRow(ThemeData theme, AppLocalizations l10n) {
+    final songCount = _results.length;
+    final artistCount = _items.whereType<YtmArtist>().length;
+    final topPad = Binaries.isMobile ? 12.0 : 2.0;
+
+    void select(_SearchFilter f) {
+      if (_filter == f) return;
+      setState(() => _filter = f);
+      // Reset del scroll al cambiar de pestaña.
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    }
+
+    // Desktop: MISMO grupo segmentado que los tabs de la biblioteca.
+    if (Binaries.isDesktop) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(16, topPad, 16, 8),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: SegmentedPills<_SearchFilter>(
+            selected: _filter,
+            onChanged: select,
+            items: [
+              SegmentedPill(
+                value: _SearchFilter.all,
+                label: l10n.searchFilterAll,
+              ),
+              SegmentedPill(
+                value: _SearchFilter.songs,
+                label: l10n.searchFilterSongs,
+                badge: '$songCount',
+              ),
+              SegmentedPill(
+                value: _SearchFilter.artists,
+                label: l10n.searchFilterArtists,
+                badge: '$artistCount',
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     Widget pill(_SearchFilter f, String label, int? count) {
       final selected = _filter == f;
       final fg = selected
@@ -457,13 +499,10 @@ class _SearchViewState extends State<SearchView> {
       );
     }
 
-    final songCount = _results.length;
-    final artistCount = _items.whereType<YtmArtist>().length;
     // 16dp: alinea las pills con el borde del artwork de las filas
     // (8 del ListView + 8 interno del tile). Arriba: en desktop la caja de
     // vidrio ya da aire (2dp); en móvil el body va directo bajo el campo
     // de búsqueda → 12dp para que no queden pegadas.
-    final topPad = Binaries.isMobile ? 12.0 : 2.0;
     return Padding(
       padding: EdgeInsets.fromLTRB(16, topPad, 16, 8),
       child: Row(
