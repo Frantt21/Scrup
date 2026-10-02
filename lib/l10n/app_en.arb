@@ -454,5 +454,14 @@
   "saveAlbum": "Save album",
   "removeAlbum": "Remove album",
   "libraryTabAlbums": "Albums",
-  "libraryTabSongs": "Songs"
+  "libraryTabSongs": "Songs",
+  "checkForUpdates": "Check for updates",
+  "updateAvailableTitle": "New version available",
+  "updateDownloading": "Downloading…",
+  "updateError": "Update failed. Please try again.",
+  "updateLater": "Later",
+  "updateOpenRelease": "Open release page",
+  "updateDownloadAndInstall": "Download and install",
+  "updateInstalling": "Installing the update…",
+  "updateUpToDate": "You are on the latest version"
 }

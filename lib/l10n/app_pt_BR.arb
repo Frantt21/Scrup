@@ -309,5 +309,14 @@
   "saveAlbum": "Salvar álbum",
   "removeAlbum": "Remover da biblioteca",
   "libraryTabAlbums": "Álbuns",
-  "libraryTabSongs": "Músicas"
+  "libraryTabSongs": "Músicas",
+  "checkForUpdates": "Verificar atualizações",
+  "updateAvailableTitle": "Nova versão disponível",
+  "updateDownloading": "Baixando…",
+  "updateError": "Falha ao atualizar. Tente novamente.",
+  "updateLater": "Mais tarde",
+  "updateOpenRelease": "Abrir página da versão",
+  "updateDownloadAndInstall": "Baixar e instalar",
+  "updateInstalling": "Instalando a atualização…",
+  "updateUpToDate": "Você já tem a versão mais recente"
 }

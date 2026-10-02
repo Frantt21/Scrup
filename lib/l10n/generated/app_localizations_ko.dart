@@ -902,4 +902,31 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get libraryTabSongs => '곡';
+
+  @override
+  String get checkForUpdates => '업데이트 확인';
+
+  @override
+  String get updateAvailableTitle => '새 버전 사용 가능';
+
+  @override
+  String get updateDownloading => '다운로드 중…';
+
+  @override
+  String get updateError => '업데이트에 실패했습니다. 다시 시도하세요.';
+
+  @override
+  String get updateLater => '나중에';
+
+  @override
+  String get updateOpenRelease => '릴리스 페이지 열기';
+
+  @override
+  String get updateDownloadAndInstall => '다운로드 및 설치';
+
+  @override
+  String get updateInstalling => '업데이트 설치 중…';
+
+  @override
+  String get updateUpToDate => '최신 버전입니다';
 }

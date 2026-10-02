@@ -310,5 +310,14 @@
   "saveAlbum": "アルバムを保存",
   "removeAlbum": "ライブラリから削除",
   "libraryTabAlbums": "アルバム",
-  "libraryTabSongs": "曲"
+  "libraryTabSongs": "曲",
+  "checkForUpdates": "アップデートを確認",
+  "updateAvailableTitle": "新しいバージョンがあります",
+  "updateDownloading": "ダウンロード中…",
+  "updateError": "更新に失敗しました。もう一度お試しください。",
+  "updateLater": "後で",
+  "updateOpenRelease": "リリースページを開く",
+  "updateDownloadAndInstall": "ダウンロードしてインストール",
+  "updateInstalling": "アップデートをインストール中…",
+  "updateUpToDate": "最新バージョンです"
 }

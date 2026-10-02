@@ -925,4 +925,31 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get libraryTabSongs => 'Песни';
+
+  @override
+  String get checkForUpdates => 'Проверить обновления';
+
+  @override
+  String get updateAvailableTitle => 'Доступна новая версия';
+
+  @override
+  String get updateDownloading => 'Загрузка…';
+
+  @override
+  String get updateError => 'Не удалось обновить. Попробуйте снова.';
+
+  @override
+  String get updateLater => 'Позже';
+
+  @override
+  String get updateOpenRelease => 'Открыть страницу релиза';
+
+  @override
+  String get updateDownloadAndInstall => 'Скачать и установить';
+
+  @override
+  String get updateInstalling => 'Установка обновления…';
+
+  @override
+  String get updateUpToDate => 'У вас последняя версия';
 }

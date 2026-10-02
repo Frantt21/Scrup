@@ -1782,6 +1782,60 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Canciones'**
   String get libraryTabSongs;
+
+  /// No description provided for @checkForUpdates.
+  ///
+  /// In es, this message translates to:
+  /// **'Buscar actualizaciones'**
+  String get checkForUpdates;
+
+  /// No description provided for @updateAvailableTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Nueva versión disponible'**
+  String get updateAvailableTitle;
+
+  /// No description provided for @updateDownloading.
+  ///
+  /// In es, this message translates to:
+  /// **'Descargando…'**
+  String get updateDownloading;
+
+  /// No description provided for @updateError.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudo actualizar. Inténtalo de nuevo.'**
+  String get updateError;
+
+  /// No description provided for @updateLater.
+  ///
+  /// In es, this message translates to:
+  /// **'Más tarde'**
+  String get updateLater;
+
+  /// No description provided for @updateOpenRelease.
+  ///
+  /// In es, this message translates to:
+  /// **'Abrir página del release'**
+  String get updateOpenRelease;
+
+  /// No description provided for @updateDownloadAndInstall.
+  ///
+  /// In es, this message translates to:
+  /// **'Descargar e instalar'**
+  String get updateDownloadAndInstall;
+
+  /// No description provided for @updateInstalling.
+  ///
+  /// In es, this message translates to:
+  /// **'Instalando la actualización…'**
+  String get updateInstalling;
+
+  /// No description provided for @updateUpToDate.
+  ///
+  /// In es, this message translates to:
+  /// **'Ya tienes la última versión'**
+  String get updateUpToDate;
 }
 
 class _AppLocalizationsDelegate

@@ -13,6 +13,7 @@ import '../l10n/generated/app_localizations.dart';
 import '../services/player_service.dart';
 import '../services/search_service.dart' show YtmAlbum, YtmArtist;
 import '../services/settings_store.dart';
+import '../services/update_service.dart';
 import 'views/artist_detail_view.dart';
 import 'views/home_view.dart';
 import 'views/library_view.dart';
@@ -28,6 +29,7 @@ import 'widgets/player_bar.dart';
 import 'widgets/playlists_sidebar.dart';
 import 'widgets/queue_panel.dart';
 import 'widgets/scrup_toasts.dart';
+import 'widgets/update_dialog.dart';
 
 /// Main app shell: title bar, sidebar, views and player bar.
 class AppShell extends StatefulWidget {
@@ -157,6 +159,15 @@ class _AppShellState extends State<AppShell> {
     });
     unawaited(_loadQueuePref());
     unawaited(_loadPanelWidths());
+    // Comprobación de actualizaciones al iniciar: silenciosa y con un pequeño
+    // retraso para no competir con el arranque (binarios/tema). Solo avisa si
+    // hay versión nueva; como no se persiste "omitir", reaparece en cada
+    // arranque.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.delayed(const Duration(seconds: 4), () {
+        if (mounted) unawaited(_checkForUpdates());
+      });
+    });
     HardwareKeyboard.instance.addHandler(_handleKey);
   }
 
@@ -383,6 +394,38 @@ class _AppShellState extends State<AppShell> {
       setState(() => _queueOpen = Binaries.isMobile ? false : saved);
     } catch (_) {
       // La preferencia nunca debe impedir el arranque.
+    }
+  }
+
+  /// Comprueba si hay una versión nueva en GitHub y, si la hay, muestra el
+  /// diálogo de actualización. [manual] (desde Ajustes) avisa cuando ya estás
+  /// en la última versión o si la comprobación falla.
+  bool _updateCheckRunning = false;
+  Future<void> _checkForUpdates({bool manual = false}) async {
+    if (_updateCheckRunning) return;
+    _updateCheckRunning = true;
+    try {
+      final info = await context.read<UpdateService>().checkForUpdate();
+      if (!mounted) return;
+      if (info == null) {
+        if (manual) {
+          showScrupToast(
+            AppLocalizations.of(context).updateUpToDate,
+            kind: ScrupToastKind.success,
+          );
+        }
+        return;
+      }
+      await showUpdateDialog(context, info);
+    } catch (_) {
+      if (manual && mounted) {
+        showScrupToast(
+          AppLocalizations.of(context).updateError,
+          kind: ScrupToastKind.error,
+        );
+      }
+    } finally {
+      _updateCheckRunning = false;
     }
   }
 
@@ -940,6 +983,7 @@ class _AppShellState extends State<AppShell> {
             SettingsView(
               key: ValueKey(_settingsOpenCount),
               onResetPanelSizes: _resetPanelSizes,
+              onCheckUpdates: () => _checkForUpdates(manual: true),
             ),
             _showFsOverlay
                 ? const SizedBox.shrink()
@@ -1063,6 +1107,7 @@ class _AppShellState extends State<AppShell> {
               child: SettingsView(
                 key: ValueKey(_settingsOpenCount),
                 onResetPanelSizes: _resetPanelSizes,
+                onCheckUpdates: () => _checkForUpdates(manual: true),
               ),
             ),
             // La página de letras del IndexedStack SOLO se monta cuando se

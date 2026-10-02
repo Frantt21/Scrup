@@ -310,5 +310,14 @@
   "saveAlbum": "Сохранить альбом",
   "removeAlbum": "Удалить из библиотеки",
   "libraryTabAlbums": "Альбомы",
-  "libraryTabSongs": "Песни"
+  "libraryTabSongs": "Песни",
+  "checkForUpdates": "Проверить обновления",
+  "updateAvailableTitle": "Доступна новая версия",
+  "updateDownloading": "Загрузка…",
+  "updateError": "Не удалось обновить. Попробуйте снова.",
+  "updateLater": "Позже",
+  "updateOpenRelease": "Открыть страницу релиза",
+  "updateDownloadAndInstall": "Скачать и установить",
+  "updateInstalling": "Установка обновления…",
+  "updateUpToDate": "У вас последняя версия"
 }

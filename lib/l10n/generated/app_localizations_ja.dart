@@ -902,4 +902,31 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get libraryTabSongs => '曲';
+
+  @override
+  String get checkForUpdates => 'アップデートを確認';
+
+  @override
+  String get updateAvailableTitle => '新しいバージョンがあります';
+
+  @override
+  String get updateDownloading => 'ダウンロード中…';
+
+  @override
+  String get updateError => '更新に失敗しました。もう一度お試しください。';
+
+  @override
+  String get updateLater => '後で';
+
+  @override
+  String get updateOpenRelease => 'リリースページを開く';
+
+  @override
+  String get updateDownloadAndInstall => 'ダウンロードしてインストール';
+
+  @override
+  String get updateInstalling => 'アップデートをインストール中…';
+
+  @override
+  String get updateUpToDate => '最新バージョンです';
 }

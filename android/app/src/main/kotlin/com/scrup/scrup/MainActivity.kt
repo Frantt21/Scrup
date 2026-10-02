@@ -13,22 +13,31 @@ class MainActivity : AudioServiceActivity() {
     companion object {
         private const val CHANNEL = "com.scrup.music.toolchain"
         private const val SAVE_CHANNEL = "com.scrup.scrup/save_image"
+        private const val INSTALL_CHANNEL = "com.scrup.scrup/install"
         private const val TAG = "Scrup"
     }
 
     private lateinit var ytDlpHandler: YtDlpHandler
     private lateinit var imageSaverHandler: ImageSaverHandler
+    private lateinit var apkInstallerHandler: ApkInstallerHandler
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         ytDlpHandler = YtDlpHandler(this)
         imageSaverHandler = ImageSaverHandler(this)
+        apkInstallerHandler = ApkInstallerHandler(this)
 
         // Guardar imágenes en la galería (share de lyrics en Android).
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SAVE_CHANNEL)
             .setMethodCallHandler { call, result ->
                 imageSaverHandler.handleMethodCall(call, result)
+            }
+
+        // Lanzar el instalador del APK de actualización (FileProvider).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INSTALL_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                apkInstallerHandler.handleMethodCall(call, result)
             }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)

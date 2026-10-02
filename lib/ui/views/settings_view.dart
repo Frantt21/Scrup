@@ -30,7 +30,11 @@ class SettingsView extends StatefulWidget {
   /// Wired from AppShell, which owns the live state.
   final Future<void> Function()? onResetPanelSizes;
 
-  const SettingsView({super.key, this.onResetPanelSizes});
+  /// Busca actualizaciones manualmente al pulsar el botón de la sección
+  /// "Acerca de". Lo cablea AppShell (dueño del chequeo y del diálogo).
+  final Future<void> Function()? onCheckUpdates;
+
+  const SettingsView({super.key, this.onResetPanelSizes, this.onCheckUpdates});
 
   @override
   State<SettingsView> createState() => _SettingsViewState();
@@ -1268,23 +1272,36 @@ class _SettingsViewState extends State<SettingsView> {
 
   Widget _buildAboutSection(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
     return _SectionCard(
       icon: Icons.info_rounded,
       title: l10n.about,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            l10n.version,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+          Row(
+            children: [
+              Text(
+                l10n.version,
+                style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+              ),
+              const Spacer(),
+              Text(
+                kAppVersionFull,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
-          const Spacer(),
-          Text(
-            kAppVersionFull,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: widget.onCheckUpdates,
+            style: FilledButton.styleFrom().copyWith(
+              mouseCursor: WidgetStateProperty.all(SystemMouseCursors.click),
             ),
+            icon: const Icon(Icons.system_update_alt_rounded, size: 18),
+            label: Text(l10n.checkForUpdates),
           ),
         ],
       ),

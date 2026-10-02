@@ -462,5 +462,14 @@
   "saveAlbum": "Guardar album",
   "removeAlbum": "Quitar de biblioteca",
   "libraryTabAlbums": "Álbumes",
-  "libraryTabSongs": "Canciones"
+  "libraryTabSongs": "Canciones",
+  "checkForUpdates": "Buscar actualizaciones",
+  "updateAvailableTitle": "Nueva versión disponible",
+  "updateDownloading": "Descargando…",
+  "updateError": "No se pudo actualizar. Inténtalo de nuevo.",
+  "updateLater": "Más tarde",
+  "updateOpenRelease": "Abrir página del release",
+  "updateDownloadAndInstall": "Descargar e instalar",
+  "updateInstalling": "Instalando la actualización…",
+  "updateUpToDate": "Ya tienes la última versión"
 }

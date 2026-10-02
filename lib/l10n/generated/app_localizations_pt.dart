@@ -918,6 +918,33 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get libraryTabSongs => 'Músicas';
+
+  @override
+  String get checkForUpdates => 'Verificar atualizações';
+
+  @override
+  String get updateAvailableTitle => 'Nova versão disponível';
+
+  @override
+  String get updateDownloading => 'A transferir…';
+
+  @override
+  String get updateError => 'Falha ao atualizar. Tente novamente.';
+
+  @override
+  String get updateLater => 'Mais tarde';
+
+  @override
+  String get updateOpenRelease => 'Abrir página da versão';
+
+  @override
+  String get updateDownloadAndInstall => 'Baixar e instalar';
+
+  @override
+  String get updateInstalling => 'Instalando a atualização…';
+
+  @override
+  String get updateUpToDate => 'Você já tem a versão mais recente';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1801,4 +1828,31 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get libraryTabSongs => 'Músicas';
+
+  @override
+  String get checkForUpdates => 'Verificar atualizações';
+
+  @override
+  String get updateAvailableTitle => 'Nova versão disponível';
+
+  @override
+  String get updateDownloading => 'Baixando…';
+
+  @override
+  String get updateError => 'Falha ao atualizar. Tente novamente.';
+
+  @override
+  String get updateLater => 'Mais tarde';
+
+  @override
+  String get updateOpenRelease => 'Abrir página da versão';
+
+  @override
+  String get updateDownloadAndInstall => 'Baixar e instalar';
+
+  @override
+  String get updateInstalling => 'Instalando a atualização…';
+
+  @override
+  String get updateUpToDate => 'Você já tem a versão mais recente';
 }

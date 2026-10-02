@@ -310,5 +310,14 @@
   "saveAlbum": "保存专辑",
   "removeAlbum": "从资料库移除",
   "libraryTabAlbums": "专辑",
-  "libraryTabSongs": "歌曲"
+  "libraryTabSongs": "歌曲",
+  "checkForUpdates": "检查更新",
+  "updateAvailableTitle": "有可用的新版本",
+  "updateDownloading": "正在下载…",
+  "updateError": "更新失败，请重试。",
+  "updateLater": "稍后",
+  "updateOpenRelease": "打开发布页面",
+  "updateDownloadAndInstall": "下载并安装",
+  "updateInstalling": "正在安装更新…",
+  "updateUpToDate": "已是最新版本"
 }

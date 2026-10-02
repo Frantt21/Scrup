@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Rutas que expone el FileProvider de Scrup. El APK de actualización se
+   descarga en el directorio de caché temporal de la app
+   (getTemporaryDirectory() -> Context.getCacheDir()), así que basta con
+   exponer cache-path. Nada más debe ser accesible desde fuera.
+-->
+<paths>
+    <cache-path name="update_cache" path="." />
+</paths>

@@ -310,5 +310,14 @@
   "saveAlbum": "앨범 저장",
   "removeAlbum": "라이브러리에서 삭제",
   "libraryTabAlbums": "앨범",
-  "libraryTabSongs": "곡"
+  "libraryTabSongs": "곡",
+  "checkForUpdates": "업데이트 확인",
+  "updateAvailableTitle": "새 버전 사용 가능",
+  "updateDownloading": "다운로드 중…",
+  "updateError": "업데이트에 실패했습니다. 다시 시도하세요.",
+  "updateLater": "나중에",
+  "updateOpenRelease": "릴리스 페이지 열기",
+  "updateDownloadAndInstall": "다운로드 및 설치",
+  "updateInstalling": "업데이트 설치 중…",
+  "updateUpToDate": "최신 버전입니다"
 }

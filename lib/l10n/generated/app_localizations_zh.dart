@@ -900,4 +900,31 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get libraryTabSongs => '歌曲';
+
+  @override
+  String get checkForUpdates => '检查更新';
+
+  @override
+  String get updateAvailableTitle => '有可用的新版本';
+
+  @override
+  String get updateDownloading => '正在下载…';
+
+  @override
+  String get updateError => '更新失败，请重试。';
+
+  @override
+  String get updateLater => '稍后';
+
+  @override
+  String get updateOpenRelease => '打开发布页面';
+
+  @override
+  String get updateDownloadAndInstall => '下载并安装';
+
+  @override
+  String get updateInstalling => '正在安装更新…';
+
+  @override
+  String get updateUpToDate => '已是最新版本';
 }

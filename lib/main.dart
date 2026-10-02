@@ -33,6 +33,7 @@ import 'services/playlist_download_service.dart';
 import 'services/scrup_audio_handler.dart';
 import 'services/settings_store.dart';
 import 'services/silence_skip_service.dart';
+import 'services/update_service.dart';
 import 'services/ytdlp_service.dart';
 import 'ui/app_shell.dart';
 import 'ui/locale_controller.dart';
@@ -301,6 +302,8 @@ class ScrupApp extends StatelessWidget {
         ),
         // Search history (persistent): the Search view chips show it and a tap repeats the query.
         Provider<SearchHistoryStore>(create: (_) => SearchHistoryStore()),
+        // Comprueba el repo de GitHub en busca de actualizaciones.
+        Provider<UpdateService>(create: (_) => UpdateService()),
         Provider<SettingsStore>(create: (_) => settings),
         Provider<PaletteCacheStore>(create: (_) => paletteCache),
         Provider<ScrupAudioHandler>(create: (_) => audioHandler),

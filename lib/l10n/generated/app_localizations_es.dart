@@ -921,4 +921,31 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get libraryTabSongs => 'Canciones';
+
+  @override
+  String get checkForUpdates => 'Buscar actualizaciones';
+
+  @override
+  String get updateAvailableTitle => 'Nueva versión disponible';
+
+  @override
+  String get updateDownloading => 'Descargando…';
+
+  @override
+  String get updateError => 'No se pudo actualizar. Inténtalo de nuevo.';
+
+  @override
+  String get updateLater => 'Más tarde';
+
+  @override
+  String get updateOpenRelease => 'Abrir página del release';
+
+  @override
+  String get updateDownloadAndInstall => 'Descargar e instalar';
+
+  @override
+  String get updateInstalling => 'Instalando la actualización…';
+
+  @override
+  String get updateUpToDate => 'Ya tienes la última versión';
 }
