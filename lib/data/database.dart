@@ -5,6 +5,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/track.dart';
+import '../services/ytmusic_service.dart' show YtmAlbum;
 import 'tables.dart';
 
 part 'database.g.dart';
@@ -66,6 +67,7 @@ class RecapPlaylistEntry {
         ArtistVisits,
         CachedTracks,
         ListenSessions,
+        SavedAlbums,
       ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -74,7 +76,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'scrup'));
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   /// Registra (sin reventar el arranque) un fallo de reparación en
   /// beforeOpen. La BD debe abrir SIEMPRE: estas reparaciones son
@@ -159,6 +161,11 @@ class AppDatabase extends _$AppDatabase {
           // la apertura de la BD y re-ejecuta la migración.)
           if (!e.toString().contains('duplicate column name')) rethrow;
         }
+      }
+      if (from < 14) {
+        // Liked albums (heart button on the album page): keyed by the YT
+        // Music playlistId so the tracklist re-resolves on open.
+        await m.createTable(savedAlbums);
       }
     },
     beforeOpen: (details) async {
@@ -1073,6 +1080,76 @@ class AppDatabase extends _$AppDatabase {
           seconds: row.read(total) ?? 0,
         ),
     ];
+  }
+
+  // ------------------------------------------------------------- helpers
+
+  // ── Álbumes guardados (corazón en la página del álbum) ────────────────
+
+  /// Stream de los álbumes guardados, el más reciente primero (alimenta la
+  /// sección de la biblioteca).
+  Stream<List<YtmAlbum>> watchSavedAlbums() {
+    final query = savedAlbums.select()
+      ..orderBy([
+        (u) => OrderingTerm.desc(u.savedAt),
+      ]);
+    return query
+        .watch()
+        .map(
+          (rows) => [
+            for (final r in rows)
+              YtmAlbum(
+                playlistId: r.id,
+                title: r.title,
+                thumbnailUrl: r.thumbnailUrl,
+                year: r.year,
+                isSingle: r.isSingle,
+              ),
+          ],
+        );
+  }
+
+  /// Guarda (o re-guarda: actualiza metadatos y pasa al frente) un álbum.
+  Future<void> saveAlbum(YtmAlbum album) {
+    return into(
+      savedAlbums,
+    ).insertOnConflictUpdate(
+      SavedAlbumsCompanion.insert(
+        id: album.playlistId,
+        title: album.title,
+        thumbnailUrl: Value(album.thumbnailUrl),
+        year: Value(album.year),
+        isSingle: Value(album.isSingle),
+        savedAt: Value(DateTime.now()),
+        )
+      );
+  }
+
+  /// Quita un álbum de los guardados (no-op si no estaba).
+  Future<void> unsaveAlbum(String playlistId) {
+    return (delete(savedAlbums)..where((u) => u.id.equals(playlistId))).go();
+  }
+
+  /// true si el playlistId está guardado (para el estado del corazón).
+  Future<bool> isAlbumSaved(String playlistId) async {
+    final row =
+        await (select(savedAlbums)..where((u) => u.id.equals(playlistId)))
+            .getSingleOrNull();
+    return row != null;
+  }
+
+  // ── Canciones de la biblioteca (tab "Canciones") ──────────────────────
+
+  /// Todas las canciones guardadas en la base local (historial + cacheadas),
+  /// ordenadas alfabéticamente por título. Alimenta el tab "Canciones" de la
+  /// biblioteca (móvil y sidebar de escritorio).
+  Stream<List<Track>> watchAllTracks({int limit = 1000}) {
+    final query = tracks.select()
+      ..orderBy([(t) => OrderingTerm.asc(t.title)])
+      ..limit(limit);
+    return query.watch().map(
+      (rows) => [for (final r in rows) _trackFromRow(r)],
+    );
   }
 
   // ------------------------------------------------------------- helpers

@@ -1740,6 +1740,48 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'{count} búsquedas en caché · perfiles de artista por 24 h'**
   String searchCacheInfo(int count);
+
+  /// No description provided for @savedAlbumsTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Albums guardados'**
+  String get savedAlbumsTitle;
+
+  /// No description provided for @albumSaved.
+  ///
+  /// In es, this message translates to:
+  /// **'Album guardado en tu biblioteca'**
+  String get albumSaved;
+
+  /// No description provided for @albumRemoved.
+  ///
+  /// In es, this message translates to:
+  /// **'Album quitado de tu biblioteca'**
+  String get albumRemoved;
+
+  /// No description provided for @saveAlbum.
+  ///
+  /// In es, this message translates to:
+  /// **'Guardar album'**
+  String get saveAlbum;
+
+  /// No description provided for @removeAlbum.
+  ///
+  /// In es, this message translates to:
+  /// **'Quitar de biblioteca'**
+  String get removeAlbum;
+
+  /// No description provided for @libraryTabAlbums.
+  ///
+  /// In es, this message translates to:
+  /// **'Álbumes'**
+  String get libraryTabAlbums;
+
+  /// No description provided for @libraryTabSongs.
+  ///
+  /// In es, this message translates to:
+  /// **'Canciones'**
+  String get libraryTabSongs;
 }
 
 class _AppLocalizationsDelegate

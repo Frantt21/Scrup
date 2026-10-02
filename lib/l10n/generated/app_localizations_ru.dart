@@ -904,4 +904,25 @@ class AppLocalizationsRu extends AppLocalizations {
   String searchCacheInfo(int count) {
     return '$count поисков в кэше · профили артистов 24 ч';
   }
+
+  @override
+  String get savedAlbumsTitle => 'Сохранённые альбомы';
+
+  @override
+  String get albumSaved => 'Альбом сохранён в библиотеку';
+
+  @override
+  String get albumRemoved => 'Альбом удалён из библиотеки';
+
+  @override
+  String get saveAlbum => 'Сохранить альбом';
+
+  @override
+  String get removeAlbum => 'Удалить из библиотеки';
+
+  @override
+  String get libraryTabAlbums => 'Альбомы';
+
+  @override
+  String get libraryTabSongs => 'Песни';
 }

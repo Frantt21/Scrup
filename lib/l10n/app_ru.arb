@@ -303,5 +303,12 @@
         "type": "int"
       }
     }
-  }
+  },
+  "savedAlbumsTitle": "Сохранённые альбомы",
+  "albumSaved": "Альбом сохранён в библиотеку",
+  "albumRemoved": "Альбом удалён из библиотеки",
+  "saveAlbum": "Сохранить альбом",
+  "removeAlbum": "Удалить из библиотеки",
+  "libraryTabAlbums": "Альбомы",
+  "libraryTabSongs": "Песни"
 }

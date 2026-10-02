@@ -881,4 +881,25 @@ class AppLocalizationsJa extends AppLocalizations {
   String searchCacheInfo(int count) {
     return '検索キャッシュ $count 件 · アーティスト情報 24時間';
   }
+
+  @override
+  String get savedAlbumsTitle => '保存したアルバム';
+
+  @override
+  String get albumSaved => 'アルバムをライブラリに保存しました';
+
+  @override
+  String get albumRemoved => 'ライブラリからアルバムを削除しました';
+
+  @override
+  String get saveAlbum => 'アルバムを保存';
+
+  @override
+  String get removeAlbum => 'ライブラリから削除';
+
+  @override
+  String get libraryTabAlbums => 'アルバム';
+
+  @override
+  String get libraryTabSongs => '曲';
 }

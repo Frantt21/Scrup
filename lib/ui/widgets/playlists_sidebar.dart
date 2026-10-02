@@ -11,6 +11,8 @@ import '../../services/player_service.dart';
 import '../../services/settings_store.dart';
 import '../../services/artwork_palette_service.dart';
 import '../../services/palette_cache_store.dart';
+import '../../services/ytmusic_service.dart' show YtmAlbum;
+import '../playback.dart';
 import '../playlist_actions.dart';
 import 'context_menu_item.dart';
 import 'cover_image.dart';
@@ -18,6 +20,7 @@ import 'create_playlist_dialog.dart';
 import 'now_playing_bars.dart';
 import 'scrup_toasts.dart';
 import 'spotify_import_dialog.dart';
+import 'track_tile.dart';
 
 const double kSidebarWidth = 300;
 
@@ -36,10 +39,17 @@ Color playlistAccent(BuildContext context, Playlist playlist, ThemeData theme) {
   return theme.colorScheme.primary;
 }
 
-/// Floating glass sidebar showing all playlists with a list/grid toggle.
+/// Sección visible en la biblioteca lateral de escritorio.
+enum _LibrarySection { all, playlists, albums, songs }
+
+/// Floating glass sidebar showing the library (playlists, saved albums and
+/// saved songs) with a list/grid toggle and section tabs.
 class PlaylistsSidebar extends StatefulWidget {
   final int? openPlaylistId;
   final ValueChanged<Playlist?> onSelectPlaylist;
+
+  /// Abre un álbum guardado (mismo screen de artista que home/móvil).
+  final ValueChanged<YtmAlbum>? onOpenAlbum;
 
   /// Current width (owned by AppShell so it persists); `null` = default.
   final double? width;
@@ -55,6 +65,7 @@ class PlaylistsSidebar extends StatefulWidget {
     super.key,
     required this.openPlaylistId,
     required this.onSelectPlaylist,
+    this.onOpenAlbum,
     this.width,
     this.onWidthDrag,
     this.onWidthDragEnd,
@@ -72,6 +83,16 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
   StreamSubscription<bool>? _playingSub;
   List<Playlist> _playlists = const [];
   Map<int, int> _counts = const {};
+
+  // Biblioteca: álbumes guardados (corazón) y canciones de la BD.
+  StreamSubscription<List<YtmAlbum>>? _albumsSub;
+  List<YtmAlbum> _savedAlbums = const [];
+  StreamSubscription<List<Track>>? _songsSub;
+  List<Track> _songs = const [];
+  StreamSubscription<Track?>? _trackSub;
+  String? _activeTrackId;
+
+  _LibrarySection _section = _LibrarySection.all;
 
   int? _activePlaylistId;
   bool _playing = false;
@@ -95,13 +116,26 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
       if (!mounted) return;
       setState(() => _counts = counts);
     });
+    _albumsSub = db.watchSavedAlbums().listen((albums) {
+      if (!mounted) return;
+      setState(() => _savedAlbums = albums);
+    });
+    _songsSub = db.watchAllTracks().listen((songs) {
+      if (!mounted) return;
+      setState(() => _songs = songs);
+    });
     _player = context.read<PlayerService>();
     _activePlaylistId = _player.activePlaylistId.value;
     _playing = _player.isPlaying;
+    _activeTrackId = _player.currentTrackValue?.id;
     _player.activePlaylistId.addListener(_onActivePlaylistChanged);
     _playingSub = _player.playing.listen((p) {
       if (!mounted) return;
       setState(() => _playing = p);
+    });
+    _trackSub = _player.currentTrack.listen((t) {
+      if (!mounted) return;
+      setState(() => _activeTrackId = t?.id);
     });
   }
 
@@ -178,6 +212,9 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
     _playlistsSub?.cancel();
     _countsSub?.cancel();
     _playingSub?.cancel();
+    _albumsSub?.cancel();
+    _songsSub?.cancel();
+    _trackSub?.cancel();
     _player.activePlaylistId.removeListener(_onActivePlaylistChanged);
     super.dispose();
   }
@@ -335,7 +372,7 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
                     children: [
                       Expanded(
                         child: Text(
-                          l10n.playlistsTitle,
+                          l10n.library,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -355,16 +392,23 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
                         tooltip: l10n.newPlaylist,
                         onPressed: _createPlaylist,
                       ),
-                      _ViewToggle(
-                        gridMode: _gridMode,
-                        onChanged: _toggleGridMode,
-                      ),
+                      if (_section != _LibrarySection.songs)
+                        _ViewToggle(
+                          gridMode: _gridMode,
+                          onChanged: _toggleGridMode,
+                        ),
                     ],
                   ),
                 ),
-                Expanded(
-                  child: _gridMode ? _buildGrid(theme) : _buildList(theme),
+                // Tabs de sección: Todo / Playlists / Álbumes / Canciones.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: _SectionTabs(
+                    section: _section,
+                    onChanged: (s) => setState(() => _section = s),
+                  ),
                 ),
+                Expanded(child: _buildBody(theme)),
               ],
             ),
           ),
@@ -423,6 +467,180 @@ class _PlaylistsSidebarState extends State<PlaylistsSidebar> {
           isPlaying: _playing,
         );
       },
+    );
+  }
+
+  Widget _buildBody(ThemeData theme) {
+    switch (_section) {
+      case _LibrarySection.playlists:
+        return _gridMode ? _buildGrid(theme) : _buildList(theme);
+      case _LibrarySection.albums:
+        return _buildAlbums(theme);
+      case _LibrarySection.songs:
+        return _buildSongs(theme);
+      case _LibrarySection.all:
+        return _gridMode ? _buildAllGrid(theme) : _buildAllList(theme);
+    }
+  }
+
+  // ── Álbumes guardados ───────────────────────────────────────────────
+  Widget _buildAlbums(ThemeData theme) {
+    if (_savedAlbums.isEmpty) {
+      return _emptyHint(
+        theme,
+        Icons.album_rounded,
+        AppLocalizations.of(context).savedAlbumsTitle,
+      );
+    }
+    if (_gridMode) {
+      return GridView.builder(
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 0.78,
+        ),
+        itemCount: _savedAlbums.length,
+        itemBuilder: (context, i) => _SavedAlbumCell(
+          album: _savedAlbums[i],
+          onTap: () => widget.onOpenAlbum?.call(_savedAlbums[i]),
+        ),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+      children: [
+        for (final album in _savedAlbums)
+          _SavedAlbumRow(
+            album: album,
+            onTap: () => widget.onOpenAlbum?.call(album),
+          ),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+
+  // ── Canciones ───────────────────────────────────────────────────────
+  Widget _buildSongs(ThemeData theme) {
+    if (_songs.isEmpty) {
+      return _emptyHint(
+        theme,
+        Icons.music_note_rounded,
+        AppLocalizations.of(context).noPlaylists,
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+      itemCount: _songs.length,
+      itemBuilder: (context, i) => TrackTile(
+        track: _songs[i],
+        isCurrent: _songs[i].id == _activeTrackId,
+        isPlaying: _playing,
+        showDuration: false,
+        onPlay: () => unawaited(playQueue(context, _songs, startIndex: i)),
+      ),
+    );
+  }
+
+  // ── Todo (playlists + álbumes) ──────────────────────────────────────
+  Widget _buildAllList(ThemeData theme) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+      children: [
+        if (_playlists.isEmpty && _savedAlbums.isEmpty) _emptyState(theme),
+        for (final playlist in _playlists)
+          _PlaylistRow(
+            playlist: playlist,
+            count: _counts[playlist.id] ?? 0,
+            selected: playlist.id == widget.openPlaylistId,
+            onTap: () => widget.onSelectPlaylist(playlist),
+            onMenu: (pos) => _showPlaylistMenu(playlist, pos),
+            onDelete: () => _deletePlaylist(playlist),
+            showDelete: !playlist.isFavorites,
+            nowPlaying: _activePlaylistId == playlist.id,
+            isPlaying: _playing,
+          ),
+        if (_savedAlbums.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
+            child: Text(
+              AppLocalizations.of(context).libraryTabAlbums,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          for (final album in _savedAlbums)
+            _SavedAlbumRow(
+              album: album,
+              onTap: () => widget.onOpenAlbum?.call(album),
+            ),
+        ],
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+
+  Widget _buildAllGrid(ThemeData theme) {
+    final total = _playlists.length + _savedAlbums.length;
+    if (total == 0) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+        children: [_emptyState(theme)],
+      );
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 0.78,
+      ),
+      itemCount: total,
+      itemBuilder: (context, i) {
+        if (i < _playlists.length) {
+          final playlist = _playlists[i];
+          return _PlaylistGridCell(
+            playlist: playlist,
+            count: _counts[playlist.id] ?? 0,
+            selected: playlist.id == widget.openPlaylistId,
+            onTap: () => widget.onSelectPlaylist(playlist),
+            onMenu: (pos) => _showPlaylistMenu(playlist, pos),
+            onDelete: () => _deletePlaylist(playlist),
+            showDelete: !playlist.isFavorites,
+            nowPlaying: _activePlaylistId == playlist.id,
+            isPlaying: _playing,
+          );
+        }
+        final album = _savedAlbums[i - _playlists.length];
+        return _SavedAlbumCell(
+          album: album,
+          onTap: () => widget.onOpenAlbum?.call(album),
+        );
+      },
+    );
+  }
+
+  Widget _emptyHint(ThemeData theme, IconData icon, String text) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      children: [
+        Icon(
+          icon,
+          size: 32,
+          color: theme.colorScheme.primary.withValues(alpha: 0.4),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          text,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 
@@ -902,6 +1120,206 @@ class _PlaylistGridCellState extends State<_PlaylistGridCell> {
       ),
     );
   }
+}
+
+/// Compact segmented tabs for the library sections (Todo / Playlists /
+/// Álbumes / Canciones). Cuatro segmentos iguales para que quepan en el
+/// ancho del sidebar sin desbordar.
+class _SectionTabs extends StatelessWidget {
+  final _LibrarySection section;
+  final ValueChanged<_LibrarySection> onChanged;
+
+  const _SectionTabs({required this.section, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final labels = <(_LibrarySection, String)>[
+      (_LibrarySection.all, l10n.searchFilterAll),
+      (_LibrarySection.playlists, l10n.playlistsTitle),
+      (_LibrarySection.albums, l10n.libraryTabAlbums),
+      (_LibrarySection.songs, l10n.libraryTabSongs),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+      ),
+      child: Row(
+        children: [
+          for (final (value, label) in labels)
+            Expanded(
+              child: _seg(context, value, label),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _seg(BuildContext context, _LibrarySection value, String label) {
+    final theme = Theme.of(context);
+    final active = value == section;
+    return Material(
+      color: active
+          ? theme.colorScheme.primary.withValues(alpha: 0.25)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => onChanged(value),
+        mouseCursor: SystemMouseCursors.click,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Center(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontSize: 11.5,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                color: active
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fila de un álbum guardado (modo lista del sidebar).
+class _SavedAlbumRow extends StatelessWidget {
+  final YtmAlbum album;
+  final VoidCallback onTap;
+
+  const _SavedAlbumRow({required this.album, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        mouseCursor: SystemMouseCursors.click,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: CoverImage(
+                    source: album.thumbnailUrl,
+                    cacheWidth: 120,
+                    fallback: _albumFallback(theme, 18),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      album.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      album.year ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Celda de un álbum guardado (modo cuadrícula del sidebar).
+class _SavedAlbumCell extends StatelessWidget {
+  final YtmAlbum album;
+  final VoidCallback onTap;
+
+  const _SavedAlbumCell({required this.album, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: CoverImage(
+                  source: album.thumbnailUrl,
+                  cacheWidth: 200,
+                  fallback: _albumFallback(theme, 28),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              album.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Text(
+              album.year ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Widget _albumFallback(ThemeData theme, double iconSize) {
+  return Container(
+    color: theme.colorScheme.surfaceContainerHigh,
+    child: Icon(
+      Icons.album_rounded,
+      size: iconSize,
+      color: theme.colorScheme.primary.withValues(alpha: 0.45),
+    ),
+  );
 }
 
 /// Button to create or import a new playlist (list view).

@@ -879,4 +879,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String searchCacheInfo(int count) {
     return '已缓存 $count 次搜索 · 艺人资料 24 小时';
   }
+
+  @override
+  String get savedAlbumsTitle => '已保存的专辑';
+
+  @override
+  String get albumSaved => '专辑已保存到资料库';
+
+  @override
+  String get albumRemoved => '已从资料库移除专辑';
+
+  @override
+  String get saveAlbum => '保存专辑';
+
+  @override
+  String get removeAlbum => '从资料库移除';
+
+  @override
+  String get libraryTabAlbums => '专辑';
+
+  @override
+  String get libraryTabSongs => '歌曲';
 }

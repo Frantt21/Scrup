@@ -303,5 +303,12 @@
         "type": "int"
       }
     }
-  }
+  },
+  "savedAlbumsTitle": "저장한 앨범",
+  "albumSaved": "앨범을 라이브러리에 저장했습니다",
+  "albumRemoved": "라이브러리에서 앨범을 삭제했습니다",
+  "saveAlbum": "앨범 저장",
+  "removeAlbum": "라이브러리에서 삭제",
+  "libraryTabAlbums": "앨범",
+  "libraryTabSongs": "곡"
 }

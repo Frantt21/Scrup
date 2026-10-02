@@ -900,4 +900,25 @@ class AppLocalizationsEs extends AppLocalizations {
   String searchCacheInfo(int count) {
     return '$count búsquedas en caché · perfiles de artista por 24 h';
   }
+
+  @override
+  String get savedAlbumsTitle => 'Albums guardados';
+
+  @override
+  String get albumSaved => 'Album guardado en tu biblioteca';
+
+  @override
+  String get albumRemoved => 'Album quitado de tu biblioteca';
+
+  @override
+  String get saveAlbum => 'Guardar album';
+
+  @override
+  String get removeAlbum => 'Quitar de biblioteca';
+
+  @override
+  String get libraryTabAlbums => 'Álbumes';
+
+  @override
+  String get libraryTabSongs => 'Canciones';
 }

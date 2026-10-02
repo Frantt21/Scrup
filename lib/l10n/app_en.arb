@@ -447,5 +447,12 @@
         "type": "int"
       }
     }
-  }
+  },
+  "savedAlbumsTitle": "Saved albums",
+  "albumSaved": "Album saved to library",
+  "albumRemoved": "Album removed from library",
+  "saveAlbum": "Save album",
+  "removeAlbum": "Remove album",
+  "libraryTabAlbums": "Albums",
+  "libraryTabSongs": "Songs"
 }

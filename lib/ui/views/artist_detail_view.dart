@@ -1036,6 +1036,10 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
   Color? _accent;
   String? _accentFor;
 
+  /// true cuando el álbum está en la biblioteca (corazón activo). Estado
+  /// local: al alternarlo solo cambia el icono (la BD emite su stream aparte).
+  bool _saved = false;
+
   /// Estilo del header (compartido con la playlist detail): false = portada
   /// 1:1 sobre acento plano (por defecto en álbumes), true = portada
   /// full-bleed con degradado. Se persiste en SettingsStore.
@@ -1058,6 +1062,41 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
     }
     unawaited(_load());
     unawaited(_extractAccent());
+    unawaited(_loadSaved());
+  }
+
+  /// Lee el estado del corazón (best-effort: si falla, queda sin guardar).
+  Future<void> _loadSaved() async {
+    try {
+      final saved = await context
+          .read<AppDatabase>()
+          .isAlbumSaved(widget.album.playlistId);
+      if (!mounted) return;
+      setState(() => _saved = saved);
+    } catch (_) {
+      // Estado por defecto (no guardado).
+    }
+  }
+
+  /// Alterna el guardado del álbum y feedback con toast (mismo patrón que
+  /// las acciones de playlist).
+  Future<void> _toggleSaved() async {
+    final db = context.read<AppDatabase>();
+    final next = !_saved;
+    setState(() => _saved = next);
+    try {
+      if (next) {
+        await db.saveAlbum(widget.album);
+      } else {
+        await db.unsaveAlbum(widget.album.playlistId);
+      }
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      showScrupToast(next ? l10n.albumSaved : l10n.albumRemoved);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saved = !next);
+    }
   }
 
   /// Alterna full-bleed ↔ acento plano y persiste (mismo setting que la
@@ -1300,6 +1339,24 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
                               icon: const Icon(Icons.shuffle_rounded),
                               label: Text(l10n.shuffle),
                             ),
+                            const SizedBox(width: 12),
+                            // Guardar/quitar de la biblioteca (corazón).
+                            IconButton.filledTonal(
+                              onPressed: _toggleSaved,
+                              style: IconButton.styleFrom(
+                                backgroundColor: accent,
+                                foregroundColor: _onColor(accent),
+                                minimumSize: const Size(44, 44),
+                              ),
+                              icon: Icon(
+                                _saved
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                              ),
+                              tooltip: _saved
+                                  ? l10n.removeAlbum
+                                  : l10n.saveAlbum,
+                            ),
                           ],
                         ),
                       ],
@@ -1376,6 +1433,20 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
           ),
           icon: const Icon(Icons.shuffle_rounded),
           label: Text(l10n.shuffle),
+        ),
+        const SizedBox(width: 12),
+        // Guardar/quitar de la biblioteca (corazón).
+        IconButton.filledTonal(
+          onPressed: _toggleSaved,
+          style: IconButton.styleFrom(
+            backgroundColor: accent,
+            foregroundColor: _onColor(accent),
+            minimumSize: const Size(44, 44),
+          ),
+          icon: Icon(
+            _saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          ),
+          tooltip: _saved ? l10n.removeAlbum : l10n.saveAlbum,
         ),
       ],
     );

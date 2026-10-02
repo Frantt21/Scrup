@@ -896,4 +896,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String searchCacheInfo(int count) {
     return '$count cached searches · artist profiles cached for 24 h';
   }
+
+  @override
+  String get savedAlbumsTitle => 'Saved albums';
+
+  @override
+  String get albumSaved => 'Album saved to library';
+
+  @override
+  String get albumRemoved => 'Album removed from library';
+
+  @override
+  String get saveAlbum => 'Save album';
+
+  @override
+  String get removeAlbum => 'Remove album';
+
+  @override
+  String get libraryTabAlbums => 'Albums';
+
+  @override
+  String get libraryTabSongs => 'Songs';
 }

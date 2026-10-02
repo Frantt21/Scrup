@@ -881,4 +881,25 @@ class AppLocalizationsKo extends AppLocalizations {
   String searchCacheInfo(int count) {
     return '검색 캐시 $count개 · 아티스트 프로필 24시간';
   }
+
+  @override
+  String get savedAlbumsTitle => '저장한 앨범';
+
+  @override
+  String get albumSaved => '앨범을 라이브러리에 저장했습니다';
+
+  @override
+  String get albumRemoved => '라이브러리에서 앨범을 삭제했습니다';
+
+  @override
+  String get saveAlbum => '앨범 저장';
+
+  @override
+  String get removeAlbum => '라이브러리에서 삭제';
+
+  @override
+  String get libraryTabAlbums => '앨범';
+
+  @override
+  String get libraryTabSongs => '곡';
 }

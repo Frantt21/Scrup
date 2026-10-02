@@ -257,18 +257,24 @@ class _HomeViewState extends State<HomeView> {
 
   /// Consulta los seeds (album, artista) de la librería y resuelve el
   /// álbum REAL en YT Music de cada uno (máx. 8). Silencioso: si no hay
-  /// seeds o la red falla la fila simplemente no aparece.
+  /// seeds o la red falla la fila simplemente no aparece. Los álbumes
+  /// GUARDADOS (corazón) van PRIMERO (locales, instantáneos); tras ellos los
+  /// recomendados resueltos en YT Music.
   Future<void> _loadLibraryAlbums({bool force = false}) async {
     if (_loadingLibraryAlbums) return;
     if (_libraryAlbumsLoaded && !force) return;
     _loadingLibraryAlbums = true;
     final token = ++_albumRecToken;
     try {
+      final saved = await context.read<AppDatabase>().watchSavedAlbums().first;
+      if (!mounted || token != _albumRecToken) return;
+      setState(() => _libraryAlbums = List.of(saved));
+      _libraryAlbumsLoaded = true;
       final seeds = await context.read<AppDatabase>().libraryAlbumSeeds();
       if (!mounted || token != _albumRecToken) return;
       if (seeds.isEmpty) {
         setState(() {
-          _libraryAlbums = const [];
+          _libraryAlbums = List.of(saved);
           _libraryAlbumsLoaded = true;
         });
         return;
@@ -278,7 +284,11 @@ class _HomeViewState extends State<HomeView> {
           .recommendedAlbumsFromLibrary(seeds, limit: 8);
       if (!mounted || token != _albumRecToken) return;
       setState(() {
-        _libraryAlbums = albums;
+        _libraryAlbums = [
+          ...saved,
+          for (final a in albums)
+            if (!saved.any((s) => s.playlistId == a.playlistId)) a,
+        ];
         _libraryAlbumsLoaded = true;
       });
     } catch (_) {

@@ -303,5 +303,12 @@
         "type": "int"
       }
     }
-  }
+  },
+  "savedAlbumsTitle": "已保存的专辑",
+  "albumSaved": "专辑已保存到资料库",
+  "albumRemoved": "已从资料库移除专辑",
+  "saveAlbum": "保存专辑",
+  "removeAlbum": "从资料库移除",
+  "libraryTabAlbums": "专辑",
+  "libraryTabSongs": "歌曲"
 }

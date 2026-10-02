@@ -455,5 +455,12 @@
         "type": "int"
       }
     }
-  }
+  },
+  "savedAlbumsTitle": "Albums guardados",
+  "albumSaved": "Album guardado en tu biblioteca",
+  "albumRemoved": "Album quitado de tu biblioteca",
+  "saveAlbum": "Guardar album",
+  "removeAlbum": "Quitar de biblioteca",
+  "libraryTabAlbums": "Álbumes",
+  "libraryTabSongs": "Canciones"
 }

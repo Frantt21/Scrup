@@ -3415,6 +3415,416 @@ class ListenSessionsCompanion extends UpdateCompanion<ListenSessionRow> {
   }
 }
 
+class $SavedAlbumsTable extends SavedAlbums
+    with TableInfo<$SavedAlbumsTable, SavedAlbumRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SavedAlbumsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _thumbnailUrlMeta = const VerificationMeta(
+    'thumbnailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> thumbnailUrl = GeneratedColumn<String>(
+    'thumbnail_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _yearMeta = const VerificationMeta('year');
+  @override
+  late final GeneratedColumn<String> year = GeneratedColumn<String>(
+    'year',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isSingleMeta = const VerificationMeta(
+    'isSingle',
+  );
+  @override
+  late final GeneratedColumn<bool> isSingle = GeneratedColumn<bool>(
+    'is_single',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_single" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _savedAtMeta = const VerificationMeta(
+    'savedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> savedAt = GeneratedColumn<DateTime>(
+    'saved_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    title,
+    thumbnailUrl,
+    year,
+    isSingle,
+    savedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'saved_albums';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SavedAlbumRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('thumbnail_url')) {
+      context.handle(
+        _thumbnailUrlMeta,
+        thumbnailUrl.isAcceptableOrUnknown(
+          data['thumbnail_url']!,
+          _thumbnailUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('year')) {
+      context.handle(
+        _yearMeta,
+        year.isAcceptableOrUnknown(data['year']!, _yearMeta),
+      );
+    }
+    if (data.containsKey('is_single')) {
+      context.handle(
+        _isSingleMeta,
+        isSingle.isAcceptableOrUnknown(data['is_single']!, _isSingleMeta),
+      );
+    }
+    if (data.containsKey('saved_at')) {
+      context.handle(
+        _savedAtMeta,
+        savedAt.isAcceptableOrUnknown(data['saved_at']!, _savedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SavedAlbumRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SavedAlbumRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      thumbnailUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}thumbnail_url'],
+      ),
+      year: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}year'],
+      ),
+      isSingle: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_single'],
+      )!,
+      savedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}saved_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SavedAlbumsTable createAlias(String alias) {
+    return $SavedAlbumsTable(attachedDatabase, alias);
+  }
+}
+
+class SavedAlbumRow extends DataClass implements Insertable<SavedAlbumRow> {
+  final String id;
+  final String title;
+  final String? thumbnailUrl;
+  final String? year;
+  final bool isSingle;
+  final DateTime savedAt;
+  const SavedAlbumRow({
+    required this.id,
+    required this.title,
+    this.thumbnailUrl,
+    this.year,
+    required this.isSingle,
+    required this.savedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || thumbnailUrl != null) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl);
+    }
+    if (!nullToAbsent || year != null) {
+      map['year'] = Variable<String>(year);
+    }
+    map['is_single'] = Variable<bool>(isSingle);
+    map['saved_at'] = Variable<DateTime>(savedAt);
+    return map;
+  }
+
+  SavedAlbumsCompanion toCompanion(bool nullToAbsent) {
+    return SavedAlbumsCompanion(
+      id: Value(id),
+      title: Value(title),
+      thumbnailUrl: thumbnailUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(thumbnailUrl),
+      year: year == null && nullToAbsent ? const Value.absent() : Value(year),
+      isSingle: Value(isSingle),
+      savedAt: Value(savedAt),
+    );
+  }
+
+  factory SavedAlbumRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SavedAlbumRow(
+      id: serializer.fromJson<String>(json['id']),
+      title: serializer.fromJson<String>(json['title']),
+      thumbnailUrl: serializer.fromJson<String?>(json['thumbnailUrl']),
+      year: serializer.fromJson<String?>(json['year']),
+      isSingle: serializer.fromJson<bool>(json['isSingle']),
+      savedAt: serializer.fromJson<DateTime>(json['savedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'title': serializer.toJson<String>(title),
+      'thumbnailUrl': serializer.toJson<String?>(thumbnailUrl),
+      'year': serializer.toJson<String?>(year),
+      'isSingle': serializer.toJson<bool>(isSingle),
+      'savedAt': serializer.toJson<DateTime>(savedAt),
+    };
+  }
+
+  SavedAlbumRow copyWith({
+    String? id,
+    String? title,
+    Value<String?> thumbnailUrl = const Value.absent(),
+    Value<String?> year = const Value.absent(),
+    bool? isSingle,
+    DateTime? savedAt,
+  }) => SavedAlbumRow(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    thumbnailUrl: thumbnailUrl.present ? thumbnailUrl.value : this.thumbnailUrl,
+    year: year.present ? year.value : this.year,
+    isSingle: isSingle ?? this.isSingle,
+    savedAt: savedAt ?? this.savedAt,
+  );
+  SavedAlbumRow copyWithCompanion(SavedAlbumsCompanion data) {
+    return SavedAlbumRow(
+      id: data.id.present ? data.id.value : this.id,
+      title: data.title.present ? data.title.value : this.title,
+      thumbnailUrl: data.thumbnailUrl.present
+          ? data.thumbnailUrl.value
+          : this.thumbnailUrl,
+      year: data.year.present ? data.year.value : this.year,
+      isSingle: data.isSingle.present ? data.isSingle.value : this.isSingle,
+      savedAt: data.savedAt.present ? data.savedAt.value : this.savedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SavedAlbumRow(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('year: $year, ')
+          ..write('isSingle: $isSingle, ')
+          ..write('savedAt: $savedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, title, thumbnailUrl, year, isSingle, savedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SavedAlbumRow &&
+          other.id == this.id &&
+          other.title == this.title &&
+          other.thumbnailUrl == this.thumbnailUrl &&
+          other.year == this.year &&
+          other.isSingle == this.isSingle &&
+          other.savedAt == this.savedAt);
+}
+
+class SavedAlbumsCompanion extends UpdateCompanion<SavedAlbumRow> {
+  final Value<String> id;
+  final Value<String> title;
+  final Value<String?> thumbnailUrl;
+  final Value<String?> year;
+  final Value<bool> isSingle;
+  final Value<DateTime> savedAt;
+  final Value<int> rowid;
+  const SavedAlbumsCompanion({
+    this.id = const Value.absent(),
+    this.title = const Value.absent(),
+    this.thumbnailUrl = const Value.absent(),
+    this.year = const Value.absent(),
+    this.isSingle = const Value.absent(),
+    this.savedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SavedAlbumsCompanion.insert({
+    required String id,
+    required String title,
+    this.thumbnailUrl = const Value.absent(),
+    this.year = const Value.absent(),
+    this.isSingle = const Value.absent(),
+    this.savedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       title = Value(title);
+  static Insertable<SavedAlbumRow> custom({
+    Expression<String>? id,
+    Expression<String>? title,
+    Expression<String>? thumbnailUrl,
+    Expression<String>? year,
+    Expression<bool>? isSingle,
+    Expression<DateTime>? savedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (title != null) 'title': title,
+      if (thumbnailUrl != null) 'thumbnail_url': thumbnailUrl,
+      if (year != null) 'year': year,
+      if (isSingle != null) 'is_single': isSingle,
+      if (savedAt != null) 'saved_at': savedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SavedAlbumsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? title,
+    Value<String?>? thumbnailUrl,
+    Value<String?>? year,
+    Value<bool>? isSingle,
+    Value<DateTime>? savedAt,
+    Value<int>? rowid,
+  }) {
+    return SavedAlbumsCompanion(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      year: year ?? this.year,
+      isSingle: isSingle ?? this.isSingle,
+      savedAt: savedAt ?? this.savedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (thumbnailUrl.present) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl.value);
+    }
+    if (year.present) {
+      map['year'] = Variable<String>(year.value);
+    }
+    if (isSingle.present) {
+      map['is_single'] = Variable<bool>(isSingle.value);
+    }
+    if (savedAt.present) {
+      map['saved_at'] = Variable<DateTime>(savedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SavedAlbumsCompanion(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('year: $year, ')
+          ..write('isSingle: $isSingle, ')
+          ..write('savedAt: $savedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3427,6 +3837,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ArtistVisitsTable artistVisits = $ArtistVisitsTable(this);
   late final $CachedTracksTable cachedTracks = $CachedTracksTable(this);
   late final $ListenSessionsTable listenSessions = $ListenSessionsTable(this);
+  late final $SavedAlbumsTable savedAlbums = $SavedAlbumsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3441,6 +3852,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     artistVisits,
     cachedTracks,
     listenSessions,
+    savedAlbums,
   ];
 }
 
@@ -6153,6 +6565,227 @@ typedef $$ListenSessionsTableProcessedTableManager =
       ListenSessionRow,
       PrefetchHooks Function({bool trackId})
     >;
+typedef $$SavedAlbumsTableCreateCompanionBuilder =
+    SavedAlbumsCompanion Function({
+      required String id,
+      required String title,
+      Value<String?> thumbnailUrl,
+      Value<String?> year,
+      Value<bool> isSingle,
+      Value<DateTime> savedAt,
+      Value<int> rowid,
+    });
+typedef $$SavedAlbumsTableUpdateCompanionBuilder =
+    SavedAlbumsCompanion Function({
+      Value<String> id,
+      Value<String> title,
+      Value<String?> thumbnailUrl,
+      Value<String?> year,
+      Value<bool> isSingle,
+      Value<DateTime> savedAt,
+      Value<int> rowid,
+    });
+
+class $$SavedAlbumsTableFilterComposer
+    extends Composer<_$AppDatabase, $SavedAlbumsTable> {
+  $$SavedAlbumsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get year => $composableBuilder(
+    column: $table.year,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isSingle => $composableBuilder(
+    column: $table.isSingle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get savedAt => $composableBuilder(
+    column: $table.savedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SavedAlbumsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SavedAlbumsTable> {
+  $$SavedAlbumsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get year => $composableBuilder(
+    column: $table.year,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isSingle => $composableBuilder(
+    column: $table.isSingle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get savedAt => $composableBuilder(
+    column: $table.savedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SavedAlbumsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SavedAlbumsTable> {
+  $$SavedAlbumsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get thumbnailUrl => $composableBuilder(
+    column: $table.thumbnailUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get year =>
+      $composableBuilder(column: $table.year, builder: (column) => column);
+
+  GeneratedColumn<bool> get isSingle =>
+      $composableBuilder(column: $table.isSingle, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get savedAt =>
+      $composableBuilder(column: $table.savedAt, builder: (column) => column);
+}
+
+class $$SavedAlbumsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SavedAlbumsTable,
+          SavedAlbumRow,
+          $$SavedAlbumsTableFilterComposer,
+          $$SavedAlbumsTableOrderingComposer,
+          $$SavedAlbumsTableAnnotationComposer,
+          $$SavedAlbumsTableCreateCompanionBuilder,
+          $$SavedAlbumsTableUpdateCompanionBuilder,
+          (
+            SavedAlbumRow,
+            BaseReferences<_$AppDatabase, $SavedAlbumsTable, SavedAlbumRow>,
+          ),
+          SavedAlbumRow,
+          PrefetchHooks Function()
+        > {
+  $$SavedAlbumsTableTableManager(_$AppDatabase db, $SavedAlbumsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SavedAlbumsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SavedAlbumsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SavedAlbumsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String?> thumbnailUrl = const Value.absent(),
+                Value<String?> year = const Value.absent(),
+                Value<bool> isSingle = const Value.absent(),
+                Value<DateTime> savedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SavedAlbumsCompanion(
+                id: id,
+                title: title,
+                thumbnailUrl: thumbnailUrl,
+                year: year,
+                isSingle: isSingle,
+                savedAt: savedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String title,
+                Value<String?> thumbnailUrl = const Value.absent(),
+                Value<String?> year = const Value.absent(),
+                Value<bool> isSingle = const Value.absent(),
+                Value<DateTime> savedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SavedAlbumsCompanion.insert(
+                id: id,
+                title: title,
+                thumbnailUrl: thumbnailUrl,
+                year: year,
+                isSingle: isSingle,
+                savedAt: savedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SavedAlbumsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SavedAlbumsTable,
+      SavedAlbumRow,
+      $$SavedAlbumsTableFilterComposer,
+      $$SavedAlbumsTableOrderingComposer,
+      $$SavedAlbumsTableAnnotationComposer,
+      $$SavedAlbumsTableCreateCompanionBuilder,
+      $$SavedAlbumsTableUpdateCompanionBuilder,
+      (
+        SavedAlbumRow,
+        BaseReferences<_$AppDatabase, $SavedAlbumsTable, SavedAlbumRow>,
+      ),
+      SavedAlbumRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6175,4 +6808,6 @@ class $AppDatabaseManager {
       $$CachedTracksTableTableManager(_db, _db.cachedTracks);
   $$ListenSessionsTableTableManager get listenSessions =>
       $$ListenSessionsTableTableManager(_db, _db.listenSessions);
+  $$SavedAlbumsTableTableManager get savedAlbums =>
+      $$SavedAlbumsTableTableManager(_db, _db.savedAlbums);
 }

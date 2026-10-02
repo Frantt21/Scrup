@@ -5,20 +5,29 @@ import 'package:flutter/material.dart';
 /// botones tonales de 40dp a la derecha, hundido con el inset de la barra
 /// de estado (pasa 0 si la vista ya vive dentro de un SafeArea superior).
 class ScreenHeaderDelegate extends SliverPersistentHeaderDelegate {
-  ScreenHeaderDelegate({required this.topInset, required this.child});
+  ScreenHeaderDelegate({
+    required this.topInset,
+    required this.child,
+    this.bottom,
+  });
 
   final double topInset;
   final Widget child;
 
+  /// Fila opcional bajo el título (p. ej. los tabs de la biblioteca): pinned
+  /// junto al header. `null` = solo la fila de título.
+  final Widget? bottom;
+
   // MISMA altura de fila que el header de home: el título y los botones
   // quedan a la misma altura visual entre screens.
   static const double _contentH = 64.0;
+  static const double _bottomH = 44.0;
 
   @override
-  double get minExtent => topInset + _contentH;
+  double get minExtent => topInset + _contentH + (bottom == null ? 0 : _bottomH);
 
   @override
-  double get maxExtent => topInset + _contentH;
+  double get maxExtent => topInset + _contentH + (bottom == null ? 0 : _bottomH);
 
   @override
   Widget build(
@@ -30,13 +39,24 @@ class ScreenHeaderDelegate extends SliverPersistentHeaderDelegate {
     // (16 laterales, 16 arriba, 8 abajo).
     return Padding(
       padding: EdgeInsets.fromLTRB(16, topInset + 16, 16, 8),
-      child: SizedBox(height: 40, child: child),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(height: 40, child: child),
+          if (bottom != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(height: 36, child: bottom),
+          ],
+        ],
+      ),
     );
   }
 
   @override
   bool shouldRebuild(ScreenHeaderDelegate oldDelegate) =>
-      oldDelegate.topInset != topInset || oldDelegate.child != child;
+      oldDelegate.topInset != topInset ||
+      oldDelegate.child != child ||
+      oldDelegate.bottom != bottom;
 }
 
 /// Botón tonal de 40dp del header (mismo estilo que el de búsqueda en home).

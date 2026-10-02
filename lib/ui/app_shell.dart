@@ -765,6 +765,7 @@ class _AppShellState extends State<AppShell> {
                           PlaylistsSidebar(
                             openPlaylistId: openPlaylist?.id,
                             onSelectPlaylist: _selectPlaylist,
+                            onOpenAlbum: _openExternalAlbum,
                             width: _sidebarWidth,
                             onWidthDrag: (w) => setState(() => _sidebarWidth = w),
                             onWidthDragEnd: () => unawaited(
@@ -1034,6 +1035,7 @@ class _AppShellState extends State<AppShell> {
               bottom: false,
               child: LibraryView(
                 onSelectPlaylist: _selectPlaylist,
+                onOpenAlbum: _openExternalAlbum,
               ),
             ),
             // Sin SafeArea superior: el artwork del detail va detr�s de la

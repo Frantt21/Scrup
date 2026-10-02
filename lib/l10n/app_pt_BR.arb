@@ -302,5 +302,12 @@
         "type": "int"
       }
     }
-  }
+  },
+  "savedAlbumsTitle": "Álbuns salvos",
+  "albumSaved": "Álbum salvo na biblioteca",
+  "albumRemoved": "Álbum removido da biblioteca",
+  "saveAlbum": "Salvar álbum",
+  "removeAlbum": "Remover da biblioteca",
+  "libraryTabAlbums": "Álbuns",
+  "libraryTabSongs": "Músicas"
 }

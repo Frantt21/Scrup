@@ -303,5 +303,12 @@
         "type": "int"
       }
     }
-  }
+  },
+  "savedAlbumsTitle": "保存したアルバム",
+  "albumSaved": "アルバムをライブラリに保存しました",
+  "albumRemoved": "ライブラリからアルバムを削除しました",
+  "saveAlbum": "アルバムを保存",
+  "removeAlbum": "ライブラリから削除",
+  "libraryTabAlbums": "アルバム",
+  "libraryTabSongs": "曲"
 }

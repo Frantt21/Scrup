@@ -897,6 +897,27 @@ class AppLocalizationsPt extends AppLocalizations {
   String searchCacheInfo(int count) {
     return '$count buscas em cache · perfis de artista por 24 h';
   }
+
+  @override
+  String get savedAlbumsTitle => 'Álbuns salvos';
+
+  @override
+  String get albumSaved => 'Álbum salvo na biblioteca';
+
+  @override
+  String get albumRemoved => 'Álbum removido da biblioteca';
+
+  @override
+  String get saveAlbum => 'Salvar álbum';
+
+  @override
+  String get removeAlbum => 'Remover da biblioteca';
+
+  @override
+  String get libraryTabAlbums => 'Álbuns';
+
+  @override
+  String get libraryTabSongs => 'Músicas';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1759,4 +1780,25 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String searchCacheInfo(int count) {
     return '$count buscas em cache · perfis de artista por 24 h';
   }
+
+  @override
+  String get savedAlbumsTitle => 'Álbuns salvos';
+
+  @override
+  String get albumSaved => 'Álbum salvo na biblioteca';
+
+  @override
+  String get albumRemoved => 'Álbum removido da biblioteca';
+
+  @override
+  String get saveAlbum => 'Salvar álbum';
+
+  @override
+  String get removeAlbum => 'Remover da biblioteca';
+
+  @override
+  String get libraryTabAlbums => 'Álbuns';
+
+  @override
+  String get libraryTabSongs => 'Músicas';
 }

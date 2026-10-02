@@ -134,3 +134,20 @@ class ListenSessions extends Table {
   IntColumn get seconds => integer()();
   DateTimeColumn get listenedAt => dateTime()();
 }
+
+/// Álbumes (de YT Music) que el usuario guardó con el corazón en su
+/// página. La clave es el playlistId reproducible de YT: con él se vuelve a
+/// resolver el tracklist al abrir (las URLs de audio expiran; el catálogo
+/// no). Sin FK: no depende de ninguna otra tabla.
+@DataClassName('SavedAlbumRow')
+class SavedAlbums extends Table {
+  TextColumn get id => text()(); // YT Music playlistId del álbum
+  TextColumn get title => text()();
+  TextColumn get thumbnailUrl => text().nullable()();
+  TextColumn get year => text().nullable()();
+  BoolColumn get isSingle => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get savedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
