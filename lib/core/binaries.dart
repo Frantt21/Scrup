@@ -470,20 +470,26 @@ class Binaries {
 
   static String? get ffmpegPath {
     if (_ffmpegPath != null) return _ffmpegPath;
-    final env = Platform.environment['SCRUP_FFMPEG_PATH'];
-    if (env != null && env.isNotEmpty) {
-      _ffmpegPath = env;
-      return _ffmpegPath;
-    }
-    final found = _findFfmpeg();
-    if (found != null) {
-      _ffmpegPath = found;
-      return _ffmpegPath;
-    }
-    final inPath = _which('ffmpeg');
-    if (inPath != null) {
-      _ffmpegPath = inPath;
-      return _ffmpegPath;
+    try {
+      final env = Platform.environment['SCRUP_FFMPEG_PATH'];
+      if (env != null && env.isNotEmpty) {
+        _ffmpegPath = env;
+        return _ffmpegPath;
+      }
+      final found = _findFfmpeg();
+      if (found != null) {
+        _ffmpegPath = found;
+        return _ffmpegPath;
+      }
+      final inPath = _which('ffmpeg');
+      if (inPath != null) {
+        _ffmpegPath = inPath;
+        return _ffmpegPath;
+      }
+    } catch (_) {
+      // Best-effort: en Android este getter se consulta aunque no haya
+      // ffmpeg (el análisis acústico del skip-silence es no-op allí). Un
+      // fallo de resolución no debe tumbar al llamador: `null` = sin ffmpeg.
     }
     return null;
   }
@@ -525,24 +531,34 @@ class Binaries {
     return dirs;
   }
 
+  /// Resuelve un ejecutable del PATH. Best-effort y NUNCA lanza: en Android
+  /// el binario `which` puede no existir y `Process.runSync` lanzaría
+  /// `ProcessException`, lo que reventaría `ffmpegPath` (y con él el servicio
+  /// de skip-silence / los offsets de letras, que lo consultan también en
+  /// móvil). Si no se puede resolver, devuelve `null`.
   static String? _which(String name) {
-    if (Platform.isWindows) {
-      final cmd = Process.runSync('where', [name]);
+    try {
+      if (Platform.isWindows) {
+        final cmd = Process.runSync('where', [name]);
+        if (cmd.exitCode == 0) {
+          final lines = (cmd.stdout as String)
+              .trim()
+              .split('\n')
+              .where((l) => l.isNotEmpty)
+              .toList();
+          return lines.isEmpty ? null : lines.first.trim();
+        }
+        return null;
+      }
+      final cmd = Process.runSync('which', [name]);
       if (cmd.exitCode == 0) {
-        final lines = (cmd.stdout as String)
-            .trim()
-            .split('\n')
-            .where((l) => l.isNotEmpty)
-            .toList();
-        return lines.isEmpty ? null : lines.first.trim();
+        final out = (cmd.stdout as String).trim();
+        return out.isEmpty ? null : out.split('\n').first;
       }
       return null;
+    } catch (_) {
+      return null;
     }
-    final cmd = Process.runSync('which', [name]);
-    if (cmd.exitCode == 0) {
-      return (cmd.stdout as String).trim().split('\n').first;
-    }
-    return null;
   }
 
   static String get statusSummary {
