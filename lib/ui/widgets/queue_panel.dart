@@ -595,6 +595,60 @@ class _QueuePanelTabsState extends State<_QueuePanelTabs> {
   }
 }
 
+/// Artwork 1:1 del now playing con el gesto de pausa compartido con el player
+/// expandido de Android: al pausar encoge de forma sutil (0.955) y al
+/// reproducir vuelve a 1.0.
+///
+/// El `AspectRatio` sigue reservando el hueco (el scale es una transformación,
+/// no cambia el layout). El `Stream` de `playing` solo AVISA del cambio para
+/// repintar; el tamaño se decide leyendo el estado REAL del servicio
+/// (`player.isPlaying`) en cada build, de modo que nunca queda un valor
+/// cacheado desincronizado (que es lo que dejaba el artwork pequeño tras
+/// reanudar).
+class NowPlayingArtwork extends StatelessWidget {
+  final PlayerService player;
+
+  /// URL o ruta local de la portada (`null`/vacío → [fallback]).
+  final String? source;
+
+  /// Radio de las esquinas redondeadas.
+  final double radius;
+
+  /// Placeholder cuando no hay portada.
+  final Widget fallback;
+
+  const NowPlayingArtwork({
+    super.key,
+    required this.player,
+    required this.source,
+    required this.fallback,
+    this.radius = 12,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 1,
+      child: StreamBuilder<bool>(
+        stream: player.playing,
+        initialData: player.isPlaying,
+        builder: (context, _) {
+          final playing = player.isPlaying;
+          return AnimatedScale(
+            scale: playing ? 1.0 : 0.955,
+            duration: const Duration(milliseconds: 450),
+            curve: Curves.easeOutCubic,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: CoverImage(source: source, fallback: fallback),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 /// Now-playing summary at the top of the desktop queue panel: source title,
 /// artwork (1:1), track name, artist row with a favorite toggle, and a
 /// clickable artist card (accent, avatar, name, monthly listeners).
@@ -820,24 +874,18 @@ class _NowPlayingPanelState extends State<_NowPlayingPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Artwork 1:1 with the same rounded corners (space always
-          // reserved: the aspect-ratio box never collapses).
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: CoverImage(
-                source: track.thumbnailUrl,
-                fallback: ColoredBox(
-                  color: theme.colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.5),
-                  child: Icon(
-                    Icons.music_note_rounded,
-                    size: 48,
-                    color: theme.colorScheme.onSurfaceVariant.withValues(
-                      alpha: 0.4,
-                    ),
-                  ),
+          NowPlayingArtwork(
+            player: widget.player,
+            source: track.thumbnailUrl,
+            fallback: ColoredBox(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.5,
+              ),
+              child: Icon(
+                Icons.music_note_rounded,
+                size: 48,
+                color: theme.colorScheme.onSurfaceVariant.withValues(
+                  alpha: 0.4,
                 ),
               ),
             ),
