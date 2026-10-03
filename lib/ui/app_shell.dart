@@ -984,6 +984,11 @@ class _AppShellState extends State<AppShell> {
                                       : _selectedIndex)))),
           children: [
             HomeView(
+              // Cards de "Recientes" del mismo ancho que las de la biblioteca
+              // (sidebar), que es redimensionable.
+              libraryCardWidth: libraryGridCardWidth(
+                _sidebarWidth ?? kSidebarWidth,
+              ),
               onSearch: _submitSearch,
               onOpenSearch: _openSearch,
               onOpenPlaylist: _selectPlaylist,

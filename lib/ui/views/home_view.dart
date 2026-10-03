@@ -24,16 +24,12 @@ import '../widgets/artist_avatar.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/drag_scroll.dart';
 import '../widgets/now_playing_bars.dart';
-import '../widgets/playlists_sidebar.dart' show playlistAccent;
+import '../widgets/playlists_sidebar.dart'
+    show playlistAccent, kSidebarWidth, libraryGridCardWidth;
 import '../widgets/player_bar.dart' show kPlayerClearance, kPlayerOverlayInset;
 
 /// Home screen: search bar on top and recent plays in a 1:1 grid of ONLY TWO ROWS (columns adjust to the window width; other recent tracks are not shown). Playlists live in the side container.
 ///
-/// Escala de las cards de PAYLISTS recientes (desktop) respecto a la celda
-/// del grid de recientes: más grandes que las canciones recientes, con el
-/// MISMO gap de separación (10). Móvil no la usa (fila horizontal fija 140).
-const double kPlaylistCardScale = 1.25;
-
 /// Altura común de los banners de home ("Your likes" y "Your recap"): la
 /// pila de portadas del banner de likes mide exactamente esto, y el banner
 /// de recap se estira a la misma altura para que la fila/columna quede
@@ -58,6 +54,11 @@ class HomeView extends StatefulWidget {
   /// Called when tapping a recommended album (AppShell opens the album screen).
   final ValueChanged<YtmAlbum>? onOpenAlbum;
 
+  /// Ancho de card de la biblioteca (sidebar) en desktop: las cards de
+  /// "Recientes" se dimensionan igual para compartir el mismo ritmo visual.
+  /// Null en móvil (fila/grid fijo).
+  final double? libraryCardWidth;
+
   const HomeView({
     super.key,
     this.onSearch,
@@ -66,6 +67,7 @@ class HomeView extends StatefulWidget {
     this.onOpenArtist,
     this.onOpenAlbum,
     this.onOpenRecap,
+    this.libraryCardWidth,
   });
 
   @override
@@ -351,24 +353,22 @@ class _HomeViewState extends State<HomeView> {
         // contenido se hunde con este inset para no quedar bajo la barra.
         final double topInset = MediaQuery.paddingOf(context).top;
         // Recientes: SIEMPRE 2 FILAS horizontales; las columnas se adaptan
-        // al ancho disponible (cards cuadradas ~1:1). Móvil fija 3 columnas.
+        // al ancho disponible (cards cuadradas 1:1). En desktop el tamaño base
+        // es el MISMO que las cards de la biblioteca (sidebar); móvil fija 3
+        // columnas.
         const int rows = 2;
+        final double recentTarget =
+            widget.libraryCardWidth ?? libraryGridCardWidth(kSidebarWidth);
         final int cols = mobile
             ? 3
-            : ((constraints.maxWidth - 48 + 10) / (140 + 10))
+            : ((constraints.maxWidth - 48 + 10) / (recentTarget + 10))
                   .floor()
                   .clamp(2, 8);
-        // Tamaño EXACTO de la celda del grid de recientes (el SliverGrid
-        // reparte: ancho - padding 48 - spacing (cols-1)*10, dividido en
-        // cols). Las cards de playlists de desktop usan este mismo valor.
-        final double cellExtent = mobile
-            ? 0
-            : (constraints.maxWidth - 48 - (cols - 1) * 10) / cols;
-        // Playlists recientes (desktop): cards MÁS GRANDES que las recientes,
-        // escalando la celda exacta del grid. La escala de columnas se
-        // recalcula para que fluyan el MISMO número máximo de filas (2) con
-        // el mismo gap (10) que el grid de recientes.
-        final double playlistExtent = cellExtent * kPlaylistCardScale;
+        // Playlists recientes / álbumes / artistas (desktop): MISMO tamaño que
+        // el artwork/avatar del screen de detalles (kHeroCoverSize). La escala
+        // de columnas se recalcula para que fluyan el MISMO número máximo de
+        // filas (2) con el mismo gap (10) que el grid de recientes.
+        final double playlistExtent = kHeroCoverSize;
         final int pCols = mobile
             ? 3
             : ((constraints.maxWidth - 48 + 10) / (playlistExtent + 10))

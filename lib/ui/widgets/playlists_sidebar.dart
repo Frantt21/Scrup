@@ -28,6 +28,11 @@ const double kSidebarWidth = 300;
 const double kSidebarMinWidth = 200;
 const double kSidebarMaxWidth = 460;
 
+/// Ancho de las cards del sidebar (biblioteca) en modo cuadrícula: 2 columnas,
+/// padding lateral 10 y spacing 10 → (ancho − 30) / 2. Home reutiliza este
+/// tamaño en sus "Recientes" para que ambos compartan el mismo ritmo visual.
+double libraryGridCardWidth(double sidebarWidth) => (sidebarWidth - 30) / 2;
+
 /// Acento de la playlist: extraído de su propia portada (fallback primary).
 Color playlistAccent(BuildContext context, Playlist playlist, ThemeData theme) {
   final url = playlist.coverUrl;
