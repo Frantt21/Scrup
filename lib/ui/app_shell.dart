@@ -785,7 +785,15 @@ class _AppShellState extends State<AppShell> {
     // controles de navegación del sistema (nunca debajo de ellos).
     final double navBarH = 64 + MediaQuery.paddingOf(context).bottom;
 
-    return Listener(
+    // `PrimaryScrollController.none` rompe la herencia del controller primario
+    // que `ModalRoute` inyecta para TODA la ruta: sin esto, todas las listas
+    // verticales del shell (home, biblioteca, playlist/álbum/artista, ajustes,
+    // recap, letras) comparten el MISMO ScrollController con varias posiciones
+    // y el `Scrollbar` descarta las métricas (necesita una sola posición) →
+    // no dibujaba el thumb en Android. Con el scope anulado, cada ScrollView
+    // usa su propio controller interno y el scrollbar vuelve a pintarse.
+    return PrimaryScrollController.none(
+      child: Listener(
       onPointerDown: _handlePointerDown,
       // Sin SafeArea global (edge-to-edge): cada vista m�vil maneja su propio
       // inset superior, y la playlist detail dibuja el artwork DEBAJO de la
@@ -944,6 +952,7 @@ class _AppShellState extends State<AppShell> {
               ),
             ),
         ],
+      ),
       ),
       ),
       ),

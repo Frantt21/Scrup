@@ -81,3 +81,62 @@ class MouseDragScrollBehavior extends MaterialScrollBehavior {
     PointerDeviceKind.stylus,
   };
 }
+
+/// ScrollBehavior global de la app.
+///
+/// Flutter SOLO dibuja el `Scrollbar` en desktop: su `MaterialScrollBehavior`
+/// devuelve el hijo tal cual en Android/iOS, así que las listas largas
+/// (playlists, álbumes, canciones…) no tenían thumb del que tirar. Además, el
+/// scrollbar nativo de Android es NO interactivo (`interactive: false`), de 4px
+/// y con un color tenue. Aquí se fuerza en móvil el mismo `Scrollbar` vertical
+/// que ya funciona en desktop: aparece al scrollear y **se puede arrastrar**
+/// para desplazarse rápido.
+///
+/// Nota: NO se usa `thumbVisibility: true` a propósito. El shell mantiene varias
+/// pantallas vivas en un `IndexedStack` que comparten el `PrimaryScrollController`;
+/// un thumb permanente exigiría un controller por scrollable y crashea en debug
+/// ("attached to more than one ScrollPosition"). Con la visibilidad por defecto
+/// (al scrollear) el resultado es idéntico al de desktop.
+class ScrupScrollBehavior extends MaterialScrollBehavior {
+  const ScrupScrollBehavior();
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    final direction = details.direction;
+    final isVertical =
+        direction == AxisDirection.up || direction == AxisDirection.down;
+    final platform = getPlatform(context);
+    final isMobile =
+        platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+    // Desktop y horizontales: comportamiento original (en desktop conserva su
+    // scrollbar nativa; el horizontal lo gestiona `DragScroll`).
+    if (!isVertical || !isMobile) {
+      return super.buildScrollbar(context, child, details);
+    }
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    return ScrollbarTheme(
+      data: ScrollbarTheme.of(context).copyWith(
+        // El thumb nativo de Android usa el `highlightColor` (muy tenue) mientras
+        // scrolleas; aquí se le da un tono claro y consistente con la app.
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.dragged)) {
+            return onSurface.withValues(alpha: 0.85);
+          }
+          return onSurface.withValues(alpha: 0.5);
+        }),
+      ),
+      child: Scrollbar(
+        controller: details.controller,
+        // Arrastrable con el dedo (por defecto en Android es NO interactivo).
+        interactive: true,
+        thickness: 8,
+        radius: const Radius.circular(8),
+        child: child,
+      ),
+    );
+  }
+}

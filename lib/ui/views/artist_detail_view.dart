@@ -413,22 +413,22 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // Portada 160 con radio 16 (idéntico al hero de playlist).
+                  // Portada 1:1 compartida con los heroes de playlist y álbum.
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: SizedBox(
-                      width: 160,
-                      height: 160,
+                      width: kHeroCoverSize,
+                      height: kHeroCoverSize,
                       child: (detail?.thumbnailUrl?.isNotEmpty ?? false)
                           ? CoverImage(
                               source: detail!.thumbnailUrl,
                               fit: BoxFit.cover,
-                              cacheWidth: 400,
+                              cacheWidth: 500,
                               fallback: ColoredBox(
                                 color: theme.colorScheme.surfaceContainerHigh,
                                 child: Icon(
                                   Icons.person_rounded,
-                                  size: 56,
+                                  size: 72,
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               ),
@@ -437,7 +437,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                               color: theme.colorScheme.surfaceContainerHigh,
                               child: Icon(
                                 Icons.person_rounded,
-                                size: 56,
+                                size: 72,
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
@@ -1254,21 +1254,22 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  // Portada 1:1 compartida con los heroes de playlist y artista.
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: SizedBox(
-                      width: 160,
-                      height: 160,
+                      width: kHeroCoverSize,
+                      height: kHeroCoverSize,
                       child: (widget.album.thumbnailUrl?.isNotEmpty ?? false)
                           ? CoverImage(
                               source: widget.album.thumbnailUrl,
                               fit: BoxFit.cover,
-                              cacheWidth: 400,
+                              cacheWidth: 500,
                               fallback: ColoredBox(
                                 color: theme.colorScheme.surfaceContainerHigh,
                                 child: const Icon(
                                   Icons.album_rounded,
-                                  size: 56,
+                                  size: 72,
                                 ),
                               ),
                             )
@@ -1276,7 +1277,7 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
                               color: theme.colorScheme.surfaceContainerHigh,
                               child: const Icon(
                                 Icons.album_rounded,
-                                size: 56,
+                                size: 72,
                               ),
                             ),
                     ),

@@ -9,6 +9,13 @@ import '../../services/artwork_cache_service.dart';
 import '../../core/app_log.dart';
 import '../../core/track.dart';
 
+/// Lado (1:1) de la portada/artwork grande de los HEROES de desktop: detalle
+/// de playlist, canal de artista y pantalla de álbum. Los tres comparten el
+/// mismo estilo de panel (radio 16, nombre al lado, botones), así que comparten
+/// también el tamaño. Los heroes de móvil usan otro layout (full-bleed) y no la
+/// usan.
+const double kHeroCoverSize = 200;
+
 /// Render an image that can come from a network URL (YouTube/Deezer artwork) or from a local file on the device (playlist cover chosen by the user from their disk).
 ///
 /// Network URLs are persisted in the ON-DISK cache ([ArtworkCacheService]): the first time they are downloaded and saved, and on later app starts they are served from the local file — without re-downloading and without losing artworks when closing and reopening the app.

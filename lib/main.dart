@@ -38,6 +38,7 @@ import 'services/ytdlp_service.dart';
 import 'ui/app_shell.dart';
 import 'ui/locale_controller.dart';
 import 'ui/theme_controller.dart';
+import 'ui/widgets/drag_scroll.dart';
 import 'ui/widgets/scrup_toasts.dart';
 
 Future<void> main() async {
@@ -477,6 +478,10 @@ class ScrupApp extends StatelessWidget {
               return MaterialApp(
                 title: 'Scrup',
                 debugShowCheckedModeBanner: false,
+                // Mismo scrollbar arrastrable en móvil que en desktop (ver
+                // ScrupScrollBehavior): Flutter por defecto solo lo dibuja en
+                // desktop, dejando las listas largas de Android sin thumb.
+                scrollBehavior: const ScrupScrollBehavior(),
                 // No performance graph over the app (clean release).
                 showPerformanceOverlay: false,
                 locale: localeController.locale,

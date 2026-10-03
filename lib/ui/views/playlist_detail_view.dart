@@ -615,7 +615,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
   Widget _coverArt(ThemeData theme, String? url) {
     return CoverImage(
       source: url,
-      cacheWidth: 400,
+      cacheWidth: 500,
       fallback: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -629,7 +629,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
         ),
         child: Icon(
           Icons.queue_music_rounded,
-          size: 40,
+          size: 72,
           color: theme.colorScheme.primary.withValues(alpha: 0.5),
         ),
       ),
@@ -2024,8 +2024,8 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
           child: Stack(
             children: [
               SizedBox(
-                width: 160,
-                height: 160,
+                width: kHeroCoverSize,
+                height: kHeroCoverSize,
                 child: _coverArt(theme, coverUrl),
               ),
               // Overlay de edición (solo en hover)
