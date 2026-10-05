@@ -383,9 +383,14 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
                   ),
                   const SizedBox(height: 24),
                   // Buscar en línea (Deezer + Apple Music + YT Music +
-                  // Spotify oEmbed) junto a Cancelar/Guardar.
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  // Spotify oEmbed) junto a Cancelar/Guardar. Se usa
+                  // OverflowBar para que en pantallas estrechas (móvil) los
+                  // botones se apilen en vertical en vez de desbordarse.
+                  OverflowBar(
+                    alignment: MainAxisAlignment.spaceBetween,
+                    spacing: 8,
+                    overflowAlignment: OverflowBarAlignment.end,
+                    overflowSpacing: 4,
                     children: [
                       TextButton.icon(
                         onPressed: _searchOnline,
@@ -395,14 +400,14 @@ class _EditMetadataDialogState extends State<EditMetadataDialog> {
                         ),
                         label: Text(l10n.metadataSearchOnline),
                       ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+                      OverflowBar(
+                        spacing: 8,
+                        overflowAlignment: OverflowBarAlignment.end,
                         children: [
                           TextButton(
                             onPressed: () => Navigator.pop(context),
                             child: Text(l10n.cancel),
                           ),
-                          const SizedBox(width: 8),
                           FilledButton(
                             onPressed: () =>
                                 Navigator.pop(context, _buildTrack()),
