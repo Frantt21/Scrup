@@ -18,6 +18,7 @@ import '../../services/player_service.dart';
 import '../../services/playlist_download_service.dart';
 import '../../services/settings_store.dart';
 import '../playback.dart';
+import '../scroll_physics.dart';
 import '../theme_controller.dart';
 import '../playlist_actions.dart';
 import '../widgets/context_menu_item.dart';
@@ -738,7 +739,7 @@ class _PlaylistDetailViewState extends State<PlaylistDetailView>
                 return false;
               },
               child: CustomScrollView(
-              physics: const BouncingScrollPhysics(
+              physics: const CappedBouncingScrollPhysics(
                 parent: AlwaysScrollableScrollPhysics(),
               ),
               slivers: [

@@ -17,6 +17,7 @@ import '../../services/search_service.dart';
 import '../../services/ytmusic_service.dart' show YtmAlbum, YtMusicResult;
 import '../../services/settings_store.dart';
 import '../playlist_actions.dart';
+import '../scroll_physics.dart';
 import '../widgets/context_menu_item.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/player_bar.dart' show kPlayerClearance;
@@ -582,7 +583,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
               return false;
             },
             child: CustomScrollView(
-            physics: const BouncingScrollPhysics(
+            physics: const CappedBouncingScrollPhysics(
               parent: AlwaysScrollableScrollPhysics(),
             ),
             slivers: [
@@ -1496,7 +1497,7 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
               return false;
             },
             child: CustomScrollView(
-            physics: const BouncingScrollPhysics(
+            physics: const CappedBouncingScrollPhysics(
               parent: AlwaysScrollableScrollPhysics(),
             ),
             slivers: [
