@@ -73,6 +73,51 @@ class StreamingDownload {
   });
 }
 
+/// Encadena dos caminos de descarga: [primary] (InnerTube + HTTP) con
+/// [fallbackFactory] (yt-dlp) para cuando el primario no llega a entregar la
+/// pista (URL caducada, 403 a mitad de la transferencia, red). El respaldo se
+/// arranca UNA sola vez y lo comparten `playablePath` y `finalPath`: si no,
+/// un fallo del camino rápido dejaría la pista sin descargar en lugar de
+/// reintentarla por el lento.
+@visibleForTesting
+StreamingDownload streamingWithFallback(
+  StreamingDownload primary,
+  Future<StreamingDownload> Function() fallbackFactory,
+) {
+  Future<StreamingDownload>? started;
+  Future<StreamingDownload> fallbackOnce() {
+    final current = started;
+    if (current != null) return current;
+    // Future.sync: un throw síncrono del factory queda como futuro fallido.
+    final f = Future<StreamingDownload>.sync(fallbackFactory);
+    started = f;
+    return f;
+  }
+
+  Future<String> relay(
+    Future<String> target,
+    Future<String> Function(StreamingDownload) pick,
+  ) async {
+    try {
+      return await target;
+    } catch (_) {
+      return await pick(await fallbackOnce());
+    }
+  }
+
+  return StreamingDownload(
+    playablePath: relay(primary.playablePath, (d) => d.playablePath),
+    finalPath: relay(primary.finalPath, (d) => d.finalPath),
+    cancel: () {
+      primary.cancel();
+      final s = started;
+      if (s != null) {
+        unawaited(s.then<void>((d) => d.cancel(), onError: (_) {}));
+      }
+    },
+  );
+}
+
 /// Orchestrates yt-dlp for search and download (streaming or full).
 class YtDlpService {
   static const int _searchCacheMax = 20;
@@ -383,6 +428,58 @@ class YtDlpService {
         onProgress: onProgress,
       );
     }
+    // DESKTOP: InnerTube + HTTP primero; yt-dlp de respaldo.
+    //
+    // Mismos motivos que en Android (ver [_startStreamingAndroid]): resolver
+    // la URL es una petición HTTPS (~150ms medidos) frente al arranque del
+    // proceso yt-dlp (~2-3s), y el cliente ANDROID de InnerTube no sufre el
+    // "Sign in to confirm you're not a bot" que YouTube sirve a la extracción
+    // de descarga de yt-dlp desde algunas IPs. Contrapartida medida en una
+    // pista de 3:29: el itag 18 que sirve InnerTube es MUXED (h264 360x360
+    // ~40kbps + aac 96k) y ocupó 3.53 MB frente a 3.31 MB del opus audio-only
+    // de yt-dlp → +6% de disco y el audio un poco por debajo.
+    final url = await _desktopInnertubeUrl(
+      videoId,
+    ).timeout(const Duration(seconds: 4), onTimeout: () => null);
+    if (url != null) {
+      _ytLog('stream(desktop) id=$videoId InnerTube muxed ok');
+      final http = await _streamHttp(
+        url,
+        videoId,
+        outputDir: outputDir,
+        title: title,
+        fromInnertube: true,
+        onProgress: onProgress,
+      );
+      // Si el camino rápido muere a mitad (URL caducada, 403), el respaldo
+      // reintenta con yt-dlp en vez de dejar la pista sin descargar.
+      return streamingWithFallback(
+        http,
+        () => _streamYtDlp(
+          videoId,
+          outputDir: outputDir,
+          title: title,
+          onProgress: onProgress,
+        ),
+      );
+    }
+    _ytLog('stream(desktop) id=$videoId sin InnerTube → yt-dlp');
+    return _streamYtDlp(
+      videoId,
+      outputDir: outputDir,
+      title: title,
+      onProgress: onProgress,
+    );
+  }
+
+  /// Camino yt-dlp de desktop (respaldo): proceso nativo, audio-only
+  /// (`bestaudio/best`) y `.part` creciente desde el que se reproduce.
+  Future<StreamingDownload> _streamYtDlp(
+    String videoId, {
+    required String outputDir,
+    String? title,
+    void Function(double? percent)? onProgress,
+  }) async {
     final ytdlp = await Binaries.resolveYtDlp();
     if (ytdlp == null) {
       throw YtDlpException(
@@ -660,6 +757,24 @@ class YtDlpService {
   /// más que una extracción individual; esperar completo era parte de los
   /// 9-10s percibidos en el primer play.
   static const Duration _presolveJoinWait = Duration(seconds: 4);
+
+  /// URL de InnerTube para desktop, con la caché de URLs delante (una URL
+  /// muxed vive ~6h y el TTL de la caché es de 5h): repetir una pista en la
+  /// misma sesión —o en la siguiente— no vuelve a pedir la URL. La entrada
+  /// cacheada se valida con el probe de rango: si ya no sirve, se descarta y
+  /// se resuelve de nuevo.
+  Future<String?> _desktopInnertubeUrl(String videoId) async {
+    await _loadUrlCache();
+    final cached = _cachedResolvedUrl(videoId);
+    if (cached != null) {
+      if (await _urlAcceptsRange(cached)) {
+        _ytLog('stream(desktop) id=$videoId URL desde caché');
+        return cached;
+      }
+      _resolvedUrls.remove(videoId);
+    }
+    return _innertubeMuxedValidatedUrl(videoId);
+  }
 
   // InnerTube ANDROID-client MUXED URL (www.youtube.com — serves any video,
   // unlike the music endpoint) accepted only if it passes the range probe.
