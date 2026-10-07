@@ -94,11 +94,20 @@ class YtDlpService {
   final Map<String, Future<List<Track>>> _searchInflight = {};
 
   /// Argumentos comunes para descargar el mejor audio de una pista.
-  List<String> _downloadArgs(String videoId, String outputDir) {
+  ///
+  /// [--progress] NO es opcional: `--print` implica `--quiet` en yt-dlp, y en
+  /// modo silencioso yt-dlp usa un multiline printer vacío (`noprogress`),
+  /// así que sin este flag la barra de progreso no se imprime en absoluto.
+  /// En desktop eso dejaba al loader de las filas sin porcentaje (giraba
+  /// indeterminado y saltaba a "descargado"); Android no usa estos argumentos
+  /// (descarga por HTTP y reporta `received/total`) y por eso sí lo mostraba.
+  @visibleForTesting
+  List<String> downloadArgs(String videoId, String outputDir) {
     final args = <String>[
       '--no-playlist',
       '--no-warnings',
       '--newline',
+      '--progress',
       '--no-mtime',
       '-f',
       _isAndroid ? 'best' : 'bestaudio/best',
@@ -388,7 +397,7 @@ class YtDlpService {
     final launcher = _launcher(ytdlp);
     final executable = launcher.first;
     final script = launcher.length > 1 ? launcher[1] : null;
-    final processArgs = script != null ? [script, ..._downloadArgs(videoId, outputDir)] : [...launcher.sublist(1), ..._downloadArgs(videoId, outputDir)];
+    final processArgs = script != null ? [script, ...downloadArgs(videoId, outputDir)] : [...launcher.sublist(1), ...downloadArgs(videoId, outputDir)];
     final process = await _retryOnSharingViolation(
       () => Process.start(
         executable,
@@ -408,30 +417,51 @@ class YtDlpService {
     var processExited = false;
     var lastLoggedPct = -1.0;
 
+    // El progreso (y el `[download] Destination:`) puede salir por stdout o
+    // por stderr según los flags: con `--quiet` implícito yt-dlp manda los
+    // mensajes de pantalla a stderr y la barra a stdout, así que se parsean
+    // los DOS streams. Antes solo se miraba stdout: en desktop el porcentaje
+    // nunca llegaba a la UI.
+    void parseLine(String line) {
+      final m = progressRe.firstMatch(line);
+      if (m != null) {
+        final pct = double.parse(m.group(1)!) / 100;
+        onProgress?.call(pct);
+        // Log cada ~10% (sin spam: el texto completo lo imprime yt-dlp).
+        if (pct - lastLoggedPct >= 0.099) {
+          lastLoggedPct = pct;
+          _ytLog('stream id=$videoId ${(pct * 100).round()}%');
+        }
+      }
+      final dm = destinationRe.firstMatch(line);
+      if (dm != null) {
+        destinationPath = dm.group(1)!.trim();
+      }
+    }
+
     process.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
-          final m = progressRe.firstMatch(line);
-          if (m != null) {
-            final pct = double.parse(m.group(1)!) / 100;
-            onProgress?.call(pct);
-            // Log cada ~10% (sin spam: el texto completo lo imprime yt-dlp).
-            if (pct - lastLoggedPct >= 0.099) {
-              lastLoggedPct = pct;
-              _ytLog('stream id=$videoId ${(pct * 100).round()}%');
-            }
-          }
-          final dm = destinationRe.firstMatch(line);
-          if (dm != null) {
-            destinationPath = dm.group(1)!.trim();
-          }
+          parseLine(line);
+          // Única línea que `--print` escribe en stdout: la ruta final.
           final trimmed = line.trim();
           if (trimmed.isNotEmpty && !trimmed.contains('[download]')) {
             printedPath = trimmed;
           }
         });
-    process.stderr.transform(utf8.decoder).listen((chunk) => stderr += chunk);
+    // stderr: el progreso se parsea, pero NO se acumula en el texto de error
+    // (si no, un fallo mostraría al usuario cientos de líneas de barra).
+    process.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen((line) {
+          if (progressRe.hasMatch(line)) {
+            parseLine(line);
+            return;
+          }
+          stderr = stderr.isEmpty ? line : '$stderr\n$line';
+        });
 
     // Polls .part file until playable.
     Future<void> pollPartial() async {

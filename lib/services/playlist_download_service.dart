@@ -16,11 +16,24 @@ import 'audio_cache_service.dart';
 /// - Per-track progress (0..1) is exposed via [progressFor] and a global
 ///   change notifier drives ListenableBuilder rows.
 class PlaylistDownloadService extends ChangeNotifier {
-  PlaylistDownloadService(this._cache);
+  PlaylistDownloadService(
+    this._cache, {
+    this.retryBackoff = const Duration(milliseconds: 1200),
+  });
   final AudioCacheService _cache;
 
   /// Cuántas canciones de la playlist se descargan a la vez (pool de fondo).
   static const int maxConcurrent = 3;
+
+  /// Intentos por pista antes de darla por fallida. Un fallo de descarga
+  /// suele ser transitorio (límite/403 de YouTube al pedir varias a la vez,
+  /// fichero bloqueado por el antivirus en Windows) y en desktop se veía como
+  /// "descargó unas cuantas y falló el resto hasta reiniciar la app".
+  static const int maxAttemptsPerTrack = 3;
+
+  /// Espera antes de reintentar una pista (se multiplica por el nº de
+  /// intento: 1.2s, 2.4s) para dar margen a que ceda el bloqueo/limitación.
+  final Duration retryBackoff;
 
   /// Batch sequence token: incremented each time [downloadPlaylist] is called,
   /// used to drop stale loop iterations of the previous batch.
@@ -82,7 +95,14 @@ class PlaylistDownloadService extends ChangeNotifier {
     final toQueue = <Track>[];
     for (final t in tracks) {
       if (isActive(t.id)) continue;
-      if (await _cache.cachedPath(t.id) != null) continue;
+      // Best-effort: un fallo puntual de I/O al mirar el disco no debe
+      // abortar la acción (antes una excepción aquí dejaba la playlist sin
+      // encolar y se propagaba a la UI); en la duda se encola la pista.
+      var cached = false;
+      try {
+        cached = await _cache.cachedPath(t.id) != null;
+      } catch (_) {}
+      if (cached) continue;
       toQueue.add(t);
     }
     if (toQueue.isEmpty) return 0;
@@ -146,6 +166,12 @@ class PlaylistDownloadService extends ChangeNotifier {
     } finally {
       _pumping = false;
     }
+    // Otra descarga pudo encolarse en la ventana entre el último chequeo y
+    // `_pumping = false`: sin esto el loop moría con trabajo vivo y esas
+    // pistas se quedaban sin descargar (fila en "descargando" para siempre).
+    if (_pending.isNotEmpty || _active.isNotEmpty) {
+      unawaited(_runBatch(token));
+    }
   }
 
   /// Start up to [maxConcurrent] queued tracks that are not yet running.
@@ -168,11 +194,15 @@ class PlaylistDownloadService extends ChangeNotifier {
 
   void _endBatch(int token) {
     if (!_batchRunning) return;
-    // Clear every state, not just this token's: chained batches share the
-    // queue, and at batch end all remaining states are terminal anyway.
-    _states.clear();
+    // Clear the TERMINAL states of every batch (chained batches share the
+    // queue). Non-terminal ones survive: if work got queued in the final
+    // window, [downloadPlaylist] already wrote their states and the loop is
+    // resumed right below, so they must not be dropped here.
+    _states.removeWhere(
+      (_, s) => s.status == _Status.done || s.status == _Status.failed,
+    );
     _failed.clear();
-    _batchRunning = false;
+    _batchRunning = _states.isNotEmpty;
     _batchToken++; // invalidate stale loops
     notifyListeners();
   }
@@ -182,6 +212,10 @@ class PlaylistDownloadService extends ChangeNotifier {
   // Download one track in the background via AudioCacheService.preload and
   // mirror the service's per-id progress into the row state. preload()
   // swallows errors internally, so completion is verified against disk.
+  //
+  // Cada intento fallido se reintenta (con espera creciente) antes de dar la
+  // pista por perdida: los fallos de yt-dlp en desktop son casi siempre
+  // transitorios y sin reintento la playlist quedaba a medias.
   Future<void> _runOne(Track track, _DownloadState state) async {
     void onProgress() {
       final p = _cache.backgroundProgress.value[track.id];
@@ -193,12 +227,24 @@ class PlaylistDownloadService extends ChangeNotifier {
 
     _cache.backgroundProgress.addListener(onProgress);
     try {
-      await _cache.preload(track.id, title: track.title);
-      if (await _cache.cachedPath(track.id) == null) {
-        throw Exception('download did not produce a file');
+      for (var attempt = 1; attempt <= maxAttemptsPerTrack; attempt++) {
+        try {
+          await _cache.preload(track.id, title: track.title);
+          if (await _cache.cachedPath(track.id) == null) {
+            throw Exception('download did not produce a file');
+          }
+          _failed.remove(track.id);
+          state.status = _Status.done;
+          return;
+        } catch (_) {
+          // `preload` se traga el error a propósito y libera el slot: el
+          // reintento es una descarga nueva (yt-dlp arranca otro proceso).
+          if (attempt == maxAttemptsPerTrack) rethrow;
+          state.progress = 0.0;
+          notifyListeners();
+          await Future<void>.delayed(retryBackoff * attempt);
+        }
       }
-      _failed.remove(track.id);
-      state.status = _Status.done;
     } catch (_) {
       state.status = _Status.failed;
       _failed.add(track.id);
