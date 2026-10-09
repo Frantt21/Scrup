@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart' show AudioDevice;
@@ -7,11 +8,23 @@ import 'audio_backend.dart';
 
 import '../core/app_log.dart';
 
+/// Ganancia del reproductor SALIENTE en el paso `p` (0..1) de la rampa.
+///
+/// La rampa lineal (`1-p` / `p`) mantiene constante la SUMA de amplitudes,
+/// pero la potencia sumada vale `(1-p)² + p²`, que en el centro cae a 0.5: en
+/// material no correlacionado eso es un bache de ~3 dB audible en mitad del
+/// fundido. Con cos/sin la potencia es constante (`cos² + sin² = 1`) y el
+/// fundido no se "hunde".
+double fadeOutGain(double p) => math.cos(p * math.pi / 2);
+
+/// Ganancia del reproductor ENTRANTE en el paso `p` (0..1). Ver [fadeOutGain].
+double fadeInGain(double p) => math.sin(p * math.pi / 2);
+
 /// Backend con CROSSFADE: envuelve el backend real y mantiene UN SEGUNDO
 /// reproductor (mismo tipo, creado vía [incomingFactory]) para montar la
-/// pista siguiente mientras la actual se apaga. Mismo enfoque que
-/// forawn_mobile: rampa de volumen lineal en N pasos, swap de roles al
-/// terminar y el reproductor saliente queda como "incoming" del siguiente
+/// pista siguiente mientras la actual se apaga. Rampa de volumen
+/// EQUAL-POWER (cos/sin) en N pasos, swap de roles al terminar y el
+/// reproductor saliente queda como "incoming" del siguiente
 /// crossfade.
 ///
 /// Fuera del fundido es un passthrough transparente: TODOS los streams y
@@ -119,15 +132,16 @@ class CrossfadeBackend implements AudioBackend {
     _fadeDone = done;
     _fadeCancelled = false;
     fadeProgress.value = 0;
-    const steps = 60;
-    final stepMs = (duration.inMilliseconds ~/ steps).clamp(10, 200);
+    final cadence = fadeCadence(duration);
+    final steps = cadence.steps;
+    final stepMs = cadence.stepMs;
     var i = 0;
     _fadeTimer = Timer.periodic(Duration(milliseconds: stepMs), (t) {
       i++;
       final p = (i / steps).clamp(0.0, 1.0);
       fadeProgress.value = p;
-      unawaited(_main.setVolume(_userVolume * (1 - p)));
-      unawaited(_incoming.setVolume(_userVolume * p));
+      unawaited(_main.setVolume(_userVolume * fadeOutGain(p)));
+      unawaited(_incoming.setVolume(_userVolume * fadeInGain(p)));
       if (i >= steps) {
         t.cancel();
         _fadeTimer = null;
@@ -140,6 +154,33 @@ class CrossfadeBackend implements AudioBackend {
       }
     });
     return done.future;
+  }
+
+  /// Pasos y cadencia de la rampa para [duration].
+  ///
+  /// La cadencia objetivo son 60 pasos, pero si la duración no cabe en el paso
+  /// máximo (200 ms) se AÑADEN pasos en vez de recortar la rampa: con la
+  /// fórmula anterior (paso limitado a 200 ms y 60 pasos fijos) cualquier
+  /// fundido de más de 12 s terminaba antes que la pista y el swap de roles se
+  /// adelantaba al final real.
+  @visibleForTesting
+  static ({int steps, int stepMs}) fadeCadence(Duration duration) {
+    final ms = duration.inMilliseconds;
+    final stepMs = (ms / 60).round().clamp(10, 200);
+    final steps = (ms / stepMs).ceil().clamp(2, 100000);
+    return (steps: steps, stepMs: stepMs);
+  }
+
+  /// Detiene el secundario y restaura los volúmenes sin depender de que haya
+  /// una rampa en curso. Se usa cuando el fundido se DESCARTA antes de empezar
+  /// (p. ej. la entrante tardó más que la ventana disponible) o en los caminos
+  /// de error, para no dejar el entrante sonando por su cuenta.
+  Future<void> abortIncoming() async {
+    await _incoming.stop();
+    await _incoming.setVolume(_userVolume);
+    await _main.setVolume(_userVolume);
+    fadeProgress.value = 0;
+    _volCtrl.add(_userVolume);
   }
 
   /// Abre la pista entrante EN PAUSA sobre el reproductor secundario.
@@ -226,7 +267,8 @@ class CrossfadeBackend implements AudioBackend {
 
   // Con isFading un setVolume externo no rompe la rampa: se aplica sobre el
   // principal respetando el progreso (el usuario subió/bajó a mitad de fade).
-  double _mainVolumeDuringFade() => _userVolume * (1 - fadeProgress.value);
+  double _mainVolumeDuringFade() =>
+      _userVolume * fadeOutGain(fadeProgress.value);
 
   @override
   Future<void> setAudioDevice(AudioDevice device) =>

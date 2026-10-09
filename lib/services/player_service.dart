@@ -758,6 +758,16 @@ class PlayerService {
   /// (el `completed` de la pista saliente se IGNORA para no doble-avanzar).
   bool _crossfading = false;
 
+  /// `completed` de la saliente que se consumió mientras `_crossfading` estaba
+  /// activo. Si el fundido acaba DESCARTÁNDOSE (la entrante tardó más que la
+  /// ventana, o falló el montaje), ese avance no puede perderse: la cola se
+  /// quedaría parada al final de la pista.
+  bool _completedSwallowedByCrossfade = false;
+
+  /// Fundido mínimo audible: si al resolver la entrante queda menos que esto,
+  /// el crossfade se descarta y manda el cambio normal de pista.
+  static const int _minCrossfadeMs = 400;
+
   /// Configura el crossfade (llamado por Settings vía main.dart).
   Future<void> setCrossfade(double seconds) async {
     _crossfadeSeconds = seconds.clamp(0.0, 12.0);
@@ -795,6 +805,15 @@ class PlayerService {
     final current = _currentTrack;
     if (current == null) return false;
 
+    // Pistas contiguas de la MISMA obra: no se funden. El fundido rompe la
+    // escucha seguida del disco (mismo criterio que el "Part of a gapless
+    // album" de iTunes, que desactiva el crossfade en esas pistas).
+    if (areGaplessNeighbors(current, incoming)) {
+      appLog('TRACK', 'crossfade omitido: misma obra (${current.album})');
+      return false;
+    }
+
+    _completedSwallowedByCrossfade = false;
     _crossfading = true;
     try {
       // Resuelve la fuente ENTRANTE con la MISMA canalización que un cambio
@@ -803,14 +822,19 @@ class PlayerService {
       final srcFuture = resolveSource(incoming);
       final enrichFuture = _enrich(incoming);
       final src = await srcFuture;
+
+      // Resolver la entrante (red/yt-dlp/caché) puede tardar más que la propia
+      // ventana del fundido: la rampa se recorta a lo que QUEDA de la saliente
+      // para que acabe con la pista y no a mitad de la entrante.
+      final fade = _remainingFadeDuration(seconds);
+      if (fade == null) return await _abortCrossfade(repairCompleted: true);
+
       await backend.openIncoming(_mediaUri(src));
       await backend.startIncoming();
 
       // publicar la ENTRANTE al terminar la rampa (los streams del backend
       // ya apuntan al nuevo principal tras el swap).
-      await backend.beginFade(
-        duration: Duration(milliseconds: (seconds * 1000).round()),
-      );
+      await backend.beginFade(duration: fade);
       // Fundido CANCELADO (pause/seek/next del usuario durante la rampa):
       // no se publica la entrante ni se intercambian roles.
       if (backend.fadeCancelled) return false;
@@ -827,10 +851,57 @@ class PlayerService {
       appLog('TRACK', 'crossfade → ${incoming.id} (${seconds}s)');
       return true;
     } catch (_) {
-      return false;
+      // Fallo montando la entrante (open/start/rampa): se limpia el secundario
+      // y, si la saliente ya había terminado, se devuelve el avance normal.
+      return await _abortCrossfade(repairCompleted: true);
     } finally {
       _crossfading = false;
     }
+  }
+
+  /// Descarta el fundido: limpia el reproductor secundario y, si la saliente ya
+  /// terminó mientras el crossfade tenía el relevo, dispara el avance normal.
+  ///
+  /// El avance se lanza AQUÍ porque aquel `completed` ya se consumió cuando
+  /// `_crossfading` era true; sin esto la cola se queda parada al final de la
+  /// pista.
+  Future<bool> _abortCrossfade({bool repairCompleted = false}) async {
+    final backend = _player;
+    if (backend is CrossfadeBackend) {
+      await backend.abortIncoming();
+    }
+    if (repairCompleted && _completedSwallowedByCrossfade) {
+      _completedSwallowedByCrossfade = false;
+      // `_onTrackCompleted` ignora el aviso si `_crossfading` sigue activo.
+      _crossfading = false;
+      await _onTrackCompleted();
+    }
+    return false;
+  }
+
+  /// Duración del fundido ajustada a lo que QUEDA de la saliente (la entrante
+  /// puede tardar en resolverse). `null` = ya no hay margen para un fundido
+  /// audible y el crossfade debe descartarse.
+  Duration? _remainingFadeDuration(double seconds) {
+    final configured = Duration(milliseconds: (seconds * 1000).round());
+    final dur = _lastDuration;
+    if (dur == null || dur <= Duration.zero) return configured;
+    final left = dur - _lastPosition;
+    if (left.inMilliseconds < _minCrossfadeMs) return null;
+    return left < configured ? left : configured;
+  }
+
+  /// ¿Son dos pistas contiguas de la MISMA obra? En tal caso el fundido sobra.
+  /// `Track` no trae número de pista, así que el criterio es álbum + artista
+  /// idénticos (y no vacíos): si algún día se añade `trackNumber` al modelo,
+  /// aquí se puede exigir además que sean consecutivas.
+  static bool areGaplessNeighbors(Track a, Track b) {
+    final album = a.album;
+    final other = b.album;
+    if (album == null || other == null) return false;
+    if (album.trim().isEmpty || other.trim().isEmpty) return false;
+    if (album.trim().toLowerCase() != other.trim().toLowerCase()) return false;
+    return a.artist.trim().toLowerCase() == b.artist.trim().toLowerCase();
   }
 
   /// Punto de entrada del crossfade en la ventana final (posición dentro de
@@ -889,9 +960,12 @@ class PlayerService {
 
     // Crossfade en curso: el fin real de la pista saliente ya no avanza
     // (la entrante fue montada y publicada por el fundido; su propio fin
-    // disparará el siguiente). Si el fundido NO llegó a arrancar (fallo de
-    // resolución), el completed avanza con la lógica normal de abajo.
-    if (_crossfading) return;
+    // disparará el siguiente). Se ANOTA que este aviso se consumió: si el
+    // fundido se descarta después, `_abortCrossfade` lo reactiva a mano.
+    if (_crossfading) {
+      _completedSwallowedByCrossfade = true;
+      return;
+    }
 
     // Repeat one: replay current track.
     if (repeatMode.value == LoopMode.one && current != null) {
