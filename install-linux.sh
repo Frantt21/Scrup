@@ -135,13 +135,19 @@ else
     "$API_URL" 2>/dev/null)" || die "no se pudo consultar la última release de $REPO_SLUG (¿sin conexión o límite de la API?).
 Si tienes el paquete descargado, usa: bash install-linux.sh --file <ruta.flatpak>"
 
-  TAG="$(printf '%s\n' "$JSON" | sed -n 's/.*"tag_name" *: *"\([^"]*\)".*/\1/p' | head -1)"
+  # Sin `| head`: con `set -o pipefail` un truncador mata por SIGPIPE al
+  # escritor y el pipeline devuelve != 0. Se consume toda la salida y se toma
+  # la primera línea con expansión de parámetros (así una release con varios
+  # assets .flatpak no rompe el script).
+  TAGS="$(printf '%s\n' "$JSON" | sed -n 's/.*"tag_name" *: *"\([^"]*\)".*/\1/p')"
+  TAG="${TAGS%%$'\n'*}"
   [ -n "$TAG" ] || die "no se pudo leer la versión de la última release."
 
   # Primer asset cuyo nombre termine en .flatpak.
-  BROWSER_URL="$(printf '%s\n' "$JSON" \
+  URLS="$(printf '%s\n' "$JSON" \
     | grep -o '"browser_download_url" *: *"[^"]*\.flatpak"' \
-    | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')"
+    | sed 's/.*"\(https[^"]*\)"/\1/')"
+  BROWSER_URL="${URLS%%$'\n'*}"
   [ -n "$BROWSER_URL" ] || die "la release $TAG no trae ningún asset .flatpak."
   ASSET_NAME="$(basename "$BROWSER_URL")"
   ORIGIN="release $TAG ($ASSET_NAME)"
@@ -218,8 +224,12 @@ fi
 # applications/. Si además existe una escrita a mano en
 # ~/.local/share/applications/ con el MISMO desktop-id, gana la de esa carpeta
 # (XDG_DATA_DIRS); si apunta a un --branch inexistente, el menú no lanza nada.
-BRANCH="$(flatpak list --user --columns=application,branch "$APP_ID" 2>/dev/null \
-  | awk -v id="$APP_ID" '$1 == id { print $2 }' | head -1)"
+# OJO: `flatpak list` no admite patrón de app junto a --columns ("Demasiados
+# argumentos", exit 1) y `| head -1` con `set -o pipefail` mata al escritor por
+# SIGPIPE; cualquiera de las dos aborta el script. Se listan todas las apps del
+# usuario y filtra awk, que consume la entrada entera.
+USER_APPS="$(flatpak list --user --app --columns=application,branch 2>/dev/null || true)"
+BRANCH="$(printf '%s\n' "$USER_APPS" | awk -v id="$APP_ID" '$1 == id { b = $2 } END { print b }')"
 BRANCH="${BRANCH:-master}"
 STALE="$HOME/.local/share/applications/$APP_ID.desktop"
 if [ -f "$STALE" ]; then
@@ -260,8 +270,11 @@ else
   warn "Prueba a ejecutarla con: flatpak run $APP_ID"
 fi
 
-VER="$(flatpak info --user "$APP_ID" 2>/dev/null \
-  | sed -n 's/^ *Version: *//p' | head -1)"
+# LC_ALL=C: la salida de `flatpak info` está TRADUCIDA (en español la línea es
+# "Versión:" y el sed con "Version:" no encuentra nada).
+VER="$(LC_ALL=C flatpak info --user "$APP_ID" 2>/dev/null \
+  | sed -n 's/^ *Version: *//p')"
+VER="${VER%%$'\n'*}"
 
 echo
 echo "==> Scrup instalado (solo para tu usuario)."
