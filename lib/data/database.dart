@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/track.dart';
@@ -56,6 +60,87 @@ class RecapPlaylistEntry {
   });
 }
 
+/// Nombre lógico de la BD: drift crea `<name>.sqlite` dentro del directorio
+/// que devuelve [resolveDatabaseDirectory].
+const String _databaseName = 'scrup';
+
+/// Directorio donde vive la BD, migrando la ubicación antigua si procede.
+///
+/// drift usa por defecto `getApplicationDocumentsDirectory()` (en escritorio
+/// `~/Documents` / `%USERPROFILE%\Documents`), pero esa carpeta NO siempre es
+/// escribible: el sandbox de Flatpak monta `/home` en SOLO LECTURA
+/// (`--filesystem=home:ro`) y SQLite falla al abrir/crear el fichero con
+/// `SQLITE_CANTOPEN (14)`. Verificado dentro del sandbox:
+/// `touch ~/Documents/x` → "Sistema de ficheros de sólo lectura".
+///
+/// En Flatpak eso producía exactamente dos síntomas: (1) al borrar la BD, el
+/// app no puede volver a crearla y Home se queda cargando para siempre; y
+/// (2) al migrar/importar una playlist, las canciones se encuentran (red) pero
+/// el `INSERT` de la playlist falla → "No se pudo crear la playlist".
+///
+/// En escritorio usamos la carpeta de datos de la app
+/// (`getApplicationSupportDirectory()` → `$XDG_DATA_HOME/<app-id o nombre del
+/// ejecutable>`: `~/.local/share/scrup` en el bundle nativo y
+/// `~/.var/app/com.scrup.scrup/data/com.scrup.scrup` en Flatpak, siempre
+/// escribible — verificado dentro del sandbox). La BD antigua
+/// de Documents se COPIA aquí la primera vez (nunca se borra: sigue siendo del
+/// usuario). En móvil no se cambia nada: `getApplicationDocumentsDirectory()`
+/// ya es privado de la app y escribible.
+///
+/// Los parámetros inyectables existen solo para los tests.
+Future<Directory> resolveDatabaseDirectory({
+  Future<Directory> Function()? supportDir,
+  Future<Directory> Function()? documentsDir,
+  bool Function()? isMobile,
+}) async {
+  final mobile = (isMobile ?? _defaultIsMobile)();
+  if (mobile) return await (documentsDir ?? getApplicationDocumentsDirectory)();
+  final support = await (supportDir ?? getApplicationSupportDirectory)();
+  final fallback = await _migrateLegacyDatabase(
+    support,
+    documentsDir: documentsDir ?? getApplicationDocumentsDirectory,
+  );
+  return fallback ?? support;
+}
+
+bool _defaultIsMobile() => Platform.isAndroid || Platform.isIOS;
+
+/// Copia la BD antigua de `Documents` a [target] si [target] todavía no tiene
+/// una. Devuelve el directorio ANTIGUO cuando allí sí hay una BD y la copia
+/// falló: mejor abrir la antigua (aunque sea de solo lectura) que arrancar con
+/// una biblioteca vacía. `null` si no hay nada que migrar o si fue bien.
+Future<Directory?> _migrateLegacyDatabase(
+  Directory target, {
+  required Future<Directory> Function() documentsDir,
+}) async {
+  final targetFile = File(p.join(target.path, '$_databaseName.sqlite'));
+  if (targetFile.existsSync()) return null;
+  Directory? legacyDir;
+  try {
+    legacyDir = await documentsDir();
+    final legacyFile = File(p.join(legacyDir.path, '$_databaseName.sqlite'));
+    if (!legacyFile.existsSync()) return null;
+    await target.create(recursive: true);
+    // Los adjuntos WAL/SHM van con la BD: sin ellos se perderían las
+    // transacciones aún no fusionadas al fichero principal.
+    for (final suffix in const ['', '-wal', '-shm']) {
+      final source = File('${legacyFile.path}$suffix');
+      if (source.existsSync()) await source.copy('${targetFile.path}$suffix');
+    }
+    debugPrint('[scrup/db] BD migrada de ${legacyDir.path} a ${target.path}');
+    return null;
+  } catch (e) {
+    debugPrint('[scrup/db] no se pudo migrar la BD desde Documents: $e');
+    try {
+      if (legacyDir != null &&
+          File(p.join(legacyDir.path, '$_databaseName.sqlite')).existsSync()) {
+        return legacyDir;
+      }
+    } catch (_) {}
+    return null;
+  }
+}
+
 @DriftDatabase(
       tables: [
         Tracks,
@@ -73,7 +158,15 @@ class RecapPlaylistEntry {
 class AppDatabase extends _$AppDatabase {
   /// [executor] lets tests inject an in-memory database.
   AppDatabase({QueryExecutor? executor})
-    : super(executor ?? driftDatabase(name: 'scrup'));
+    : super(
+        executor ??
+            driftDatabase(
+              name: _databaseName,
+              native: DriftNativeOptions(
+                databaseDirectory: resolveDatabaseDirectory,
+              ),
+            ),
+      );
 
   @override
   int get schemaVersion => 14;

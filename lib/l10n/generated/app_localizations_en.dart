@@ -577,6 +577,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not read the playlist (is the link correct and public?)';
 
   @override
+  String get importNetworkError =>
+      'Could not reach the service (check your internet connection)';
+
+  @override
   String get spotifyNoMatch => 'No match found';
 
   @override

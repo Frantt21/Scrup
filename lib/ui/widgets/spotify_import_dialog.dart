@@ -26,6 +26,12 @@ enum _Phase { url, fetching, matching, done }
 
 enum _RowStatus { searching, matched, unmatched }
 
+/// Mensaje para un fallo al LEER la playlist: si fue de red (sin internet,
+/// DNS/firewall, TLS interceptado, timeout…) se dice tal cual; el texto
+/// genérico ("¿enlace correcto y pública?") despistaba en ese caso.
+String _fetchError(AppLocalizations l10n, Object error) =>
+    isImportNetworkError(error) ? l10n.importNetworkError : l10n.spotifyFetchError;
+
 class _RowState {
   _RowState({
     required this.label,
@@ -91,11 +97,11 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
     YtmPlaylist playlist;
     try {
       playlist = await YtMusicService().fetchPlaylist(input);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _phase = _Phase.url;
-        _error = AppLocalizations.of(context).spotifyFetchError;
+        _error = _fetchError(AppLocalizations.of(context), e);
       });
       return;
     }
@@ -128,11 +134,11 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
     SpotifyPlaylist playlist;
     try {
       playlist = await service.fetchPlaylist(input);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _phase = _Phase.url;
-        _error = l10n.spotifyFetchError;
+        _error = _fetchError(l10n, e);
       });
       return;
     }
@@ -179,11 +185,11 @@ class _SpotifyImportDialogState extends State<SpotifyImportDialog> {
     SpotifyPlaylist playlist;
     try {
       playlist = await _appleMusic.fetchPlaylist(input);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _phase = _Phase.url;
-        _error = l10n.spotifyFetchError;
+        _error = _fetchError(l10n, e);
       });
       return;
     }

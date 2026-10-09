@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -56,10 +57,46 @@ class SpotifyMatchResult {
 
 class SpotifyImportException implements Exception {
   const SpotifyImportException(this.reason);
+
+  /// `invalid-id` | `network` | `not-found` | `parse` | `empty`.
   final String reason;
 
   @override
   String toString() => reason;
+}
+
+/// `true` si el fallo al leer la playlist fue de CONEXIÓN (sin internet,
+/// DNS/firewall, TLS interceptado por antivirus, timeout…), no de la playlist.
+///
+/// El diálogo mostraba "¿enlace correcto y pública?" para cualquier error, lo
+/// que despistaba justo en el caso contrario: una playlist válida que no se
+/// podía descargar desde esa máquina. Con esto se le dice al usuario qué
+/// revisar de verdad.
+bool isImportNetworkError(Object? error) {
+  if (error is SpotifyImportException) return error.reason == 'network';
+  if (error is SocketException ||
+      error is HandshakeException ||
+      error is TimeoutException ||
+      error is http.ClientException) {
+    return true;
+  }
+  // Las búsquedas de InnerTube y yt-dlp propagan el error envuelto en textos
+  // distintos ("SocketException: Failed host lookup…", "Connection timed
+  // out", "Certificado…"): se reconoce por mensaje.
+  final text = error.toString().toLowerCase();
+  return text.contains('socketexception') ||
+      text.contains('clientexception') ||
+      text.contains('handshakeexception') ||
+      text.contains('failed host lookup') ||
+      text.contains('connection refused') ||
+      text.contains('connection reset') ||
+      text.contains('connection timed out') ||
+      text.contains('timed out') ||
+      text.contains('timeout') ||
+      text.contains('network is unreachable') ||
+      text.contains('no address associated with hostname') ||
+      text.contains('temporary failure in name resolution') ||
+      text.contains('certificate');
 }
 
 /// Reads public Spotify playlists via the embed endpoint and matches tracks to YouTube.

@@ -579,6 +579,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Não foi possível ler a playlist (o link está correto e é pública?)';
 
   @override
+  String get importNetworkError =>
+      'Não foi possível contactar o serviço (verifica a tua ligação à internet)';
+
+  @override
   String get spotifyNoMatch => 'Sem correspondência';
 
   @override
@@ -1499,6 +1503,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get spotifyFetchError =>
       'Não foi possível ler a playlist (o link está correto e ela é pública?)';
+
+  @override
+  String get importNetworkError =>
+      'Não foi possível contatar o serviço (verifique sua conexão com a internet)';
 
   @override
   String get spotifyNoMatch => 'Sem correspondência';

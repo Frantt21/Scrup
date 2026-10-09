@@ -172,6 +172,7 @@
   "spotifyUrlHint": "Link de playlist do Spotify, YouTube ou Apple Music",
   "importAction": "Importar",
   "spotifyFetchError": "Não foi possível ler a playlist (o link está correto e é pública?)",
+  "importNetworkError": "Não foi possível contactar o serviço (verifica a tua ligação à internet)",
   "spotifyNoMatch": "Sem correspondência",
   "spotifyTruncated": "Playlist grande: sem o Spotify Premium apenas as primeiras {limit} faixas são importadas.",
   "@spotifyTruncated": {

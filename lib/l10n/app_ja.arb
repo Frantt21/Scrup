@@ -172,6 +172,7 @@
   "spotifyUrlHint": "Spotify・YouTube・Apple Musicのプレイリストリンク",
   "importAction": "インポート",
   "spotifyFetchError": "プレイリストを読み込めませんでした（リンクと公開設定を確認してください）",
+  "importNetworkError": "サービスに接続できませんでした（インターネット接続を確認してください）",
   "spotifyNoMatch": "一致なし",
   "spotifyTruncated": "大きなプレイリスト：Premiumなしでは最初の{limit}曲のみインポートされます。",
   "@spotifyTruncated": {

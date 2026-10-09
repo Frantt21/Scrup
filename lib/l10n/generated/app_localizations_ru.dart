@@ -585,6 +585,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'Не удалось прочитать плейлист (проверьте ссылку и доступность)';
 
   @override
+  String get importNetworkError =>
+      'Не удалось связаться с сервисом (проверьте подключение к интернету)';
+
+  @override
   String get spotifyNoMatch => 'Нет совпадения';
 
   @override

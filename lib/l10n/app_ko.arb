@@ -172,6 +172,7 @@
   "spotifyUrlHint": "Spotify, YouTube 또는 Apple Music 재생목록 링크",
   "importAction": "가져오기",
   "spotifyFetchError": "플레이리스트를 읽을 수 없습니다(링크와 공개 여부를 확인하세요)",
+  "importNetworkError": "서비스에 연결할 수 없습니다(인터넷 연결을 확인하세요)",
   "spotifyNoMatch": "일치 없음",
   "spotifyTruncated": "큰 플레이리스트: Premium 없이는 처음 {limit}곡만 가져옵니다.",
   "@spotifyTruncated": {

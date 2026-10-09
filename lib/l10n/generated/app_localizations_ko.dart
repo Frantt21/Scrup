@@ -567,6 +567,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get spotifyFetchError => '플레이리스트를 읽을 수 없습니다(링크와 공개 여부를 확인하세요)';
 
   @override
+  String get importNetworkError => '서비스에 연결할 수 없습니다(인터넷 연결을 확인하세요)';
+
+  @override
   String get spotifyNoMatch => '일치 없음';
 
   @override

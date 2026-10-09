@@ -10,6 +10,19 @@ Metadata, history and playlists are stored in a local SQLite database using `dri
 
 Target platforms: Windows, Linux and macOS with a single Flutter codebase.
 
+## Install on Linux (flatpak)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Frantt21/Scrup/main/install-linux.sh | bash
+```
+
+The script downloads the `.flatpak` from the latest release and installs it for
+the current user — no root, no system dependencies (GTK3 comes from the GNOME
+runtime; libmpv, sqlite3 and the `yt-dlp`/`ffmpeg`/`deno` sidecars are bundled).
+It also removes a stale menu entry that can shadow the flatpak one and refreshes
+the desktop caches. Library, settings and the audio cache live in
+`~/.var/app/com.scrup.scrup` and survive updates.
+
 ## What it includes
 
 ### Playback

@@ -1141,6 +1141,12 @@ abstract class AppLocalizations {
   /// **'No se pudo leer la playlist (¿enlace correcto y pública?)'**
   String get spotifyFetchError;
 
+  /// No description provided for @importNetworkError.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudo conectar con el servicio (revisa tu conexión a internet)'**
+  String get importNetworkError;
+
   /// No description provided for @spotifyNoMatch.
   ///
   /// In es, this message translates to:

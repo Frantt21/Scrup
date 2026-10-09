@@ -172,6 +172,7 @@
   "spotifyUrlHint": "Ссылка на плейлист Spotify, YouTube или Apple Music",
   "importAction": "Импортировать",
   "spotifyFetchError": "Не удалось прочитать плейлист (проверьте ссылку и доступность)",
+  "importNetworkError": "Не удалось связаться с сервисом (проверьте подключение к интернету)",
   "spotifyNoMatch": "Нет совпадения",
   "spotifyTruncated": "Большой плейлист: без Spotify Premium импортируются только первые {limit} треков.",
   "@spotifyTruncated": {

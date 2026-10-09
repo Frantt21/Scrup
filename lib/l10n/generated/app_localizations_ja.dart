@@ -567,6 +567,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get spotifyFetchError => 'プレイリストを読み込めませんでした（リンクと公開設定を確認してください）';
 
   @override
+  String get importNetworkError => 'サービスに接続できませんでした（インターネット接続を確認してください）';
+
+  @override
   String get spotifyNoMatch => '一致なし';
 
   @override

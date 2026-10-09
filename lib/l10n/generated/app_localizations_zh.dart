@@ -565,6 +565,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get spotifyFetchError => '无法读取播放列表（请检查链接是否正确且公开）';
 
   @override
+  String get importNetworkError => '无法连接到服务（请检查网络连接）';
+
+  @override
   String get spotifyNoMatch => '无匹配';
 
   @override
