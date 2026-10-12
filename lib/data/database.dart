@@ -43,9 +43,8 @@ class Playlist {
   });
 }
 
-/// Fila del recap "playlists más escuchadas": agregado de segundos por
-/// playlist. `playlistId` null = escuchas sin playlist (cola suelta).
-/// `name` vacío = la playlist fue borrada después de escuchar.
+/// Recap "playlists más escuchadas": total de segundos por playlist.
+/// `playlistId` null = escuchas sin playlist; `name` vacío = playlist borrada.
 class RecapPlaylistEntry {
   final int? playlistId;
   final String name;
@@ -60,33 +59,14 @@ class RecapPlaylistEntry {
   });
 }
 
-/// Nombre lógico de la BD: drift crea `<name>.sqlite` dentro del directorio
-/// que devuelve [resolveDatabaseDirectory].
+/// Nombre lógico de la BD: drift crea `<name>.sqlite` dentro de
+/// [resolveDatabaseDirectory].
 const String _databaseName = 'scrup';
 
-/// Directorio donde vive la BD, migrando la ubicación antigua si procede.
-///
-/// drift usa por defecto `getApplicationDocumentsDirectory()` (en escritorio
-/// `~/Documents` / `%USERPROFILE%\Documents`), pero esa carpeta NO siempre es
-/// escribible: el sandbox de Flatpak monta `/home` en SOLO LECTURA
-/// (`--filesystem=home:ro`) y SQLite falla al abrir/crear el fichero con
-/// `SQLITE_CANTOPEN (14)`. Verificado dentro del sandbox:
-/// `touch ~/Documents/x` → "Sistema de ficheros de sólo lectura".
-///
-/// En Flatpak eso producía exactamente dos síntomas: (1) al borrar la BD, el
-/// app no puede volver a crearla y Home se queda cargando para siempre; y
-/// (2) al migrar/importar una playlist, las canciones se encuentran (red) pero
-/// el `INSERT` de la playlist falla → "No se pudo crear la playlist".
-///
-/// En escritorio usamos la carpeta de datos de la app
-/// (`getApplicationSupportDirectory()` → `$XDG_DATA_HOME/<app-id o nombre del
-/// ejecutable>`: `~/.local/share/scrup` en el bundle nativo y
-/// `~/.var/app/com.scrup.scrup/data/com.scrup.scrup` en Flatpak, siempre
-/// escribible — verificado dentro del sandbox). La BD antigua
-/// de Documents se COPIA aquí la primera vez (nunca se borra: sigue siendo del
-/// usuario). En móvil no se cambia nada: `getApplicationDocumentsDirectory()`
-/// ya es privado de la app y escribible.
-///
+/// Directorio donde vive la BD. En escritorio usa
+/// `getApplicationSupportDirectory()` (siempre escribible, incluso en Flatpak),
+/// en móvil `getApplicationDocumentsDirectory()` (ya es privado y escribible).
+/// La BD antigua de Documents se copia aquí la primera vez (no se borra).
 /// Los parámetros inyectables existen solo para los tests.
 Future<Directory> resolveDatabaseDirectory({
   Future<Directory> Function()? supportDir,
@@ -99,16 +79,15 @@ Future<Directory> resolveDatabaseDirectory({
   final fallback = await _migrateLegacyDatabase(
     support,
     documentsDir: documentsDir ?? getApplicationDocumentsDirectory,
-  );
-  return fallback ?? support;
+  );    // Si la BD escritorio migró, úsala para no perder el historial local.
+    return fallback ?? support;
 }
 
 bool _defaultIsMobile() => Platform.isAndroid || Platform.isIOS;
 
-/// Copia la BD antigua de `Documents` a [target] si [target] todavía no tiene
-/// una. Devuelve el directorio ANTIGUO cuando allí sí hay una BD y la copia
-/// falló: mejor abrir la antigua (aunque sea de solo lectura) que arrancar con
-/// una biblioteca vacía. `null` si no hay nada que migrar o si fue bien.
+/// Copia la BD antigua de `Documents` a [target] si aún no existe. Devuelve
+/// el directorio ANTIGUO si hay BD y la copia falló (mejor abrir la antigua,
+/// aunque sea de solo lectura, que arrancar vacía). `null` si no había nada.
 Future<Directory?> _migrateLegacyDatabase(
   Directory target, {
   required Future<Directory> Function() documentsDir,
@@ -127,10 +106,10 @@ Future<Directory?> _migrateLegacyDatabase(
       final source = File('${legacyFile.path}$suffix');
       if (source.existsSync()) await source.copy('${targetFile.path}$suffix');
     }
-    debugPrint('[scrup/db] BD migrada de ${legacyDir.path} a ${target.path}');
+    debugPrint('[scrup/db] BD migrada de $legacyDir a $target');
     return null;
   } catch (e) {
-    debugPrint('[scrup/db] no se pudo migrar la BD desde Documents: $e');
+    debugPrint('[scrup/db] migración Documents fallida: $e');
     try {
       if (legacyDir != null &&
           File(p.join(legacyDir.path, '$_databaseName.sqlite')).existsSync()) {
@@ -157,116 +136,97 @@ Future<Directory?> _migrateLegacyDatabase(
 )
 class AppDatabase extends _$AppDatabase {
   /// [executor] lets tests inject an in-memory database.
-  AppDatabase({QueryExecutor? executor})
-    : super(
-        executor ??
-            driftDatabase(
-              name: _databaseName,
-              native: DriftNativeOptions(
-                databaseDirectory: resolveDatabaseDirectory,
-              ),
-            ),
-      );
+  AppDatabase({QueryExecutor? executor}): super(
+    executor ?? driftDatabase(
+      name: _databaseName,
+      native: DriftNativeOptions(
+        databaseDirectory: resolveDatabaseDirectory,
+      ),
+    ),
+  );
+
 
   @override
   int get schemaVersion => 14;
 
-  /// Registra (sin reventar el arranque) un fallo de reparación en
-  /// beforeOpen. La BD debe abrir SIEMPRE: estas reparaciones son
-  /// best-effort y se reintentarán en la próxima apertura.
+  /// Registra un fallo de reparación (best-effort) sin reventar el arranque.
   void _logMigrationFailure(String step, Object error) {
-    // Sin print: drift ya expone el error vía driftRuntimeOptions si hay
-    // listener; aquí solo lo dejamos visible en debug.
     assert(() {
       // ignore: avoid_print
-      print('[scrup/db] reparación "$step" falló (best-effort): $error');
+      print('[scrup/db] reparación "$step" falló: $error');
       return true;
     }());
   }
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (m) async {
-      await m.createAll();
-    },
+    onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
       if (from < 2) {
         await m.createTable(playlists);
         await m.createTable(playlistTracks);
       }
       if (from < 3) {
-        // Álbum enriquecido (Deezer)
+        // Álbum enriquecido (Deezer).
         await m.addColumn(tracks, tracks.album);
       }
       if (from < 4) {
-        // Portada de la playlist
+        // Portada de la playlist.
         await m.addColumn(playlists, playlists.coverUrl);
       }
       if (from < 5) {
-        // Descripción de la playlist
+        // Descripción de la playlist.
         await m.addColumn(playlists, playlists.description);
       }
       if (from < 6) {
-        // Playlist especial de Favoritos
+        // Playlist especial de Favoritos.
         await m.addColumn(playlists, playlists.isFavorites);
       }
       if (from < 7) {
-        // Cached lyrics table
+        // Letra en caché.
         await m.createTable(lyrics);
-        // Migrate old lyrics from SharedPreferences to SQLite (once).
         await _migrateSharedPrefsLyrics();
       }
       if (from < 8) {
-        // Artwork palette cache (accent + fullscreen trio), formerly in
-        // palette_cache.json. The old JSON is removed best-effort on startup
-        // (see PaletteCacheStore.load).
+        // Paleta de artwork (acento + trio fullscreen): antes en JSON.
         await m.createTable(paletteCache);
       }
       if (from < 9) {
-        // Last played timestamp for a playlist (for "recent playlists").
+        // Última reproducción de la playlist (home "recientes").
         await m.addColumn(playlists, playlists.lastPlayedAt);
       }
       if (from < 10) {
-        // Visited artists (home "visited artists" row).
+        // Artistas visitados (fila home).
         await m.createTable(artistVisits);
       }
       if (from < 11) {
-        // Downloads metadata for the settings dialog (title/artist/size per
-        // cached file). Backfilled from the tracks table on demand.
+        // Metadatos de descargas (settings dialog).
         await m.createTable(cachedTracks);
       }
       if (from < 12) {
-        // Listening time (recap: total, top tracks/artists/playlists).
+        // Tiempo de escucha (recap).
         await m.createTable(listenSessions);
       }
       if (from < 13) {
-        // Artist channel id per track (recap artist avatars).
-        // Idempotente: builds anteriores creaban esta columna en el CREATE
-        // TABLE sin subir la versión (user_version 12 con la columna ya
-        // presente) → un ALTER TABLE plano explotaba con "duplicate column
-        // name" y la BD dejaba de abrir (app colgada cargando).
+        // Canal del artista por pista (avatares del recap).
+        // Idempotente: builds anteriores creaban la columna sin subir la
+        // versión → un ALTER TABLE plano explotaba con "duplicate column
+        // name" y la BD no abría. Cualquier query aquí re-entra en la
+        // apertura y re-ejecuta la migración, así que se ignora el error.
         try {
           await m.addColumn(tracks, tracks.artistChannelId);
         } on Exception catch (e) {
-          // "duplicate column name" significa exactamente que la columna ya
-          // existe: el resultado que queríamos. (No se puede consultar la
-          // estructura aquí: cualquier query durante onUpgrade re-entra en
-          // la apertura de la BD y re-ejecuta la migración.)
           if (!e.toString().contains('duplicate column name')) rethrow;
         }
       }
       if (from < 14) {
-        // Liked albums (heart button on the album page): keyed by the YT
-        // Music playlistId so the tracklist re-resolves on open.
+        // Álbumes guardados (corazón en la página del álbum): clave
+        // playlistId de YT Music para re-resolver el tracklist al abrir.
         await m.createTable(savedAlbums);
       }
     },
     beforeOpen: (details) async {
-      // Todo lo que hay aquí es REPARACIÓN best-effort: si un paso falla
-      // (datos inesperados, carreras previas, etc.) la BD debe abrir igual;
-      // un fallo aquí nunca debe colgar el arranque de la app.
-      // Duplicados de favoritos (carreras de arranque previas): fusionar
-      // ANTES de crear el índice único parcial que los impide para siempre.
+      // REPARACIÓN best-effort: un fallo nunca debe colgar el arranque.
       try {
         await _ensureFavoritesPlaylist();
       } catch (e) {
@@ -277,10 +237,6 @@ class AppDatabase extends _$AppDatabase {
       } catch (e) {
         _logMigrationFailure('mergeDuplicateFavorites', e);
       }
-      // Likes huérfanos: el cleanup buggy anterior borraba la fila de la
-      // favorito SIN borrar sus playlistTracks (FK OFF en drift) → los
-      // likes quedaron apuntando a una playlist inexistente y el banner
-      // "Your likes" quedaba vacío aunque el usuario tuviera favoritos.
       try {
         await rescueOrphanedPlaylistTracks();
       } catch (e) {
@@ -298,13 +254,13 @@ class AppDatabase extends _$AppDatabase {
     },
   );
 
-  // -------------------------------------------------- paletas de artwork
+  // ── paletas de artwork ──────────────────────────────────────────────
 
-  /// Insert or update a palette entry (single accent: [colors] with 1 element; fullscreen trio: 3). Updates `usedAt` for LRU.
+  /// Upsert de una paleta (1 color = acento; 3 = trio fullscreen).
+  /// Actualiza `usedAt` para el recorte LRU.
   Future<void> upsertPalette(String url, List<int> colors) async {
     assert(colors.isNotEmpty && colors.length <= 3);
     await into(paletteCache).insertOnConflictUpdate(
-      // Non-nullable columns with no default: raw value (not Value).
       PaletteCacheCompanion.insert(
         id: url,
         c1: colors[0],
@@ -314,10 +270,10 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// All persisted entries (to populate the in-memory cache on startup).
+  /// Todas las entradas persisted (para poblar la caché en memoria al arrancar).
   Future<List<PaletteRow>> allPalettes() => select(paletteCache).get();
 
-  /// LRU trim: keep only the [keep] most recently used entries.
+  /// Recorte LRU: se queda con las [keep] entradas más recientes.
   Future<void> trimPalettes(int keep) async {
     await customStatement(
       'DELETE FROM palette_cache WHERE id NOT IN '
@@ -326,12 +282,12 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Delete a palette entry (manual recalculation).
+  /// Elimina una paleta (recalculo manual).
   Future<void> deletePalette(String url) async {
     await (delete(paletteCache)..where((r) => r.id.equals(url))).go();
   }
 
-  /// Distinct artwork URLs from a playlist (for palette recalculation).
+  /// URLs de artwork distintas de una playlist (para recalcular paletas).
   Future<List<String>> distinctPlaylistArtworks(int playlistId) async {
     final query = selectOnly(
       playlistTracks,
@@ -347,11 +303,11 @@ class AppDatabase extends _$AppDatabase {
     ];
   }
 
-  // -------------------------------------------------------------- lyrics
+  // ── letra ──────────────────────────────────────────────────────────
   String _lyricsKey(String title, String artist) =>
       '${title.toLowerCase().trim()}_${artist.toLowerCase().trim()}';
 
-  /// Save lyrics (LRC) to the database.
+  /// Persiste letra (LRC).
   Future<void> storeLyrics(
     String title,
     String artist,
@@ -369,7 +325,7 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Get stored lyrics, or null if none exist.
+  /// Letra persistida, o null si no existe.
   Future<String?> getStoredLrc(String title, String artist) async {
     final key = _lyricsKey(title, artist);
     final row = await (select(
@@ -380,7 +336,7 @@ class AppDatabase extends _$AppDatabase {
     return row.lrcContent.isEmpty ? null : row.lrcContent;
   }
 
-  /// Mark a song as "lyrics not found" to avoid repeated searches.
+  /// Marca "letra no encontrada" para no repetir búsquedas.
   Future<void> markLyricsNotFound(String title, String artist) async {
     final key = _lyricsKey(title, artist);
     await into(lyrics).insertOnConflictUpdate(
@@ -393,14 +349,14 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Delete cached lyrics for a song.
+  /// Elimina la letra en caché de una canción.
   Future<void> deleteLyrics(String title, String artist) async {
     final key = _lyricsKey(title, artist);
     await (delete(lyrics)..where((l) => l.id.equals(key))).go();
   }
 
-  /// Migrate lyrics from SharedPreferences (legacy format) to SQLite.
-  /// It runs once during the v6->v7 migration and clears the old SharedPreferences keys afterward.
+  /// Migra letras de SharedPreferences (formato legacy) a SQLite, una sola
+  /// vez en la migración v6→v7, y borra las claves antiguas.
   Future<void> _migrateSharedPrefsLyrics() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -438,13 +394,12 @@ class AppDatabase extends _$AppDatabase {
         );
         await prefs.remove(prefKey);
       }
-    } catch (_) {
-      // Silent: the migration is best-effort.
-    }
+    } catch (_) {}
   }
 
-  // ---------------------------------------------------------------- cache
-  /// Save (or update) a track's metadata. We never save the audio URL because it expires.
+  // ── caché de pistas ──────────────────────────────────────────────────
+  /// Persiste (o actualiza) metadatos de una pista. Nunca la URL de audio
+  /// porque expira.
   Future<void> cacheTrack(Track track) async {
     await into(tracks).insertOnConflictUpdate(
       TracksCompanion.insert(
@@ -461,13 +416,15 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Update a cached track's metadata (e.g. when Deezer enrichment arrives) without touching history. Since recent tracks JOIN `tracks`, the enriched artwork/album appear instantly on the home screen.
+  /// Actualiza metadatos sin tocar el historial (el enrich de Deezer, p. ej.).
+  /// Las pistas recientes hacen JOIN con `tracks`, así que la portada/álbum
+  /// enriquecidos aparecen al momento en home.
   Future<void> updateTrackMetadata(Track track) => cacheTrack(track);
 
-  // --------------------------------------------------- cached (downloads)
-  /// Metadata snapshot of a completed download (audio cache). Never
-  /// deletes the row: `deletedAt` keeps the id so a future re-download of
-  /// the same video skips Deezer enrichment.
+  // ── descargas (audio cache) ─────────────────────────────────────────
+  /// Snapshot de una descarga completada. Nunca borra la fila: `deletedAt`
+  /// conserva el id para que una re-descarga del mismo video no vuelva a
+  /// enriquecer.
   Future<void> upsertCachedTrack({
     required String id,
     String? title,
@@ -488,8 +445,8 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Mark a download entry as removed from disk (the row stays for future
-  /// re-downloads). No-op if the id is unknown.
+  /// Marca la entrada como eliminada del disco (la fila se queda para
+  /// re-descargas futuras). No-op si el id es desconocido.
   Future<void> markCachedTrackDeleted(String id) async {
     await (update(
       cachedTracks,
@@ -498,15 +455,15 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// All download entries with metadata (deleted ones included, flagged by
-  /// `deletedAt`), most recent first.
+  /// Todas las entradas de descargas con metadatos (incluidas las borradas,
+  /// marcadas por `deletedAt`), más recientes primero.
   Future<List<CachedTrackRow>> allCachedTracks() {
     final query = select(cachedTracks)
       ..orderBy([(ct) => OrderingTerm.desc(ct.downloadedAt)]);
     return query.get();
   }
 
-  /// Return a track's cached metadata, if any exist.
+  /// Metadatos en caché de una pista, si existen.
   Future<Track?> getCachedTrack(String id) async {
     final row = await (select(
       tracks,
@@ -515,9 +472,10 @@ class AppDatabase extends _$AppDatabase {
     return _trackFromRow(row);
   }
 
-  /// Recent songs played (for the offline home screen).
-  ///
-  /// Deduplicate by track id: each song appears only once, using the most recent play. History is bounded by pruning (60 days), so we fetch all rows and deduplicate in memory.
+  /// Canciones reproducidas recientemente (home offline). Deduplicadas por
+  /// id: cada canción aparece una vez, con la reproducción más reciente. El
+  /// historial se limita a 60 días, así que leemos todo y deduplicamos en
+  /// memoria.
   Stream<List<Track>> watchRecentlyPlayed({int limit = 30}) {
     final query =
         (select(history)..orderBy([(h) => OrderingTerm.desc(h.playedAt)])).join(
@@ -538,8 +496,8 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  // ------------------------------------------------------------- historial
-  /// Record a play (mark lastPlayed, increment playCount, add a history row).
+  // ── historial ──────────────────────────────────────────────────────
+  /// Registra una reproducción (lastPlayed, playCount + fila en historial).
   Future<void> recordPlay(Track track) async {
     await cacheTrack(track);
     await (update(tracks)..where((t) => t.id.equals(track.id))).write(
@@ -553,7 +511,7 @@ class AppDatabase extends _$AppDatabase {
     await into(history).insert(
       HistoryCompanion.insert(trackId: track.id, playedAt: DateTime.now()),
     );
-    // Pruning: keep only the last 60 days of history
+    // Recorte: solo los últimos 60 días.
     await (delete(history)..where(
           (h) => h.playedAt.isSmallerThanValue(
             DateTime.now().subtract(const Duration(days: 60)),
@@ -562,10 +520,10 @@ class AppDatabase extends _$AppDatabase {
         .go();
   }
 
-  // ------------------------------------------------------------ playlists
+  // ── playlists ────────────────────────────────────────────────────────
+  /// Playlists ordenadas: favoritos siempre al final, el resto por fecha de
+  /// creación (más reciente primero).
   Stream<List<Playlist>> watchPlaylists() {
-    // Favorites always last (isFavorites=false first); the rest by
-    // creation, most recent first.
     final query = select(playlists)
       ..orderBy([
         (p) => OrderingTerm.asc(p.isFavorites),
@@ -588,7 +546,9 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Watch playlists by play date (most recent first), for the home recent playlists section. Only playlists that have been played at least once.
+  /// Playlists por fecha de reproducción (más reciente primero), para el
+  /// aside de home "playlists recientes". Solo playlists reproducidas al
+  /// menos una vez.
   Stream<List<Playlist>> watchRecentPlaylists({int limit = 10}) {
     final query = select(playlists)
       ..where((p) => p.lastPlayedAt.isNotNull())
@@ -611,14 +571,14 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Record that [playlistId] was played now (for recent playlists).
+  /// Marca [playlistId] como reproducido ahora (playlists recientes).
   Future<void> markPlaylistPlayed(int playlistId) async {
     await (update(playlists)..where((p) => p.id.equals(playlistId))).write(
       PlaylistsCompanion(lastPlayedAt: Value(DateTime.now())),
     );
   }
 
-  /// Watch a specific playlist (to reflect cover changes in the detail view).
+  /// Una playlist concreta (para reflejar cambios de portada en el detail).
   Stream<Playlist?> watchPlaylist(int id) {
     final query = select(playlists)..where((p) => p.id.equals(id));
     return query.watchSingleOrNull().map(
@@ -636,7 +596,7 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Number of songs per playlist (to show on the grid cards).
+  /// Número de canciones por playlist (para las cards del grid).
   Stream<Map<int, int>> watchPlaylistTrackCounts() {
     final query = selectOnly(playlistTracks)
       ..addColumns([playlistTracks.playlistId, playlistTracks.trackId.count()])
@@ -652,7 +612,7 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Create a playlist and return its id.
+  /// Crea una playlist y devuelve su id.
   Future<int> createPlaylist(String name) async {
     final id = await into(
       playlists,
@@ -682,14 +642,14 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Establece la portada de una playlist (o la quita con `null`).
+  /// Establece (o quita con `null`) la portada de una playlist.
   Future<void> setPlaylistCover(int playlistId, String? coverUrl) async {
     await (update(playlists)..where((p) => p.id.equals(playlistId))).write(
       PlaylistsCompanion(coverUrl: Value(coverUrl)),
     );
   }
 
-  /// Establece la descripción de una playlist (o la quita con `null`).
+  /// Establece (o quita con `null`) la descripción de una playlist.
   Future<void> setPlaylistDescription(
     int playlistId,
     String? description,
@@ -707,12 +667,11 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Promesa en vuelo del ensure: todos los callers simultáneos comparten
-  /// el MISMO futuro. El check-then-insert no es atómico entre awaits y
-  /// tres callers en paralelo (HomeView, PlayerBar, overlay) creaban tres
-  /// favoritos: cada SELECT veía vacío antes de que el anterior insertara.
+  /// el MISMO futuro. El check-then-insert no es atómico y tres callers en
+  /// paralelo (HomeView, PlayerBar, overlay) creaban tres favoritos.
   Future<int>? _favoritesEnsure;
 
-  /// Return the Favorites playlist id, creating it if it does not exist.
+  /// Id de la playlist Favoritos, creándola si no existe.
   Future<int> ensureFavoritesPlaylist() {
     return _favoritesEnsure ??= _ensureFavoritesPlaylist().whenComplete(() {
       _favoritesEnsure = null;
@@ -736,11 +695,10 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// FUSIONA las playlists de favoritos duplicadas (de carreras de arranque
-  /// previas): mueve los tracks a la más antigua (respetando la clave única
+  /// Fusiona las playlists de favoritos duplicadas (carreras de arranque
+  /// previas): mueve los tracks a la más antigua (respetando clave única
   /// playlist/track), repunta la portada si faltaba y borra el resto. Sin
-  /// esto, `watchLatestPlaylistTracks` del banner "Your likes" puede quedar
-  /// apuntando a una favorito vacía mientras los likes viven en un duplicado.
+  /// esto, el banner "Your likes" podía apuntar a un favorito vacío.
   Future<void> mergeDuplicateFavorites() async {
     final favs = await (select(playlists)
           ..where((p) => p.isFavorites.equals(true))
@@ -792,11 +750,10 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// RESCATA los likes huérfanos: playlistTracks apuntando a playlists que
-  /// ya no existen. Los mueve a la favorito (keep) con posición alta para
-  /// que el banner "Your likes" los lea primero (los últimos likeados son
-  /// los más recientes). Sin FK activa, el cleanup buggy anterior dejaba
-  /// estos huérfanos al borrar la fila de la favorito.
+  /// Rescata los likes huérfanos: playlistTracks apuntando a playlists
+  /// inexistentes. Los mueve al favorito (keep) con posición alta para que
+  /// el banner "Your likes" los lea primero. Sin FK activa, el cleanup
+  /// buggy anterior dejaba estos huérfanos al borrar la favorito.
   Future<void> rescueOrphanedPlaylistTracks() async {
     final favs = await (select(playlists)
           ..where((p) => p.isFavorites.equals(true))
@@ -836,7 +793,6 @@ class AppDatabase extends _$AppDatabase {
           ),
         );
         nextPos++;
-        // El huérfano se elimina: su playlist no volverá a existir.
         await (delete(playlistTracks)
               ..where((pt) => pt.id.equals(orphan.id)))
             .go();
@@ -844,7 +800,7 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// ids of playlists that already contain [trackId]: the "add to playlist" modal marks those with a check.
+  /// Playlists que ya contienen [trackId] (para marcar con check en el modal).
   Future<Set<int>> playlistIdsContainingTrack(String trackId) async {
     final rows = await (select(
       playlistTracks,
@@ -852,7 +808,7 @@ class AppDatabase extends _$AppDatabase {
     return rows.map((r) => r.playlistId).toSet();
   }
 
-  /// Track ids of a playlist (plain list, for grouping the downloads dialog).
+  /// Track ids de una playlist (lista plana, para agrupar el diálogo de descargas).
   Future<List<String>> playlistTrackIds(int playlistId) async {
     final rows = await (select(
       playlistTracks,
@@ -869,7 +825,7 @@ class AppDatabase extends _$AppDatabase {
     return {for (final r in rows) r.id: r};
   }
 
-  /// `true` while the track is in the playlist (reactive stream).
+  /// `true` mientras la pista está en la playlist (stream reactivo).
   Stream<bool> watchTrackInPlaylist(int playlistId, String trackId) {
     final query = select(playlistTracks)
       ..where(
@@ -878,7 +834,7 @@ class AppDatabase extends _$AppDatabase {
     return query.watch().map((rows) => rows.isNotEmpty);
   }
 
-  /// Songs of a playlist (with cached metadata), in order.
+  /// Canciones de una playlist (con metadatos cacheados), en orden.
   Stream<List<Track>> watchPlaylistTracks(int playlistId) {
     final query =
         (select(playlistTracks)
@@ -921,7 +877,8 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
 
-    // Default cover: if the playlist still has none and the song has artwork, use it as the cover.
+    // Cover por defecto: si la playlist no tiene portada y la pista tiene
+    // artwork, se usa como portada.
     final playlist = await getPlaylist(playlistId);
     if (playlist != null &&
         playlist.coverUrl == null &&
@@ -937,14 +894,12 @@ class AppDatabase extends _$AppDatabase {
         .go();
   }
 
-  /// Distinct (album, artist) pairs from the user's saved tracks — every
-  /// playlist (favorites included), ONE SQL query. Ordered by RECENCY (the
-  /// track most recently added to a playlist first, using its position as a
-  /// proxy) and then by how many different songs share the album: the home
-  /// "albums from your library" row is seeded from these, so adding a single
-  /// song surfaces its album at the top instead of being buried under albums
-  /// with more saved songs. Null albums are excluded (no seed without an
-  /// album name).
+  /// Pares (álbum, artista) distintos de las pistas guardadas del usuario —
+  /// todas las playlists (favoritos incluido), una sola query. Orden: primero
+  /// RECENCIA (pista más reciente añadida a una playlist, por su posición)
+  /// y luego cuántas canciones distintas comparten el álbum. Así, al añadir
+  /// una sola canción, su álbum aparece arriba en vez de quedarse bajo
+  /// álbumes con más canciones guardadas. Álbumes nulos se excluyen.
   Future<List<(String, String)>> libraryAlbumSeeds({int limit = 12}) async {
     final countExp = tracks.id.count();
     final recencyExp = playlistTracks.position.max();
@@ -970,7 +925,9 @@ class AppDatabase extends _$AppDatabase {
     ];
   }
 
-  /// Most recently added tracks to [playlistId] (for the home "Your likes" banner: the 3 most recent covers, overlaid). It uses the playlist order (position DESC) as a proxy for "most recently added".
+  /// Últimas pistas añadidas a [playlistId] (banner home "Your likes":
+  /// las 3 portadas más recientes sobrepuestas). Usa el orden de la playlist
+  /// (position DESC) como proxy de "añadida más recientemente".
   Stream<List<Track>> watchLatestPlaylistTracks(
     int playlistId, {
     int limit = 3,
@@ -991,7 +948,9 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Reorder the songs of [playlistId] according to [trackIds] (full final order): a batch of position UPDATEs in one transaction. The `watchPlaylistTracks` stream re-emits the persisted order.
+  /// Reordena las canciones de [playlistId] según [trackIds] (orden final
+  /// completo): un batch de UPDATEs de posición en una sola transacción. El
+  /// stream `watchPlaylistTracks` re-emite el orden persisted.
   Future<void> reorderPlaylistTracks(
     int playlistId,
     List<String> trackIds,
@@ -1008,11 +967,10 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  // -------------------------------------------------- artistas visitados
+  // ── artistas visitados ──────────────────────────────────────────────
 
-  /// Registra/actualiza la visita a un canal (el más reciente queda
-  /// primero en `watchVisitedArtists`). Best-effort: sin artista no pasa
-  /// nada.
+  /// Registra/actualiza la visita a un canal (el más reciente primero en
+  /// `watchVisitedArtists`). Best-effort: sin artista no pasa nada.
   Future<void> recordArtistVisit({
     required String id,
     required String name,
@@ -1040,12 +998,11 @@ class AppDatabase extends _$AppDatabase {
         .watch();
   }
 
-  // ------------------------------------------------------------- recap
+  // ── recap ──────────────────────────────────────────────────────────
 
-  /// Persist a listening chunk (accumulated seconds for the current track).
-  /// Best-effort from the player tracker; a missing track row (deleted cache)
-  /// is ignored via the FK with cascade-off (plain insert failure is caught
-  /// by the caller).
+  /// Persiste un chunk de escucha (segundos acumulados de la pista actual).
+  /// Best-effort desde el tracker del player; una pista faltante (caché
+  /// borrada) se ignora por el FK con cascade-off.
   Future<void> recordListenChunk(
     String trackId,
     int seconds, {
@@ -1067,7 +1024,7 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Total listening seconds since [since] (null = all time).
+  /// Total de segundos de escucha desde [since] (null = todo el tiempo).
   Future<int> totalListenSeconds({DateTime? since}) async {
     final total = listenSessions.seconds.sum();
     final query = selectOnly(listenSessions)
@@ -1081,8 +1038,8 @@ class AppDatabase extends _$AppDatabase {
     return row.read(total) ?? 0;
   }
 
-  /// Listening seconds grouped by track, top [limit] first. Only rows whose
-  /// track still exists (inner join).
+  /// Segundos de escucha agrupados por pista, top [limit] primero. Solo
+  /// filas cuya pista aún existe (inner join).
   Future<List<(Track, int)>> topListenedTracks({
     DateTime? since,
     int limit = 10,
@@ -1122,7 +1079,7 @@ class AppDatabase extends _$AppDatabase {
     ];
   }
 
-  /// Listening seconds grouped by artist name, top [limit] first.
+  /// Segundos de escucha agrupados por artista, top [limit] primero.
   Future<List<(String, int)>> topListenedArtists({
     DateTime? since,
     int limit = 10,
@@ -1145,9 +1102,9 @@ class AppDatabase extends _$AppDatabase {
     ];
   }
 
-  /// Listening seconds grouped by playlist, top [limit] first (playlists
-  /// deleted afterwards drop out of the join; unknown playlist rows are
-  /// counted under the "queue/no playlist" bucket with id -1).
+  /// Segundos de escucha agrupados por playlist, top [limit] primero.
+  /// Playlists borradas después caen fuera del join; filas sin playlist
+  /// cuentan bajo el bucket "cola/sin playlist" con id -1.
   Future<List<RecapPlaylistEntry>> topListenedPlaylists({
     DateTime? since,
     int limit = 10,
@@ -1180,18 +1137,11 @@ class AppDatabase extends _$AppDatabase {
     ];
   }
 
-  // ------------------------------------------------------------- helpers
+  // ── álbumes guardados (corazón en la página del álbum) ──────────────
 
-  // ── Álbumes guardados (corazón en la página del álbum) ────────────────
-
-  /// Stream de los álbumes guardados, el más reciente primero (alimenta la
-  /// sección de la biblioteca).
+  /// Álbumes guardados, el más reciente primero: sección de la biblioteca.
   Stream<List<YtmAlbum>> watchSavedAlbums() {
-    final query = savedAlbums.select()
-      ..orderBy([
-        (u) => OrderingTerm.desc(u.savedAt),
-      ]);
-    return query
+    return savedAlbums.select()
         .watch()
         .map(
           (rows) => [
@@ -1209,9 +1159,7 @@ class AppDatabase extends _$AppDatabase {
 
   /// Guarda (o re-guarda: actualiza metadatos y pasa al frente) un álbum.
   Future<void> saveAlbum(YtmAlbum album) {
-    return into(
-      savedAlbums,
-    ).insertOnConflictUpdate(
+    return into(savedAlbums).insertOnConflictUpdate(
       SavedAlbumsCompanion.insert(
         id: album.playlistId,
         title: album.title,
@@ -1219,8 +1167,8 @@ class AppDatabase extends _$AppDatabase {
         year: Value(album.year),
         isSingle: Value(album.isSingle),
         savedAt: Value(DateTime.now()),
-        )
-      );
+      ),
+    );
   }
 
   /// Quita un álbum de los guardados (no-op si no estaba).
@@ -1228,7 +1176,7 @@ class AppDatabase extends _$AppDatabase {
     return (delete(savedAlbums)..where((u) => u.id.equals(playlistId))).go();
   }
 
-  /// true si el playlistId está guardado (para el estado del corazón).
+  /// `true` si el playlistId está guardado (estado del corazón).
   Future<bool> isAlbumSaved(String playlistId) async {
     final row =
         await (select(savedAlbums)..where((u) => u.id.equals(playlistId)))
@@ -1236,11 +1184,9 @@ class AppDatabase extends _$AppDatabase {
     return row != null;
   }
 
-  // ── Canciones de la biblioteca (tab "Canciones") ──────────────────────
-
-  /// Todas las canciones guardadas en la base local (historial + cacheadas),
-  /// ordenadas alfabéticamente por título. Alimenta el tab "Canciones" de la
-  /// biblioteca (móvil y sidebar de escritorio).
+  // ── canciones de la biblioteca (tab "Canciones") ───────────────────
+  /// Todas las canciones guardadas (historial + cacheadas), por título.
+  /// Alimenta el tab "Canciones" de la biblioteca (móvil y sidebar).
   Stream<List<Track>> watchAllTracks({int limit = 1000}) {
     final query = tracks.select()
       ..orderBy([(t) => OrderingTerm.asc(t.title)])
@@ -1250,7 +1196,7 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  // ------------------------------------------------------------- helpers
+  // ── helpers ──────────────────────────────────────────────────────────
   Track _trackFromRow(TrackRow row) {
     return Track(
       id: row.id,

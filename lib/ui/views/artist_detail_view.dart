@@ -30,9 +30,7 @@ Color _onColor(Color bg) =>
     ? Colors.white
     : Colors.black;
 
-/// Menú contextual de pista COMPARTIDO por canal y álbum/single: favorito
-/// + añadir a playlist. Vive a nivel de archivo porque los dos estados
-/// (_ArtistDetailViewState y _ArtistAlbumViewState) lo usan.
+/// Menú contextual de pista COMPARTIDO por canal y álbum/single.
 Future<void> _showTrackMenuShared(
   BuildContext context,
   Track track,
@@ -73,9 +71,8 @@ Future<void> _showTrackMenuShared(
   }
 }
 
-/// Desktop theme with the artist/album accent as PRIMARY (same approach as
-/// the playlist detail): FilledButtons and tints pick the extracted accent
-/// instead of the global theme primary.
+/// Theme con el acento del artista/álbum como PRIMARY (igual que el
+/// detalle de playlist).
 ThemeData _themeWithAccent(ThemeData base, Color accent) {
   final onPrimary =
       ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
@@ -89,9 +86,7 @@ ThemeData _themeWithAccent(ThemeData base, Color accent) {
   );
 }
 
-/// Floating glass panel IDENTICAL to the desktop playlist detail: same margin
-/// (12 + player clearance below), radius 18, shadow and translucent
-/// background tinted with the accent (lerp 0.30).
+/// Panel de cristal IDENTICO al detalle de playlist de desktop.
 Widget _desktopPanel({
   required ThemeData theme,
   required Color? accent,
@@ -126,9 +121,8 @@ Widget _desktopPanel({
   );
 }
 
-/// Artist detail (Android/desktop): data from the InnerTube channel page (top songs + albums) with its own 24h cache.
-///
-/// Header with PLAYLIST DETAIL style and FULL ARTWORK: the channel image spans the full width (edge-to-edge, behind the status bar) with a gradient that blends into the background color — the same look as the playlist detail in its default style. Buttons use the accent EXTRACTED from the channel image (not the global theme primary). Scrolling shows the artist name in the collapsed appbar. It is mounted INSIDE the shell (nav + miniplayer present).
+/// Detalle de artista (Android/desktop): datos de la página del canal
+/// (canciones + álbumes), con su propia caché de 24h.
 class ArtistDetailView extends StatefulWidget {
   const ArtistDetailView({
     super.key,
@@ -139,24 +133,24 @@ class ArtistDetailView extends StatefulWidget {
     this.pendingAlbum,
   });
 
-  /// Mirror of the shell's open-album flag: when the shell flips it to
-  /// false (back button / back gesture), this widget closes its internal
-  /// album state via didUpdateWidget.
+  /// Espejo del flag del shell: cuando el shell lo pasa a `false` (back),
+  /// este widget cierra su estado interno de álbum vía didUpdateWidget.
   final bool albumOpen;
 
-  /// Artist derived from the search: channel + name (no avatar: the real face arrives with the detail).
+  /// Artista de la búsqueda: canal + nombre (sin avatar: la cara real llega
+  /// con el detail).
   final YtmArtist artist;
 
-  /// Returns to the search. On mobile it is provided by AppShell (screen mounted in the shell); if null, it pops the Navigator (desktop).
+  /// Vuelve a la búsqueda. En móvil lo provee AppShell; si es null, hace
+  /// pop del Navigator (desktop).
   final VoidCallback? onBack;
 
-  /// Notifies the shell when an album/single opens/closes inside this
-  /// screen, so the Android back gesture returns to the CHANNEL first.
+  /// Notifica al shell cuando un álbum/single se abre/cierra dentro de este
+  /// screen, para que el back gesture de Android vuelva al CANAL primero.
   final ValueChanged<bool>? onAlbumOpenChanged;
 
-  /// Album requested EXTERNALLY (home "albums from your library" row):
-  /// mounted with it already open. Clearing the pending request closes it
-  /// via didUpdateWidget (same channel as the shell's albumOpen flag).
+  /// Álbum pedido DESDE FUERA (fila home "álbumes de tu biblioteca"): montado
+  /// ya abierto. Limpiar la petición pendiente lo cierra vía didUpdateWidget.
   final YtmAlbum? pendingAlbum;
 
   @override
@@ -168,36 +162,38 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   bool _loading = true;
   String? _error;
 
-  /// true cuando el scroll pasó el header del canal: el nombre aparece
-  /// entre los botones del header flotante.
+  /// El scroll pasó el header del canal: el nombre aparece en el header
+  /// flotante.
   bool _showArtistTitle = false;
 
-  /// Acento extraído de la imagen del canal (mismo camino que el detalle de playlist: PaletteCacheStore + ArtworkPaletteService). Pinta los botones y tiñe el fondo (lerp 0.30, igual que el playlist completo).
+  /// Acento extraído de la imagen del canal (PaletteCacheStore +
+  /// ArtworkPaletteService): pinta los botones y tiñe el fondo (lerp 0.30,
+  /// igual que el detalle de playlist).
   Color? _accent;
   String? _accentFor;
 
-  /// Álbum/single abierto: se muestra EMBEBIDO (en vez del contenido del artista, sin push de ruta) — nav + miniplayer visibles.
+  /// Álbum/single abierto: se muestra EMBEBIDO en vez del contenido del
+  /// artista (sin push de ruta) — nav + miniplayer visibles.
   YtmAlbum? _openedAlbum;
 
-  /// El álbum abierto vino de FUERA (biblioteca/home vía `pendingAlbum`), no
-  /// de este canal. No existe un canal real al que volver, así que el atrás
-  /// debe cerrar el screen completo (no mostrar el canal fantasma).
+  /// El álbum vino de FUERA (biblioteca/home vía `pendingAlbum`). No hay
+  /// canal real al que volver, así que el atrás cierra el screen.
   bool _albumFromShell = false;
 
   @override
   void didUpdateWidget(covariant ArtistDetailView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // El shell cerró el álbum (botón atrás de la titlebar en desktop o back
-    // de Android): limpia el estado interno. Antes solo se togglaba el flag
-    // del shell y el álbum seguía abierto → el botón "no hacía nada".
+    // El shell cerró el álbum (back en desktop o en Android): limpia el
+    // estado interno. Antes solo se togglaba el flag y el álbum seguía
+    // abierto → el botón "no hacía nada".
     if (!widget.albumOpen && oldWidget.albumOpen && _openedAlbum != null) {
       setState(() {
         _openedAlbum = null;
         _albumFromShell = false;
       });
     }
-    // Shell cleared the pending external album request (back from the
-    // album): close the embedded album view.
+    // El shell limpió la petición pendiente de álbum externo (volver del
+    // álbum): cierra la vista embebida.
     if (oldWidget.pendingAlbum != null && widget.pendingAlbum == null) {
       setState(() {
         _openedAlbum = null;
@@ -209,10 +205,10 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   @override
   void initState() {
     super.initState();
-    // Hot cache (same session): paint the FIRST frame with the real data —
-    // no placeholder flash for the ~1 frame the async read takes. The
-    // accent is also read synchronously from the palette store (no setState
-    // here: direct field assignment before the first build).
+    // Cache reciente (misma sesión): pinta el primer frame con datos
+    // reales, sin flash de placeholder. El acento también se lee de forma
+    // síncrona desde la caché (sin setState: campo directo antes del
+    // primer build).
     final peek = context
         .read<SearchService>()
         .peekArtistDetail(widget.artist.browseId);
@@ -228,8 +224,8 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
         }
       }
     }
-    // External album request (home row): open the embedded album view
-    // directly, skipping the channel (the album screen is self-contained).
+    // Petición de álbum externo (fila home): abre la vista embebida sin
+    // pasar por el canal (la vista es autónoma).
     if (widget.pendingAlbum != null) {
       _openedAlbum = widget.pendingAlbum;
       _albumFromShell = true;
@@ -255,9 +251,9 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
         _error = detail == null ? 'no-data' : null;
       });
       unawaited(_maybeExtractAccent(detail?.thumbnailUrl));
-      // Los artistas derivados de la búsqueda NO traen avatar (solo canal):
-      // la fila de visita se actualiza con la cara real del canal para que
-      // la card de "Artistas visitados" del home no quede con placeholder.
+      // Los artistas de la búsqueda NO traen avatar (solo canal): la fila de
+      // visita se actualiza con la cara real para que la card de
+      // "Artistas visitados" de home no quede con placeholder.
       final thumbUrl = detail?.thumbnailUrl ?? widget.artist.thumbnailUrl;
       if (thumbUrl != null && thumbUrl.isNotEmpty) {
         unawaited(
@@ -277,7 +273,8 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     }
   }
 
-  /// Extract the accent from the channel image (cached in the PaletteCacheStore — same shared store as the playlists).
+  /// Extrae el acento de la imagen del canal (PaletteCacheStore, el mismo
+  /// almacén que las playlists).
   Future<void> _maybeExtractAccent(String? thumb) async {
     if (thumb == null || thumb.isEmpty || thumb == _accentFor) return;
     _accentFor = thumb;
@@ -325,8 +322,8 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     );
   }
 
-  /// Álbum/single → muestra su tracklist EMBEBIDO (sin Navigator.push): el
-  /// spinner vive DENTRO de esa vista mientras trae las pistas.
+  /// Álbum/single: muestra su tracklist EMBEBIDO (sin Navigator.push);
+  /// el spinner vive aquí mientras carga las pistas.
   Future<void> _openAlbum(YtmAlbum album) async {
     setState(() {
       _openedAlbum = album;
@@ -337,9 +334,9 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
 
   void _back() {
     if (_openedAlbum != null) {
-      // Álbum abierto desde la biblioteca/home: no hay canal real que mostrar
-      // al volver, así que el atrás cierra el screen completo (el shell
-      // deshace su historial y devuelve a la lista de origen).
+      // Álbum abierto desde la biblioteca/home: no hay canal real que
+      // mostrar al volver, así que el atrás cierra el screen (el shell
+      // deshace su historial y vuelve a la lista de origen).
       if (_albumFromShell) {
         final cb = widget.onBack;
         if (cb != null) {
@@ -367,16 +364,15 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     final l10n = AppLocalizations.of(context);
     final detail = _detail;
 
-    // Tracklist de álbum abierto: vista EMbebIDA (mismo hueco del shell,
-    // sin push de ruta — nav + miniplayer siguen visibles).
+    // Álbum abierto: vista EMbebida (mismo hueco del shell, sin push de
+    // ruta; nav + miniplayer siguen visibles).
     final album = _openedAlbum;
     if (album != null) {
       return ArtistAlbumView(album: album, onBack: _back, artistAccent: _accent);
     }
 
-    // Fondo con el color EXTRAÍDO de la imagen (mismo lerp 0.30 que el
-    // detalle de playlist en su estilo full-bleed): sin costura entre el
-    // header y el contenido.
+    // Fondo con el acento extraído de la imagen (lerp 0.30, igual que el
+    // detalle de playlist en su estilo full-bleed).
     final Color bgColor = _accent == null
         ? theme.colorScheme.surface
         : (Color.lerp(
@@ -393,10 +389,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
         : widget.artist.name;
 
     // ── DESKTOP ──
-    // MISMO estilo que el detalle de playlist de desktop: panel de cristal
-    // flotante con hero (portada 160 + nombre + botones) y lista de tracks
-    // debajo. El acento va como PRIMARY del theme (buttons/tints, igual que
-    // la playlist usa su ambiente).
+    // MISMO estilo que el detalle de playlist de desktop.
     if (Binaries.isDesktop) {
       final dtheme = _accent != null
           ? _themeWithAccent(theme, _accent!)
@@ -527,7 +520,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Popular: encogible (el scroll vive fuera).
+                          // Top canciones: encogible (el scroll vive fuera).
                           ...[
                             for (var i = 0; i < tracks.length; i++)
                               () {
@@ -551,12 +544,9 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                                 );
                               }(),
                           ],
-                          // Discografía: MISMAS filas horizontales que la
+                          // Discografía: mismas filas horizontales que la
                           // vista móvil (los ListViews horizontales
-                          // internos mantienen SU propio scroll lateral).
-                          // sidePad 8 RELATIVO al scroll (que ya lleva 12):
-                          // 12 + 8 = 20, alineado con la portada del hero
-                          // (igual que playlist detail).
+                          // mantienen su propio scroll lateral).
                           ..._albumSections(detail, sidePad: 8),
                           const SizedBox(height: 16),
                         ],
@@ -736,8 +726,8 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
             ),
             ),
             // Header flotante SIEMPRE visible (overlay externo al scroll,
-            // como la playlist detail): back al ACENTO + nombre del canal
-            // cuando el hero salió de pantalla.
+            // como la playlist detail): back + nombre del canal cuando el
+            // hero salió de pantalla.
             Positioned(
               top: 0,
               left: 0,
@@ -775,10 +765,9 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
     );
   }
 
-  /// Secciones horizontales de discografía: Álbumes y Singles separados
-  /// (el subtítulo de la card del canal marca el tipo de lanzamiento).
-  /// Devuelve WIDGETS normales (servibles en Column de desktop); el llamado
-  /// móvil los envuelve en [SliverToBoxAdapter].
+  /// Secciones de discografía: Álbumes y Singles separados (el subtítulo
+  /// de la card del canal marca el tipo de lanzamiento). Devuelve widgets
+  /// normales (servibles en Column de desktop); el móvil los envuelve.
   List<Widget> _albumSections(YtmArtistDetail detail, {double sidePad = 16}) {
     final albums = [
       for (final a in detail.albums)
@@ -803,19 +792,15 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
                 ),
               ),
             ),
-            SizedBox(
+            const SizedBox(
               // Portada 140 + título (1 línea) + año.
-              height: 186,              // _DragScroll: en desktop el ratón NO tiene gesto de arrastre
-              // sobre un ListView (solo rueda); aquí la rueda se convierte
-              // en scroll horizontal y el arrastre con botón presionado
-              // desliza la fila (en móvil queda igual). El controller lo
-              // gestiona el propio _DragScroll (compartido con la lista).
+              height: 186,
               child: _DragScroll(
                 builder: (controller) => ListView.builder(
                   controller: controller,
                   scrollDirection: Axis.horizontal,
-                  // Match the section title inset so the first card's
-                  // artwork aligns with the hero avatar.
+                  // Primer card alineado con el avatar: el padding empata
+                  // con el offset del títular de la sección.
                   padding: EdgeInsets.symmetric(horizontal: sidePad),
                   itemCount: items.length,
                   itemBuilder: (context, i) {
@@ -841,8 +826,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
 
   Widget _floatingCircleBtn(BuildContext context) {
     final theme = Theme.of(context);
-    // MISMO estilo que la playlist detail (y el screen del álbum): círculo
-    // 40×40 al ACENTO del canal con icono contrastado.
+    // MISMO estilo que la playlist detail (y el screen del álbum).
     final Color accent = _accent ?? theme.colorScheme.primary;
     return Container(
       width: 40,
@@ -960,10 +944,9 @@ class _FullArtHeader extends StatelessWidget {
   }
 }
 
-/// Card de álbum para la FILA HORIZONTAL: portada 1:1 a tamaño completo
-/// (140dp, mismo tamaño que las cards de playlists recientes del home) +
-/// título + año debajo. SIN loader en la card: el toque abre la vista del
-/// tracklist, que muestra el spinner mientras carga.
+/// Card de álbum para la FILA HORIZONTAL: portada 1:1 (140dp, igual que
+/// las cards de playlists recientes de home) + título + año. Sin loader:
+/// el toque abre la vista del tracklist, que muestra el spinner.
 class _AlbumCard extends StatelessWidget {
   const _AlbumCard({required this.album, required this.onTap});
 
@@ -1036,7 +1019,10 @@ class _AlbumCard extends StatelessWidget {
   }
 }
 
-/// Tracklist de un álbum/single con el mismo estilo que el detalle de playlist en modo "acento plano" (flat): fondo del acento extraído de la propia portada del álbum (fallback al artista), portada 1:1 centrada, título y botones Play/Shuffle. Vista embebida (sin push): el spinner vive aquí, nunca en la card.
+/// Tracklist de un álbum/single con el mismo estilo que el detalle de
+/// playlist en modo "acento plano": fondo del acento extraído de la portada
+/// del álbum (fallback al artista), portada 1:1 centrada, Play/Shuffle.
+/// Vista embebida (sin push): el spinner vive aquí, nunca en la card.
 class ArtistAlbumView extends StatefulWidget {
   const ArtistAlbumView({
     super.key,
@@ -1047,8 +1033,8 @@ class ArtistAlbumView extends StatefulWidget {
 
   final YtmAlbum album;
 
-  /// Volver (vista embebida dentro del detalle de artista). Si es null se
-  /// hace pop del Navigator (push de ruta en desktop).
+  /// Volver (vista embebida dentro del detalle de artista). Si es null,
+  /// hace pop del Navigator (desktop).
   final VoidCallback? onBack;
 
   /// Acento del artista (extraído de su imagen): fallback mientras se
@@ -1064,24 +1050,24 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
   Color? _accent;
   String? _accentFor;
 
-  /// true cuando el álbum está en la biblioteca (corazón activo). Estado
-  /// local: al alternarlo solo cambia el icono (la BD emite su stream aparte).
+  /// El álbum está en la biblioteca (corazón activo). Estado local: al
+  /// alternarlo solo cambia el icono (la BD emite su stream aparte).
   bool _saved = false;
 
   /// Estilo del header (compartido con la playlist detail): false = portada
-  /// 1:1 sobre acento plano (por defecto en álbumes), true = portada
-  /// full-bleed con degradado. Se persiste en SettingsStore.
+  /// 1:1 sobre acento plano (por defecto en álbumes), true = full-bleed con
+  /// degradado. Se persiste en SettingsStore.
   bool _fullBleed = false;
 
-  /// true cuando el scroll pasó el header: el título aparece entre los
-  /// botones del header flotante.
+  /// El scroll pasó el header: el título aparece entre los botones del
+  /// header flotante.
   bool _showScrollTitle = false;
 
   @override
   void initState() {
     super.initState();
-    // Lecturas SÍNCRONAS antes del primer frame: sin flash flat ↔ full-bleed
-    // ni acento por defecto (el valor async corregía ~1 frame después).
+    // Lecturas SÍNCRONAS antes del primer frame: sin flash flat ↔
+    // full-bleed ni acento por defecto (el async corregía ~1 frame después).
     _fullBleed =
         context.read<SettingsStore>().flatPlaylistHeaderCache ?? false;
     final url = widget.album.thumbnailUrl;
@@ -1093,7 +1079,7 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
     unawaited(_loadSaved());
   }
 
-  /// Lee el estado del corazón (best-effort: si falla, queda sin guardar).
+  /// Lee el estado del corazón (best-effort: si falla, sin guardar).
   Future<void> _loadSaved() async {
     try {
       final saved = await context
@@ -1106,8 +1092,8 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
     }
   }
 
-  /// Alterna el guardado del álbum y feedback con toast (mismo patrón que
-  /// las acciones de playlist).
+  /// Alterna el guardado del álbum y feedback con toast (igual que las
+  /// acciones de playlist).
   Future<void> _toggleSaved() async {
     final db = context.read<AppDatabase>();
     final next = !_saved;
@@ -1128,7 +1114,7 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
   }
 
   /// Alterna full-bleed ↔ acento plano y persiste (mismo setting que la
-  /// playlist detail: ambos estilos viajan juntos).
+  /// playlist detail).
   void _toggleHeaderStyle() {
     setState(() => _fullBleed = !_fullBleed);
     unawaited(
@@ -1143,7 +1129,7 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
           .fetchAlbumTracks(widget.album.playlistId);
       if (!mounted) return;
       setState(() => _tracks = tracks);
-      // El acento depende de la portada; por si la recarga la actualizó.
+      // El acento depende de la portada; si la recarga la actualizó.
       unawaited(_extractAccent());
     } catch (_) {
       if (!mounted) return;
@@ -1167,8 +1153,8 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
     }
   }
 
-  /// Acento de la PROPIA portada del álbum (mismo almacén de paletas que
-  /// las playlists); fallback al acento del artista.
+  /// Acento de la portada del álbum (mismo almacén de paletas que las
+  /// playlists); fallback al acento del artista.
   Future<void> _extractAccent() async {
     final url = widget.album.thumbnailUrl;
     if (url == null || url.isEmpty || url == _accentFor) return;
@@ -1203,8 +1189,7 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
     await context.read<PlayerService>().playQueue(tracks);
   }
 
-  /// Igual que el detalle de playlist: activa shuffle si no está activo y
-  /// reproduce toda la lista.
+  /// Igual que el detalle de playlist: activa shuffle si no está activo.
   Future<void> _playShuffled() async {
     final tracks = _tracks;
     if (tracks == null || tracks.isEmpty) return;
@@ -1239,9 +1224,7 @@ class _ArtistAlbumViewState extends State<ArtistAlbumView> {
     final double titleThreshold = (expandedH - 90).clamp(0.0, double.infinity);
 
     // ── DESKTOP ──
-    // Panel de cristal IDENTICO al detalle de playlist de desktop: hero con
-    // portada 160 + título + año + nº de canciones + Play/Shuffle (botones
-    // del MISMO estilo que la playlist) y tracklist debajo.
+    // Panel de cristal IDENTICO al detalle de playlist de desktop.
     if (Binaries.isDesktop) {
       final dtheme = _themeWithAccent(theme, accent);
       return _desktopPanel(

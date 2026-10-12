@@ -62,7 +62,7 @@ class _LibraryViewState extends State<LibraryView> {
 
   _LibraryTab _tab = _LibraryTab.all;
 
-  // Para el indicador "now playing" en las cards.
+  // Estado del reproductor (para indicador "now playing" en cards).
   int? _activePlaylistId;
   bool _playing = false;
 
@@ -70,7 +70,7 @@ class _LibraryViewState extends State<LibraryView> {
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
 
-  /// Playlists filtered by the search query (accent-insensitive).
+  /// Playlists filtradas por la búsqueda (insensible a acentos).
   List<Playlist> get _filtered {
     final q = _normQuery(_searchCtrl.text.trim());
     if (q.isEmpty) return _playlists;
@@ -246,7 +246,7 @@ class _LibraryViewState extends State<LibraryView> {
     final cs = theme.colorScheme;
     final filtered = _filtered;
     final searching = _searchOpen && _searchCtrl.text.trim().isNotEmpty;
-    // Con búsqueda activa los resultados (playlists) mandan sobre el tab.
+      // Con búsqueda activa, los resultados (playlists) mandan sobre el tab.
     final tab = searching ? _LibraryTab.playlists : _tab;
 
     return CustomScrollView(
@@ -358,7 +358,7 @@ class _LibraryViewState extends State<LibraryView> {
     );
   }
 
-  /// Slivers de contenido según el tab activo (o los resultados de búsqueda).
+  /// Slivers según el tab activo (o resultados de búsqueda).
   List<Widget> _buildSectionSlivers(
     AppLocalizations l10n,
     ThemeData theme,
@@ -417,8 +417,6 @@ class _LibraryViewState extends State<LibraryView> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       sliver: SliverGrid(
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          // 2 columnas: tarjetas grandes y simétricas que cubren el ancho.
-          // Portada 1:1 + bloque de texto debajo.
           crossAxisCount: 2,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
@@ -439,7 +437,7 @@ class _LibraryViewState extends State<LibraryView> {
     );
   }
 
-  /// Título "Albums guardados" + su grid (mismo lenguaje que las playlists).
+  /// Título "Álbumes guardados" + su grid (mismo lenguaje que playlists).
   List<Widget> _albumsSection(AppLocalizations l10n, ThemeData theme) {
     return [
       SliverToBoxAdapter(
@@ -602,7 +600,7 @@ class _PlaylistGridCard extends StatelessWidget {
   final Playlist playlist;
   final int trackCount;
 
-  /// La playlist está en reproducción: muestra el indicador con su acento.
+  /// La playlist está en reproducción (indica con su acento).
   final bool isCurrent;
   final bool isPlaying;
   final VoidCallback onTap;
@@ -627,7 +625,6 @@ class _PlaylistGridCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Portada siempre 1:1, ancho de la celda.
           AspectRatio(
             aspectRatio: 1,
             child: Stack(
@@ -711,9 +708,8 @@ class _PlaylistGridCard extends StatelessWidget {
   }
 }
 
-/// Card de álbum guardado: mismo lenguaje que [_PlaylistGridCard] (portada
-/// 1:1 + textos debajo). Sin indicador de reproducción: el álbum abre el
-/// screen del artista, no es una cola activa del shell.
+/// Card de álbum guardado: mismo lenguaje que [_PlaylistGridCard].
+/// Sin indicador de reproducción: abre el screen del artista.
 class _SavedAlbumCard extends StatelessWidget {
   final YtmAlbum album;
   final VoidCallback? onTap;

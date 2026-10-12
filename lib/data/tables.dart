@@ -9,15 +9,14 @@ class Tracks extends Table {
   IntColumn get durationSeconds => integer().nullable()();
   TextColumn get thumbnailUrl => text().nullable()();
 
-  /// Album enriched via Deezer (null until it has been enriched).
+  /// Álbum enriquecido via Deezer (nulo hasta que se enriquece).
   TextColumn get album => text().nullable()();
   DateTimeColumn get lastPlayed => dateTime().nullable()();
   IntColumn get playCount => integer().withDefault(const Constant(0))();
 
-  /// YouTube channel id (UC…) of the artist, learned from InnerTube search
-  /// rows or the track-owner lookup; powers recap artist avatars.
+  /// Canal del artista (UC…), aprendido de InnerTube o del propietario de
+  /// la pista; alimenta los avatares del recap.
   TextColumn get artistChannelId => text().nullable()();
-
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -37,20 +36,18 @@ class Playlists extends Table {
   TextColumn get name => text()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
-  /// Playlist cover (URL of the artwork of one of its songs, or null if none yet).
+  /// Portada de la playlist (artwork de una de sus canciones, o nulo).
   TextColumn get coverUrl => text().nullable()();
 
-  /// Optional description written by the user.
+  /// Descripción opcional del usuario.
   TextColumn get description => text().nullable()();
 
-  /// Special Favorites playlist (always last, cannot be deleted).
+  /// Playlist especial de Favoritos (siempre al final, no borrable).
   BoolColumn get isFavorites => boolean().withDefault(const Constant(false))();
 
-  /// Last time the playlist was played (for the home recent playlists section).
+  /// Última reproducción de la playlist (home "recientes").
   DateTimeColumn get lastPlayedAt => dateTime().nullable()();
-}
-
-/// Cached lyrics for a song (synced LRC).
+}  /// Cached lyrics for a song (synced LRC).
 @DataClassName('LyricsRow')
 class Lyrics extends Table {
   TextColumn get id => text()(); // normalized title_artist
@@ -62,13 +59,13 @@ class Lyrics extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// Artwork palette cache: the player accent (1 color) and the fullscreen background trio (3 colors), by cover URL.
-///
-/// Replaces the former plain JSON: incremental writes (INSERT OR REPLACE per entry), no full rewrite, and total load does not grow unbounded. [usedAt] orders LRU trimming.
+/// Paleta de artwork: acento del player (1 color) + trio de fondo (3),
+/// por URL de portada. Reemplaza al JSON anterior: escrituras parciales,
+/// carga en memoria acotada. [usedAt] ordena el recorte LRU.
 @DataClassName('PaletteRow')
 class PaletteCache extends Table {
-  TextColumn get id => text()(); // artwork URL
-  IntColumn get c1 => integer()(); // ARGB accent / first color
+  TextColumn get id => text()(); // URL de artwork
+  IntColumn get c1 => integer()(); // ARGB acento / primer color
   IntColumn get c2 => integer().nullable()(); // ARGB (trio)
   IntColumn get c3 => integer().nullable()(); // ARGB (trio)
   DateTimeColumn get usedAt => dateTime().withDefault(currentDateAndTime)();
@@ -91,9 +88,8 @@ class PlaylistTracks extends Table {
   ];
 }
 
-/// Artistas (canales) visitados: alimenta la fila "Artistas visitados" de
-/// home, igual que las playlists recientes. Una fila por artista; abrir el
-/// screen de nuevo repuebla el timestamp (el más reciente queda primero).
+/// Artistas visitados: alimenta la fila "Artistas visitados" de home.
+/// Una fila por artista; volver a abrirlo repuebla el timestamp.
 @DataClassName('VisitedArtist')
 class ArtistVisits extends Table {
   TextColumn get id => text()(); // browseId del canal (UC…)
@@ -105,10 +101,9 @@ class ArtistVisits extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// Metadatos de las canciones descargadas a la caché de audio: alimenta el
-/// diálogo de descargas de settings (título/artista/artwork/tamaño) sin leer
-/// el disco. `deletedAt` mantiene el id tras borrar el archivo para no
-/// volver a enriquecer una futura descarga del mismo video.
+/// Metadatos de las canciones descargadas: alimenta el diálogo de
+/// descargas de settings sin leer el disco. `deletedAt` conserva el id
+/// tras borrar el archivo para no volver a enriquecer.
 @DataClassName('CachedTrackRow')
 class CachedTracks extends Table {
   TextColumn get id => text()(); // YouTube video id
@@ -123,9 +118,8 @@ class CachedTracks extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// Tiempo de escucha real (chunks de ~15s mientras suena la pista): alimenta
-/// el recap (total, top canciones, top artistas, top playlists).
-/// `playlistId` es nullable y SIN FK: la playlist puede borrarse después.
+// Tiempo de escucha real (chunks): alimenta el recap. `playlistId`
+// nulleable y sin FK: la playlist puede borrarse después.
 @DataClassName('ListenSessionRow')
 class ListenSessions extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -135,10 +129,9 @@ class ListenSessions extends Table {
   DateTimeColumn get listenedAt => dateTime()();
 }
 
-/// Álbumes (de YT Music) que el usuario guardó con el corazón en su
-/// página. La clave es el playlistId reproducible de YT: con él se vuelve a
-/// resolver el tracklist al abrir (las URLs de audio expiran; el catálogo
-/// no). Sin FK: no depende de ninguna otra tabla.
+// Álbumes (YT Music) guardados con el corazón. Clave: playlistId
+// reproducible de YT, con el que se vuelve a leer el tracklist al abrir
+// (las URLs de audio expiran). Sin FK: no depende de otras tablas.
 @DataClassName('SavedAlbumRow')
 class SavedAlbums extends Table {
   TextColumn get id => text()(); // YT Music playlistId del álbum
@@ -151,3 +144,4 @@ class SavedAlbums extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
+
